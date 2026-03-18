@@ -1,0 +1,26 @@
+/* Comprehensive Font Library */
+
+/* Hindi Fonts - Kruti Dev */
+@font-face { font-family: 'Kruti Dev 010'; src: url('https://cdn.jsdelivr.net/gh/Anilsharma012/Hindi-Fonts@master/Kruti_Dev_010.ttf') format('truetype'); }
+@font-face { font-family: 'Kruti Dev 011'; src: url('https://cdn.jsdelivr.net/gh/Anilsharma012/Hindi-Fonts@master/Kruti_Dev_011.ttf') format('truetype'); }
+@font-face { font-family: 'Kruti Dev 012'; src: url('https://cdn.jsdelivr.net/gh/Anilsharma012/Hindi-Fonts@master/Kruti_Dev_012.ttf') format('truetype'); }
+@font-face { font-family: 'Kruti Dev 021'; src: url('https://cdn.jsdelivr.net/gh/Anilsharma012/Hindi-Fonts@master/Kruti_Dev_021.ttf') format('truetype'); }
+@font-face { font-family: 'Kruti Dev 040'; src: url('https://cdn.jsdelivr.net/gh/Anilsharma012/Hindi-Fonts@master/Kruti_Dev_040.ttf') format('truetype'); }
+@font-face { font-family: 'Kruti Dev 055'; src: url('https://cdn.jsdelivr.net/gh/Anilsharma012/Hindi-Fonts@master/Kruti_Dev_055.ttf') format('truetype'); }
+@font-face { font-family: 'Kruti Dev 100'; src: url('https://cdn.jsdelivr.net/gh/Anilsharma012/Hindi-Fonts@master/Kruti_Dev_100.ttf') format('truetype'); }
+
+/* Hindi Fonts - Devlys */
+@font-face { font-family: 'Devlys 010'; src: url('https://cdn.jsdelivr.net/gh/Anilsharma012/Hindi-Fonts@master/Devlys_010.ttf') format('truetype'); }
+@font-face { font-family: 'Devlys 020'; src: url('https://cdn.jsdelivr.net/gh/Anilsharma012/Hindi-Fonts@master/Devlys_020.ttf') format('truetype'); }
+
+/* Google Fonts - Unicode Hindi & Premium English */
+@import url('https://fonts.googleapis.com/css2?family=Hind:wght@400;700&family=Khand:wght@400;700&family=Rajdhani:wght@400;700&family=Inter:wght@400;700&family=Poppins:wght@400;700&family=Montserrat:wght@400;700&family=Oswald:wght@400;700&family=Dancing+Script:wght@400;700&family=Pacifico&family=Playfair+Display:wght@400;700&family=Open+Sans:wght@400;700&display=swap');
+
+/* Force Font Visibility in Editor UI */
+.cke_panel_list a {
+    font-size: 14px !important;
+}
+
+[title*="Kruti Dev"], [title*="Devlys"] {
+    font-weight: bold !important;
+}

@@ -1,0 +1,148 @@
+import express from 'express';
+import { MongoClient } from 'mongodb';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.API_PORT || 3001;
+const MONGODB_URI = process.env.MONGODB_URI;
+
+// Fix __dirname for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Middleware
+app.use(cors({
+  origin: '*',
+  credentials: false,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  maxAge: 86400
+}));
+
+app.use(express.json());
+
+// Debug logger
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.path}`);
+  if (req.body && Object.keys(req.body).length > 0) {
+    console.log('Body:', JSON.stringify(req.body).substring(0, 100));
+  }
+  next();
+});
+
+let db;
+
+// MongoDB Connection
+const connectDB = async () => {
+  try {
+    const client = new MongoClient(MONGODB_URI);
+    await client.connect();
+    db = client.db('aonetarget');
+    console.log('MongoDB connected successfully');
+  } catch (error) {
+    console.error('MongoDB connection error:', error);
+    process.exit(1);
+  }
+};
+
+connectDB();
+
+/* ===========================
+   API ROUTES (same as before)
+=========================== */
+
+// Courses
+app.get('/api/courses', async (req, res) => {
+  try {
+    const courses = await db.collection('courses').find({}).toArray();
+    res.json(courses);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch courses' });
+  }
+});
+
+app.post('/api/courses', async (req, res) => {
+  try {
+    const result = await db.collection('courses').insertOne(req.body);
+    res.status(201).json({ _id: result.insertedId, ...req.body });
+  } catch {
+    res.status(500).json({ error: 'Failed to create course' });
+  }
+});
+
+// Instructors
+app.get('/api/instructors', async (req, res) => {
+  try {
+    res.json(await db.collection('instructors').find({}).toArray());
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch instructors' });
+  }
+});
+
+// Students
+app.get('/api/students', async (req, res) => {
+  try {
+    res.json(await db.collection('students').find({}).toArray());
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch students' });
+  }
+});
+
+app.post('/api/students', async (req, res) => {
+  try {
+    const result = await db.collection('students').insertOne(req.body);
+    res.status(201).json({ _id: result.insertedId, ...req.body });
+  } catch {
+    res.status(500).json({ error: 'Failed to create student' });
+  }
+});
+
+app.delete('/api/students/:id', async (req, res) => {
+  try {
+    await db.collection('students').deleteOne({ id: req.params.id });
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ error: 'Failed to delete student' });
+  }
+});
+
+// Orders
+app.post('/api/orders', async (req, res) => {
+  try {
+    const order = { ...req.body, createdAt: new Date() };
+    const result = await db.collection('orders').insertOne(order);
+    res.status(201).json({ _id: result.insertedId, ...order });
+  } catch {
+    res.status(500).json({ error: 'Failed to create order' });
+  }
+});
+
+// Health
+app.get('/health', (req, res) => {
+  res.json({ status: 'Server running' });
+});
+
+/* ===========================
+   FRONTEND SERVE (IMPORTANT)
+=========================== */
+
+// Serve Vite build
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// React routing fallback
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+/* ===========================
+   START SERVER
+=========================== */
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});

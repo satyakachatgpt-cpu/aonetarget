@@ -1,0 +1,638 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  RightSideDrawer, 
+  DrawerHeader, 
+  DrawerBody, 
+  DrawerFooter, 
+  FormLabel, 
+  FormInput, 
+  PrimaryButton 
+} from './DrawerSystem';
+import RichTextEditor from '../shared/RichTextEditor';
+
+interface QuestionForm {
+  id?: string | number;
+  questionType: string;
+  sectionId: string;
+  questionHeading: string;
+  questionText: string;
+  questionEn?: string;
+  questionImages: (File | null)[];  // array of 3
+  options: {
+    text: string;
+    file: File | null;
+    isCorrect: boolean;
+  }[];  // array of 5
+  answerMode: 'Single' | 'Multiple';
+  solution: {
+    heading: string;
+    text: string;
+    images: (File | null)[];  // array of 2
+    video: File | null;
+  };
+  positiveMarks: number;
+  negativeMarks: number;
+}
+
+interface AddQuestionModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSubmit: (data: any) => void;
+  sections?: { id: string; name: string }[];
+  testId?: string;
+  onUploadImage?: (file: File) => Promise<string>;
+  editingQuestion?: any; // To support future edits
+}
+
+interface OptionRowProps {
+  index: number;
+  option: {
+    text: string;
+    file: File | null;
+    isCorrect: boolean;
+  };
+  errors: Record<string, string>;
+  handleCorrectToggle: (index: number) => void;
+  handleOptionTextChange: (index: number, text: string) => void;
+  handleOptionFileUpload: (index: number, file: File | null) => void;
+}
+
+const OptionRow: React.FC<OptionRowProps> = ({ 
+  index, 
+  option, 
+  errors, 
+  handleCorrectToggle, 
+  handleOptionTextChange, 
+  handleOptionFileUpload 
+}) => {
+  const isRequired = index < 2;
+
+  return (
+    <div className="space-y-4 mb-8">
+      <div className="space-y-2">
+        <label className="text-[13px] font-bold text-[#444] mb-2 block">
+          Option {index + 1}{isRequired && <span className="text-red-500">*</span>}
+        </label>
+        <div className="flex items-center gap-4">
+          <div 
+            onClick={() => handleCorrectToggle(index)}
+            className={`w-5 h-5 rounded-full border-[1.5px] flex items-center justify-center cursor-pointer transition-all ${option.isCorrect ? 'border-black bg-black' : 'border-gray-300 bg-white'}`}
+          >
+            {option.isCorrect && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
+          </div>
+          <div className="flex-1">
+            <input
+              type="text"
+              value={option.text}
+              onChange={(e) => handleOptionTextChange(index, e.target.value)}
+              placeholder=""
+              className={`w-full h-12 bg-white border border-gray-200 rounded-xl px-4 text-[14px] font-medium text-gray-700 outline-none focus:border-gray-400 transition-all ${errors[`option${index + 1}`] ? 'border-red-500' : ''}`}
+            />
+            {errors[`option${index + 1}`] && <p className="text-red-500 text-[11px] mt-1">{errors[`option${index + 1}`]}</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-[160px_1fr] gap-4">
+        <div className="h-[120px] bg-gray-100 rounded-lg flex flex-col items-center justify-center text-center p-2 relative overflow-hidden group border border-gray-100">
+          {option.file ? (
+            <>
+              {option.file.type.startsWith('image/') ? (
+                 <img src={URL.createObjectURL(option.file)} className="w-full h-full object-contain" />
+              ) : (
+                <div className="flex flex-col items-center">
+                  <span className="material-symbols-outlined text-gray-400 text-[32px]">description</span>
+                  <span className="text-[10px] text-gray-400 truncate w-full px-1 mt-1 font-medium">{option.file.name}</span>
+                </div>
+              )}
+              <button 
+                onClick={() => handleOptionFileUpload(index, null)}
+                className="absolute inset-0 bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+              >
+                <span className="material-symbols-outlined">delete</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="material-symbols-outlined text-gray-400 text-[32px]">description</span>
+              <span className="text-[12px] font-bold text-gray-400 mt-1">No File</span>
+            </>
+          )}
+        </div>
+        <label className="border-2 border-dashed border-gray-200 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer hover:border-gray-300 transition-all bg-white relative">
+          <input 
+            type="file" 
+            className="hidden" 
+            accept="image/*, application/pdf" 
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleOptionFileUpload(index, file);
+            }}
+          />
+          <span className="text-[14px] font-bold text-gray-700">Upload File</span>
+          <span className="text-[12px] text-gray-400 text-center mt-1 font-medium">Click or Drag & Drop your file here.</span>
+        </label>
+      </div>
+    </div>
+  );
+};
+
+interface ImageUploadSetProps {
+  label: string;
+  index: number;
+  type?: 'question' | 'solution';
+  file: File | null;
+  handleImageUpload: (index: number, type: 'question' | 'solution', file: File | null) => void;
+}
+
+const ImageUploadSet: React.FC<ImageUploadSetProps> = ({ 
+  label, 
+  index, 
+  type = 'question',
+  file,
+  handleImageUpload
+}) => {
+  return (
+    <div className="space-y-4">
+      <label className="text-[13px] font-bold text-[#444] block">{label}</label>
+      <div className="grid grid-cols-[160px_1fr] gap-4">
+        <div className="h-[120px] bg-gray-100 rounded-lg flex flex-col items-center justify-center relative overflow-hidden group border border-gray-100">
+          {file ? (
+            <>
+              <img src={URL.createObjectURL(file)} className="w-full h-full object-contain" />
+              <button 
+                onClick={() => handleImageUpload(index, type, null)}
+                className="absolute inset-0 bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+              >
+                <span className="material-symbols-outlined">delete</span>
+              </button>
+            </>
+          ) : (
+            <>
+              <span className="material-symbols-outlined text-gray-400 text-[32px]">image</span>
+              <span className="text-[12px] font-bold text-gray-400 mt-1">No Image</span>
+            </>
+          )}
+        </div>
+        <label className="border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-gray-300 transition-all bg-white p-4">
+          <input 
+            type="file" 
+            className="hidden" 
+            accept="image/*" 
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) handleImageUpload(index, type, file);
+            }}
+          />
+          <span className="text-[14px] font-bold text-gray-700">Upload Image</span>
+          <span className="text-[12px] text-gray-400 text-center mt-1 leading-[1.3] font-medium tracking-tight">Click or Drag & Drop your file here.</span>
+        </label>
+      </div>
+    </div>
+  );
+};
+
+const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
+  isOpen,
+  onClose,
+  onSubmit,
+  sections = [],
+  testId,
+  onUploadImage,
+  editingQuestion
+}) => {
+  const [activeEditor, setActiveEditor] = useState<string | null>(null);
+  const [form, setForm] = useState<QuestionForm>({
+    questionType: 'Multiple Choice Question',
+    sectionId: sections[0]?.id || '',
+    questionHeading: '',
+    questionText: '',
+    questionImages: [null, null, null],
+    options: Array(5).fill(null).map(() => ({ text: '', file: null, isCorrect: false })),
+    answerMode: 'Single',
+    solution: {
+      heading: 'Full Solution',
+      text: '',
+      images: [null, null],
+      video: null
+    },
+    positiveMarks: 1,
+    negativeMarks: 0
+  });
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (isOpen && sections.length > 0 && !form.sectionId) {
+      setForm(prev => ({ ...prev, sectionId: sections[0].id }));
+    }
+
+    if (isOpen && editingQuestion) {
+      // Map existing question data to form
+      setForm({
+        id: editingQuestion.id || editingQuestion._id,
+        questionType: editingQuestion.questionType || 'Multiple Choice Question',
+        sectionId: editingQuestion.sectionId || sections[0]?.id || '',
+        questionHeading: editingQuestion.questionHeading || '',
+        questionText: editingQuestion.questionText || editingQuestion.questionEn || '',
+        questionImages: editingQuestion.questionImages || [null, null, null],
+        options: editingQuestion.options || (editingQuestion.displayOptions ? editingQuestion.displayOptions.map((o: any) => ({
+          text: o.text || '',
+          file: null,
+          isCorrect: o.isCorrect || false
+        })) : Array(5).fill(null).map(() => ({ text: '', file: null, isCorrect: false }))),
+        answerMode: editingQuestion.answerMode || 'Single',
+        solution: editingQuestion.solution || {
+          heading: 'Full Solution',
+          text: '',
+          images: [null, null],
+          video: null
+        },
+        positiveMarks: editingQuestion.positiveMarks || editingQuestion.marks || 1,
+        negativeMarks: editingQuestion.negativeMarks || editingQuestion.negative || 0
+      });
+    } else if (isOpen && !editingQuestion) {
+      // Reset form for fresh creation
+      setForm({
+        questionType: 'Multiple Choice Question',
+        sectionId: sections[0]?.id || '',
+        questionHeading: '',
+        questionText: '',
+        questionImages: [null, null, null],
+        options: Array(5).fill(null).map(() => ({ text: '', file: null, isCorrect: false })),
+        answerMode: 'Single',
+        solution: {
+          heading: 'Full Solution',
+          text: '',
+          images: [null, null],
+          video: null
+        },
+        positiveMarks: 1,
+        negativeMarks: 0
+      });
+    }
+  }, [isOpen, editingQuestion, sections]);
+
+  const validate = () => {
+    const newErrors: Record<string, string> = {};
+    if (!form.questionText) newErrors.questionText = 'Question is required';
+    if (!form.options[0].text) newErrors.option1 = 'Option 1 is required';
+    if (!form.options[1].text) newErrors.option2 = 'Option 2 is required';
+    if (!form.solution.heading) newErrors.solutionHeading = 'Solution heading is required';
+    if (form.positiveMarks === undefined || form.positiveMarks === null) newErrors.positiveMarks = 'Positive marks is required';
+    if (form.negativeMarks === undefined || form.negativeMarks === null) newErrors.negativeMarks = 'Negative marks is required';
+    if (!form.sectionId) newErrors.sectionId = 'Section is required';
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleSave = () => {
+    if (validate()) {
+      // Prepare data for submission, aligning with Tests.tsx requirements
+      const submissionData = {
+        ...form,
+        questionEn: form.questionText, // Ensure both are sent
+        marks: form.positiveMarks,     // Map positiveMarks to marks
+        negative: form.negativeMarks,   // Map negativeMarks to negative
+        optionsContent: form.options.map((opt, i) => ({
+          id: String.fromCharCode(97 + i),
+          label: opt.text
+        })),
+        displayOptions: form.options.map((opt, i) => ({
+          id: i + 1,
+          text: opt.text,
+          isCorrect: opt.isCorrect
+        }))
+      };
+      onSubmit(submissionData);
+      onClose();
+    }
+  };
+
+  const handleImageUpload = (index: number, type: 'question' | 'solution', file: File | null) => {
+    if (type === 'question') {
+      const newImages = [...form.questionImages];
+      newImages[index] = file;
+      setForm({ ...form, questionImages: newImages });
+    } else {
+      const newImages = [...form.solution.images];
+      newImages[index] = file;
+      setForm({ ...form, solution: { ...form.solution, images: newImages } });
+    }
+  };
+
+  const handleOptionFileUpload = (index: number, file: File | null) => {
+    const newOptions = [...form.options];
+    newOptions[index].file = file;
+    setForm({ ...form, options: newOptions });
+  };
+
+  const handleOptionTextChange = (index: number, text: string) => {
+    const newOptions = [...form.options];
+    newOptions[index].text = text;
+    setForm({ ...form, options: newOptions });
+  };
+
+  const handleCorrectToggle = (index: number) => {
+    const newOptions = [...form.options];
+    if (form.answerMode === 'Single') {
+      newOptions.forEach((opt, i) => opt.isCorrect = i === index);
+    } else {
+      newOptions[index].isCorrect = !newOptions[index].isCorrect;
+    }
+    setForm({ ...form, options: newOptions });
+  };
+
+  return (
+    <RightSideDrawer isOpen={isOpen} onClose={onClose} width="960px">
+      <DrawerHeader title="Add Question" onClose={onClose} />
+      
+      <DrawerBody className="bg-white px-8 py-6 space-y-10">
+        <div className="grid grid-cols-2 gap-8 pt-2">
+          <div className="space-y-2">
+            <label className="text-[13px] font-bold text-gray-800 tracking-tight">Question Type<span className="text-red-500">*</span></label>
+            <div className="relative group">
+              <select
+                value={form.questionType}
+                onChange={(e) => setForm({ ...form, questionType: e.target.value })}
+                className="w-full h-[54px] bg-white border border-gray-200 rounded-xl px-4 text-[15px] font-medium outline-none focus:border-gray-400 transition-all appearance-none cursor-pointer"
+              >
+                <option>Multiple Choice Question</option>
+                <option>True/False</option>
+                <option>Fill in the Blank</option>
+                <option>Match the Column</option>
+              </select>
+              <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-gray-600 transition-colors">expand_more</span>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[13px] font-bold text-gray-800 tracking-tight">Section<span className="text-red-500">*</span></label>
+            <div className="relative group">
+              <select
+                value={form.sectionId}
+                onChange={(e) => setForm({ ...form, sectionId: e.target.value })}
+                className={`w-full h-[54px] bg-white border border-gray-200 rounded-xl px-4 text-[15px] font-medium outline-none focus:border-gray-400 transition-all appearance-none cursor-pointer ${errors.sectionId ? 'border-red-500' : ''}`}
+              >
+                {sections.map(s => (
+                  <option key={s.id} value={s.id}>{s.name || (s as any).title}</option>
+                ))}
+              </select>
+              <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-gray-600 transition-colors">expand_more</span>
+            </div>
+            {errors.sectionId && <p className="text-red-500 text-[11px] mt-1">{errors.sectionId}</p>}
+          </div>
+        </div>
+
+        <div className="border-t border-gray-50 pt-8" />
+
+        <div className="space-y-6">
+          <h3 className="text-[17px] font-bold text-gray-800 tracking-tight">Question</h3>
+          <div className="space-y-6">
+            <div className="space-y-1">
+              <label className="text-[13px] font-bold text-gray-800 tracking-tight block">Question Heading</label>
+              {activeEditor === 'heading' ? (
+                <div>
+                   <RichTextEditor
+                    content={form.questionHeading}
+                    onChange={(val) => setForm({ ...form, questionHeading: val })}
+                    height="120px"
+                  />
+                </div>
+              ) : (
+                <div 
+                  onClick={() => setActiveEditor('heading')}
+                  className="w-full h-[54px] bg-white border border-gray-200 rounded-xl px-4 text-[15px] font-medium text-gray-400 cursor-text hover:border-gray-300 transition-all shadow-sm flex items-center overflow-hidden"
+                >
+                  {form.questionHeading ? (
+                    <div className="text-gray-700 truncate" dangerouslySetInnerHTML={{ __html: form.questionHeading }} />
+                  ) : (
+                    "Type question heading here..."
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="space-y-1">
+              <label className="text-[13px] font-bold text-gray-800 tracking-tight block">Question<span className="text-red-500">*</span></label>
+              {activeEditor === 'question' ? (
+                <div>
+                   <RichTextEditor
+                    content={form.questionText}
+                    onChange={(val) => setForm({ ...form, questionText: val })}
+                    height="180px"
+                  />
+                </div>
+              ) : (
+                <div 
+                  onClick={() => setActiveEditor('question')}
+                  className={`w-full min-h-[100px] bg-white border border-gray-200 rounded-xl p-4 text-[15px] font-medium text-gray-400 cursor-text hover:border-gray-300 transition-all shadow-sm ${errors.questionText ? 'border-red-500' : ''}`}
+                >
+                  {form.questionText ? (
+                    <div className="text-gray-700 editor-preview" dangerouslySetInnerHTML={{ __html: form.questionText }} />
+                  ) : (
+                    "Type your question here..."
+                  )}
+                </div>
+              )}
+              {errors.questionText && <p className="text-red-500 text-[11px] mt-1">{errors.questionText}</p>}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-8">
+            <ImageUploadSet 
+              label="Question Image 1" 
+              index={0} 
+              file={form.questionImages[0]}
+              handleImageUpload={handleImageUpload}
+            />
+            <ImageUploadSet 
+              label="Question Image 2" 
+              index={1} 
+              file={form.questionImages[1]}
+              handleImageUpload={handleImageUpload}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-8">
+            <ImageUploadSet 
+              label="Question Image 3" 
+              index={2} 
+              file={form.questionImages[2]}
+              handleImageUpload={handleImageUpload}
+            />
+          </div>
+
+        </div>
+
+        <div className="border-t border-gray-100 pt-8" />
+
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-[17px] font-bold text-gray-800 tracking-tight">Options</h3>
+            <div className="relative group">
+              <select
+                value={form.answerMode}
+                onChange={(e) => setForm({ ...form, answerMode: e.target.value as any })}
+                className="w-[140px] h-10 bg-white border border-gray-200 rounded-xl px-4 text-[14px] font-bold text-gray-700 cursor-pointer outline-none hover:border-gray-300 transition-all appearance-none"
+              >
+                <option>Single</option>
+                <option>Multiple</option>
+              </select>
+              <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-hover:text-gray-600 transition-colors">expand_more</span>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {[0, 1, 2, 3, 4].map(idx => (
+              <OptionRow 
+                key={idx} 
+                index={idx} 
+                option={form.options[idx]}
+                errors={errors}
+                handleCorrectToggle={handleCorrectToggle}
+                handleOptionTextChange={handleOptionTextChange}
+                handleOptionFileUpload={handleOptionFileUpload}
+              />
+            ))}
+          </div>
+
+        </div>
+
+        <div className="border-t border-gray-100 pt-8" />
+
+        <div className="space-y-6">
+          <h3 className="text-[17px] font-bold text-gray-800 tracking-tight">Solution</h3>
+          <div className="space-y-5">
+            <div className="space-y-2">
+              <label className="text-[13px] font-bold text-gray-800 tracking-tight block">Solution Heading<span className="text-red-500">*</span></label>
+              <input
+                type="text"
+                value={form.solution.heading}
+                onChange={(e) => setForm({ ...form, solution: { ...form.solution, heading: e.target.value } })}
+                className={`w-full h-[54px] bg-white border border-gray-200 rounded-xl px-4 text-[15px] font-medium text-gray-700 outline-none focus:border-gray-400 transition-all shadow-sm ${errors.solutionHeading ? 'border-red-500' : ''}`}
+              />
+              {errors.solutionHeading && <p className="text-red-500 text-[11px] mt-1">{errors.solutionHeading}</p>}
+            </div>
+            <div className="space-y-1">
+              <label className="text-[13px] font-bold text-gray-800 tracking-tight block">Solution Text</label>
+              {activeEditor === 'solution' ? (
+                <div>
+                  <RichTextEditor
+                    content={form.solution.text}
+                    onChange={(val) => setForm({ ...form, solution: { ...form.solution, text: val } })}
+                    height="180px"
+                  />
+                </div>
+              ) : (
+                <div 
+                  onClick={() => setActiveEditor('solution')}
+                  className="w-full min-h-[100px] bg-white border border-gray-200 rounded-xl p-4 text-[15px] font-medium text-gray-400 cursor-text hover:border-gray-300 transition-all shadow-sm"
+                >
+                  {form.solution.text ? (
+                    <div className="text-gray-700" dangerouslySetInnerHTML={{ __html: form.solution.text }} />
+                  ) : (
+                    "Type solution text here..."
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-8">
+            <ImageUploadSet 
+              label="Solution Image 1" 
+              index={0} 
+              type="solution" 
+              file={form.solution.images[0]}
+              handleImageUpload={handleImageUpload}
+            />
+            <ImageUploadSet 
+              label="Solution Image 2" 
+              index={1} 
+              type="solution" 
+              file={form.solution.images[1]}
+              handleImageUpload={handleImageUpload}
+            />
+          </div>
+
+
+          <div className="space-y-4">
+            <label className="text-[13px] font-bold text-gray-800 tracking-tight block">Solution Video</label>
+            <div className="grid grid-cols-[160px_1fr] gap-4">
+              <div className="h-[120px] bg-gray-100 rounded-lg flex flex-col items-center justify-center relative overflow-hidden group border border-gray-100">
+                {form.solution.video ? (
+                  <>
+                    <video src={URL.createObjectURL(form.solution.video)} className="w-full h-full object-cover" />
+                    <button 
+                      onClick={() => setForm({ ...form, solution: { ...form.solution, video: null } })}
+                      className="absolute inset-0 bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                    >
+                      <span className="material-symbols-outlined">delete</span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-gray-400 text-[32px]">videocam</span>
+                    <span className="text-[12px] font-bold text-gray-400 mt-1">No Video</span>
+                  </>
+                )}
+              </div>
+              <label className="border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-gray-300 transition-all bg-white p-4">
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  accept="video/*" 
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) setForm({ ...form, solution: { ...form.solution, video: file } });
+                  }}
+                />
+                <span className="text-[14px] font-bold text-gray-700">Upload Video</span>
+                <span className="text-[12px] text-gray-400 text-center mt-1 leading-[1.3] font-medium tracking-tight">Click or Drag & Drop your file here.</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-gray-100 pt-8" />
+
+        {/* SECTION 5 — MARKING SCHEME */}
+        <div className="space-y-6 pb-20">
+          <h3 className="text-[17px] font-bold text-gray-800 tracking-tight">Marking Scheme</h3>
+          <div className="grid grid-cols-2 gap-8">
+            <div className="space-y-2">
+              <label className="text-[13px] font-bold text-gray-800 tracking-tight block">Positive Marks<span className="text-red-500">*</span></label>
+              <input
+                type="number"
+                value={form.positiveMarks}
+                onChange={(e) => setForm({ ...form, positiveMarks: parseFloat(e.target.value) })}
+                className={`w-full h-[54px] bg-white border border-gray-200 rounded-xl px-4 text-[15px] font-medium text-gray-700 outline-none focus:border-gray-400 transition-all shadow-sm ${errors.positiveMarks ? 'border-red-500' : ''}`}
+              />
+              {errors.positiveMarks && <p className="text-red-500 text-[11px] mt-1">{errors.positiveMarks}</p>}
+            </div>
+            <div className="space-y-2">
+              <label className="text-[13px] font-bold text-gray-800 tracking-tight block">Negative Marks<span className="text-red-500">*</span></label>
+              <input
+                type="number"
+                value={form.negativeMarks}
+                onChange={(e) => setForm({ ...form, negativeMarks: parseFloat(e.target.value) })}
+                className={`w-full h-[54px] bg-white border border-gray-200 rounded-xl px-4 text-[15px] font-medium text-gray-700 outline-none focus:border-gray-400 transition-all shadow-sm ${errors.negativeMarks ? 'border-red-500' : ''}`}
+              />
+              {errors.negativeMarks && <p className="text-red-500 text-[11px] mt-1">{errors.negativeMarks}</p>}
+            </div>
+          </div>
+        </div>
+      </DrawerBody>
+
+      <DrawerFooter className="p-0 border-t border-gray-100">
+        <button
+          onClick={handleSave}
+          className="w-full h-[74px] bg-black text-white text-[17px] font-bold tracking-tight hover:bg-gray-900 transition-all flex items-center justify-center active:bg-black"
+        >
+          Save changes
+        </button>
+      </DrawerFooter>
+    </RightSideDrawer>
+  );
+};
+
+export default AddQuestionDrawer;

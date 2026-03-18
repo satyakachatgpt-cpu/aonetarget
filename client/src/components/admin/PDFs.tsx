@@ -1,0 +1,469 @@
+import React, { useState, useEffect } from 'react';
+import { pdfsAPI, coursesAPI, categoriesAPI } from '../../services/apiClient';
+import {
+  RightSideDrawer,
+  DrawerBody,
+  DrawerHeader,
+  DrawerFooter,
+  UploadArea,
+  FilePreviewItem,
+  PrimaryButton
+} from './DrawerSystem';
+
+interface PDF {
+  _id?: string;
+  id: string;
+  title: string;
+  price: number;
+  sortBy: number;
+  fileUrl: string;
+  courseId?: string;
+  categoryId?: string;
+  status: 'active' | 'inactive';
+  isEbook?: boolean;
+}
+
+interface Props {
+  showToast: (m: string, type?: 'success' | 'error') => void;
+}
+
+const PDFs: React.FC<Props> = ({ showToast }) => {
+  const [pdfs, setPdfs] = useState<PDF[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAddDrawer, setShowAddDrawer] = useState(false);
+  const [editingPdf, setEditingPdf] = useState<PDF | null>(null);
+  const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [formData, setFormData] = useState({
+    title: '',
+    price: 0,
+    sortBy: 1,
+    fileUrl: '',
+    courseId: '',
+    categoryId: '',
+    status: 'active' as 'active' | 'inactive',
+    isEbook: true
+  });
+
+  const fetchInitialData = async () => {
+    try {
+      setIsLoading(true);
+      const [pd, cs, cats] = await Promise.all([
+        pdfsAPI.getAll(),
+        coursesAPI.getAll(),
+        categoriesAPI.getAll()
+      ]);
+      // Filter to only show E-Books
+      const pdfList = Array.isArray(pd) ? pd : [];
+      setPdfs(pdfList.filter(p => p.isEbook !== false)); // Default to true or if explicitly marked
+      setCourses(Array.isArray(cs) ? cs : []);
+      setCategories(Array.isArray(cats) ? cats : []);
+    } catch (error) {
+      console.error('Failed to fetch data:', error);
+      showToast('Error loading data', 'error');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchInitialData();
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest('.row-action-menu-container')) {
+        setOpenActionMenuId(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filteredPdfs = pdfs.filter(pdf =>
+    pdf.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleOpenAdd = () => {
+    setEditingPdf(null);
+    setSelectedFile(null);
+    setFormData({
+      title: '',
+      price: 0,
+      sortBy: (pdfs.length + 1),
+      fileUrl: '',
+      courseId: '',
+      categoryId: '',
+      status: 'active',
+      isEbook: true
+    });
+    setShowAddDrawer(true);
+  };
+
+  const handleEdit = (pdf: any) => {
+    setEditingPdf(pdf);
+    setSelectedFile(null);
+    setFormData({
+      title: pdf.title,
+      price: pdf.price || 0,
+      sortBy: pdf.sortBy || 0,
+      fileUrl: pdf.fileUrl || '',
+      courseId: pdf.courseId || '',
+      categoryId: pdf.categoryId || '',
+      status: pdf.status || 'active',
+      isEbook: true
+    });
+    setShowAddDrawer(true);
+    setOpenActionMenuId(null);
+  };
+
+  const handleSubmit = async () => {
+    if (!formData.title && !selectedFile) {
+      showToast('Please provide a title or select a file', 'error');
+      return;
+    }
+    if (!formData.courseId || !formData.categoryId) {
+      showToast('Please select a Course and Subject', 'error');
+      return;
+    }
+
+    try {
+      let finalData = { ...formData };
+      if (selectedFile) {
+        // In a real app, upload the file here and get the URL
+        // For now, we simulate with a dummy URL if file skipped but Title exists
+        if (!finalData.fileUrl) finalData.fileUrl = `https://storage.example.com/ebooks/${selectedFile.name}`;
+        if (!finalData.title) finalData.title = selectedFile.name.split('.')[0];
+      }
+
+      if (editingPdf) {
+        await pdfsAPI.update(editingPdf._id || editingPdf.id, finalData);
+        showToast('E-Book updated successfully');
+      } else {
+        await pdfsAPI.create({
+          ...finalData,
+          id: `pdf_${Date.now()}`
+        });
+        showToast('E-Book added successfully');
+      }
+      setShowAddDrawer(false);
+      fetchInitialData();
+    } catch (error) {
+      console.error('Action failed:', error);
+      showToast('Failed to save e-book', 'error');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm('Are you sure you want to delete this e-book?')) {
+      try {
+        await pdfsAPI.delete(id);
+        showToast('E-Book deleted');
+        fetchInitialData();
+      } catch (error) {
+        showToast('Failed to delete e-book', 'error');
+      }
+    }
+  };
+
+  return (
+    <div className="bg-[#fafafa] min-h-screen">
+      <div className="pt-0 px-6 pb-10 space-y-4">
+        <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100">
+          {/* Header Section matches Screenshot 2 */}
+          <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-50 bg-white rounded-t-[1.5rem]">
+            <h1 className="text-[18px] font-bold text-gray-800 tracking-tight">E-Books</h1>
+
+            <div className="flex items-center gap-3">
+              {/* Search bar matches Screenshot 2 */}
+              <div className="relative group flex-1 md:flex-none">
+                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-[18px] group-focus-within:text-navy transition-colors">search</span>
+                <input
+                  type="text"
+                  placeholder="Search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full md:w-[240px] pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-500 transition-all shadow-sm placeholder:text-gray-400"
+                />
+              </div>
+
+              {/* Filters button matches Screenshot 2 */}
+              <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-[13px] font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm">
+                <span className="material-symbols-outlined text-[18px]">tune</span>
+                Filters
+              </button>
+
+              {/* Add button matches Screenshot 2 */}
+              <button
+                onClick={handleOpenAdd}
+                className="w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center hover:bg-gray-800 transition-all shadow-md active:scale-95 shrink-0"
+              >
+                <span className="material-symbols-outlined text-[24px]">add</span>
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-visible pb-32 -mb-32">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-50/10 border-b border-gray-100">
+                  <th className="pl-8 pr-4 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
+                    <div className="flex items-center gap-1">
+                      S. NO. <span className="material-symbols-outlined text-[14px]">unfold_more</span>
+                    </div>
+                  </th>
+                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
+                    <div className="flex items-center gap-1">
+                      TITLE <span className="material-symbols-outlined text-[14px]">unfold_more</span>
+                    </div>
+                  </th>
+                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
+                    <div className="flex items-center gap-1">
+                      PRICE <span className="material-symbols-outlined text-[14px]">unfold_more</span>
+                    </div>
+                  </th>
+                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
+                    <div className="flex items-center gap-1">
+                      SORT BY <span className="material-symbols-outlined text-[14px]">unfold_more</span>
+                    </div>
+                  </th>
+                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">ACTIONS</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={5} className="px-8 py-20 text-center text-gray-400 font-medium">Loading...</td>
+                  </tr>
+                ) : filteredPdfs.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-8 py-20 text-center text-gray-400 font-medium italic">No data available in table</td>
+                  </tr>
+                ) : (
+                  filteredPdfs.map((pdf: any, idx) => (
+                    <tr key={pdf._id || pdf.id} className="hover:bg-gray-50/50 transition-colors group">
+                      <td className="pl-8 pr-4 py-6 text-[13px] font-medium text-gray-600 group-hover:text-black">{idx + 1}</td>
+                      <td className="px-6 py-6">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[14px] font-bold text-gray-800">{pdf.title}</span>
+                          <div className="flex items-center gap-2">
+                            {pdf.courseId && (
+                              <span className="text-[11px] px-2 py-0.5 bg-gray-50 text-gray-400 font-medium rounded border border-gray-100 uppercase tracking-tighter">
+                                {courses.find(c => (c._id || c.id) === pdf.courseId)?.title || 'Course: ' + pdf.courseId}
+                              </span>
+                            )}
+                            {pdf.categoryId && (
+                              <span className="text-[11px] px-2 py-0.5 bg-gray-50 text-gray-400 font-medium rounded border border-gray-100 uppercase tracking-tighter">
+                                {categories.find(c => (c._id || c.id) === pdf.categoryId)?.name || 'Subject: ' + pdf.categoryId}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-6">
+                        <span className="text-[14px] font-bold text-gray-700">₹{pdf.price || 0}</span>
+                      </td>
+                      <td className="px-6 py-6">
+                        <span className="px-3 py-1 bg-gray-50 text-gray-500 rounded-lg text-[12px] font-medium border border-gray-100">
+                          {(pdf.sortBy || 0).toFixed(2)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-6">
+                        <div className="relative row-action-menu-container">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenActionMenuId(openActionMenuId === (pdf._id || pdf.id) ? null : (pdf._id || pdf.id));
+                            }}
+                            className={`px-4 py-2 bg-white border border-gray-200 rounded-xl text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-all flex items-center gap-2 group shadow-sm`}
+                          >
+                            Actions
+                            <span className="material-symbols-outlined text-[18px] text-gray-400 group-hover:text-gray-600">expand_more</span>
+                          </button>
+
+                          {openActionMenuId === (pdf._id || pdf.id) && (
+                            <div className={`absolute right-0 ${idx >= filteredPdfs.length - 2 ? 'bottom-full mb-2' : 'top-full mt-2'} w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-gray-100 py-3 z-[999] animate-in fade-in zoom-in duration-200 ${idx >= filteredPdfs.length - 2 ? 'origin-bottom-right' : 'origin-top-right'}`}>
+                              <button
+                                onClick={() => { window.open(pdf.fileUrl, '_blank'); setOpenActionMenuId(null); }}
+                                className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-[20px] text-blue-500">visibility</span>
+                                View PDF
+                              </button>
+                              <button
+                                onClick={() => handleEdit(pdf)}
+                                className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-gray-600 hover:bg-amber-50 hover:text-amber-600 transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-[20px] text-blue-500">edit</span>
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => { handleDelete(pdf._id || pdf.id); setOpenActionMenuId(null); }}
+                                className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-[20px] text-red-500">delete</span>
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination section matches Screenshot 2 */}
+          {!isLoading && (
+            <div className="p-6 border-t border-gray-50 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="relative flex items-center group">
+                  <select className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50">
+                    <option>10</option>
+                    <option>25</option>
+                    <option>50</option>
+                  </select>
+                  <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400 flex items-center justify-center h-full top-0">expand_more</span>
+                </div>
+              </div>
+
+              <div className="flex items-center p-1 bg-white border border-gray-200 rounded-xl shadow-sm">
+                <button className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-lg transition-all">
+                  Previous
+                </button>
+                <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+                <button className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-lg transition-all">
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Premium Add/Edit Drawer matches Screenshot 3 */}
+        <RightSideDrawer isOpen={showAddDrawer} onClose={() => setShowAddDrawer(false)} width="480px">
+          <DrawerHeader
+            title={editingPdf ? 'Edit E-Books' : 'Add E-Books'}
+            onClose={() => setShowAddDrawer(false)}
+          />
+          <DrawerBody className="space-y-6 px-8 pt-8 pb-10">
+            {/* Subject and Course Selectors - MATCHING USER REQUEST */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[13px] font-bold text-gray-700 ml-1">Select Course <span className="text-red-500">*</span></label>
+                <div className="relative group">
+                  <select
+                    value={formData.courseId}
+                    onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
+                    className="w-full h-[52px] px-5 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-500 transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="">Select Course</option>
+                    {courses.map(c => <option key={c._id || c.id} value={c._id || c.id}>{c.title || c.name}</option>)}
+                  </select>
+                  <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-focus-within:text-black">expand_more</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[13px] font-bold text-gray-700 ml-1">Select Subject <span className="text-red-500">*</span></label>
+                <div className="relative group">
+                  <select
+                    value={formData.categoryId}
+                    onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
+                    className="w-full h-[52px] px-5 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-500 transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="">Select Subject</option>
+                    {categories.map(cat => <option key={cat._id || cat.id} value={cat._id || cat.id}>{cat.name || cat.title}</option>)}
+                  </select>
+                  <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-focus-within:text-black">expand_more</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Selected File Preview - if already selected or editing */}
+            {selectedFile && (
+              <FilePreviewItem file={selectedFile} onRemove={() => setSelectedFile(null)} />
+            )}
+
+            {editingPdf && !selectedFile && (
+              <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 flex items-center gap-3">
+                <span className="material-symbols-outlined text-blue-500">description</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-[13px] font-bold text-gray-700 truncate">{editingPdf.title}</p>
+                  <p className="text-[10px] font-medium text-blue-500 uppercase">Existing File</p>
+                </div>
+              </div>
+            )}
+
+            {/* Upload PDF Section matches Screenshot 3 */}
+            <div className="space-y-3">
+              <label className="text-[13px] font-bold text-gray-700 ml-1">Select PDFs</label>
+              <UploadArea
+                title="UPLOAD PDF"
+                subtitle="Click or Drag & Drop your file here."
+                accept=".pdf"
+                onFileSelect={(file) => {
+                  setSelectedFile(file);
+                  if (!formData.title) setFormData(prev => ({ ...prev, title: file.name.split('.')[0] }));
+                }}
+                className="h-[180px]"
+              />
+            </div>
+
+            {/* Title, Price, SortBy fields */}
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-[13px] font-bold text-gray-700 ml-1">E-Book Title <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  placeholder="Enter E-Book Title"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  className="w-full h-[52px] px-5 border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-500 transition-all bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-[13px] font-bold text-gray-700 ml-1">Price (₹)</label>
+                  <input
+                    type="number"
+                    placeholder="0"
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
+                    className="w-full h-[52px] px-5 border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-500 transition-all bg-white"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[13px] font-bold text-gray-700 ml-1">Sort Order</label>
+                  <input
+                    type="number"
+                    step="1"
+                    placeholder="3"
+                    value={formData.sortBy}
+                    onChange={(e) => setFormData({ ...formData, sortBy: Number(e.target.value) })}
+                    className="w-full h-[52px] px-5 border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-500 transition-all bg-white"
+                  />
+                </div>
+              </div>
+            </div>
+          </DrawerBody>
+          <DrawerFooter className="p-0 border-none">
+            <PrimaryButton
+              onClick={handleSubmit}
+              className="h-[64px]"
+            >
+              Save changes
+            </PrimaryButton>
+          </DrawerFooter>
+        </RightSideDrawer>
+      </div>
+    </div>
+  );
+};
+
+export default PDFs;
+

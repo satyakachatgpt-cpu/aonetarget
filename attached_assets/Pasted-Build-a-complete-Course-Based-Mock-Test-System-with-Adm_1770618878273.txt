@@ -1,0 +1,177 @@
+Build a complete Course-Based Mock Test System with Admin Panel and Student Interface.
+
+1. Course Integration
+
+Mock tests must be linked to a specific course.
+
+Only students who purchased/enrolled in the course can access its mock tests.
+
+After purchase, mock tests appear automatically in the student dashboard.
+
+2. Admin Panel Features
+
+Admin should be able to:
+
+Mock Test Management
+
+Create mock tests inside a selected course.
+
+Add:
+
+Mock Test Name
+
+Description
+
+Duration (minutes)
+
+Total Marks
+
+Negative marking
+
+Marks per question
+
+Number of questions
+
+Question Management
+
+Admin can:
+
+Add questions with options.
+
+Select correct answer.
+
+Upload question images if needed.
+
+Upload option images if needed.
+
+Edit/Delete questions anytime.
+
+3. Student Interface
+
+When student clicks Start Mock Test:
+
+Test starts immediately.
+
+Timer should run continuously.
+
+Test auto submits when time ends.
+
+Navigation buttons:
+
+Next Question
+
+Previous Question
+
+Mark for Review
+
+Submit Test
+
+4. Test Screen Requirements
+
+Interface should show:
+
+Question number
+
+Question text/image
+
+Options
+
+Timer running
+
+Question palette (answered/unanswered/review)
+
+5. Result Calculation
+
+After submission:
+
+Calculate score automatically.
+
+Apply negative marking.
+
+Show:
+
+Total score
+
+Correct answers
+
+Wrong answers
+
+Skipped questions
+
+Percentage
+
+6. Student Dashboard Records
+
+Student should see:
+
+All attempted mock tests.
+
+Scores of each test.
+
+Attempt history.
+
+Option to re-attempt test.
+
+View result details anytime.
+
+7. Reattempt Feature
+
+Student can retake mock tests.
+
+Each attempt stored separately.
+
+Previous attempts remain saved.
+
+8. Admin Analytics
+
+Admin should see:
+
+Number of attempts
+
+Average scores
+
+Student performance
+
+Test difficulty analytics
+
+9. Backend Requirements
+
+Backend should manage:
+
+Course access validation
+
+Attempt tracking
+
+Timer handling
+
+Score calculation
+
+Question & answer storage
+
+10. Database Structure Needed
+
+Tables/Collections:
+
+Courses
+
+Mock Tests
+
+Questions
+
+Student Attempts
+
+Test Results
+
+Course Purchases
+
+Goal
+
+System should behave like professional exam platforms:
+
+Live timer
+
+Course-based access
+
+Attempt tracking
+
+Admin-controlled mock test system

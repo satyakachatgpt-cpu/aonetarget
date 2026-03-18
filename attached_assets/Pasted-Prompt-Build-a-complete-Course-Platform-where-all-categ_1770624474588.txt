@@ -1,0 +1,172 @@
+Prompt: Build a complete Course Platform where all categories, subcategories, courses and mock tests are fully controlled from Admin Panel.
+
+1. Main Categories (Home Screen)
+
+Home screen पर ये 6 categories दिखनी चाहिए:
+
+NEET – IIT JEE
+
+NURSING
+
+9th – 10th
+
+11th – 12th
+
+MOCK TEST
+
+E-BOOKS & NOTES
+
+⚠️ ये categories admin panel से add/edit/delete हो सकें।
+
+2. NEET – IIT JEE Flow
+
+जब user NEET–IITJEE category पर click करे:
+
+दो portals दिखें:
+
+NEET
+
+IIT-JEE
+
+दोनों के अंदर subcategories:
+
+Recorded Batch
+
+Live Classroom
+
+Crash Course
+
+Mock Tests
+
+फिर इन courses के अंदर subjects:
+
+Biology
+
+Chemistry
+
+Physics
+
+Maths
+
+3. Nursing Category Flow
+
+NURSING category पर click करने पर:
+
+Nursing subcategories दिखें (जैसे आपकी images के page 2.1 में है)
+
+Courses list दिखे
+
+अंदर subjects, lectures, mock tests दिखें
+
+सब admin से manage हों।
+
+4. Class 9–10 Category Flow
+
+Click करने पर:
+
+Boards selection (जैसे CBSE)
+
+Board select करने के बाद subjects/subcategories
+
+फिर courses
+
+फिर lectures + mock tests
+
+5. Class 11–12 Category
+
+Same hierarchical flow:
+Category → Board → Subjects → Courses → Mock Tests
+
+6. Mock Test Integration
+
+हर category/course के अंदर:
+
+Mock tests दिखें
+
+Course buy करने के बाद tests unlock हों
+
+Student attempt कर सके
+
+Score save हो
+
+Reattempt allowed हो
+
+7. Admin Panel Control (Important)
+
+Admin should control:
+
+Categories
+
+Add/edit/delete categories
+
+Subcategories
+
+Add per category
+
+Courses
+
+Name
+
+Description
+
+Price
+
+Thumbnail
+
+Category mapping
+
+Mock Tests
+
+Duration
+
+Marks per question
+
+Negative marking
+
+Questions
+
+Options
+
+Correct answers
+
+8. Student Dashboard Features
+
+Student should see:
+
+Purchased courses
+
+Attempted mock tests
+
+Scores
+
+Reattempt option
+
+History
+
+9. App Launch Popup Requirement
+
+App open करते ही:
+
+Popup auto show होना चाहिए
+
+Sirf app launch पर show हो
+
+बार-बार session में न आए
+
+Admin popup content बदल सके
+
+Banner / offer / notice add कर सके
+
+Popup should be:
+
+Image or text based
+
+Close button available
+
+10. System Goal
+
+App structure should behave like:
+
+Category → Subcategory → Course → Subjects → Lectures → Mock Tests
+
+Everything admin controlled without code changes.
