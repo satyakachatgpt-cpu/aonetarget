@@ -5326,25 +5326,29 @@ app.post('/api/razorpay/create-order', async (req, res) => {
 
     let keyId = process.env.RAZORPAY_KEY_ID;
     let keySecret = process.env.RAZORPAY_KEY_SECRET;
-    let source = '.env';
+    let source = '.env File (Recommended)';
 
-    // Check if env vars are placeholders or empty, fallback to DB settings
+    // settings is already declared above or we use it here
     if (!keyId || keyId.includes('your_') || keyId.trim() === '') {
       keyId = settings?.razorpayKeyId;
-      source = 'Database Settings';
+      source = 'Database Settings (Admin Panel)';
     }
     if (!keySecret || keySecret.includes('your_') || keySecret.trim() === '') {
       keySecret = settings?.razorpayKeySecret;
-      source = 'Database Settings';
+      source = 'Database Settings (Admin Panel)';
     }
 
-    keyId = (keyId || '').toString().trim();
-    keySecret = (keySecret || '').toString().trim();
+    // AGGRESSIVE CLEANING: remove ALL whitespace/new-lines/tabs/etc.
+    keyId = (keyId || '').toString().replace(/\s/g, '');
+    keySecret = (keySecret || '').toString().replace(/\s/g, '');
 
-    console.log(`[DEBUG] Razorpay Credentials Source: ${source}`);
+    console.log(`[RAZORPAY] Buying attempt for courseId: ${courseId}`);
+    console.log(`[RAZORPAY] Credentials Source: ${source}`);
+    console.log(`[RAZORPAY] KeyId in use: ${keyId}`); // Full log for verification
+    console.log(`[RAZORPAY] Secret Length: ${keySecret.length}`);
+
     if (!keyId || !keySecret) {
-      console.warn('[DEBUG] Razorpay credentials missing from both sources.');
-      return res.status(500).json({ error: 'Razorpay credentials not configured. Please check .env in server/ folder.' });
+      return res.status(500).json({ error: 'Razorpay keys missing from both .env and Settings.' });
     }
 
     console.log(`Razorpay Mode: ${keyId.startsWith('rzp_live') ? 'LIVE (Real Money)' : 'TEST (Sandbox)'}`);
