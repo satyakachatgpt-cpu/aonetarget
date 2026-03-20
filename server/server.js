@@ -21,8 +21,9 @@ import {
 import compression from 'compression';
 import { globalLimiter, authLimiter, videoLimiter, securityHeaders, sanitizeInput } from './middleware/security.js';
 
-// Force Google DNS to fix MongoDB SRV resolution issues (ECONNREFUSED)
-// dns.setServers(['8.8.8.8', '8.8.4.4']);
+// Force Google DNS to fix MongoDB SRV resolution issues (ECONNRFRUSED)
+dns.setServers(['8.8.8.8', '8.8.4.4']);
+console.log('[DEBUG] DNS Servers forced to Google (8.8.8.8) to fix ECONNREFUSED');
 
 
 dotenv.config();

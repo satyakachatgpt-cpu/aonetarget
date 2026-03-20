@@ -539,8 +539,8 @@ const CourseDetails: React.FC = () => {
                     <span className="material-symbols-rounded text-xl">folder</span>
                   </div>
                   <div>
-                    <h4 className="font-bold text-gray-800 text-sm">{folder.title}</h4>
-                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest opacity-60">Open Folder</p>
+                    <h4 className="font-bold text-gray-860 text-[13px] leading-tight mb-0.5">{folder.title || (folder as any).name || 'Chapter'}</h4>
+                    <p className="text-[9px] text-gray-400 font-black uppercase tracking-[0.15em] opacity-40">Section</p>
                   </div>
                 </div>
                 <span className="material-symbols-rounded text-gray-300 group-hover:text-primary-500 transition-colors">chevron_right</span>
@@ -790,16 +790,14 @@ const CourseDetails: React.FC = () => {
           </div>
         )}
         {!isEnrolled && (
-          <div className="mt-6 mb-24 px-4">
-            <div className="relative overflow-hidden bg-[#1A237E] p-4 rounded-3xl shadow-xl flex flex-col items-center gap-3 border border-white/20">
-              <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full -mr-10 -mt-10 blur-xl"></div>
-              
-              <div className="text-center z-10">
-                <span className="text-[9px] font-black text-white/50 uppercase tracking-[0.2em] mb-1 block">Full Access Content</span>
-                <div className="flex items-baseline justify-center gap-2">
-                  <span className="text-2xl font-black text-white">₹{course.price}</span>
+          <div className="mt-4 mb-24 px-4">
+            <div className="bg-[#0D1B2A] p-4 rounded-[2rem] shadow-2xl flex items-center justify-between border border-white/5 mx-auto max-w-sm">
+              <div className="flex flex-col gap-0">
+                <span className="text-[8px] font-black text-white/30 uppercase tracking-widest">Enrollment Fee</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl font-black text-white">₹{course.price}</span>
                   {course.mrp && course.mrp > (course.price || 0) && (
-                    <span className="text-xs text-white/40 line-through font-bold">₹{course.mrp}</span>
+                    <span className="text-[10px] text-white/20 line-through font-bold">₹{course.mrp}</span>
                   )}
                 </div>
               </div>
@@ -807,18 +805,17 @@ const CourseDetails: React.FC = () => {
               {isPaidCourse ? (
                 <button
                   onClick={handleBuyNow}
-                  className="w-full bg-white text-[#1A237E] py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.1em] flex items-center justify-center gap-2 shadow-xl hover:shadow-white/20 active:scale-95 transition-all z-10"
+                  className="px-6 py-3 bg-[#E0E1DD] text-[#0D1B2A] rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
                 >
-                  <span className="material-symbols-rounded text-base">shopping_cart</span>
-                  Purchase Now
+                  Purchase Course
                 </button>
               ) : (
                 <button
                   onClick={handleEnroll}
                   disabled={enrolling}
-                  className="w-full bg-white text-green-600 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.1em] shadow-xl active:scale-95 transition-all z-10"
+                  className="px-6 py-3 bg-green-500 text-white rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
                 >
-                  {enrolling ? 'Enrolling...' : 'Join Now Free'}
+                  {enrolling ? '...' : 'Enroll Free'}
                 </button>
               )}
             </div>
