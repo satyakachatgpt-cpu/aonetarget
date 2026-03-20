@@ -57,8 +57,9 @@ interface Progress {
 }
 
 interface Folder {
+  _id?: string;
   id: string;
-  name: string;
+  title: string;
   courseId: string;
   parentId?: string;
 }
@@ -68,7 +69,7 @@ const CourseDetails: React.FC = () => {
   const navigate = useNavigate();
   const [folders, setFolders] = useState<Folder[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const [navigationHistory, setNavigationHistory] = useState<string[]>([]);
+  const [navigationHistory, setNavigationHistory] = useState<Folder[]>([]);
   const { student } = useAuthStore();
   const [course, setCourse] = useState<Course | null>(null);
   const [videos, setVideos] = useState<Video[]>([]);
@@ -512,14 +513,14 @@ const CourseDetails: React.FC = () => {
               <button
                 onClick={() => {
                   const newHistory = [...navigationHistory];
-                  const prevId = newHistory.pop() || null;
-                  setCurrentFolderId(prevId);
+                  const lastFolder = newHistory.pop();
+                  setCurrentFolderId(lastFolder ? lastFolder.id : null);
                   setNavigationHistory(newHistory);
                 }}
-                className="flex items-center gap-2 text-primary-600 font-bold text-sm mb-4 px-1"
+                className="flex items-center gap-1.5 text-primary-600 font-bold text-[10px] mb-4 px-2 py-1 bg-primary-50 w-fit rounded-lg hover:bg-primary-100 transition-colors uppercase tracking-wider"
               >
-                <span className="material-symbols-rounded">arrow_back</span>
-                Back to {navigationHistory.length > 0 ? folders.find(f => f.id === navigationHistory[navigationHistory.length - 1])?.name || 'Previous' : 'Main Menu'}
+                <span className="material-symbols-rounded text-sm">arrow_back</span>
+                Back to {navigationHistory.length > 0 ? navigationHistory[navigationHistory.length - 1].title : 'Main'}
               </button>
             )}
 
@@ -527,21 +528,22 @@ const CourseDetails: React.FC = () => {
               <div
                 key={folder.id}
                 onClick={() => {
-                  setNavigationHistory([...navigationHistory, currentFolderId || '']);
+                  const currentFolder = folders.find(f => f.id === currentFolderId);
+                  setNavigationHistory([...navigationHistory, ...(currentFolder ? [currentFolder] : [])]);
                   setCurrentFolderId(folder.id);
                 }}
-                className="card-premium p-4 cursor-pointer active:scale-[0.98] transition-all flex items-center justify-between group"
+                className="glass-card mb-3 p-3.5 cursor-pointer active:scale-[0.98] transition-all flex items-center justify-between group border border-white/40 shadow-card"
               >
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-primary-50 rounded-2xl flex items-center justify-center text-primary-600">
-                    <span className="material-symbols-rounded text-2xl">folder</span>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex items-center justify-center text-white shadow-lg group-hover:rotate-6 transition-transform">
+                    <span className="material-symbols-rounded text-xl">folder</span>
                   </div>
                   <div>
-                    <h4 className="font-bold text-gray-800">{folder.name}</h4>
-                    <p className="text-[10px] text-gray-400 font-medium">Click to view contents</p>
+                    <h4 className="font-bold text-gray-800 text-sm">{folder.title}</h4>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest opacity-60">Open Folder</p>
                   </div>
                 </div>
-                <span className="material-symbols-rounded text-gray-300 group-hover:text-primary-400 transition-colors">chevron_right</span>
+                <span className="material-symbols-rounded text-gray-300 group-hover:text-primary-500 transition-colors">chevron_right</span>
               </div>
             ))}
 
@@ -788,44 +790,35 @@ const CourseDetails: React.FC = () => {
           </div>
         )}
         {!isEnrolled && (
-          <div className="mt-8 mb-20 px-2">
-            <div className="card-premium p-5 border border-primary-100 flex flex-col items-center gap-3 text-center mx-auto max-w-sm">
-              <div className="flex flex-col items-center gap-0.5">
-                <h3 className="text-base font-bold text-gray-900 leading-tight">
-                  {isPaidCourse ? 'Unlock Recording & Content' : 'Join for Free'}
-                </h3>
-              </div>
-
-              <div className="flex flex-col items-center gap-1">
-                {isPaidCourse ? (
-                  <>
-                    <div className="flex items-center gap-2">
-                      <span className="text-2xl font-black text-gray-900">₹{course.price}</span>
-                      {course.mrp && course.mrp > (course.price || 0) && (
-                        <span className="text-xs text-gray-400 line-through font-bold">₹{course.mrp}</span>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <span className="text-lg font-black text-green-600">FREE ACCESS</span>
-                )}
+          <div className="mt-6 mb-24 px-4">
+            <div className="relative overflow-hidden bg-[#1A237E] p-4 rounded-3xl shadow-xl flex flex-col items-center gap-3 border border-white/20">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-white/5 rounded-full -mr-10 -mt-10 blur-xl"></div>
+              
+              <div className="text-center z-10">
+                <span className="text-[9px] font-black text-white/50 uppercase tracking-[0.2em] mb-1 block">Full Access Content</span>
+                <div className="flex items-baseline justify-center gap-2">
+                  <span className="text-2xl font-black text-white">₹{course.price}</span>
+                  {course.mrp && course.mrp > (course.price || 0) && (
+                    <span className="text-xs text-white/40 line-through font-bold">₹{course.mrp}</span>
+                  )}
+                </div>
               </div>
 
               {isPaidCourse ? (
                 <button
                   onClick={handleBuyNow}
-                  className="w-full btn-accent py-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-button active:scale-95 transition-all"
+                  className="w-full bg-white text-[#1A237E] py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.1em] flex items-center justify-center gap-2 shadow-xl hover:shadow-white/20 active:scale-95 transition-all z-10"
                 >
                   <span className="material-symbols-rounded text-base">shopping_cart</span>
-                  BUY NOW
+                  Purchase Now
                 </button>
               ) : (
                 <button
                   onClick={handleEnroll}
                   disabled={enrolling}
-                  className="w-full btn-primary py-3 rounded-xl text-xs font-black active:scale-95 transition-all shadow-button"
+                  className="w-full bg-white text-green-600 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-[0.1em] shadow-xl active:scale-95 transition-all z-10"
                 >
-                  {enrolling ? 'ENROLLING...' : 'ENROLL FREE'}
+                  {enrolling ? 'Enrolling...' : 'Join Now Free'}
                 </button>
               )}
             </div>
