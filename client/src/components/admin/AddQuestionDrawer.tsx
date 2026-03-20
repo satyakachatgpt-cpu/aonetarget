@@ -42,6 +42,8 @@ interface AddQuestionModalProps {
   testId?: string;
   onUploadImage?: (file: File) => Promise<string>;
   editingQuestion?: any; // To support future edits
+  onSaveAndGoToPrevious?: (data: any) => void;
+  onSaveAndGoToNext?: (data: any) => void;
 }
 
 interface OptionRowProps {
@@ -199,7 +201,9 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
   sections = [],
   testId,
   onUploadImage,
-  editingQuestion
+  editingQuestion,
+  onSaveAndGoToPrevious,
+  onSaveAndGoToNext
 }) => {
   const [activeEditor, setActiveEditor] = useState<string | null>(null);
   const [form, setForm] = useState<QuestionForm>({
@@ -228,26 +232,77 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
     }
 
     if (isOpen && editingQuestion) {
-      // Map existing question data to form
+      // Robustly map existing question data to form
+
+      // --- Normalize options: handle string arrays, object arrays, or displayOptions ---
+      let rawOptions: { text: string; file: File | null; isCorrect: boolean }[] = [];
+      
+      if (editingQuestion.displayOptions && Array.isArray(editingQuestion.displayOptions)) {
+        rawOptions = editingQuestion.displayOptions.map((o: any) => ({
+          text: typeof o === 'string' ? o : (o?.text || ''),
+          file: null,
+          isCorrect: typeof o === 'object' ? (o?.isCorrect || false) : false
+        }));
+      } else if (editingQuestion.options && Array.isArray(editingQuestion.options)) {
+        rawOptions = editingQuestion.options.map((o: any) => {
+          if (typeof o === 'string') {
+            return { text: o, file: null, isCorrect: false };
+          } else if (typeof o === 'object' && o !== null) {
+            return { text: o.text || o.label || '', file: null, isCorrect: o.isCorrect || false };
+          }
+          return { text: '', file: null, isCorrect: false };
+        });
+      }
+
+      // Ensure we always have exactly 5 options for the UI
+      const paddedOptions = [...rawOptions];
+      while (paddedOptions.length < 5) {
+        paddedOptions.push({ text: '', file: null, isCorrect: false });
+      }
+      const finalOptions = paddedOptions.slice(0, 5);
+
+      // --- Normalize solution: handle string, object, or missing ---
+      let normalizedSolution: { heading: string; text: string; images: (File | null)[]; video: File | null };
+      const rawSolution = editingQuestion.solution;
+      if (typeof rawSolution === 'string') {
+        normalizedSolution = {
+          heading: 'Full Solution',
+          text: rawSolution,
+          images: [null, null],
+          video: null
+        };
+      } else if (rawSolution && typeof rawSolution === 'object') {
+        normalizedSolution = {
+          heading: rawSolution.heading || 'Full Solution',
+          text: rawSolution.text || '',
+          images: Array.isArray(rawSolution.images) ? [...rawSolution.images, null, null].slice(0, 2) : [null, null],
+          video: rawSolution.video || null
+        };
+      } else {
+        normalizedSolution = {
+          heading: 'Full Solution',
+          text: '',
+          images: [null, null],
+          video: null
+        };
+      }
+
+      // --- Normalize questionImages: ensure array of 3 ---
+      let normalizedQImages: (File | null)[] = [null, null, null];
+      if (Array.isArray(editingQuestion.questionImages)) {
+        normalizedQImages = [...editingQuestion.questionImages, null, null, null].slice(0, 3);
+      }
+
       setForm({
         id: editingQuestion.id || editingQuestion._id,
         questionType: editingQuestion.questionType || 'Multiple Choice Question',
         sectionId: editingQuestion.sectionId || sections[0]?.id || '',
         questionHeading: editingQuestion.questionHeading || '',
         questionText: editingQuestion.questionText || editingQuestion.questionEn || '',
-        questionImages: editingQuestion.questionImages || [null, null, null],
-        options: editingQuestion.options || (editingQuestion.displayOptions ? editingQuestion.displayOptions.map((o: any) => ({
-          text: o.text || '',
-          file: null,
-          isCorrect: o.isCorrect || false
-        })) : Array(5).fill(null).map(() => ({ text: '', file: null, isCorrect: false }))),
+        questionImages: normalizedQImages,
+        options: finalOptions,
         answerMode: editingQuestion.answerMode || 'Single',
-        solution: editingQuestion.solution || {
-          heading: 'Full Solution',
-          text: '',
-          images: [null, null],
-          video: null
-        },
+        solution: normalizedSolution,
         positiveMarks: editingQuestion.positiveMarks || editingQuestion.marks || 1,
         negativeMarks: editingQuestion.negativeMarks || editingQuestion.negative || 0
       });
@@ -276,35 +331,52 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
   const validate = () => {
     const newErrors: Record<string, string> = {};
     if (!form.questionText) newErrors.questionText = 'Question is required';
-    if (!form.options[0].text) newErrors.option1 = 'Option 1 is required';
-    if (!form.options[1].text) newErrors.option2 = 'Option 2 is required';
-    if (!form.solution.heading) newErrors.solutionHeading = 'Solution heading is required';
+    if (!form.options?.[0]?.text) newErrors.option1 = 'Option 1 is required';
+    if (!form.options?.[1]?.text) newErrors.option2 = 'Option 2 is required';
+    if (!form.solution?.heading) newErrors.solutionHeading = 'Solution heading is required';
     if (form.positiveMarks === undefined || form.positiveMarks === null) newErrors.positiveMarks = 'Positive marks is required';
     if (form.negativeMarks === undefined || form.negativeMarks === null) newErrors.negativeMarks = 'Negative marks is required';
     if (!form.sectionId) newErrors.sectionId = 'Section is required';
 
     setErrors(newErrors);
+    
+    // Scroll to first error if any
+    if (Object.keys(newErrors).length > 0) {
+      const errorKeys = Object.keys(newErrors);
+      const firstErrorKey = errorKeys[0];
+      // Try to find the first error element and scroll to it
+      setTimeout(() => {
+        const errorEl = document.querySelector(`[class*="border-red-500"]`);
+        if (errorEl) {
+          errorEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
+    }
+    
     return Object.keys(newErrors).length === 0;
+  };
+
+  const buildSubmissionData = () => {
+    return {
+      ...form,
+      questionEn: form.questionText, // Ensure both are sent
+      marks: form.positiveMarks,     // Map positiveMarks to marks
+      negative: form.negativeMarks,   // Map negativeMarks to negative
+      optionsContent: (form.options || []).map((opt, i) => ({
+        id: String.fromCharCode(97 + i),
+        label: opt?.text || ''
+      })),
+      displayOptions: (form.options || []).map((opt, i) => ({
+        id: i + 1,
+        text: opt?.text || '',
+        isCorrect: opt?.isCorrect || false
+      }))
+    };
   };
 
   const handleSave = () => {
     if (validate()) {
-      // Prepare data for submission, aligning with Tests.tsx requirements
-      const submissionData = {
-        ...form,
-        questionEn: form.questionText, // Ensure both are sent
-        marks: form.positiveMarks,     // Map positiveMarks to marks
-        negative: form.negativeMarks,   // Map negativeMarks to negative
-        optionsContent: form.options.map((opt, i) => ({
-          id: String.fromCharCode(97 + i),
-          label: opt.text
-        })),
-        displayOptions: form.options.map((opt, i) => ({
-          id: i + 1,
-          text: opt.text,
-          isCorrect: opt.isCorrect
-        }))
-      };
+      const submissionData = buildSubmissionData();
       onSubmit(submissionData);
       onClose();
     }
@@ -346,10 +418,17 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
 
   return (
     <RightSideDrawer isOpen={isOpen} onClose={onClose} width="960px">
-      <DrawerHeader title="Add Question" onClose={onClose} />
+      <DrawerHeader title={editingQuestion ? 'Update Question' : 'Add Question'} onClose={onClose} />
       
       <DrawerBody className="bg-white px-8 py-6 space-y-10">
-        <div className="grid grid-cols-2 gap-8 pt-2">
+        {editingQuestion && (
+          <div className="flex items-center gap-3 pt-2">
+            <span className="text-[14px] font-bold text-gray-700">Report count</span>
+            <span className="text-[14px] font-bold text-gray-500">:</span>
+            <span className="text-[14px] font-bold text-gray-700">{editingQuestion.reportCount || 0}</span>
+          </div>
+        )}
+        <div className={`grid grid-cols-2 gap-8 ${editingQuestion ? '' : 'pt-2'}`}>
           <div className="space-y-2">
             <label className="text-[13px] font-bold text-gray-800 tracking-tight">Question Type<span className="text-red-500">*</span></label>
             <div className="relative group">
@@ -486,7 +565,7 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
               <OptionRow 
                 key={idx} 
                 index={idx} 
-                option={form.options[idx]}
+                option={form.options?.[idx] || { text: '', file: null, isCorrect: false }}
                 errors={errors}
                 handleCorrectToggle={handleCorrectToggle}
                 handleOptionTextChange={handleOptionTextChange}
@@ -595,9 +674,9 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
 
         <div className="border-t border-gray-100 pt-8" />
 
-        {/* SECTION 5 — MARKING SCHEME */}
+        {/* SECTION 5 — SCORING */}
         <div className="space-y-6 pb-20">
-          <h3 className="text-[17px] font-bold text-gray-800 tracking-tight">Marking Scheme</h3>
+          <h3 className="text-[17px] font-bold text-gray-800 tracking-tight">Scoring</h3>
           <div className="grid grid-cols-2 gap-8">
             <div className="space-y-2">
               <label className="text-[13px] font-bold text-gray-800 tracking-tight block">Positive Marks<span className="text-red-500">*</span></label>
@@ -624,12 +703,38 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
       </DrawerBody>
 
       <DrawerFooter className="p-0 border-t border-gray-100">
-        <button
-          onClick={handleSave}
-          className="w-full h-[74px] bg-black text-white text-[17px] font-bold tracking-tight hover:bg-gray-900 transition-all flex items-center justify-center active:bg-black"
-        >
-          Save changes
-        </button>
+        <div className="flex w-full h-[60px]">
+          <button
+            onClick={() => {
+              if (validate()) {
+                const submissionData = buildSubmissionData();
+                if (onSaveAndGoToPrevious) onSaveAndGoToPrevious(submissionData);
+                else { onSubmit(submissionData); onClose(); }
+              }
+            }}
+            className="flex-1 h-full bg-white text-gray-700 text-[14px] font-bold tracking-tight hover:bg-gray-50 transition-all flex items-center justify-center border-r border-gray-100"
+          >
+            Save and Go To Previous
+          </button>
+          <button
+            onClick={handleSave}
+            className="flex-1 h-full bg-[#333] text-white text-[14px] font-bold tracking-tight hover:bg-[#222] transition-all flex items-center justify-center"
+          >
+            Save changes
+          </button>
+          <button
+            onClick={() => {
+              if (validate()) {
+                const submissionData = buildSubmissionData();
+                if (onSaveAndGoToNext) onSaveAndGoToNext(submissionData);
+                else { onSubmit(submissionData); onClose(); }
+              }
+            }}
+            className="flex-1 h-full bg-white text-gray-700 text-[14px] font-bold tracking-tight hover:bg-gray-50 transition-all flex items-center justify-center border-l border-gray-100"
+          >
+            Save and Go To Next
+          </button>
+        </div>
       </DrawerFooter>
     </RightSideDrawer>
   );

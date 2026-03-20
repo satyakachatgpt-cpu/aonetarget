@@ -27,9 +27,10 @@ const BulkActionsDrawer: React.FC<BulkActionsDrawerProps> = ({ isOpen, onClose, 
     const [exportOption, setExportOption] = useState('');
 
     const filteredItems = useMemo(() => {
-        return items.filter(item =>
-            item.title.toLowerCase().includes(searchQuery.toLowerCase())
-        );
+        return (items || []).filter(item => {
+            const title = item.title || (item as any).name || '';
+            return title.toLowerCase().includes(searchQuery.toLowerCase());
+        });
     }, [items, searchQuery]);
 
     const handleSelectAll = (checked: boolean) => {
@@ -116,7 +117,7 @@ const BulkActionsDrawer: React.FC<BulkActionsDrawerProps> = ({ isOpen, onClose, 
                                 <div className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 shrink-0 group-hover:bg-blue-50 group-hover:text-blue-500 transition-all">
                                     <span className="material-symbols-outlined text-[20px]">{getIcon(item.type)}</span>
                                 </div>
-                                <span className="flex-1 text-[14px] font-bold text-gray-700 truncate group-hover:text-gray-900">{item.title}</span>
+                                <span className="flex-1 text-[14px] font-bold text-gray-700 truncate group-hover:text-gray-900">{item.title || (item as any).name}</span>
                                 <div
                                     className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${selectedIds.includes(item.id) ? 'bg-blue-600 border-blue-600' : 'border-gray-200 group-hover:border-gray-300 bg-white'}`}
                                 >

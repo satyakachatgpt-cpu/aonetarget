@@ -9,6 +9,7 @@ const videoSchema = new mongoose.Schema({
     duration: { type: String },
     isFree: { type: Boolean, default: false },
     allowDownload: { type: Boolean, default: false },
+
     createdAt: { type: Date, default: Date.now }
 }, { strict: false });
 

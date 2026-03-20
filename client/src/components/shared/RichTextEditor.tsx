@@ -24,6 +24,10 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ label, content, onChang
                         const editor = evt.editor;
                         const doc = editor.document.$;
                         const head = doc.getElementsByTagName('head')[0];
+                        if (!head) {
+                            console.warn('[RichTextEditor] Document head not found, skipping style injection.');
+                            return;
+                        }
                         
                         // Aggressive Font Injection for Kruti Dev & Devlys
                         const style = doc.createElement('style');

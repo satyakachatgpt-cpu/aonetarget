@@ -13,6 +13,7 @@ interface Video {
   thumbnail?: string;
   videoUrl?: string;
   youtubeUrl?: string;
+  folderId?: string;
   isFree?: boolean;
   topicId?: string;
   topicName?: string;
@@ -55,9 +56,19 @@ interface Progress {
   completedNotes: string[];
 }
 
+interface Folder {
+  id: string;
+  name: string;
+  courseId: string;
+  parentId?: string;
+}
+
 const CourseDetails: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [navigationHistory, setNavigationHistory] = useState<string[]>([]);
   const { student } = useAuthStore();
   const [course, setCourse] = useState<Course | null>(null);
   const [videos, setVideos] = useState<Video[]>([]);
@@ -72,7 +83,6 @@ const CourseDetails: React.FC = () => {
   const [showVideoPlayer, setShowVideoPlayer] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [shareSuccess, setShareSuccess] = useState(false);
-  const [zoomLevel, setZoomLevel] = useState(1);
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
   const tabConfig = [
@@ -88,11 +98,10 @@ const CourseDetails: React.FC = () => {
   }, []);
 
 
-  const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.1, 1.5));
-  const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.1, 0.8));
-  const handleZoomReset = () => setZoomLevel(1);
+
 
   const handleVideoClick = (video: Video) => {
+    console.log('Video clicked:', video.title, 'Playable:', isEnrolled || video.isFree, 'URL:', video.youtubeUrl || video.videoUrl);
     const canPlay = isEnrolled || video.isFree;
     if (canPlay && (video.youtubeUrl || video.videoUrl)) {
       setSelectedVideo(video);
@@ -154,8 +163,9 @@ const CourseDetails: React.FC = () => {
 
   const fetchCourseData = async () => {
     try {
-      const [courseData, videosData, notesData, testsData] = await Promise.all([
+      const [courseData, foldersData, videosData, notesData, testsData] = await Promise.all([
         fetch(`/api/courses/${id}`).then(r => r.json()).catch(() => null),
+        fetch(`/api/courses/${id}/folders`).then(r => r.json()).catch(() => []),
         fetch(`/api/courses/${id}/videos`).then(r => r.json()).catch(() => []),
         fetch(`/api/courses/${id}/notes`).then(r => r.json()).catch(() => []),
         fetch(`/api/courses/${id}/tests`).then(r => r.json()).catch(() => []),
@@ -164,6 +174,8 @@ const CourseDetails: React.FC = () => {
       if (courseData && !courseData.error) {
         setCourse(courseData);
       }
+
+      setFolders(Array.isArray(foldersData) ? foldersData : []);
 
       setVideos(Array.isArray(videosData) ? videosData : []);
       setNotes(Array.isArray(notesData) ? notesData : []);
@@ -444,7 +456,7 @@ const CourseDetails: React.FC = () => {
         </div>
       </div>
 
-      <main className="p-4 origin-top transition-transform duration-200 space-y-4" style={{ transform: `scale(${zoomLevel})` }}>
+      <main className="p-4 space-y-4">
 
         {course.description && (
           <div className="card-premium p-4 animate-fade-in-up">
@@ -496,17 +508,60 @@ const CourseDetails: React.FC = () => {
 
         {activeTab === 'videos' && (
           <div className="space-y-3">
-            {videos.length === 0 ? (
+            {currentFolderId && (
+              <button
+                onClick={() => {
+                  const newHistory = [...navigationHistory];
+                  const prevId = newHistory.pop() || null;
+                  setCurrentFolderId(prevId);
+                  setNavigationHistory(newHistory);
+                }}
+                className="flex items-center gap-2 text-primary-600 font-bold text-sm mb-4 px-1"
+              >
+                <span className="material-symbols-rounded">arrow_back</span>
+                Back to {navigationHistory.length > 0 ? folders.find(f => f.id === navigationHistory[navigationHistory.length - 1])?.name || 'Previous' : 'Main Menu'}
+              </button>
+            )}
+
+            {folders.filter(f => String(f.parentId || '') === String(currentFolderId || '')).map((folder) => (
+              <div
+                key={folder.id}
+                onClick={() => {
+                  setNavigationHistory([...navigationHistory, currentFolderId || '']);
+                  setCurrentFolderId(folder.id);
+                }}
+                className="card-premium p-4 cursor-pointer active:scale-[0.98] transition-all flex items-center justify-between group"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-primary-50 rounded-2xl flex items-center justify-center text-primary-600">
+                    <span className="material-symbols-rounded text-2xl">folder</span>
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-gray-800">{folder.name}</h4>
+                    <p className="text-[10px] text-gray-400 font-medium">Click to view contents</p>
+                  </div>
+                </div>
+                <span className="material-symbols-rounded text-gray-300 group-hover:text-primary-400 transition-colors">chevron_right</span>
+              </div>
+            ))}
+
+            {videos.filter(v => 
+              (!currentFolderId && (!v.folderId || v.folderId === 'null' || v.folderId === 'undefined')) || 
+              (currentFolderId && String(v.folderId) === String(currentFolderId))
+            ).length === 0 && folders.filter(f => String(f.parentId || '') === String(currentFolderId || '')).length === 0 ? (
               <div className="card-premium p-10 text-center animate-fade-in-up">
                 <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
                   <span className="material-symbols-rounded text-3xl text-gray-300">video_library</span>
                 </div>
-                <p className="text-gray-400 font-medium text-sm">No videos available yet</p>
+                <p className="text-gray-400 font-medium text-sm">No items in this folder</p>
               </div>
             ) : (
-              videos.map((video, index) => {
+              videos.filter(v => 
+                (!currentFolderId && (!v.folderId || v.folderId === 'null' || v.folderId === 'undefined')) || 
+                (currentFolderId && String(v.folderId) === String(currentFolderId))
+              ).map((video, index) => {
                 const isCompleted = progress.completedVideos.includes(video.id);
-                const canPlay = isEnrolled || video.isFree || index === 0;
+                const canPlay = isEnrolled || video.isFree || (index === 0 && !currentFolderId);
                 const isLocked = !canPlay;
                 return (
                   <div
@@ -544,7 +599,7 @@ const CourseDetails: React.FC = () => {
                         <div className="absolute bottom-1.5 right-1.5 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md">
                           {video.duration || '00:00'}
                         </div>
-                        {(video.isFree || index === 0) && !isEnrolled && (
+                        {(video.isFree || (index === 0 && !currentFolderId)) && !isEnrolled && (
                           <div className="absolute top-1.5 left-1.5 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">
                             FREE
                           </div>
@@ -732,125 +787,80 @@ const CourseDetails: React.FC = () => {
             )}
           </div>
         )}
+        {!isEnrolled && (
+          <div className="mt-8 mb-20 px-2">
+            <div className="card-premium p-5 border border-primary-100 flex flex-col items-center gap-3 text-center mx-auto max-w-sm">
+              <div className="flex flex-col items-center gap-0.5">
+                <h3 className="text-base font-bold text-gray-900 leading-tight">
+                  {isPaidCourse ? 'Unlock Recording & Content' : 'Join for Free'}
+                </h3>
+              </div>
+
+              <div className="flex flex-col items-center gap-1">
+                {isPaidCourse ? (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl font-black text-gray-900">₹{course.price}</span>
+                      {course.mrp && course.mrp > (course.price || 0) && (
+                        <span className="text-xs text-gray-400 line-through font-bold">₹{course.mrp}</span>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <span className="text-lg font-black text-green-600">FREE ACCESS</span>
+                )}
+              </div>
+
+              {isPaidCourse ? (
+                <button
+                  onClick={handleBuyNow}
+                  className="w-full btn-accent py-3 rounded-xl text-xs font-black flex items-center justify-center gap-2 shadow-button active:scale-95 transition-all"
+                >
+                  <span className="material-symbols-rounded text-base">shopping_cart</span>
+                  BUY NOW
+                </button>
+              ) : (
+                <button
+                  onClick={handleEnroll}
+                  disabled={enrolling}
+                  className="w-full btn-primary py-3 rounded-xl text-xs font-black active:scale-95 transition-all shadow-button"
+                >
+                  {enrolling ? 'ENROLLING...' : 'ENROLL FREE'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </main>
 
-      {zoomLevel !== 1 && (
-        <div className="fixed bottom-28 right-4 z-40 flex flex-col gap-1.5 glass rounded-2xl shadow-elevated p-1.5">
-          <button
-            onClick={handleZoomIn}
-            disabled={zoomLevel >= 1.5}
-            className="w-10 h-10 rounded-xl bg-primary-800 text-white flex items-center justify-center disabled:opacity-30 hover:bg-primary-600 transition-all duration-200 active:scale-[0.97]"
-          >
-            <span className="material-symbols-rounded text-xl">add</span>
-          </button>
-          <button
-            onClick={handleZoomReset}
-            className="w-10 h-10 rounded-xl bg-surface-200 text-gray-700 flex items-center justify-center hover:bg-surface-300 transition-all duration-200 text-xs font-bold active:scale-[0.97]"
-          >
-            {Math.round(zoomLevel * 100)}%
-          </button>
-          <button
-            onClick={handleZoomOut}
-            disabled={zoomLevel <= 0.8}
-            className="w-10 h-10 rounded-xl bg-primary-800 text-white flex items-center justify-center disabled:opacity-30 hover:bg-primary-600 transition-all duration-200 active:scale-[0.97]"
-          >
-            <span className="material-symbols-rounded text-xl">remove</span>
-          </button>
-        </div>
-      )}
-
-      {zoomLevel === 1 && (
-        <div className="fixed bottom-28 right-4 z-40 flex flex-col gap-1.5 glass rounded-2xl shadow-elevated p-1.5">
-          <button
-            onClick={handleZoomIn}
-            className="w-10 h-10 rounded-xl bg-primary-800 text-white flex items-center justify-center hover:bg-primary-600 transition-all duration-200 active:scale-[0.97]"
-            title="Zoom In"
-          >
-            <span className="material-symbols-rounded text-xl">add</span>
-          </button>
-          <button
-            onClick={handleZoomOut}
-            className="w-10 h-10 rounded-xl bg-primary-800 text-white flex items-center justify-center hover:bg-primary-600 transition-all duration-200 active:scale-[0.97]"
-            title="Zoom Out"
-          >
-            <span className="material-symbols-rounded text-xl">remove</span>
-          </button>
-        </div>
-      )}
-
       {showVideoPlayer && selectedVideo && (
-        <div className="fixed inset-0 bg-black/95 z-50 flex flex-col animate-fade-in">
-          <div className="flex items-center justify-between p-4 text-white">
-            <button onClick={closeVideoPlayer} className="flex items-center gap-2 active:scale-[0.97] transition-all duration-200">
-              <span className="material-symbols-rounded">arrow_back</span>
-              <span className="font-medium text-sm">Back</span>
+        <div className="fixed inset-0 bg-black z-50 flex flex-col animate-fade-in sm:p-4">
+          <div className="flex items-center justify-between p-3 text-white bg-black/40 backdrop-blur-md z-10 border-b border-white/5">
+            <button onClick={closeVideoPlayer} className="flex items-center gap-1.5 active:scale-[0.97] transition-all duration-200">
+              <span className="material-symbols-rounded text-xl">arrow_back</span>
+              <span className="font-bold text-xs uppercase tracking-wider">Back</span>
             </button>
-            <h3 className="text-sm font-bold truncate max-w-[200px]">{selectedVideo.title}</h3>
+            <h3 className="text-[10px] font-black truncate max-w-[140px] opacity-60 uppercase tracking-widest">{selectedVideo.title}</h3>
             <button
               onClick={() => { markVideoComplete(selectedVideo.id); closeVideoPlayer(); }}
-              className="flex items-center gap-1 text-green-400 text-sm font-bold active:scale-[0.97] transition-all duration-200"
+              className="px-4 py-1.5 bg-green-600 text-white text-[10px] font-black rounded-lg active:scale-[0.97] transition-all duration-200 shadow-lg border border-green-500/50"
             >
-              <span className="material-symbols-rounded text-sm">check_circle</span>
-              Done
+              FINISH
             </button>
           </div>
-          <div className="flex-1 flex items-center justify-center p-4" style={{ touchAction: 'manipulation' }}>
-            <div className="w-full max-w-4xl aspect-video bg-black rounded-3xl overflow-hidden relative shadow-elevated">
+          <div className="flex-1 flex items-center justify-center overflow-hidden bg-black relative">
+            <div className="w-full h-full max-w-none aspect-video bg-black relative flex items-center justify-center">
               <SecureVideoPlayer
                 src={selectedVideo.youtubeUrl || selectedVideo.videoUrl || ''}
                 title={selectedVideo.title}
                 poster={selectedVideo.thumbnail || getYouTubeThumbnail(selectedVideo.youtubeUrl || selectedVideo.videoUrl || '') || undefined}
-                className="w-full h-full"
+                className="w-full h-full object-contain"
               />
             </div>
           </div>
-          <div className="p-4 text-white">
-            <h4 className="font-bold">{selectedVideo.title}</h4>
-            <p className="text-gray-400 text-sm">{selectedVideo.duration || '00:00'} min</p>
-          </div>
-        </div>
-      )}
-
-      {!isEnrolled && (
-        <div className="fixed bottom-[72px] left-0 right-0 z-40 max-w-md mx-auto">
-          <div className="glass border-t border-surface-200 shadow-elevated px-4 py-3.5 flex items-center justify-between rounded-t-3xl">
-            <div>
-              {isPaidCourse ? (
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl font-extrabold text-primary-800">₹{course.price}</span>
-                    {course.mrp && course.mrp > (course.price || 0) && (
-                      <span className="text-sm text-gray-400 line-through">₹{course.mrp}</span>
-                    )}
-                  </div>
-                  {course.mrp && course.mrp > (course.price || 0) && (
-                    <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-lg inline-block mt-0.5">
-                      {Math.round(((course.mrp - (course.price || 0)) / course.mrp) * 100)}% OFF
-                    </span>
-                  )}
-                </div>
-              ) : (
-                <span className="text-lg font-extrabold text-green-600">Free Course</span>
-              )}
-            </div>
-            {isPaidCourse ? (
-              <button
-                onClick={handleBuyNow}
-                className="btn-accent px-8 py-3 text-sm active:scale-[0.97] transition-all duration-200 flex items-center gap-2"
-              >
-                <span className="material-symbols-rounded text-lg">shopping_cart</span>
-                Buy Now
-              </button>
-            ) : (
-              <button
-                onClick={handleEnroll}
-                disabled={enrolling}
-                className="btn-primary px-8 py-3 text-sm active:scale-[0.97] transition-all duration-200 disabled:opacity-50 flex items-center gap-2"
-              >
-                <span className="material-symbols-rounded text-lg">school</span>
-                {enrolling ? 'Enrolling...' : 'Enroll Free'}
-              </button>
-            )}
+          <div className="p-4 py-6 bg-gradient-to-t from-black via-black/90 to-transparent text-white hidden sm:block">
+            <h4 className="font-bold text-lg">{selectedVideo.title}</h4>
+            <p className="text-gray-400 text-sm">{selectedVideo.duration || '00:00'} min • Class Recording</p>
           </div>
         </div>
       )}

@@ -19,6 +19,7 @@ import Packages from '../components/admin/Packages';
 import Messages from '../components/admin/Messages';
 import Blog from '../components/admin/Blog';
 import Settings from '../components/admin/Settings';
+import SecurityCenter from '../components/admin/SecurityCenter';
 import Banners from '../components/admin/Banners';
 import Buyers from '../components/admin/shopping/Buyers';
 import Tokens from '../components/admin/shopping/Tokens';
@@ -41,7 +42,7 @@ import LiveSessions from '../components/admin/LiveSessions';
 import ContentManager from '../components/admin/ContentManager';
 import ViewFormatPage from '../components/admin/ViewFormatPage';
 
-export type AdminView = 'dashboard' | 'students' | 'buyers' | 'tokens' | 'coupons' | 'store' | 'institute' | 'questions' | 'question-bank' | 'passages' | 'tests' | 'subjective-test' | 'test-series' | 'all-reports' | 'videos' | 'video-series' | 'live-videos' | 'live-sessions' | 'pdfs' | 'packages' | 'messages' | 'blog' | 'settings' | 'banners' | 'courses' | 'course-content' | 'live-class-scheduler' | 'subcourses' | 'subjects' | 'topics' | 'instructions' | 'exam-documents' | 'global-news' | 'quick-links' | 'push-notifications' | 'categories' | 'misc' | 'referrals' | 'chat-support' | 'free-content' | 'demo-content' | 'blocked-users';
+export type AdminView = 'dashboard' | 'students' | 'buyers' | 'tokens' | 'coupons' | 'store' | 'institute' | 'questions' | 'question-bank' | 'passages' | 'tests' | 'subjective-test' | 'test-series' | 'all-reports' | 'videos' | 'video-series' | 'live-videos' | 'live-sessions' | 'pdfs' | 'packages' | 'messages' | 'blog' | 'settings' | 'banners' | 'courses' | 'course-content' | 'live-class-scheduler' | 'subcourses' | 'subjects' | 'topics' | 'instructions' | 'exam-documents' | 'global-news' | 'quick-links' | 'push-notifications' | 'categories' | 'misc' | 'referrals' | 'chat-support' | 'free-content' | 'demo-content' | 'blocked-users' | 'security-center';
 
 interface Props {
   setAuth: (val: boolean) => void;
@@ -183,6 +184,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         { id: 'institute', label: 'Profile', icon: 'person' },
         { id: 'categories', label: 'Categories', icon: 'category' },
         { id: 'settings', label: 'Configurations', icon: 'admin_panel_settings' },
+        { id: 'security-center', label: 'Security Center', icon: 'shield' },
         { id: 'blocked-users', label: 'Blocked Users', icon: 'block' }
       ]
     },
@@ -252,6 +254,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         <Route path="messages" element={<Messages {...props} />} />
         <Route path="blog" element={<Blog {...props} />} />
         <Route path="settings" element={<Settings {...props} />} />
+        <Route path="security-center" element={<SecurityCenter />} />
         <Route path="banners" element={<Banners {...props} />} />
         <Route path="referrals" element={<Referrals {...props} />} />
         <Route path="courses" element={<Courses {...props} />} />

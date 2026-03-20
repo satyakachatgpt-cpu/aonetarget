@@ -38,6 +38,9 @@ const StudyDashboard: React.FC = () => {
   const [student, setStudent] = useState<any>(null);
   const [toastMsg, setToastMsg] = useState('');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [folders, setFolders] = useState<any[]>([]);
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [folderStack, setFolderStack] = useState<any[]>([]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -55,16 +58,18 @@ const StudyDashboard: React.FC = () => {
     const fetchCourseData = async () => {
       try {
         setLoading(true);
-        const [courseRes, videosRes, notesRes, testsRes] = await Promise.all([
+        const [courseRes, vRes, nRes, tRes, fRes] = await Promise.all([
           fetch(`/api/courses/${id}`).then(r => r.json()),
           fetch(`/api/courses/${id}/videos`).then(r => r.json()),
           fetch(`/api/courses/${id}/notes`).then(r => r.json()),
-          fetch(`/api/courses/${id}/tests`).then(r => r.json())
+          fetch(`/api/courses/${id}/tests`).then(r => r.json()),
+          fetch(`/api/courses/${id}/folders`).then(r => r.json())
         ]);
         setCourse(courseRes);
-        setVideos(Array.isArray(videosRes) ? videosRes : []);
-        setNotes(Array.isArray(notesRes) ? notesRes : []);
-        setTests(Array.isArray(testsRes) ? testsRes : []);
+        setVideos(Array.isArray(vRes) ? vRes : []);
+        setNotes(Array.isArray(nRes) ? nRes : []);
+        setTests(Array.isArray(tRes) ? tRes : []);
+        setFolders(Array.isArray(fRes) ? fRes : []);
       } catch (err) {
         console.error('Fetch error:', err);
       } finally {
@@ -137,6 +142,26 @@ const StudyDashboard: React.FC = () => {
     } finally {
       setDownloadingId(null);
     }
+  };
+  const normalizeId = (id: any): string | null => {
+    if (!id) return null;
+    if (typeof id === 'string') return id;
+    if (id.$oid) return id.$oid;
+    if (id._id) return normalizeId(id._id);
+    return String(id);
+  };
+
+  const handleFolderClick = (folder: any) => {
+    setFolderStack(prev => [...prev, folder]);
+    setCurrentFolderId(normalizeId(folder.id || folder._id));
+  };
+
+  const handleBackNavigation = () => {
+    if (folderStack.length === 0) return;
+    const newStack = [...folderStack];
+    newStack.pop();
+    setFolderStack(newStack);
+    setCurrentFolderId(newStack.length > 0 ? normalizeId(newStack[newStack.length - 1].id || newStack[newStack.length - 1]._id) : null);
   };
 
   // Quiz State
@@ -262,11 +287,57 @@ const StudyDashboard: React.FC = () => {
                 })}
               </div>
 
+              {/* Breadcrumb / Back Navigation */}
+              {currentFolderId && (
+                <div className="flex items-center gap-2 mb-4 animate-fade-in bg-white p-3 rounded-2xl shadow-sm border border-gray-100">
+                  <button
+                    onClick={handleBackNavigation}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-brandBlue text-white rounded-xl text-[10px] font-black uppercase tracking-wider shadow-md active:scale-95 transition-all"
+                  >
+                    <span className="material-symbols-rounded text-base">arrow_back</span>
+                    Back
+                  </button>
+                  <div className="flex items-center gap-1 overflow-hidden">
+                    <span className="text-gray-400 text-xs">/</span>
+                    {folderStack.map((f, i) => (
+                      <React.Fragment key={i}>
+                        <span className={`text-[10px] uppercase tracking-widest truncate ${i === folderStack.length - 1 ? 'text-brandBlue font-black' : 'text-gray-400 font-bold'}`}>
+                          {f.name}
+                        </span>
+                        {i < folderStack.length - 1 && <span className="text-gray-400 text-xs mx-1">›</span>}
+                      </React.Fragment>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Tab Content */}
               {activeTab === 'videos' && (
                 <div className="space-y-4">
-                  {videos.length > 0 ? (
-                    videos.map((video, idx) => (
+                  {/* Folders in Videos Tab */}
+                  {(folders.filter(f => normalizeId(f.parentId) === currentFolderId).length > 0) && (
+                    <div className="grid grid-cols-1 gap-4 mb-4">
+                      {folders.filter(f => normalizeId(f.parentId) === currentFolderId).map((folder) => (
+                        <div
+                          key={folder._id || folder.id}
+                          onClick={() => handleFolderClick(folder)}
+                          className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 cursor-pointer hover:border-brandBlue transition-all animate-fade-in-up group active:scale-[0.98]"
+                        >
+                          <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-brandBlue group-hover:bg-brandBlue group-hover:text-white transition-all">
+                            <span className="material-symbols-rounded text-2xl">folder</span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-sm text-gray-800 truncate">{folder.title || folder.name}</h4>
+                            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Explore Folder</p>
+                          </div>
+                          <span className="material-symbols-rounded text-gray-300">chevron_right</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {videos.filter(v => normalizeId(v.folderId) === currentFolderId).length > 0 ? (
+                    videos.filter(v => normalizeId(v.folderId) === currentFolderId).map((video, idx) => (
                       <div key={video._id || idx} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group hover:border-brandBlue transition-all">
                         <div className="p-4 flex gap-4 items-center">
                           <div
@@ -299,10 +370,12 @@ const StudyDashboard: React.FC = () => {
                         </div>
                       </div>
                     ))
-                  ) : (
+                  ) : null}
+                  
+                  {videos.filter(v => normalizeId(v.folderId) === currentFolderId).length === 0 && folders.filter(f => normalizeId(f.parentId) === currentFolderId).length === 0 && (
                     <div className="bg-white p-12 rounded-2xl text-center border-2 border-dashed border-gray-200">
                       <span className="material-symbols-rounded text-gray-200 text-5xl">smart_display</span>
-                      <p className="text-sm font-bold text-gray-400 mt-4">No videos found for this course</p>
+                      <p className="text-sm font-bold text-gray-400 mt-4">No content found in this folder</p>
                     </div>
                   )}
                 </div>
@@ -310,8 +383,26 @@ const StudyDashboard: React.FC = () => {
 
               {activeTab === 'notes' && (
                 <div className="space-y-4">
-                  {notes.length > 0 ? (
-                    notes.map((note, idx) => (
+                  {/* Folders in Notes Tab */}
+                  {folders.filter(f => normalizeId(f.parentId) === currentFolderId).map((folder) => (
+                    <div
+                      key={folder._id || folder.id}
+                      onClick={() => handleFolderClick(folder)}
+                      className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 cursor-pointer hover:border-brandBlue transition-all animate-fade-in-up group active:scale-[0.98]"
+                    >
+                      <div className="w-12 h-12 bg-orange-50 rounded-2xl flex items-center justify-center text-orange-500 group-hover:bg-orange-500 group-hover:text-white transition-all">
+                        <span className="material-symbols-rounded text-2xl">folder</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-sm text-gray-800 truncate">{folder.title || folder.name}</h4>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">View Notes Folder</p>
+                      </div>
+                      <span className="material-symbols-rounded text-gray-300">chevron_right</span>
+                    </div>
+                  ))}
+
+                  {notes.filter(n => normalizeId(n.folderId) === currentFolderId).length > 0 ? (
+                    notes.filter(n => normalizeId(n.folderId) === currentFolderId).map((note, idx) => (
                       <div key={note._id || idx} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex gap-4 items-center group hover:border-brandBlue transition-all">
                         <div className="w-10 h-10 bg-brandBlue/10 rounded-full flex items-center justify-center text-brandBlue flex-shrink-0">
                           <span className="material-symbols-rounded">description</span>
@@ -333,7 +424,9 @@ const StudyDashboard: React.FC = () => {
                         </button>
                       </div>
                     ))
-                  ) : (
+                  ) : null}
+
+                  {notes.filter(n => normalizeId(n.folderId) === currentFolderId).length === 0 && folders.filter(f => normalizeId(f.parentId) === currentFolderId).length === 0 && (
                     <div className="bg-white p-12 rounded-2xl text-center border-2 border-dashed border-gray-200">
                       <span className="material-symbols-rounded text-gray-200 text-5xl">description</span>
                       <p className="text-sm font-bold text-gray-400 mt-2">कोई नोट्स उपलब्ध नहीं हैं (No notes available yet)</p>
@@ -344,9 +437,27 @@ const StudyDashboard: React.FC = () => {
 
               {activeTab === 'tests' && (
                 <div className="space-y-6">
-                  {tests.length > 0 ? (
+                  {/* Folders in Tests Tab */}
+                  {folders.filter(f => normalizeId(f.parentId) === currentFolderId).map((folder) => (
+                    <div
+                      key={folder._id || folder.id}
+                      onClick={() => handleFolderClick(folder)}
+                      className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 cursor-pointer hover:border-brandBlue transition-all animate-fade-in-up group active:scale-[0.98]"
+                    >
+                      <div className="w-12 h-12 bg-purple-50 rounded-2xl flex items-center justify-center text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-all">
+                        <span className="material-symbols-rounded text-2xl">folder</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-bold text-sm text-gray-800 truncate">{folder.title || folder.name}</h4>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">View Test Folder</p>
+                      </div>
+                      <span className="material-symbols-rounded text-gray-300">chevron_right</span>
+                    </div>
+                  ))}
+
+                  {tests.filter(t => normalizeId(t.folderId) === currentFolderId).length > 0 ? (
                     <div className="grid grid-cols-1 gap-4">
-                      {tests.map((test, idx) => (
+                      {tests.filter(t => normalizeId(t.folderId) === currentFolderId).map((test, idx) => (
                         <div key={test._id || idx} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex gap-4 items-center">
                           <div className="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center text-green-600">
                             <span className="material-symbols-rounded">rule</span>

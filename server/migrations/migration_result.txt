@@ -1,0 +1,8 @@
+﻿Connecting to MongoDB...
+Videos updated from 69a33b96692a7018f0f248f0: 0
+Folders updated from 69a33b96692a7018f0f248f0: 0
+Videos updated from 69a33b96692a7018f0f248f1: 0
+Folders updated from 69a33b96692a7018f0f248f1: 0
+Videos updated from neet-2025-physics: 0
+Folders updated from neet-2025-physics: 0
+DONE

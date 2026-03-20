@@ -310,7 +310,7 @@ const Videos: React.FC<Props> = ({ showToast }) => {
               <p className="text-white/80 text-sm font-semibold">Manage and organize your video lectures</p>
             </div>
             <button
-              onClick={() => { setEditingVideo(null); setFormData({ title: '', subject: '', topic: '', course: '', instructor: '', duration: '', quality: 'HD 1080P', videoUrl: '', videoFile: null, thumbnail: '', thumbnailFile: null, status: 'active', isFree: false, isLiveRecording: false }); setShowModal(true); }}
+              onClick={() => { setEditingVideo(null); setFormData({ title: '', subject: '', topic: '', course: '', courseId: '', instructor: '', duration: '', quality: 'HD 1080P', videoUrl: '', videoFile: null, thumbnail: '', thumbnailFile: null, status: 'active', isFree: false, isLiveRecording: false }); setShowModal(true); }}
               className="bg-white/20 hover:bg-white/30 backdrop-blur-md text-white px-6 py-3 rounded-2xl font-black text-sm uppercase shadow-lg border border-white/20 transition-all hover:shadow-xl hover:scale-105"
             >
               <span className="flex items-center gap-2">

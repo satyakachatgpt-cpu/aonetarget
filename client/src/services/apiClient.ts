@@ -9,6 +9,8 @@ const apiCache: Record<string, { data: any; timestamp: number }> = {};
 const pendingRequests: Record<string, Promise<any>> = {};
 const CACHE_TTL = 30000;
 
+
+
 async function cachedFetch(url: string, ttl = CACHE_TTL): Promise<any> {
   const now = Date.now();
   const cached = apiCache[url];
@@ -492,12 +494,45 @@ export const questionsAPI = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error('Failed to update question');
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to update question');
+    }
     return response.json();
   },
   delete: async (id: string) => {
     const response = await fetch(`${API_BASE_URL}/questions/${id}`, { method: 'DELETE' });
-    if (!response.ok) throw new Error('Failed to delete question');
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to delete question');
+    }
+    return response.json();
+  },
+  bulkDelete: async (ids: string[]) => {
+    const response = await fetch(`${API_BASE_URL}/questions/bulk-delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ questionIds: ids })
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      const msg = errorData.error || 'Failed to bulk delete questions';
+      const details = errorData.details ? `: ${errorData.details}` : '';
+      throw new Error(`${msg}${details}`);
+    }
+    return response.json();
+  },
+  updateAll: async (updates: any[]) => {
+    const response = await fetch(`${API_BASE_URL}/questions/update-all`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates })
+    });
+    if (!response.ok) {
+       const errorData = await response.json().catch(() => ({}));
+       throw new Error(errorData.error || 'Failed to update questions order');
+    }
+    invalidateCache('tests');
     return response.json();
   }
 };
@@ -539,6 +574,18 @@ export const testsAPI = {
   getQuestions: async (id: string): Promise<any[]> => {
     const data = await cachedFetch(`${API_BASE_URL}/tests/${id}`, 10000);
     return data.questions || [];
+  },
+  publish: async (id: string) => {
+    const response = await fetch(`${API_BASE_URL}/tests/${id}/publish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!response.ok) {
+       const errorData = await response.json().catch(() => ({}));
+       throw new Error(errorData.error || 'Failed to publish test');
+    }
+    invalidateCache('tests');
+    return response.json();
   }
 };
 

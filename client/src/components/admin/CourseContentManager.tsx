@@ -198,6 +198,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
   const [isProductFilterOpen, setIsProductFilterOpen] = useState(false);
   const [isContentFilterOpen, setIsContentFilterOpen] = useState(false);
   const [folderStack, setFolderStack] = useState<any[]>([]);
+  const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
   const currentFolder = folderStack.length > 0 ? folderStack[folderStack.length - 1] : null;
 
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
@@ -2024,6 +2025,181 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     });
   };
 
+  
+  const toggleFolder = (folderItem: any) => {
+    setFolderStack(prev => [...prev, folderItem]);
+  };
+
+  const getFilteredFlatItems = () => {
+    const flatFolders = folders.map(f => ({ ...f, type: 'folder', order: f.order || f.sortingOrder }));
+    const flatVideos = videos.map(v => ({ ...v, type: 'video', order: v.order }));
+    const flatNotes = notes.map(n => ({ ...n, type: 'note', order: n.order }));
+    const flatTests = tests.map(t => ({ ...t, type: 'test', order: t.order || 0 }));
+    
+    return [...flatFolders, ...flatVideos, ...flatNotes, ...flatTests]
+      .filter(item => {
+        const matchesSearch = (item.title || item.name || '').toLowerCase().includes(contentSearchQuery.toLowerCase());
+        const matchesStatus = contentStatusFilter === 'all' || item.status === contentStatusFilter;
+        return matchesSearch && matchesStatus;
+      })
+      .sort((a: any, b: any) => (Number(a.order) || 0) - (Number(b.order) || 0));
+  };
+
+  const renderContentItem = (item: any, level: number) => {
+    const isFolder = item.type === 'folder';
+    const isVideo = item.type === 'video';
+    const isNote = item.type === 'note';
+    const isTest = item.type === 'test';
+    const itemId = normalizeId(item._id || item.id);
+    const isExpanded = itemId ? expandedFolders.includes(itemId) : false;
+
+    // Check if this folder is the active folder for uploads
+    const isActiveUploadFolder = isFolder && currentFolder && normalizeId(currentFolder._id || currentFolder.id) === itemId;
+
+    return (
+      <React.Fragment key={itemId + '_' + level}>
+        <div
+          onClick={() => isFolder && toggleFolder(item)}
+          style={{ marginLeft: `${level * 24}px` }}
+          className={`bg-white border ${isActiveUploadFolder ? 'border-blue-400 shadow-md ring-2 ring-blue-100' : 'border-gray-50'} rounded-[12px] py-4 px-4 flex items-center gap-4 group hover:bg-gray-50/50 transition-all ${isFolder ? 'cursor-pointer' : ''} mb-3`}
+        >
+          {/* Drag Handle */}
+          <div className="text-gray-300 shrink-0 flex items-center gap-1">
+            <span className="material-symbols-outlined text-[20px] cursor-grab">drag_indicator</span>
+          </div>
+
+          {/* Thumbnail/Icon Container */}
+          <div className={`w-[100px] h-[64px] rounded-[10px] overflow-hidden relative flex items-center justify-center shrink-0 border border-gray-100 ${isNote ? 'bg-[#fff7ed]' :
+            isTest ? 'bg-[#f0fdf4]' :
+              isFolder ? 'bg-white' :
+                isVideo && item.platform === 'YouTube/Zoom Live' ? 'bg-[#fdf2ff]' : 'bg-[#eff6ff]'
+            }`}>
+            {item.thumbnail || item.image ? (
+              <img src={item.thumbnail || item.image} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <span className={`material-symbols-outlined text-[28px] ${isNote ? 'text-[#f97316]' :
+                isTest ? 'text-[#22c55e]' :
+                  isFolder ? 'text-[#3b82f6]' :
+                    isVideo && item.platform === 'YouTube/Zoom Live' ? 'text-[#d946ef]' : 'text-[#3b82f6]'
+                }`}>
+                {isNote ? 'description' :
+                  isTest ? 'assignment' :
+                    isFolder ? (isExpanded ? 'folder_open' : 'folder') :
+                      isVideo && item.platform === 'YouTube/Zoom Live' ? 'live_tv' : 'play_circle'}
+              </span>
+            )}
+          </div>
+
+          {/* Text Content */}
+          <div className="flex-1 min-w-0">
+            <h4 className="font-bold text-[#1a1a1a] text-[15px] truncate">
+              {item.title || item.name}
+            </h4>
+            <div className="flex flex-col mt-0.5">
+              <span className="text-[12px] text-gray-500 font-medium">
+                {isFolder ? (() => {
+                  const fId = item.id || item._id;
+                  const vCount = videos.filter(v => normalizeId(v.folderId) === normalizeId(fId)).length;
+                  const nCount = notes.filter(n => normalizeId(n.folderId) === normalizeId(fId)).length;
+                  const tCount = tests.filter(t => normalizeId(t.folderId) === normalizeId(fId)).length;
+                  const counts = [];
+                  if (vCount > 0) counts.push(`${vCount} Videos`);
+                  if (nCount > 0) counts.push(`${nCount} Notes`);
+                  if (tCount > 0) counts.push(`${tCount} Tests`);
+                  return counts.length > 0 ? counts.join(', ') : 'Empty Folder';
+                })() :
+                  isVideo ? (item.datetime ? `Duration: ${item.duration || 'N/A'}, Views: ${item.views ?? item.viewCount ?? 0}, Date & Time: ${item.datetime}` : `Duration: ${item.duration || 'N/A'}, Views: ${item.views ?? item.viewCount ?? 0}`) :
+                    `Date & Time: ${item.datetime || '09:31 AM 06th March 2026'}`}
+              </span>
+            </div>
+            <div className="mt-2.5 px-3 py-0.5 rounded-full text-[10px] font-bold text-gray-500 bg-gray-100 w-fit">
+              {isNote ? 'PDF' : isTest ? 'Test' : isFolder ? 'Folder' : isVideo && item.platform === 'YouTube/Zoom Live' ? 'YouTube/Zoom Live' : isVideo ? 'Video' : 'Content'}
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                showToast('Status updated', 'success');
+              }}
+              className={`w-[36px] h-[20px] rounded-full relative cursor-pointer flex items-center transition-all ${item.status === 'active' ? 'bg-[#1a1c1e]' : 'bg-gray-200'}`}
+            >
+              <div className={`absolute ${item.status === 'active' ? 'right-[2px]' : 'left-[2px]'} w-[16px] h-[16px] bg-white rounded-full shadow-sm`}></div>
+            </button>
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                showToast('Access updated', 'success');
+              }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-900"
+            >
+              <span className="material-symbols-outlined text-[18px]">
+                {item.isFree ? 'lock_open' : 'lock'}
+              </span>
+            </button>
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isFolder) handleEditFolder(item);
+                else if (isVideo) handleEditVideo(item);
+                else if (isNote) handleEditNote(item);
+                else if (isTest) handleEditTest(item);
+              }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-900"
+            >
+              <span className="material-symbols-outlined text-[18px]">edit</span>
+            </button>
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const id = item._id || item.id;
+                if (isFolder) handleDeleteFolder(id);
+                else if (isVideo) handleDeleteVideo(id);
+                else if (isNote) handleDeleteNote(id);
+                else if (isTest) handleDeleteTest(id);
+              }}
+              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500"
+            >
+              <span className="material-symbols-outlined text-[18px]">delete</span>
+            </button>
+          </div>
+        </div>
+        
+
+      </React.Fragment>
+    );
+  };
+
+  const renderAccordionTree = (parentId: string | null = null, level: number = 0) => {
+    const levelFolders = folders.filter(f => normalizeId(f.parentId) === parentId).map(f => ({ ...f, type: 'folder', order: f.order || f.sortingOrder }));
+    const levelVideos = videos.filter(v => normalizeId(v.folderId) === parentId).map(v => ({ ...v, type: 'video', order: v.order }));
+    const levelNotes = notes.filter(n => normalizeId(n.folderId) === parentId).map(n => ({ ...n, type: 'note', order: n.order }));
+    const levelTests = tests.filter(t => normalizeId(t.folderId) === parentId).map(t => ({ ...t, type: 'test', order: t.order || 0 }));
+
+    // Separate folders and other items to ensure folders always appear at the top
+    const items = [
+      ...levelFolders.sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0)),
+      ...[...levelVideos, ...levelNotes, ...levelTests].sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
+    ];
+
+    const filteredItems = items.filter(item => {
+        const matchesSearch = (item.title || item.name || '').toLowerCase().includes(contentSearchQuery.toLowerCase());
+        const matchesStatus = contentStatusFilter === 'all' || item.status === contentStatusFilter;
+        return matchesSearch && matchesStatus;
+    });
+
+    return filteredItems.map(item => renderContentItem(item, level));
+  };
+
+  const finalRenderedItems = contentSearchQuery.trim() !== '' 
+     ? getFilteredFlatItems().map(item => renderContentItem(item, 0)) 
+     : renderAccordionTree(currentFolderId, 0);
+
   if (loading) {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div></div>;
   }
@@ -2424,31 +2600,26 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
           <div className="flex-1 space-y-6">
             <div className="flex flex-wrap items-center justify-between gap-6 py-4 px-2">
               <div className="flex-1 min-w-[200px]">
-                {!currentFolder ? (
-                  <h3 className="text-[20px] font-bold text-[#1a1a1a] tracking-tight">Batch Content</h3>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setFolderStack([])}
-                      className="text-[18px] font-bold text-gray-900 hover:text-blue-600 transition-colors"
+                <div className="flex items-center gap-3 mb-1">
+                  {folderStack.length > 0 && (
+                    <button 
+                      onClick={() => setFolderStack(folderStack.slice(0, -1))}
+                      className="w-8 h-8 flex items-center justify-center bg-gray-50 hover:bg-gray-100 rounded-full text-gray-500 transition-all active:scale-95"
                     >
-                      Home
+                      <span className="material-symbols-outlined text-[20px]">arrow_back</span>
                     </button>
-                    {folderStack.map((f, i) => (
-                      <React.Fragment key={f.id || f._id}>
-                        <span className="material-symbols-outlined text-[18px] text-gray-400">chevron_right</span>
-                        <button
-                          onClick={() => setFolderStack(folderStack.slice(0, i + 1))}
-                          className={`text-[18px] tracking-tight truncate max-w-[200px] transition-colors ${i === folderStack.length - 1 ? 'font-bold text-gray-500' : 'font-bold text-gray-900 hover:text-blue-600'}`}
-                        >
-                          {f.title || f.name}
-                        </button>
-                      </React.Fragment>
-                    ))}
-                  </div>
+                  )}
+                  <h3 className="text-[20px] font-bold text-[#1a1a1a] tracking-tight">Batch Content</h3>
+                </div>
+                {currentFolder ? (
+                   <p className="text-[12px] font-medium text-blue-600 flex items-center gap-1 uppercase tracking-wider">
+                      <span className="material-symbols-outlined text-[14px]">folder_open</span>
+                      {currentFolder.title || currentFolder.name}
+                   </p>
+                ) : (
+                    <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Adding content to root</p>
                 )}
               </div>
-
               <div className="flex items-center gap-3">
                 <div className="relative group flex items-center">
                   <input
@@ -2484,7 +2655,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
             <div className="bg-white rounded-[24px] border border-gray-100 overflow-hidden shadow-sm">
               <div className="p-4 space-y-3">
-                {combinedItems.length === 0 ? (
+                {finalRenderedItems.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 text-center">
                     <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mb-4">
                       <span className="material-symbols-outlined text-4xl text-gray-200">dashboard_customize</span>
@@ -2492,132 +2663,9 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                     <p className="text-gray-400 font-bold text-[14px]">No content items found</p>
                   </div>
                 ) : (
-                  combinedItems.map((item: any) => {
-                    const isFolder = item.type === 'folder';
-                    const isVideo = item.type === 'video';
-                    const isNote = item.type === 'note';
-                    const isTest = item.type === 'test';
-
-                    return (
-                      <div
-                        key={item._id || item.id}
-                        onClick={() => isFolder && setFolderStack([...folderStack, item])}
-                        className={`bg-white border border-gray-50 rounded-[12px] py-4 px-4 flex items-center gap-4 group hover:bg-gray-50/50 transition-all ${isFolder ? 'cursor-pointer' : ''}`}
-                      >
-                        {/* Drag Handle */}
-                        <div className="text-gray-300 shrink-0">
-                          <span className="material-symbols-outlined text-[20px] cursor-grab">drag_indicator</span>
-                        </div>
-
-                        {/* Thumbnail/Icon Container */}
-                        <div className={`w-[100px] h-[64px] rounded-[10px] overflow-hidden relative flex items-center justify-center shrink-0 border border-gray-100 ${isNote ? 'bg-[#fff7ed]' :
-                          isTest ? 'bg-[#f0fdf4]' :
-                            isFolder ? 'bg-white' :
-                              isVideo && item.platform === 'YouTube/Zoom Live' ? 'bg-[#fdf2ff]' : 'bg-[#eff6ff]'
-                          }`}>
-                          {item.thumbnail || item.image ? (
-                            <img src={item.thumbnail || item.image} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <span className={`material-symbols-outlined text-[28px] ${isNote ? 'text-[#f97316]' :
-                              isTest ? 'text-[#22c55e]' :
-                                isFolder ? 'text-[#3b82f6]' :
-                                  isVideo && item.platform === 'YouTube/Zoom Live' ? 'text-[#d946ef]' : 'text-[#3b82f6]'
-                              }`}>
-                              {isNote ? 'description' :
-                                isTest ? 'assignment' :
-                                  isFolder ? 'folder' :
-                                    isVideo && item.platform === 'YouTube/Zoom Live' ? 'live_tv' : 'play_circle'}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Text Content */}
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-bold text-[#1a1a1a] text-[15px] truncate">
-                            {item.title || item.name}
-                          </h4>
-                          <div className="flex flex-col mt-0.5">
-                            <span className="text-[12px] text-gray-500 font-medium">
-                              {isFolder ? (() => {
-                                const fId = item.id || item._id;
-                                const vCount = videos.filter(v => v.folderId === fId).length;
-                                const nCount = notes.filter(n => n.folderId === fId).length;
-                                const tCount = tests.filter(t => t.folderId === fId).length;
-                                const counts = [];
-                                if (vCount > 0) counts.push(`${vCount} Videos`);
-                                if (nCount > 0) counts.push(`${nCount} Notes`);
-                                if (tCount > 0) counts.push(`${tCount} Tests`);
-                                return counts.length > 0 ? counts.join(', ') : 'Empty Folder';
-                              })() :
-                                isVideo ? (item.datetime ? `Duration: ${item.duration || 'N/A'}, Views: ${item.views ?? item.viewCount ?? 0}, Date & Time: ${item.datetime}` : `Duration: ${item.duration || 'N/A'}, Views: ${item.views ?? item.viewCount ?? 0}`) :
-                                  `Date & Time: ${item.datetime || '09:31 AM 06th March 2026'}`}
-                            </span>
-                          </div>
-                          <div className="mt-2.5 px-3 py-0.5 rounded-full text-[10px] font-bold text-gray-500 bg-gray-100 w-fit">
-                            {isNote ? 'PDF' : isTest ? 'Test' : isFolder ? 'Folder' : isVideo && item.platform === 'YouTube/Zoom Live' ? 'YouTube/Zoom Live' : isVideo ? 'Video' : 'Content'}
-                          </div>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="flex items-center gap-2">
-                          {/* Toggle Switch */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              showToast('Status updated', 'success');
-                            }}
-                            className={`w-[36px] h-[20px] rounded-full relative cursor-pointer flex items-center transition-all ${item.status === 'active' ? 'bg-[#1a1c1e]' : 'bg-gray-200'}`}
-                          >
-                            <div className={`absolute ${item.status === 'active' ? 'right-[2px]' : 'left-[2px]'} w-[16px] h-[16px] bg-white rounded-full shadow-sm`}></div>
-                          </button>
-
-                          {/* Lock/Free Toggle */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              showToast('Access updated', 'success');
-                            }}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-900"
-                          >
-                            <span className="material-symbols-outlined text-[18px]">
-                              {item.isFree ? 'lock_open' : 'lock'}
-                            </span>
-                          </button>
-
-                          {/* Edit Button */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (isFolder) handleEditFolder(item);
-                              else if (isVideo) handleEditVideo(item);
-                              else if (isNote) handleEditNote(item);
-                              else if (isTest) handleEditTest(item);
-                            }}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-900"
-                          >
-                            <span className="material-symbols-outlined text-[18px]">edit</span>
-                          </button>
-
-                          {/* Delete Button */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const id = item._id || item.id;
-                              if (isFolder) handleDeleteFolder(id);
-                              else if (isVideo) handleDeleteVideo(id);
-                              else if (isNote) handleDeleteNote(id);
-                              else if (isTest) handleDeleteTest(id);
-                            }}
-                            className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500"
-                          >
-                            <span className="material-symbols-outlined text-[18px]">delete</span>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
+                  finalRenderedItems
                 )}
-                {combinedItems.length > 0 && (
+                {finalRenderedItems.length > 0 && (
                   <div className="flex flex-col items-center justify-center py-10">
                     <p className="text-[13px] font-medium text-gray-400">You've seen all the items in the list.</p>
                   </div>

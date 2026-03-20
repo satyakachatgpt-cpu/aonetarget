@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import Razorpay from 'razorpay';
 import dotenv from 'dotenv';
 import { fileURLToPath } from "url";
 import path from 'path';
@@ -8,6 +9,7 @@ import http from 'http';
 import { createServer as createViteServer } from 'vite';
 import multer from 'multer';
 import * as XLSX from 'xlsx';
+import crypto from 'crypto';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import dns from 'dns';
@@ -20,7 +22,7 @@ import compression from 'compression';
 import { globalLimiter, authLimiter, videoLimiter, securityHeaders, sanitizeInput } from './middleware/security.js';
 
 // Force Google DNS to fix MongoDB SRV resolution issues (ECONNREFUSED)
-dns.setServers(['8.8.8.8', '8.8.4.4']);
+// dns.setServers(['8.8.8.8', '8.8.4.4']);
 
 
 dotenv.config();
@@ -156,13 +158,6 @@ const excelUpload = multer({
 });
 
 app.use((req, res, next) => {
-  if (req.path.startsWith('/api') || req.path === '/health') {
-    const logMsg = `[${new Date().toISOString()}] ${req.method} ${req.path}\n`;
-    console.log(logMsg);
-    try {
-      fs.appendFileSync(path.join(__dirname, 'api_requests.log'), logMsg);
-    } catch (e) {}
-  }
   if (req.path.startsWith('/api') && !db) {
     return res.status(503).json({ error: 'Database connecting, please retry' });
   }
@@ -241,17 +236,17 @@ app.get('/api/ping', (req, res) => {
 // Routes for Folders
 app.get('/api/courses/:courseId/folders', async (req, res) => {
   try {
-    const course = await findCourse(req.params.courseId);
-    if (!course) return res.json([]);
-
+    const idVariants = await getCourseIdVariants(req.params.courseId);
+    console.log(`GET /api/courses/${req.params.courseId}/folders - Resolved IDs:`, idVariants);
+    
     const query = {
-      courseId: { $in: [String(course.id || ''), String(course._id || ''), req.params.courseId].filter(Boolean) }
+      courseId: { $in: idVariants }
     };
     const folders = await Folder.find(query).sort({ order: 1, sortingOrder: 1 }).lean();
     res.json(folders || []);
   } catch (error) {
     console.error('Fetch folders error:', error);
-    res.status(500).json({ error: 'Failed to fetch' });
+    res.status(500).json({ error: 'Failed' });
   }
 });
 
@@ -564,54 +559,90 @@ app.get('/api/instructors', async (req, res) => {
 
 // Routes for Course Videos
 // Helper to find a course by any ID (custom or ObjectId)
+// Helper to find all relevant IDs for a course/package (including sub-courses)
+async function getCourseIdVariants(identifier) {
+  if (!identifier) return [];
+  
+  let idVariants = [String(identifier)];
+  const course = await findCourse(identifier);
+  
+  if (course) {
+    idVariants.push(String(course.id || ''));
+    idVariants.push(String(course._id || ''));
+    idVariants.push(course._id.toString());
+    
+    // 1. If it's a package, fetch IDs of all included courses
+    if (course.courses && Array.isArray(course.courses)) {
+      for (const name of course.courses) {
+        const subCourse = await db.collection('courses').findOne({ 
+          $or: [{ name: name }, { title: name }] 
+        });
+        if (subCourse) {
+          idVariants.push(String(subCourse.id || ''));
+          idVariants.push(String(subCourse._id || ''));
+          idVariants.push(subCourse._id.toString());
+        }
+      }
+    }
+
+    // 2. Also find any packages that might INCLUDE this course
+    const parentPackages = await db.collection('packages').find({ 
+      courses: { $in: [course.name, course.title].filter(Boolean) } 
+    }).toArray();
+    
+    for (const p of parentPackages) {
+      if (p.id) idVariants.push(String(p.id));
+      idVariants.push(p._id.toString());
+    }
+  }
+  
+  return [...new Set(idVariants.filter(Boolean))];
+}
+
 async function findCourse(id) {
   if (!id) return null;
   const collections = ['courses', 'packages', 'testSeries', 'test-series', 'subcourses', 'tests'];
   
   for (const colName of collections) {
     try {
-      // Try custom id first
       let item = await db.collection(colName).findOne({ id: id });
-      
-      // Try _id as string or ObjectId
       if (!item) {
         item = await db.collection(colName).findOne({ _id: id });
       }
       if (!item && ObjectId.isValid(id)) {
         item = await db.collection(colName).findOne({ _id: new ObjectId(id) });
       }
-      
       if (item) return item;
     } catch (e) {
       console.warn(`Search in ${colName} failed:`, e.message);
     }
   }
-
   return null;
 }
 
 // Routes for Course Videos
 app.get('/api/courses/:id/videos', async (req, res) => {
   try {
-    const course = await findCourse(req.params.id);
-    if (!course) return res.json([]);
-
-    const idVariants = [String(course.id || ''), String(course._id || ''), req.params.id].filter(Boolean);
-    let videos = await db.collection('videos').find({ courseId: { $in: idVariants } }).sort({ order: 1 }).toArray();
+    const idVariants = await getCourseIdVariants(req.params.id);
+    
+    let videos = await db.collection('videos').find({ 
+      courseId: { $in: idVariants } 
+    }).sort({ order: 1 }).toArray();
 
     if (videos.length === 0) {
-      const courseNames = [];
-      if (course.name) courseNames.push(course.name);
-      if (course.title && course.title !== course.name) courseNames.push(course.title);
-      if (courseNames.length > 0) {
-        videos = await db.collection('videos').find({ course: { $in: courseNames } }).sort({ order: 1 }).toArray();
+      const course = await findCourse(req.params.id);
+      if (course) {
+        const courseNames = [course.name, course.title].filter(Boolean);
+        videos = await db.collection('videos').find({ 
+          course: { $in: courseNames } 
+        }).sort({ order: 1 }).toArray();
       }
     }
 
     res.json(videos);
   } catch (error) {
     console.error('Fetch videos error:', error);
-    res.status(500).json({ error: 'Failed to fetch videos' });
+    res.status(500).json({ error: 'Failed' });
   }
 });
 
@@ -908,23 +939,20 @@ app.get('/api/demo-content', async (req, res) => {
 // Routes for Course Notes (uses pdfs collection - consistent with admin uploads)
 app.get('/api/courses/:id/notes', async (req, res) => {
   try {
-    const course = await findCourse(req.params.id);
-    if (!course) return res.json([]);
-
+    const idVariants = await getCourseIdVariants(req.params.id);
     const query = {
-      courseId: { $in: [String(course.id || ''), String(course._id || ''), req.params.id].filter(Boolean) }
+      courseId: { $in: idVariants }
     };
-    // Check both pdfs and notes collections for backward compatibility
+    // Check both pdfs and notes collections
     const pdfs = await db.collection('pdfs').find(query).sort({ order: 1 }).toArray();
     const notes = await db.collection('notes').find(query).sort({ order: 1 }).toArray();
-    // Merge both, deduplicating by id
     const allNotes = [...pdfs];
     notes.forEach(n => {
       if (!allNotes.find(p => p.id === n.id || p._id.toString() === n._id.toString())) allNotes.push(n);
     });
     res.json(allNotes);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch notes' });
+    res.status(500).json({ error: 'Failed' });
   }
 });
 
@@ -1012,10 +1040,7 @@ app.delete('/api/courses/:id/notes/:noteId', async (req, res) => {
 // Routes for Course Tests
 app.get('/api/courses/:id/tests', async (req, res) => {
   try {
-    const course = await findCourse(req.params.id);
-    if (!course) return res.json([]);
-
-    const idVariants = [String(course.id || ''), String(course._id || ''), req.params.id].filter(Boolean);
+    const idVariants = await getCourseIdVariants(req.params.id);
     const query = {
       $or: [
         { courseId: { $in: idVariants } },
@@ -1025,11 +1050,26 @@ app.get('/api/courses/:id/tests', async (req, res) => {
     };
 
     const tests = await db.collection('tests').find(query).toArray();
-    console.log(`GET /api/courses/${req.params.id}/tests - Found ${tests.length} tests (strictly for this course)`);
     res.json(tests);
   } catch (error) {
-    console.error('Error fetching course tests:', error);
-    res.status(500).json({ error: 'Failed to fetch tests' });
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.get('/api/courses/:id/live-classes', async (req, res) => {
+  try {
+    const idVariants = await getCourseIdVariants(req.params.id);
+    const query = {
+      courseId: { $in: idVariants }
+    };
+    const [c1, c2] = await Promise.all([
+      db.collection('liveVideos').find(query).toArray(),
+      db.collection('liveClasses').find(query).toArray()
+    ]);
+    const merged = [...c1, ...c2].sort((a,b) => new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt));
+    res.json(merged);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed' });
   }
 });
 
@@ -4393,27 +4433,46 @@ app.post('/api/students/:id/enroll', async (req, res) => {
     res.status(500).json({ error: 'Failed to enroll' });
   }
 });
-// Check if student is enrolled in a course
+// Check if student is enrolled in a cour// Check if student is enrolled in a course or its parent package
 app.get('/api/students/:id/enrolled/:courseId', async (req, res) => {
   try {
-    const student = await db.collection('students').findOne({ id: req.params.id });
-    if (!student) {
-      return res.status(404).json({ error: 'Student not found' });
+    const studentId = req.params.id;
+    const identifier = req.params.courseId;
+    
+    // 1. Get all relevant IDs for this course/package
+    const course = await findCourse(identifier);
+    if (!course) return res.json({ enrolled: false });
+    
+    const canonicalId = course.id || course._id.toString();
+    const hexId = course._id.toString();
+    
+    // 2. Determine all packages that contain this course
+    const parentPackages = await db.collection('packages').find({ 
+      courses: { $in: [course.name, course.title].filter(Boolean) } 
+    }).toArray();
+    
+    const relevantIds = [canonicalId, hexId, identifier, ...parentPackages.map(p => p.id), ...parentPackages.map(p => p._id.toString())];
+    const uniqueRelevantIds = [...new Set(relevantIds.filter(Boolean))];
+
+    // 3. Check student's enrolledCourses array
+    const student = await db.collection('students').findOne({ id: studentId });
+    if (student) {
+      const studentEnrolled = student.enrolledCourses || [];
+      if (uniqueRelevantIds.some(id => studentEnrolled.includes(id))) {
+        return res.json({ enrolled: true });
+      }
     }
 
-    const course = await findCourse(req.params.courseId);
-    if (!course) {
-      return res.json({ enrolled: false });
-    }
+    // 4. Check enrollments collection (more robust)
+    const enrollment = await db.collection('enrollments').findOne({
+      studentId: studentId,
+      courseId: { $in: uniqueRelevantIds }
+    });
 
-    const enrolledCourses = student.enrolledCourses || [];
-    const isEnrolled = enrolledCourses.includes(course.id || req.params.courseId) ||
-      enrolledCourses.includes(course._id.toString());
-
-    res.json({ enrolled: isEnrolled });
+    res.json({ enrolled: !!enrollment });
   } catch (error) {
     console.error('Error checking enrollment:', error);
-    res.status(500).json({ error: 'Failed to check enrollment' });
+    res.status(500).json({ enrolled: false });
   }
 });
 
@@ -5284,6 +5343,8 @@ app.post('/api/razorpay/create-order', async (req, res) => {
     }
 
     console.log(`Razorpay Mode: ${keyId.startsWith('rzp_live') ? 'LIVE (Real Money)' : 'TEST (Sandbox)'}`);
+    console.log(`KeyId: ${keyId.slice(0, 8)}...${keyId.slice(-4)}`);
+    console.log(`Secret length: ${keySecret.length}`);
 
     const student = await db.collection('students').findOne({ id: studentId });
     if (!student) {
@@ -5300,27 +5361,23 @@ app.post('/api/razorpay/create-order', async (req, res) => {
       return res.status(400).json({ error: 'This course is free, no payment needed' });
     }
 
-    const orderData = {
+    const razorpay = new Razorpay({
+      key_id: keyId,
+      key_secret: keySecret
+    });
+
+    const orderOptions = {
       amount: Math.round(coursePrice * 100),
       currency: 'INR',
       receipt: `receipt_${Date.now()}`,
       notes: { courseId: course.id || course._id.toString(), studentId }
     };
 
-    const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
-    const response = await fetch('https://api.razorpay.com/v1/orders', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Basic ${auth}`
-      },
-      body: JSON.stringify(orderData)
-    });
+    const order = await razorpay.orders.create(orderOptions);
 
-    const order = await response.json();
-    if (!response.ok) {
+    if (!order || order.status === 'failed') {
       console.error('Razorpay order creation failed:', order);
-      return res.status(500).json({ error: order.error?.description || 'Failed to create Razorpay order' });
+      return res.status(500).json({ error: 'Failed to create Razorpay order' });
     }
 
     res.json({ orderId: order.id, amount: order.amount, currency: order.currency, keyId });
@@ -5356,7 +5413,6 @@ app.post('/api/razorpay/verify', async (req, res) => {
       return res.status(500).json({ error: 'Razorpay credentials not configured' });
     }
 
-    const crypto = await import('crypto');
     const generated_signature = crypto.createHmac('sha256', keySecret)
       .update(razorpay_order_id + '|' + razorpay_payment_id)
       .digest('hex');

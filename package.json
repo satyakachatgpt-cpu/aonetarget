@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently \"npm run server\" \"npm run client\"",
-    "server": "cd server && npm run dev",
-    "client": "cd client && npm run dev",
+    "dev": "concurrently --raw \"npm run server -s\" \"npm run client -s\"",
+    "server": "cd server && npm run dev -s",
+    "client": "cd client && npm run dev -s",
     "install-all": "npm install && cd client && npm install && cd ../server && npm install",
-    "build": "cd client && npm run build"
+    "build": "cd client && npm run build -s"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

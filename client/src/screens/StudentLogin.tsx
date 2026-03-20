@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { indiaStateDistrictMap } from '../src/utils/indiaStates';
+import { indiaStateDistrictMap } from '../utils/indiaStates';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -30,7 +30,7 @@ type PhoneFormData = z.infer<typeof phoneSchema>;
 type ProfileFormData = z.infer<typeof profileSchema>;
 
 interface StudentLoginProps {
-  setAuth: (auth: any) => void;
+  setAuth: (student: any, accessToken?: string, deviceId?: string) => void;
 }
 
 const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth }) => {

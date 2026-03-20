@@ -12,6 +12,7 @@ import SubjectiveTestDrawer from './SubjectiveTestDrawer';
 import AddTestPDFBulkDrawer from './AddTestPDFBulkDrawer';
 import ViewFormatModal from './ViewFormatModal';
 import AddQuestionDrawer from './AddQuestionDrawer';
+import ImportGlobalLibraryDrawer from './ImportGlobalLibraryDrawer';
 import mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -24,23 +25,10 @@ const detailSubTabs = ['Tests', 'Test PDFs', 'Subjective Tests', 'Users'] as con
 
 type DetailSubTab = typeof detailSubTabs[number];
 
-const mockPDFs = [
-  { id: 'PDF-101', name: 'Pronoun Handout Notes', size: '2.4 MB', addedOn: 'Oct 12, 2025' },
-  { id: 'PDF-102', name: 'English Grammar Rules PDF', size: '1.8 MB', addedOn: 'Oct 15, 2025' },
-];
-
-const mockSubjectives = [
-  { id: 'SUB-401', name: 'Descriptive English Mains Test', marks: 100, time: 180, questions: 5, status: 'Draft' },
-];
-
-const mockUsers = [
-  { id: 1, name: 'Harsh Vardhan', phone: '9876543210', transactionId: 'TXN_99882211', dateTime: 'Oct 20, 2025, 10:30 AM', expiryDate: 'Oct 20, 2026' },
-  { id: 2, name: 'Amit Verma', phone: '9122334455', transactionId: 'TXN_44556677', dateTime: 'Oct 22, 2025, 02:15 PM', expiryDate: 'Oct 22, 2026' },
-];
-
-const mockDetailTests = [
-  { id: '2210', name: 'Pronoun Full Test', marks: 50, time: 60, questions: 5, published: 'October 30, 2025, 12:48 pm', status: 'active', price: 0 },
-];
+const mockPDFs: any[] = [];
+const mockSubjectives: any[] = [];
+const mockUsers: any[] = [];
+const mockDetailTests: any[] = [];
 
 
 
@@ -331,7 +319,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
-        
+
         return jsonData.map((row: any, idx) => ({
           id: idx + 1,
           questionEn: row.Question || row.question || row.text || 'No question text',
@@ -357,14 +345,14 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         console.log('Starting PDF parsing for:', file.name);
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         let fullText = '';
-        
+
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
-          
+
           let lastY = -1;
           let pageText = '';
-          
+
           // Use Y coordinate to detect new lines in PDF
           for (const item of (textContent.items as any[])) {
             const currentY = item.transform[5];
@@ -376,7 +364,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           }
           fullText += pageText + '\n\n';
         }
-        
+
         console.log('Extracted PDF text length:', fullText.length);
         const questions = extractQuestionsFromText(fullText);
         console.log('Extracted questions count:', questions.length);
@@ -391,10 +379,10 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
   function extractQuestionsFromText(text: string): any[] {
     const questions: any[] = [];
-    
+
     // Normalize text: handle various newline formats and multi-spaces
     const normalizedText = text.replace(/\r\n/g, '\n').replace(/[ \t]+/g, ' ');
-    
+
     // Split into question blocks
     // Matches patterns like "1.", "Q1.", "Question 1:", "1)", "(1)" at start of line or after double newline
     // We use a broader regex to capture various numbering styles
@@ -407,11 +395,11 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       // Find options: (A), A., A), [A], Option A:
       // We look for A, B, C, D in various brackets or followed by dot/dash
       const optionMarkerRegex = /(?:\n|[ \t])(?:\(?([A-Da-d])[\s\).\]:]|Option\s*([A-Da-d])[\s.:])(?!\w)/gi;
-      
+
       let lastIndex = 0;
       let match;
       const optionMatches = [];
-      
+
       // Use a fresh regex instance for each block
       const tempGlobalRegex = new RegExp(optionMarkerRegex);
       while ((match = tempGlobalRegex.exec(block)) !== null) {
@@ -421,46 +409,46 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           label: (match[1] || match[2]).toUpperCase()
         });
       }
-      
+
       let questionPart = "";
       let optionsArray: string[] = [];
       let answer = "A";
       let solution = "";
-      
+
       if (optionMatches.length > 0) {
         // Text before first option is the question
         questionPart = block.substring(0, optionMatches[0].index).trim();
-        
+
         // Extract options
         for (let i = 0; i < optionMatches.length; i++) {
           const start = optionMatches[i].index + optionMatches[i].marker.length;
           const end = (i + 1 < optionMatches.length) ? optionMatches[i + 1].index : block.length;
           let optText = block.substring(start, end).trim();
-          
+
           // Detect Ans/Solution inside option text (sometimes they are appended on the same line)
           const ansMatch = optText.match(/(?:Ans(?:wer)?|Correct|उत्तर)[:.\s]*([A-D])/i);
           if (ansMatch) {
             answer = ansMatch[1].toUpperCase();
             optText = optText.substring(0, ansMatch.index).trim();
           }
-          
+
           const solMatch = optText.match(/(?:Sol(?:ution)?|Expl(?:anation)?|हल)[:.\s]*([\s\S]*)/i);
           if (solMatch) {
             solution = solMatch[1].trim();
             optText = optText.substring(0, solMatch.index).trim();
           }
-          
+
           if (optText) optionsArray.push(optText);
         }
       } else {
         // No options found, the whole block is just question text
         questionPart = block.trim();
       }
-      
+
       // Clean up question text: remove the question number prefix (e.g., "1. ")
       let questionEn = questionPart.replace(/^\s*(?:Q(?:uestion)?\s*)?\(?\d+\)?[\s.:\)]+\s*/i, '').trim();
       let questionHi = "";
-      
+
       // Hindi detection and separation for bilingual questions
       const hindiRegex = /[\u0900-\u097F]/;
       if (hindiRegex.test(questionEn)) {
@@ -469,7 +457,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         if (lines.length >= 2) {
           const hasHindi0 = hindiRegex.test(lines[0]);
           const hasHindi1 = hindiRegex.test(lines[1]);
-          
+
           if (hasHindi0 && !hasHindi1) {
             questionHi = lines[0];
             questionEn = lines.slice(1).join(' ');
@@ -477,9 +465,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             questionEn = lines[0];
             questionHi = lines.slice(1).join(' ');
           } else if (hasHindi0 && hasHindi1) {
-             // Both have Hindi, maybe just a long Hindi question
-             questionHi = questionEn;
-             questionEn = ""; // Or we could duplicate
+            // Both have Hindi, maybe just a long Hindi question
+            questionHi = questionEn;
+            questionEn = ""; // Or we could duplicate
           }
         } else if (hindiRegex.test(questionEn)) {
           // Single line with Hindi
@@ -487,13 +475,13 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           questionEn = "";
         }
       }
-      
+
       // Fallback: Global answer detection if not found in options
       if (answer === "A") {
         const globalAns = block.match(/(?:Ans(?:wer)?|Correct|उत्तर)[:.\s]*([A-D])\b/i);
         if (globalAns) answer = globalAns[1].toUpperCase();
       }
-      
+
       // Fallback: Global solution detection
       const globalSol = block.match(/(?:Sol(?:ution)?|Expl(?:anation)?|हल)[:.\s]*([\s\S]{5,})/i);
       if (globalSol) {
@@ -515,7 +503,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         });
       }
     }
-    
+
     return questions;
   }
   const [viewingFormatModal, setViewingFormatModal] = useState<string | null>(null);
@@ -528,7 +516,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       return saved ? JSON.parse(saved) : null;
     } catch { return null; }
   });
-  
+
   const setViewingTestSeries = (val: any) => {
     if (val) localStorage.setItem('viewingTestSeries', JSON.stringify(val));
     else localStorage.removeItem('viewingTestSeries');
@@ -543,7 +531,19 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     localStorage.setItem('viewingTestSeriesTab', val);
     setViewingTestSeriesTabState(val);
   };
-  const [viewingQuestionEditor, setViewingQuestionEditor] = useState<any | null>(null);
+  const [viewingQuestionEditor, setViewingQuestionEditorState] = useState<any | null>(() => {
+    try {
+      const saved = localStorage.getItem('viewingQuestionEditor');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
+
+  const setViewingQuestionEditor = (val: any) => {
+    if (val) localStorage.setItem('viewingQuestionEditor', JSON.stringify(val));
+    else localStorage.removeItem('viewingQuestionEditor');
+    setViewingQuestionEditorState(val);
+  };
+
   const [showAddMenu, setShowAddMenu] = useState(false);
   const [showAddSingleTestDrawer, setShowAddSingleTestDrawer] = useState(false);
   const [showAddTestPDFDrawer, setShowAddTestPDFDrawer] = useState(false);
@@ -557,6 +557,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const [isParsing, setIsParsing] = useState(false);
   const [selectedBulkDeleteQuestions, setSelectedBulkDeleteQuestions] = useState<number[]>([]);
   const [showSortModal, setShowSortModal] = useState(false);
+  const [showImportLibraryDrawer, setShowImportLibraryDrawer] = useState(false);
   // Results Tab States
   const [results, setResults] = useState<any[]>([]);
   const [resultFilters, setResultFilters] = useState({
@@ -591,24 +592,14 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
   // Sync routeId with viewingTestSeries
   useEffect(() => {
-    if (routeId) {
-      // If we have an ID in the route but no viewingTestSeries or a different one, fetch it
-      if (!viewingTestSeries || (viewingTestSeries.id !== routeId && (viewingTestSeries as any)._id !== routeId)) {
-        const foundTest = tests.find(t => t.id === routeId || (t as any)._id === routeId);
-        if (foundTest) {
-          setViewingTestSeriesState(foundTest);
-        } else {
-          // If not found in current list, we might need to fetch it specifically or it might be a course/series from the courses API
-          // For now, let's check the courses too
-          const foundCourse = courses.find(c => c.id === routeId || (c as any)._id === routeId);
-          if (foundCourse) {
-            setViewingTestSeriesState(foundCourse);
-          } else if (tests.length > 0) {
-            // If we've loaded tests but still can't find it, it might be an invalid ID
-            // showToast('Test Series not found', 'error');
-            // navigate('/admin/tests');
-          }
-        }
+    if (viewingTestSeries || routeId) {
+      const id = routeId || (viewingTestSeries?.id || viewingTestSeries?._id);
+      const foundTest = tests.find(t => t.id === id || (t as any)._id === id);
+      if (foundTest) {
+        setViewingTestSeriesState(foundTest);
+      } else {
+        const foundCourse = courses.find(c => c.id === id || (c as any)._id === id);
+        if (foundCourse) setViewingTestSeriesState(foundCourse);
       }
     } else {
       // If no ID in route, clear viewingTestSeries
@@ -669,22 +660,29 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     const payload = data || questionFormData;
     if (!payload) return;
     try {
-      if (payload.id) {
-        await questionsAPI.update(payload.id, payload);
+      const editorId = viewingQuestionEditor?.id || viewingQuestionEditor?._id;
+      const questionId = String(payload.id || payload._id || '');
+
+      if (questionId) {
+        console.log('[handleSaveQuestion] Updating question:', questionId, 'payload keys:', Object.keys(payload));
+        await questionsAPI.update(questionId, payload);
         showToast('Question updated successfully', 'success');
       } else {
-        await questionsAPI.create({ ...payload, testId: viewingQuestionEditor.id });
+        console.log('[handleSaveQuestion] Creating new question for test:', editorId);
+        await questionsAPI.create({ ...payload, testId: editorId });
         showToast('Question created successfully', 'success');
       }
+      invalidateCache('tests'); // Force refresh for questions list
       setViewingAddQuestionForm(null);
       setQuestionFormData(null);
       // Refresh questions list for the editor
-      if (viewingQuestionEditor) {
-        const qs = await testsAPI.getQuestions(viewingQuestionEditor.id);
+      if (editorId) {
+        const qs = await testsAPI.getQuestions(editorId);
         setEditorQuestions(qs);
       }
     } catch (err: any) {
-      showToast(err.message, 'error');
+      console.error('[handleSaveQuestion] Error:', err);
+      showToast(err.message || 'Failed to save question', 'error');
     }
   };
 
@@ -692,10 +690,12 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     if (!window.confirm('Are you sure you want to delete this question?')) return;
     try {
       await questionsAPI.delete(String(id));
+      invalidateCache('tests');
       showToast('Question deleted successfully', 'success');
       // Refresh questions list for the editor
-      if (viewingQuestionEditor) {
-        const qs = await testsAPI.getQuestions(viewingQuestionEditor.id);
+      const editorId = viewingQuestionEditor?.id || viewingQuestionEditor?._id;
+      if (editorId) {
+        const qs = await testsAPI.getQuestions(editorId);
         setEditorQuestions(qs);
       }
     } catch (err: any) {
@@ -744,45 +744,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       if (viewingQuestionEditor && editorId) {
         try {
           const qs = await testsAPI.getQuestions(editorId);
-          // Fallback to existing mock if API is empty for demo
-          const finalQs = Array.isArray(qs) && qs.length > 0 ? qs : [
-            {
-              id: 1,
-              questionEn: "This book is mine and that is ________.",
-              optionsContent: [
-                { id: 'a', label: 'Your' },
-                { id: 'b', label: "Your's" },
-                { id: 'c', label: 'Yours' },
-                { id: 'd', label: 'You' },
-                { id: 'e', label: 'No word' },
-              ],
-              displayOptions: [
-                { id: 1, text: 'A', isCorrect: false },
-                { id: 2, text: 'B', isCorrect: false },
-                { id: 3, text: 'C', isCorrect: true },
-                { id: 4, text: 'D', isCorrect: false },
-              ]
-            }
-          ];
-          setEditorQuestions(finalQs);
+          setEditorQuestions(Array.isArray(qs) ? qs : []);
         } catch (err) {
-          // If API fails, use mock
-          setEditorQuestions([
-            {
-              id: 1,
-              questionEn: "This book is mine and that is ________.",
-              optionsContent: [
-                { id: 'a', label: 'Your' },
-                { id: 'b', label: "Your's" },
-                { id: 'c', label: 'Yours' },
-              ],
-              displayOptions: [
-                { id: 1, text: 'A', isCorrect: false },
-                { id: 2, text: 'B', isCorrect: false },
-                { id: 3, text: 'C', isCorrect: true },
-              ]
-            }
-          ]);
+          setEditorQuestions([]);
         }
 
       }
@@ -894,11 +858,11 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      
+
       if (showFloatingAddMenu && !target.closest('.add-menu-container')) {
         setShowFloatingAddMenu(false);
       }
-      
+
       if (showFloatingMoreMenu && !target.closest('.more-menu-container')) {
         setShowFloatingMoreMenu(false);
       }
@@ -1061,9 +1025,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const getCourseName = (test: any) => {
     if (test.courseName) return test.courseName;
     if (test.courseId) {
-      const course = courses.find(c => c.id === test.courseId);
+      const course = courses.find(c => c.id === test.courseId || (c as any)._id === test.courseId);
       if (course) return (course.name || course.title);
-      const parentSeries = tests.find(t => t.id === test.courseId);
+      const parentSeries = tests.find(t => t.id === test.courseId || (t as any)._id === test.courseId);
       if (parentSeries) return (parentSeries.name || parentSeries.title);
       return test.courseId;
     }
@@ -1074,11 +1038,11 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     const matchesSearch = !searchQuery || (test.name && test.name.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesCourse = !filterCourse || (test.courseId === filterCourse) || (!test.courseId && test.course === filterCourse);
     const matchesStatus = !filterStatus || (test.status === filterStatus);
-    
+
     // ONLY show Test Series in the main global list. 
     // Individual tests should only be visible inside their respective series.
     const isMainSeries = test.isSeries === true;
-    
+
     return matchesSearch && matchesCourse && matchesStatus && isMainSeries;
   });
 
@@ -1116,7 +1080,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       return;
     }
 
-    const selectedCourse = courses.find(c => c.id === effectiveCourseId) || viewingTestSeries;
+    const selectedCourse = courses.find(c => c.id === effectiveCourseId || (c as any)._id === effectiveCourseId) || viewingTestSeries;
 
     try {
       const testData: any = {
@@ -1141,12 +1105,12 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
       if (editingTest) {
         try {
-          await testsAPI.update(editingTest.id, testData);
-          setTests(tests.map(t => t.id === editingTest.id ? testData : t));
+          await testsAPI.update(editingTest.id || (editingTest as any)._id, testData);
+          setTests(tests.map(t => (t.id || (t as any)._id) === (editingTest.id || (editingTest as any)._id) ? testData : t));
           showToast('Test updated successfully!');
         } catch (apiError) {
           console.error('API update error:', apiError);
-          setTests(tests.map(t => t.id === editingTest.id ? testData : t));
+          setTests(tests.map(t => (t.id || (t as any)._id) === (editingTest.id || (editingTest as any)._id) ? testData : t));
           showToast('Test updated (local only)');
         }
       } else {
@@ -1186,7 +1150,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     if (confirm('Are you sure you want to delete this test?')) {
       try {
         await testsAPI.delete(id);
-        setTests(tests.filter(t => t.id !== id));
+        setTests(tests.filter(t => (t.id || (t as any)._id) !== id));
         showToast('Test deleted successfully!');
       } catch (error) {
         showToast('Failed to delete test', 'error');
@@ -1199,7 +1163,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     if (confirm(`Delete ${selectedTests.length} selected tests?`)) {
       try {
         await Promise.all(selectedTests.map(id => testsAPI.delete(id)));
-        setTests(tests.filter(t => !selectedTests.includes(t.id)));
+        setTests(tests.filter(t => !selectedTests.includes(t.id || (t as any)._id)));
         setSelectedTests([]);
         showToast(`${selectedTests.length} tests deleted!`);
       } catch (error) {
@@ -1212,7 +1176,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     if (selectedTests.length === paginatedTests.length) {
       setSelectedTests([]);
     } else {
-      setSelectedTests(paginatedTests.map(t => t.id));
+      setSelectedTests(paginatedTests.map(t => t.id || (t as any)._id));
     }
   };
 
@@ -1225,8 +1189,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const toggleFeatured = async (test: Test) => {
     try {
       const updatedTest = { ...test, featured: !test.featured };
-      await testsAPI.update(test.id, updatedTest);
-      setTests(tests.map(t => t.id === test.id ? updatedTest : t));
+      await testsAPI.update(test.id || (test as any)._id, updatedTest);
+      setTests(tests.map(t => (t.id || (t as any)._id) === (test.id || (test as any)._id) ? updatedTest : t));
       showToast(test.featured ? 'Removed from featured!' : 'Added to featured!');
     } catch (error) {
       showToast('Failed to update test', 'error');
@@ -1237,8 +1201,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     const newStatus = test.status === 'active' ? 'inactive' : 'active';
     try {
       const updatedTest = { ...test, status: newStatus as any };
-      await testsAPI.update(test.id, updatedTest);
-      setTests(tests.map(t => t.id === test.id ? updatedTest : t));
+      await testsAPI.update(test.id || (test as any)._id, updatedTest);
+      setTests(tests.map(t => (t.id || (t as any)._id) === (test.id || (test as any)._id) ? updatedTest : t));
       showToast(`Test ${newStatus}!`);
     } catch (error) {
       showToast('Failed to update status', 'error');
@@ -1615,23 +1579,10 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const renderTestSeriesDetail = () => {
     if (!viewingTestSeries) return null;
 
-    const mockDetailTests = [
-      { id: '2210', name: 'Pronoun Full Test', marks: 50, time: 60, questions: 50, published: 'October 30, 2025, 12:48 pm', status: 'active' },
-    ];
-
-    const mockPDFs = [
-      { id: 'PDF-101', name: 'Pronoun Handout Notes', size: '2.4 MB', addedOn: 'Oct 12, 2025' },
-      { id: 'PDF-102', name: 'English Grammar Rules PDF', size: '1.8 MB', addedOn: 'Oct 15, 2025' },
-    ];
-
-    const mockSubjectives = [
-      { id: 'SUB-401', name: 'Descriptive English Mains Test', marks: 100, time: 180, questions: 5, status: 'Draft' },
-    ];
-
-    const mockUsers = [
-      { id: 1, name: 'Harsh Vardhan', phone: '9876543210', transactionId: 'TXN_99882211', dateTime: 'Oct 20, 2025, 10:30 AM', expiryDate: 'Oct 20, 2026' },
-      { id: 2, name: 'Amit Verma', phone: '9122334455', transactionId: 'TXN_44556677', dateTime: 'Oct 22, 2025, 02:15 PM', expiryDate: 'Oct 22, 2026' },
-    ];
+    const mockDetailTests: any[] = [];
+    const mockPDFs: any[] = [];
+    const mockSubjectives: any[] = [];
+    const mockUsers: any[] = [];
 
     // Question Editor View (Full Page)
     if (viewingQuestionEditor) {
@@ -1665,7 +1616,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
               <div className="flex items-center gap-6">
                 <span className="text-[13px] font-bold text-gray-600">{viewingQuestionEditor.marks || 0} Marks</span>
                 <span className="text-[13px] font-bold text-gray-600">{viewingQuestionEditor.time || 0} Minutes</span>
-                <span className="text-[13px] font-bold text-gray-600">{editorQuestions.length}/{viewingQuestionEditor.questions || 0} Question Added</span>
+                <span className="text-[13px] font-bold text-gray-600">{editorQuestions.length} Questions Added</span>
+
               </div>
               <p className="text-[12px] font-medium text-gray-400">Last Published: {viewingQuestionEditor.published || 'October 30, 2025, 12:43 pm'}</p>
             </div>
@@ -1754,8 +1706,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                         { label: 'Bulk Delete', icon: 'delete', onClick: () => { setShowBulkDeleteModal(true); setSelectedBulkDeleteQuestions([]); } },
                         { label: 'Sort Questions', icon: 'sort', onClick: () => setShowSortModal(true) }
                       ].map((item, idx) => (
-                        <button 
-                          key={idx} 
+                        <button
+                          key={idx}
                           onClick={() => {
                             if (item.onClick) item.onClick();
                             setShowFloatingMoreMenu(false);
@@ -1790,39 +1742,38 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                       <span className="material-symbols-outlined text-[18px]">edit_note</span>
                       Edit
                     </button>
-                     <button
-                        onClick={() => handleDeleteQuestion(q.id)}
-                        className="w-9 h-9 border border-gray-100 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"
-                      >
-                       <span className="material-symbols-outlined text-[20px]">delete</span>
-                     </button>
+                    <button
+                      onClick={() => handleDeleteQuestion(q.id || (q as any)._id)}
+                      className="w-9 h-9 border border-gray-100 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"
+                    >
+                      <span className="material-symbols-outlined text-[20px]">delete</span>
+                    </button>
                   </div>
 
-                  <div className="space-y-6">
-                    <p className="text-[13px] font-bold text-gray-400">{idx + 1}.</p>
-                    <div className="space-y-4">
-                      <div className="text-[14px] font-bold text-gray-800">
-                        {renderQuestionText(q?.questionEn || 'No question text')}
-                      </div>
-                      <div className="space-y-1.5 pl-6 mt-3">
-                        {(q?.optionsContent || []).map((opt: any, oidx: number) => (
-                          <div key={oidx} className="text-[13px] font-bold text-gray-700 flex gap-1">
-                            <span>{opt?.id || String.fromCharCode(97 + oidx)}.</span>
-                            <span>{renderQuestionText(opt?.label || 'Option')}</span>
+                  <div className="space-y-8">
+                    <div className="flex items-start gap-4">
+                      <span className="text-[16px] font-black text-gray-300 shrink-0 leading-[1.6]">{idx + 1}.</span>
+                      <div className="flex-1">
+                        <div className="text-[16px] font-bold text-gray-800 leading-[1.6] pr-64">
+                          {renderQuestionText(q?.questionEn || 'No question text')}
+                        </div>
+                        {q?.questionHi && (
+                          <div className="text-[16px] font-medium text-gray-500 mt-2 leading-[1.6]">
+                            {renderQuestionText(q.questionHi)}
                           </div>
-                        ))}
+                        )}
                       </div>
                     </div>
 
                     {/* Options Grid */}
-                    <div className="pt-10 grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="pl-10 grid grid-cols-1 md:grid-cols-3 gap-6">
                       {(q?.displayOptions || []).map((opt: any, oidx: number) => (
-                        <div key={oidx} className={`rounded-xl border shadow-sm overflow-hidden ${opt?.isCorrect ? 'border-[#82B366]' : 'border-gray-100'}`}>
-                          <div className={`px-4 py-2 border-b flex items-center justify-center gap-2 ${opt?.isCorrect ? 'bg-[#D5E8D4] border-[#82B366] text-[#2E7D32]' : 'bg-[#fcfcfc] border-gray-100 text-gray-500'}`}>
-                            <span className="text-[12px] font-bold">Option {opt?.id || oidx + 1}</span>
-                            {opt?.isCorrect && <span className="material-symbols-outlined text-[16px]">check</span>}
+                        <div key={oidx} className={`rounded-xl border shadow-sm overflow-hidden transition-all hover:shadow-md ${opt?.isCorrect ? 'border-[#82B366] bg-[#fdfdfd]' : 'border-gray-100 bg-white'}`}>
+                          <div className={`px-4 py-3 border-b flex items-center justify-between gap-2 ${opt?.isCorrect ? 'bg-[#D5E8D4]/30 border-[#82B366] text-[#2E7D32]' : 'bg-[#fcfcfc] border-gray-100 text-gray-500'}`}>
+                            <span className="text-[11px] font-black uppercase tracking-widest">Option {opt?.id || oidx + 1}</span>
+                            {opt?.isCorrect && <span className="material-symbols-outlined text-[18px]">check_circle</span>}
                           </div>
-                          <div className="p-6 flex items-center justify-center min-h-[100px] text-[15px] font-bold text-gray-700 text-center">
+                          <div className="p-8 flex items-center justify-center min-h-[120px] text-[15px] font-bold text-gray-700 text-center leading-relaxed">
                             {renderQuestionText(opt?.text || 'Option Text')}
                           </div>
                         </div>
@@ -1930,14 +1881,14 @@ const Tests: React.FC<Props> = ({ showToast }) => {
               {/* Test Cards List */}
               <div className="grid grid-cols-1 gap-4">
                 {(detailTests.length > 0 ? detailTests : mockDetailTests).filter(t => t && typeof t === 'object').map((test, index) => (
-                  <div key={String(test?.id || index)} className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm hover:shadow-md transition-all flex items-center justify-between group">
+                  <div key={String(test?.id || (test as any)._id || index)} className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm hover:shadow-md transition-all flex items-center justify-between group">
                     <div className="flex items-center gap-8 flex-1 text-[#1a202c]">
                       <div className="flex items-center px-4">
                         <input type="checkbox" className="w-[18px] h-[18px] rounded border-gray-200 accent-black cursor-pointer" />
                       </div>
                       <div className="space-y-1.5">
                         <h3 className="text-[15px] font-black text-gray-800 group-hover:text-blue-600 transition-colors cursor-pointer" onClick={() => { setViewingQuestionEditor(test); setEditingTest(test); }}>
-                          {String(test.id || index + 1)}) {test.name || (test as any).title}
+                          {String(test.id || (test as any)._id || index + 1)}) {test.name || (test as any).title}
                         </h3>
                         <div className="flex items-center gap-6 text-[12px] font-bold text-gray-400">
                           <span className="flex items-center gap-1.5"><span className="material-symbols-outlined text-[16px] text-blue-500">assignment</span> {test.marks || 0} Marks</span>
@@ -1949,40 +1900,40 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
                     <div className="flex items-center gap-10">
                       <div className="flex flex-col items-end gap-1 px-4 text-right">
-                         <span className="text-[11px] font-black text-gray-300 uppercase tracking-widest">Published</span>
-                         <span className="text-[13px] font-black text-gray-400 whitespace-nowrap">{(test as any).published || 'N/A'}</span>
+                        <span className="text-[11px] font-black text-gray-300 uppercase tracking-widest">Published</span>
+                        <span className="text-[13px] font-black text-gray-400 whitespace-nowrap">{(test as any).published || 'N/A'}</span>
                       </div>
-                      
+
                       <div className="flex flex-col items-center gap-1 min-w-[60px]">
                         <span className="text-[11px] font-black text-gray-300 uppercase tracking-widest mb-1">Price</span>
                         <span className="text-[15px] font-black text-[#2E7D32] bg-[#E9F7EF] px-3 py-1 rounded-full border border-[#82B366]/20">₹{(test as any).price || 0}</span>
                       </div>
 
                       <div className="flex items-center gap-4">
-                         <button className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-black transition-colors">
-                           <span className="material-symbols-outlined text-[20px]">lock_open</span>
-                         </button>
+                        <button className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-black transition-colors">
+                          <span className="material-symbols-outlined text-[20px]">lock_open</span>
+                        </button>
                         <button
-                          onClick={() => {}}
+                          onClick={() => { }}
                           className={`w-11 h-6 rounded-full relative transition-all duration-300 ${test.status === 'active' ? 'bg-black' : 'bg-gray-200'}`}
                         >
                           <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 ${test.status === 'active' ? 'left-6' : 'left-1'}`} />
                         </button>
-                        
+
                         <div className="relative">
-                          <button 
-                            onClick={() => setActiveActionMenuId(activeActionMenuId === test.id ? null : test.id)}
+                          <button
+                            onClick={() => setActiveActionMenuId(activeActionMenuId === (test.id || (test as any)._id) ? null : (test.id || (test as any)._id))}
                             className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-black transition-colors"
                           >
                             <span className="material-symbols-outlined">more_vert</span>
                           </button>
-                          
-                          {String(activeActionMenuId) === String(test.id) && (
+
+                          {String(activeActionMenuId) === String(test.id || (test as any)._id) && (
                             <div className="absolute right-0 top-full mt-2 w-[200px] bg-white rounded-xl shadow-2xl border border-gray-100 py-1 z-50 animate-in fade-in zoom-in-95 duration-200 origin-top-right">
                               {[
                                 { id: 'edit', label: 'Edit Test', icon: 'edit', onClick: () => { setEditingTest(test); setShowAddSingleTestDrawer(true); setActiveActionMenuId(null); } },
                                 { id: 'questions', label: 'Manage Questions', icon: 'quiz', onClick: () => { setViewingQuestionEditor(test); setActiveActionMenuId(null); } },
-                                { id: 'delete', label: 'Delete', icon: 'delete', color: 'text-red-500', onClick: () => { handleDelete(test.id); setActiveActionMenuId(null); } },
+                                { id: 'delete', label: 'Delete', icon: 'delete', color: 'text-red-500', onClick: () => { handleDelete(test.id || (test as any)._id); setActiveActionMenuId(null); } },
                               ].map((item) => (
                                 <button
                                   key={item.id}
@@ -2023,7 +1974,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                       <td className="px-8 py-5">
                         <div className="flex items-center gap-4">
                           <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center text-red-500">
-                             <span className="material-symbols-outlined">picture_as_pdf</span>
+                            <span className="material-symbols-outlined">picture_as_pdf</span>
                           </div>
                           <span className="text-[14px] font-bold text-gray-700">{pdf.name}</span>
                         </div>
@@ -2109,7 +2060,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                         </div>
                       </td>
                       <td className="px-8 py-5">
-                         <span className="text-[14px] font-mono font-medium text-gray-600">{user.transactionId}</span>
+                        <span className="text-[14px] font-mono font-medium text-gray-600">{user.transactionId}</span>
                       </td>
                       <td className="px-8 py-5 text-center text-[13px] font-medium text-gray-500 whitespace-nowrap">{user.dateTime}</td>
                       <td className="px-8 py-5 text-center text-[13px] font-medium text-gray-500 whitespace-nowrap">{user.expiryDate}</td>
@@ -2244,24 +2195,24 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              const next = activeActionMenuId === q.id + 20000 ? null : q.id + 20000;
+                              const next = activeActionMenuId === (q.id || (q as any)._id) + 20000 ? null : (q.id || (q as any)._id) + 20000;
                               setActiveActionMenuId(next);
                               if (next !== null) {
                                 setShowFloatingAddMenu(false);
                                 setShowFloatingMoreMenu(false);
                               }
                             }}
-                            className={`flex items-center justify-between gap-2 px-4 py-2 border rounded-lg text-[13px] font-bold transition-all shadow-sm w-[110px] ${activeActionMenuId === q.id + 20000
+                            className={`flex items-center justify-between gap-2 px-4 py-2 border rounded-lg text-[13px] font-bold transition-all shadow-sm w-[110px] ${activeActionMenuId === (q.id || (q as any)._id) + 20000
                               ? 'bg-blue-50 border-blue-200 text-blue-700'
                               : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
                               }`}
                           >
                             Actions
-                            <span className={`material-symbols-outlined text-[18px] transition-transform duration-200 ${activeActionMenuId === q.id + 20000 ? 'rotate-180 text-blue-500' : 'text-gray-400 group-hover:text-gray-600'
+                            <span className={`material-symbols-outlined text-[18px] transition-transform duration-200 ${activeActionMenuId === (q.id || (q as any)._id) + 20000 ? 'rotate-180 text-blue-500' : 'text-gray-400 group-hover:text-gray-600'
                               }`}>expand_more</span>
                           </button>
 
-                          {activeActionMenuId === q.id + 20000 && (
+                          {activeActionMenuId === (q.id || (q as any)._id) + 20000 && (
                             <div className={`absolute right-0 w-[140px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${filteredMaster.length > 3 ? (idx >= filteredMaster.length - 2 ? 'bottom-full mb-1' : 'top-full mt-1') : (idx >= filteredMaster.length - 1 ? 'bottom-full mb-1' : 'top-full mt-1')
                               }`}>
                               <button
@@ -2322,7 +2273,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
   const renderBulkUploaderTab = () => {
     const previewQuestions = (bulkUploadData.parsedQuestions && bulkUploadData.parsedQuestions.length > 0)
-      ? bulkUploadData.parsedQuestions 
+      ? bulkUploadData.parsedQuestions
       : [];
 
 
@@ -2334,10 +2285,10 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             <div className="border-[0.5px] border-gray-200 flex-1 flex flex-col">
               {[1, 2, 3, 4, 5, 6].map(i => (
                 <div key={i} className="flex border-b-[0.5px] border-gray-100 last:border-0 h-[16%]">
-                   <div className="w-[30%] bg-gray-50 border-r-[0.5px] border-gray-100" />
-                   <div className="flex-1 p-[2px]">
-                      <div className={`h-[2px] bg-gray-100 rounded-full ${i % 2 === 0 ? 'w-[60%]' : 'w-[80%]'}`} />
-                   </div>
+                  <div className="w-[30%] bg-gray-50 border-r-[0.5px] border-gray-100" />
+                  <div className="flex-1 p-[2px]">
+                    <div className={`h-[2px] bg-gray-100 rounded-full ${i % 2 === 0 ? 'w-[60%]' : 'w-[80%]'}`} />
+                  </div>
                 </div>
               ))}
             </div>
@@ -2348,27 +2299,27 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         key: 'format1', label: 'Format 1', beta: false,
         preview: (
           <div className="w-full h-full bg-white p-1 flex flex-col gap-[2px]">
-             <div className="p-1 space-y-2">
-                <div className="space-y-1">
-                   <div className="h-[2px] bg-gray-200 w-[90%]" />
-                   <div className="h-[1px] bg-gray-100 w-[60%]" />
-                </div>
-                <div className="pl-2 space-y-1">
-                   {[1, 2, 3, 4].map(i => (
-                     <div key={i} className="flex gap-1">
-                        <div className="w-2 h-[1px] bg-gray-200" />
-                        <div className="h-[1px] bg-gray-100 w-[30%]" />
-                     </div>
-                   ))}
-                </div>
-                <div className="pt-2">
-                   <div className="h-[2px] bg-gray-200 w-[40%]" />
-                </div>
-                <div className="space-y-1">
-                   <div className="h-[1px] bg-gray-100 w-[60%]" />
-                   <div className="h-[1px] bg-gray-100 w-[50%]" />
-                </div>
-             </div>
+            <div className="p-1 space-y-2">
+              <div className="space-y-1">
+                <div className="h-[2px] bg-gray-200 w-[90%]" />
+                <div className="h-[1px] bg-gray-100 w-[60%]" />
+              </div>
+              <div className="pl-2 space-y-1">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="flex gap-1">
+                    <div className="w-2 h-[1px] bg-gray-200" />
+                    <div className="h-[1px] bg-gray-100 w-[30%]" />
+                  </div>
+                ))}
+              </div>
+              <div className="pt-2">
+                <div className="h-[2px] bg-gray-200 w-[40%]" />
+              </div>
+              <div className="space-y-1">
+                <div className="h-[1px] bg-gray-100 w-[60%]" />
+                <div className="h-[1px] bg-gray-100 w-[50%]" />
+              </div>
+            </div>
           </div>
         )
       },
@@ -2376,32 +2327,32 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         key: 'format2', label: 'Format 2', beta: true,
         preview: (
           <div className="w-full h-full bg-white p-1 flex flex-col gap-[2px]">
-             <div className="p-1 space-y-2">
-                <div className="flex gap-1">
-                   <span className="text-[6px] font-bold">1.</span>
-                   <div className="flex-1 space-y-1">
-                      <div className="h-[2px] bg-gray-200 w-full" />
-                      <div className="h-[1px] bg-gray-100 w-[80%]" />
-                   </div>
+            <div className="p-1 space-y-2">
+              <div className="flex gap-1">
+                <span className="text-[6px] font-bold">1.</span>
+                <div className="flex-1 space-y-1">
+                  <div className="h-[2px] bg-gray-200 w-full" />
+                  <div className="h-[1px] bg-gray-100 w-[80%]" />
                 </div>
-                <div className="pl-2 space-y-1">
-                   {['A.', 'B.', 'C.', 'D.'].map(l => (
-                      <div key={l} className="flex gap-1">
-                         <span className="text-[5px] font-bold">{l}</span>
-                         <div className="h-[1px] bg-gray-100 w-[20%]" />
-                      </div>
-                   ))}
-                </div>
-                <div className="space-y-1">
-                   <div className="h-[1.5px] bg-gray-200 w-[30%]" />
-                   <div className="h-[1.5px] bg-gray-200 w-[40%]" />
-                </div>
-                <div className="space-y-1">
-                   <div className="h-[1px] bg-gray-100 w-full" />
-                   <div className="h-[1px] bg-gray-100 w-[90%]" />
-                   <div className="h-[1px] bg-gray-100 w-[85%]" />
-                </div>
-             </div>
+              </div>
+              <div className="pl-2 space-y-1">
+                {['A.', 'B.', 'C.', 'D.'].map(l => (
+                  <div key={l} className="flex gap-1">
+                    <span className="text-[5px] font-bold">{l}</span>
+                    <div className="h-[1px] bg-gray-100 w-[20%]" />
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-1">
+                <div className="h-[1.5px] bg-gray-200 w-[30%]" />
+                <div className="h-[1.5px] bg-gray-200 w-[40%]" />
+              </div>
+              <div className="space-y-1">
+                <div className="h-[1px] bg-gray-100 w-full" />
+                <div className="h-[1px] bg-gray-100 w-[90%]" />
+                <div className="h-[1px] bg-gray-100 w-[85%]" />
+              </div>
+            </div>
           </div>
         )
       },
@@ -2409,27 +2360,27 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         key: 'format3', label: 'Format 3', beta: false,
         preview: (
           <div className="w-full h-full bg-white p-1 flex flex-col gap-[2px]">
-             <div className="p-1 space-y-1.5">
-                <div className="flex justify-between items-center bg-gray-50 p-1 rounded">
-                   <div className="h-[2px] bg-gray-300 w-[50%]" />
-                   <div className="h-[2px] bg-gray-300 w-[20%]" />
-                </div>
-                <div className="space-y-1 py-1">
-                   <div className="h-[1px] bg-gray-200 w-full" />
-                   <div className="h-[1px] bg-gray-200 w-[90%]" />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                   {[1, 2, 3, 4].map(i => (
-                     <div key={i} className="flex gap-1 items-center">
-                        <div className="w-2 h-2 rounded-sm border border-gray-200" />
-                        <div className="h-[1px] bg-gray-100 w-[70%]" />
-                     </div>
-                   ))}
-                </div>
-                <div className="bg-blue-50/50 p-1 border-t border-blue-100 mt-1">
-                   <div className="h-[1px] bg-blue-200 w-[40%]" />
-                </div>
-             </div>
+            <div className="p-1 space-y-1.5">
+              <div className="flex justify-between items-center bg-gray-50 p-1 rounded">
+                <div className="h-[2px] bg-gray-300 w-[50%]" />
+                <div className="h-[2px] bg-gray-300 w-[20%]" />
+              </div>
+              <div className="space-y-1 py-1">
+                <div className="h-[1px] bg-gray-200 w-full" />
+                <div className="h-[1px] bg-gray-200 w-[90%]" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="flex gap-1 items-center">
+                    <div className="w-2 h-2 rounded-sm border border-gray-200" />
+                    <div className="h-[1px] bg-gray-100 w-[70%]" />
+                  </div>
+                ))}
+              </div>
+              <div className="bg-blue-50/50 p-1 border-t border-blue-100 mt-1">
+                <div className="h-[1px] bg-blue-200 w-[40%]" />
+              </div>
+            </div>
           </div>
         )
       },
@@ -2437,23 +2388,23 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         key: 'format4', label: 'Format 4', beta: false,
         preview: (
           <div className="w-full h-full bg-white p-1 flex flex-col">
-             <div className="flex-1 border border-gray-100 rounded p-1 space-y-2">
-                <div className="flex gap-2">
-                   <div className="w-4 h-4 bg-gray-100 rounded" />
-                   <div className="flex-1 space-y-1">
-                      <div className="h-[1.5px] bg-gray-300 w-full" />
-                      <div className="h-[1.5px] bg-gray-300 w-[60%]" />
-                   </div>
+            <div className="flex-1 border border-gray-100 rounded p-1 space-y-2">
+              <div className="flex gap-2">
+                <div className="w-4 h-4 bg-gray-100 rounded" />
+                <div className="flex-1 space-y-1">
+                  <div className="h-[1.5px] bg-gray-300 w-full" />
+                  <div className="h-[1.5px] bg-gray-300 w-[60%]" />
                 </div>
-                <div className="space-y-1 pl-6">
-                   {[1, 2, 3, 4].map(i => (
-                      <div key={i} className="h-[1px] bg-gray-100 w-[40%]" />
-                   ))}
-                </div>
-                <div className="border-t border-gray-50 pt-1 mt-1">
-                   <div className="h-[2px] bg-emerald-100 w-[30%]" />
-                </div>
-             </div>
+              </div>
+              <div className="space-y-1 pl-6">
+                {[1, 2, 3, 4].map(i => (
+                  <div key={i} className="h-[1px] bg-gray-100 w-[40%]" />
+                ))}
+              </div>
+              <div className="border-t border-gray-50 pt-1 mt-1">
+                <div className="h-[2px] bg-emerald-100 w-[30%]" />
+              </div>
+            </div>
           </div>
         )
       },
@@ -2461,24 +2412,24 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         key: 'format5', label: 'Format 5', beta: true,
         preview: (
           <div className="w-full h-full bg-white p-1">
-             <div className="space-y-2">
-                <div className="h-3 bg-gray-50 rounded-sm w-[70%] mb-2" />
-                <div className="space-y-1 pl-2">
-                   {[1, 2, 3].map(i => (
-                      <div key={i} className="flex gap-2">
-                        <div className="w-1 h-[1px] bg-gray-300" />
-                        <div className="h-[1px] bg-gray-200 w-[50%]" />
-                      </div>
-                   ))}
+            <div className="space-y-2">
+              <div className="h-3 bg-gray-50 rounded-sm w-[70%] mb-2" />
+              <div className="space-y-1 pl-2">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="flex gap-2">
+                    <div className="w-1 h-[1px] bg-gray-300" />
+                    <div className="h-[1px] bg-gray-200 w-[50%]" />
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2 mt-4">
+                <div className="w-6 h-6 border border-gray-100 rounded shadow-sm" />
+                <div className="flex-1 space-y-1">
+                  <div className="h-[1px] bg-gray-200 w-full" />
+                  <div className="h-[1px] bg-gray-200 w-[80%]" />
                 </div>
-                <div className="flex gap-2 mt-4">
-                   <div className="w-6 h-6 border border-gray-100 rounded shadow-sm" />
-                   <div className="flex-1 space-y-1">
-                      <div className="h-[1px] bg-gray-200 w-full" />
-                      <div className="h-[1px] bg-gray-200 w-[80%]" />
-                   </div>
-                </div>
-             </div>
+              </div>
+            </div>
           </div>
         )
       },
@@ -2487,21 +2438,21 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         preview: (
           <div className="w-full h-full bg-white p-1 flex flex-col items-center justify-center">
             <div className="w-full h-full border border-gray-100 rounded-lg p-2 flex gap-2">
-               <div className="w-1 bg-gray-200 h-full rounded-full" />
-               <div className="flex-1 space-y-4">
-                  <div className="space-y-1">
-                     <div className="h-[2px] bg-gray-200 w-[80%]" />
-                     <div className="h-[1px] bg-gray-100 w-[40%]" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                     {[1, 2, 3, 4].map(i => (
-                        <div key={i} className="h-5 bg-gray-50 rounded flex items-center px-1">
-                           <div className="w-1.5 h-1.5 rounded-full bg-gray-200 mr-1" />
-                           <div className="h-[1px] bg-gray-100 w-full" />
-                        </div>
-                     ))}
-                  </div>
-               </div>
+              <div className="w-1 bg-gray-200 h-full rounded-full" />
+              <div className="flex-1 space-y-4">
+                <div className="space-y-1">
+                  <div className="h-[2px] bg-gray-200 w-[80%]" />
+                  <div className="h-[1px] bg-gray-100 w-[40%]" />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {[1, 2, 3, 4].map(i => (
+                    <div key={i} className="h-5 bg-gray-50 rounded flex items-center px-1">
+                      <div className="w-1.5 h-1.5 rounded-full bg-gray-200 mr-1" />
+                      <div className="h-[1px] bg-gray-100 w-full" />
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         )
@@ -2520,7 +2471,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             <div className="space-y-1">
               <label className="text-[12px] font-semibold text-[#1a7a5e]">Select Test Series *</label>
               <CustomDropdown
-                options={courses.map(c => ({ value: c.id, label: c.name || c.title || '' }))}
+                options={courses.map(c => ({ value: c.id || (c as any)._id, label: c.name || c.title || '' }))}
                 value={bulkUploadData.testSeries}
                 onChange={(val: any) => setBulkUploadData({ ...bulkUploadData, testSeries: val, testTitle: '' })}
                 placeholder="Select Test Series"
@@ -2533,8 +2484,11 @@ const Tests: React.FC<Props> = ({ showToast }) => {
               <label className="text-[12px] font-semibold text-[#1a7a5e]">Select Test Title *</label>
               <CustomDropdown
                 options={tests
-                  .filter(t => !bulkUploadData.testSeries || t.courseId === bulkUploadData.testSeries)
-                  .map(t => ({ value: t.id, label: t.name || 'Unnamed Test' }))}
+                  .filter(t => {
+                    const testSeriesId = t.courseId || (t as any).testSeriesId || (t.course && (typeof t.course === 'object' ? (t.course as any)._id || (t.course as any).id : t.course));
+                    return !bulkUploadData.testSeries || testSeriesId === bulkUploadData.testSeries;
+                  })
+                  .map(t => ({ value: t.id || (t as any)._id, label: t.name || t.title || 'Unnamed Test' }))}
                 value={bulkUploadData.testTitle}
                 onChange={(val: any) => setBulkUploadData({ ...bulkUploadData, testTitle: val })}
                 placeholder=""
@@ -2572,13 +2526,13 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             </div>
 
             <div className="flex justify-end pt-2 items-center gap-3">
-                {previewQuestions.length === 0 && !isParsing && (
-                  <span className="text-[11px] text-amber-600 font-medium flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[14px]">warning</span>
-                    Upload a file to preview with real data
-                  </span>
-                )}
-                <button 
+              {previewQuestions.length === 0 && !isParsing && (
+                <span className="text-[11px] text-amber-600 font-medium flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[14px]">warning</span>
+                  Upload a file to preview with real data
+                </span>
+              )}
+              <button
                 onClick={() => {
                   // Save current questions to localStorage for the format view
                   localStorage.setItem('formatViewQuestions', JSON.stringify(previewQuestions));
@@ -2589,10 +2543,10 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 }}
                 disabled={isParsing}
                 className={`flex items-center gap-2 text-[13px] font-bold transition-all group ${isParsing ? 'text-gray-300 cursor-not-allowed' : 'text-gray-500 hover:text-black'}`}
-               >
-                  <span className="material-symbols-outlined text-[18px] group-hover:scale-110 transition-transform">visibility</span>
-                  View Format
-               </button>
+              >
+                <span className="material-symbols-outlined text-[18px] group-hover:scale-110 transition-transform">visibility</span>
+                View Format
+              </button>
             </div>
 
             {/* modern file uploader */}
@@ -2642,14 +2596,85 @@ const Tests: React.FC<Props> = ({ showToast }) => {
               </div>
             </div>
 
-            <div className="pt-6">
+            <div className="pt-6 flex items-center gap-4">
               <button
                 onClick={async () => {
-                  if (!bulkUploadData.testSeries) { showToast('Please select Test Series', 'error'); return; }
-                  if (!bulkUploadData.testTitle) { showToast('Please select Test Title', 'error'); return; }
-                  if (!bulkUploadData.file) { showToast('Please select a file to upload', 'error'); return; }
-                  // Upload logic...
-                  showToast('Questions uploaded successfully!', 'success');
+                  const testId = bulkUploadData.testTitle || (viewingQuestionEditor?.id || (viewingQuestionEditor as any)?._id);
+                  if (!bulkUploadData.testSeries && !viewingQuestionEditor) { showToast('Please select Test Series', 'error'); return; }
+                  if (!testId) { showToast('Please select Test Title', 'error'); return; }
+                  if (!bulkUploadData.file || (bulkUploadData.parsedQuestions || []).length === 0) {
+                    showToast('No questions to upload. Please parse a file first.', 'error');
+                    return;
+                  }
+
+                  try {
+                    // 1. Fetch current questions for duplicate check
+                    const existingQuestions = await testsAPI.getQuestions(testId);
+                    const existingTexts = new Set(existingQuestions.map((q: any) => (q.questionEn || q.question || '').trim().toLowerCase()));
+
+                    // 2. Prepare payload - Standardization to displayOptions
+                    const questionsToUpload = (bulkUploadData.parsedQuestions || [])
+                      .filter(q => !existingTexts.has((q.questionEn || '').trim().toLowerCase()))
+                      .map(q => ({
+                        testId: testId,
+                        courseId: bulkUploadData.testSeries || (viewingTestSeries?.id || (viewingTestSeries as any)?._id),
+                        questionEn: q.questionEn,
+                        questionHi: q.questionHi || '',
+                        type: "Multiple Choice Question",
+                        marks: q.positiveMarks || 4,
+                        negative: q.negativeMarks || -1,
+                        displayOptions: (q.options || []).map((opt: string, i: number) => ({
+                          id: i + 1,
+                          text: opt,
+                          isCorrect: q.correctAnswer === String.fromCharCode(65 + i)
+                        })),
+                        solution: { heading: 'Full Solution', text: q.solution || '' }
+                      }));
+
+                    if (questionsToUpload.length === 0) {
+                      showToast('All questions in this file already exist in the test.', 'error');
+                      return;
+                    }
+
+                    showToast(`Uploading ${questionsToUpload.length} new questions...`, 'success');
+
+                    // 3. Bulk upload
+                    const res = await fetch('/api/questions/bulk', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ questions: questionsToUpload })
+                    });
+
+                    if (!res.ok) throw new Error('Upload failed');
+
+                    invalidateCache('tests');
+                    showToast(`${questionsToUpload.length} questions uploaded successfully!`, 'success');
+
+                    // 4. Update the test's viewFormat if needed
+                    const formatVal = bulkUploadData.format || 'format1';
+                    await fetch(`/api/tests/${testId}`, {
+                      method: 'PUT',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ viewFormat: formatVal })
+                    });
+
+                    // 5. Cleanup and Sync
+                    setBulkUploadData({ ...bulkUploadData, file: null, parsedQuestions: [] });
+
+                    // Sync the editor view if we are in it
+                    const updatedQs = await testsAPI.getQuestions(testId);
+                    setEditorQuestions(updatedQs);
+
+                    // 6. Redirect to view results
+                    const targetTest = tests.find(t => (t.id || (t as any)._id) === testId);
+                    if (targetTest) {
+                      setViewingQuestionEditor(targetTest);
+                      setActiveTab('Tests');
+                    }
+                    loadData();
+                  } catch (err: any) {
+                    showToast(err.message || 'Failed to upload questions', 'error');
+                  }
                 }}
                 className="px-12 h-12 bg-gradient-to-r from-[#12A5B8] to-[#0E8A9A] hover:shadow-lg hover:shadow-cyan-500/30 text-white rounded-xl font-bold text-[15px] transition-all active:scale-[0.98] shadow-md flex items-center gap-2"
               >
@@ -2657,8 +2682,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 Upload Questions
               </button>
             </div>
-
           </div>
+
 
           {/* RIGHT: Preview Panel — appears when file is selected */}
           {bulkUploadData.file && (
@@ -2735,8 +2760,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                         <div className="flex gap-2">
                           <span className="font-bold text-[13px] text-gray-900 shrink-0">{idx + 1}.</span>
                           <div className="space-y-1 flex-1">
-                             <p className="text-[12px] font-medium text-gray-800 leading-relaxed">{renderQuestionText(q.questionEn)}</p>
-                             <p className="text-[12px] font-medium text-gray-600 leading-relaxed">{renderQuestionText(q.questionHi)}</p>
+                            <p className="text-[12px] font-medium text-gray-800 leading-relaxed">{renderQuestionText(q.questionEn)}</p>
+                            <p className="text-[12px] font-medium text-gray-600 leading-relaxed">{renderQuestionText(q.questionHi)}</p>
                           </div>
                         </div>
                         <div className="pl-8 space-y-1 font-sans">
@@ -2751,9 +2776,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           <p><span className="font-bold">Answer</span> {q.correctAnswer}</p>
                           <p className="font-bold">Solution.</p>
                           <div className="text-[11px] text-gray-500 space-y-1">
-                             {q.solution?.split('\n').map((line: string, li: number) => (
-                               <p key={li} className="line-clamp-1 opacity-70">• {line}</p>
-                             ))}
+                            {q.solution?.split('\n').map((line: string, li: number) => (
+                              <p key={li} className="line-clamp-1 opacity-70">• {line}</p>
+                            ))}
                           </div>
                         </div>
                       </div>
@@ -2764,21 +2789,21 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                     return (
                       <div key={idx} className="px-5 py-4 hover:bg-blue-50/30 transition-colors border-b border-gray-100">
                         <div className="bg-gray-50 px-3 py-1.5 rounded-md flex justify-between items-center mb-3">
-                           <span className="text-[10px] font-black text-gray-400 uppercase">Question {idx + 1}</span>
-                           <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full">GRID STYLE</span>
+                          <span className="text-[10px] font-black text-gray-400 uppercase">Question {idx + 1}</span>
+                          <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full">GRID STYLE</span>
                         </div>
                         <p className="text-[13px] font-bold text-gray-800 mb-4">{renderQuestionText(q.questionEn)}</p>
                         <div className="grid grid-cols-2 gap-3">
-                           {q.options.map((o: string, i: number) => (
-                             <div key={i} className="flex items-center gap-2 p-2 border border-gray-100 rounded-lg bg-white shadow-sm">
-                               <span className="w-5 h-5 flex items-center justify-center bg-gray-100 rounded text-[10px] font-bold text-gray-500">{String.fromCharCode(65 + i)}</span>
-                               <span className="text-[11px] text-gray-600 font-medium truncate">{renderQuestionText(o)}</span>
-                             </div>
-                           ))}
+                          {q.options.map((o: string, i: number) => (
+                            <div key={i} className="flex items-center gap-2 p-2 border border-gray-100 rounded-lg bg-white shadow-sm">
+                              <span className="w-5 h-5 flex items-center justify-center bg-gray-100 rounded text-[10px] font-bold text-gray-500">{String.fromCharCode(65 + i)}</span>
+                              <span className="text-[11px] text-gray-600 font-medium truncate">{renderQuestionText(o)}</span>
+                            </div>
+                          ))}
                         </div>
                         <div className="mt-4 flex items-center gap-4 text-[10px]">
-                           <span className="font-bold text-emerald-600 px-2 py-1 bg-emerald-50 rounded">ANS: {q.correctAnswer}</span>
-                           <span className="text-gray-400 italic shrink-0">Solution: {renderQuestionText(q.solution).slice(0, 30)}...</span>
+                          <span className="font-bold text-emerald-600 px-2 py-1 bg-emerald-50 rounded">ANS: {q.correctAnswer}</span>
+                          <span className="text-gray-400 italic shrink-0">Solution: {renderQuestionText(q.solution).slice(0, 30)}...</span>
                         </div>
                       </div>
                     );
@@ -2788,24 +2813,24 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                     return (
                       <div key={idx} className="px-5 py-6 hover:bg-gray-50 transition-colors border-l-4 border-blue-500 bg-white">
                         <div className="flex gap-4">
-                           <div className="w-16 h-16 bg-gray-100 rounded-xl flex items-center justify-center shrink-0 border border-gray-200 shadow-inner">
-                              <span className="material-symbols-outlined text-gray-300">image</span>
-                           </div>
-                           <div className="flex-1 space-y-2">
-                              <p className="text-[13px] font-black text-gray-900 leading-tight line-clamp-2">{renderQuestionText(q.questionEn)}</p>
-                              <div className="space-y-1">
-                                 {q.options.map((o: string, i: number) => (
-                                   <div key={i} className="flex gap-2 text-[11px] text-gray-500 font-medium">
-                                      <span className="text-blue-500">{String.fromCharCode(97 + i)}.</span>
-                                      <span>{renderQuestionText(o)}</span>
-                                   </div>
-                                 ))}
-                              </div>
-                           </div>
+                          <div className="w-16 h-16 bg-gray-100 rounded-xl flex items-center justify-center shrink-0 border border-gray-200 shadow-inner">
+                            <span className="material-symbols-outlined text-gray-300">image</span>
+                          </div>
+                          <div className="flex-1 space-y-2">
+                            <p className="text-[13px] font-black text-gray-900 leading-tight line-clamp-2">{renderQuestionText(q.questionEn)}</p>
+                            <div className="space-y-1">
+                              {q.options.map((o: string, i: number) => (
+                                <div key={i} className="flex gap-2 text-[11px] text-gray-500 font-medium">
+                                  <span className="text-blue-500">{String.fromCharCode(97 + i)}.</span>
+                                  <span>{renderQuestionText(o)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                         <div className="mt-4 pt-3 border-t border-gray-50 flex items-center justify-between text-[10px]">
-                           <span className="font-bold text-gray-800 uppercase tracking-widest">Answer Key: {q.correctAnswer}</span>
-                           <span className="text-[#1a7a5e] font-black">+{q.positiveMarks} Marks</span>
+                          <span className="font-bold text-gray-800 uppercase tracking-widest">Answer Key: {q.correctAnswer}</span>
+                          <span className="text-[#1a7a5e] font-black">+{q.positiveMarks} Marks</span>
                         </div>
                       </div>
                     );
@@ -2815,33 +2840,33 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                     return (
                       <div key={idx} className="m-3 bg-[#ecfdf5]/30 border border-emerald-100 rounded-2xl overflow-hidden hover:shadow-md transition-all">
                         <div className="bg-emerald-600 px-4 py-2 flex justify-between items-center text-white">
-                           <span className="text-[11px] font-black uppercase tracking-tighter">EXPERT SOLUTION #{idx + 1}</span>
-                           <span className="text-[10px] font-bold opacity-80">{q.type || 'MCQ'}</span>
+                          <span className="text-[11px] font-black uppercase tracking-tighter">EXPERT SOLUTION #{idx + 1}</span>
+                          <span className="text-[10px] font-bold opacity-80">{q.type || 'MCQ'}</span>
                         </div>
                         <div className="p-4 space-y-4">
-                           <div className="space-y-1">
-                              <p className="text-[12px] font-bold text-emerald-950">{renderQuestionText(q.questionEn)}</p>
-                              <p className="text-[10px] text-emerald-600/70 font-medium italic">{renderQuestionText(q.questionHi)}</p>
-                           </div>
-                           <div className="space-y-1">
-                              {q.options.map((o: string, i: number) => (
-                                <div key={i} className="flex gap-3 items-center py-1.5 px-3 bg-white/50 rounded-lg text-[11px] text-emerald-800 font-bold border border-emerald-50">
-                                   <span className="w-4 text-emerald-300">{String.fromCharCode(65 + i)}</span>
-                                   <span>{renderQuestionText(o)}</span>
-                                </div>
-                              ))}
-                           </div>
-                           <div className="bg-white p-3 rounded-xl border border-emerald-100 space-y-2">
-                              <p className="text-[10px] font-black text-emerald-800 flex items-center gap-1">
-                                 <span className="material-symbols-outlined text-[14px]">psychology</span>
-                                 DETAILED EXPLANATION
-                              </p>
-                              <p className="text-[11px] text-gray-500 leading-relaxed italic">{renderQuestionText(q.solution)}</p>
-                              <div className="pt-2 flex gap-4 text-[10px] font-black text-emerald-600">
-                                 <span>CORRECT: {q.correctAnswer}</span>
-                                 <span>WEIGHTAGE: {q.positiveMarks}M</span>
+                          <div className="space-y-1">
+                            <p className="text-[12px] font-bold text-emerald-950">{renderQuestionText(q.questionEn)}</p>
+                            <p className="text-[10px] text-emerald-600/70 font-medium italic">{renderQuestionText(q.questionHi)}</p>
+                          </div>
+                          <div className="space-y-1">
+                            {q.options.map((o: string, i: number) => (
+                              <div key={i} className="flex gap-3 items-center py-1.5 px-3 bg-white/50 rounded-lg text-[11px] text-emerald-800 font-bold border border-emerald-50">
+                                <span className="w-4 text-emerald-300">{String.fromCharCode(65 + i)}</span>
+                                <span>{renderQuestionText(o)}</span>
                               </div>
-                           </div>
+                            ))}
+                          </div>
+                          <div className="bg-white p-3 rounded-xl border border-emerald-100 space-y-2">
+                            <p className="text-[10px] font-black text-emerald-800 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[14px]">psychology</span>
+                              DETAILED EXPLANATION
+                            </p>
+                            <p className="text-[11px] text-gray-500 leading-relaxed italic">{renderQuestionText(q.solution)}</p>
+                            <div className="pt-2 flex gap-4 text-[10px] font-black text-emerald-600">
+                              <span>CORRECT: {q.correctAnswer}</span>
+                              <span>WEIGHTAGE: {q.positiveMarks}M</span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     );
@@ -2878,14 +2903,14 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           <div className="p-2.5 text-[11px] text-gray-500 italic flex-1">{renderQuestionText(q.solution)}</div>
                         </div>
                         <div className="flex border-t border-gray-100">
-                           <div className="flex-1 flex border-r border-gray-100">
-                             <div className="w-24 bg-gray-50 p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0 whitespace-nowrap">Positive Marks</div>
-                             <div className="p-2.5 text-[11px] text-green-600 font-black">{q.positiveMarks}</div>
-                           </div>
-                           <div className="flex-1 flex">
-                             <div className="w-24 bg-gray-50 p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0 whitespace-nowrap">Negative Marks</div>
-                             <div className="p-2.5 text-[11px] text-red-500 font-black">{q.negativeMarks}</div>
-                           </div>
+                          <div className="flex-1 flex border-r border-gray-100">
+                            <div className="w-24 bg-gray-50 p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0 whitespace-nowrap">Positive Marks</div>
+                            <div className="p-2.5 text-[11px] text-green-600 font-black">{q.positiveMarks}</div>
+                          </div>
+                          <div className="flex-1 flex">
+                            <div className="w-24 bg-gray-50 p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0 whitespace-nowrap">Negative Marks</div>
+                            <div className="p-2.5 text-[11px] text-red-500 font-black">{q.negativeMarks}</div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -2893,7 +2918,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 }) : !isParsing && (
                   <div className="py-20 text-center space-y-3">
                     <span className="material-symbols-outlined text-[48px] text-gray-200">find_in_page</span>
-                    <p className="text-[13px] font-medium text-gray-400">No questions found in this file.<br/>Try DOCX or Excel format.</p>
+                    <p className="text-[13px] font-medium text-gray-400">No questions found in this file.<br />Try DOCX or Excel format.</p>
                   </div>
                 )}
               </div>
@@ -2910,26 +2935,45 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
                 <button
                   onClick={async () => {
+                    const testId = bulkUploadData.testTitle;
                     if (!bulkUploadData.testSeries) { showToast('Please select Test Series', 'error'); return; }
-                    if (!bulkUploadData.testTitle) { showToast('Please select Test Title', 'error'); return; }
+                    if (!testId) { showToast('Please select Test Title', 'error'); return; }
                     if (!bulkUploadData.file) { showToast('Please select a file to upload', 'error'); return; }
 
                     try {
+                      // Fetch existing questions for duplicate check
+                      const existingQuestions = await testsAPI.getQuestions(testId);
+                      const existingTexts = new Set(existingQuestions.map((q: any) =>
+                        (q.questionEn || q.question || '').trim().toLowerCase()
+                      ));
+
                       const selectedFormat = bulkUploadData.format || 'default';
-                      const questionsToUpload = previewQuestions.map(q => ({
-                        ...q,
-                        testId: bulkUploadData.testTitle,
-                        courseId: bulkUploadData.testSeries,
-                        question: q.questionEn,
-                        optionA: q.options[0] || '',
-                        optionB: q.options[1] || '',
-                        optionC: q.options[2] || '',
-                        optionD: q.options[3] || '',
-                        explanation: q.solution,
-                        marks: q.positiveMarks,
-                        negativeMarks: q.negativeMarks,
-                        format: selectedFormat
-                      }));
+                      const questionsToUpload = previewQuestions
+                        .filter(q => !existingTexts.has((q.questionEn || '').trim().toLowerCase()))
+                        .map(q => ({
+                          testId: testId,
+                          courseId: bulkUploadData.testSeries,
+                          questionEn: q.questionEn,
+                          questionHi: q.questionHi || '',
+                          type: "Multiple Choice Question",
+                          marks: q.positiveMarks || 4,
+                          negative: q.negativeMarks || -1,
+                          displayOptions: (q.options || []).map((opt: string, i: number) => ({
+                            id: i + 1,
+                            text: opt,
+                            isCorrect: q.correctAnswer === String.fromCharCode(65 + i)
+                          })),
+                          solution: {
+                            heading: 'Full Solution',
+                            text: q.solution || ''
+                          },
+                          format: selectedFormat
+                        }));
+
+                      if (questionsToUpload.length === 0 && previewQuestions.length > 0) {
+                        showToast('All parsed questions already exist in this test.', 'error');
+                        return;
+                      }
 
                       const res = await fetch('/api/questions/bulk', {
                         method: 'POST',
@@ -2938,10 +2982,10 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                       });
 
                       if (!res.ok) throw new Error('Upload failed');
-                      
+
                       // Update the Test document to save the selected viewFormat
                       try {
-                        await fetch(`/api/tests/${bulkUploadData.testTitle}`, {
+                        await fetch(`/api/tests/${testId}`, {
                           method: 'PUT',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ viewFormat: selectedFormat })
@@ -2952,16 +2996,31 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
                       // Invalidate local cache to force refresh
                       invalidateCache('tests');
-                      showToast('Realistic question data uploaded successfully!');
+                      showToast(`Successfully uploaded ${questionsToUpload.length} new questions!`);
+                      if (questionsToUpload.length < previewQuestions.length) {
+                        showToast(`${previewQuestions.length - questionsToUpload.length} duplicates were skipped.`, 'success');
+                      }
+
                       setBulkUploadData({ ...bulkUploadData, file: null });
+
+                      // Auto-redirect to the Test to show newly uploaded questions
+                      const targetTest = tests.find(t => (t.id || (t as any)._id) === testId);
+                      if (targetTest) {
+                        const targetSeries = courses.find(c => (c.id || (c as any)._id) === bulkUploadData.testSeries);
+                        if (targetSeries) setViewingTestSeries(targetSeries);
+                        setViewingQuestionEditor(targetTest);
+                        setActiveTab('Tests');
+                      }
+
                       loadData();
                     } catch (e) {
+                      console.error('Final upload error:', e);
                       showToast('Failed to upload questions', 'error');
                     }
                   }}
                   className="w-full bg-gray-900 hover:bg-black text-white py-3 rounded-xl font-bold text-[13px] uppercase tracking-wider transition-all active:scale-[0.98]"
                 >
-                  PROCEED TO UPLOAD
+                  PROCEED TO UPLOAD ({previewQuestions.length} Questions)
                 </button>
 
               </div>
@@ -2985,136 +3044,28 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const renderCopyContentTab = () => {
     return (
       <div className="animate-in fade-in duration-500 space-y-6">
-      {/* Selector Card */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200/60 p-6">
-        <div className="flex items-center gap-6">
-          <label className="text-[14px] font-medium text-gray-700">Content Type</label>
-          <div className="w-[200px] relative z-[90]">
-            <CustomDropdown
-              options={[
-                { value: 'copy_questions', label: 'Copy Questions' },
-                { value: 'copy_tests', label: 'Copy Tests' },
-                { value: 'copy_pdf_tests', label: 'Copy PDF Tests' }
-              ]}
-              value={selectedContentType}
-              onChange={(val: any) => setSelectedContentType(val)}
-              placeholder="Select"
-            />
+        {/* Selector Card */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200/60 p-6">
+          <div className="flex items-center gap-6">
+            <label className="text-[14px] font-medium text-gray-700">Content Type</label>
+            <div className="w-[200px] relative z-[90]">
+              <CustomDropdown
+                options={[
+                  { value: 'copy_questions', label: 'Copy Questions' },
+                  { value: 'copy_tests', label: 'Copy Tests' },
+                  { value: 'copy_pdf_tests', label: 'Copy PDF Tests' }
+                ]}
+                value={selectedContentType}
+                onChange={(val: any) => setSelectedContentType(val)}
+                placeholder="Select"
+              />
+            </div>
           </div>
         </div>
-      </div>
 
-      {selectedContentType === 'copy_tests' && (
-        <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8 space-y-8 animate-in slide-in-from-top-4 duration-500">
-          <div className="space-y-4">
-            {/* Alert Message */}
-            <div className="bg-[#FFEFEF] border border-[#FFDADA] rounded-xl px-6 py-3">
-              <p className="text-[12px] font-medium text-[#E84E4E]">
-                <span className="font-bold">Note :-</span> Please be careful while using this feature. Test Title & Questions added accidentally using this will have to be removed individually and manually.
-              </p>
-            </div>
-          </div>
-
-          {/* Source Section */}
-          <div className="bg-[#F8F9FB] border border-gray-100 rounded-[1.5rem] p-6 space-y-6">
-            <div className="bg-[#FFF8E6] rounded-xl px-6 py-4">
-              <h4 className="text-[15px] font-bold text-[#856404]">Source</h4>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-gray-500">Test Series/Quiz Series *</label>
-                <CustomDropdown
-                  options={courses.map(c => ({ value: c.id, label: c.name || c.title || '' }))}
-                  value={copyTestsData.sourceSeries}
-                  onChange={(val: any) => setCopyTestsData({ ...copyTestsData, sourceSeries: val })}
-                  placeholder="Select Test Series"
-                  searchPlaceholder="Search"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-gray-500">Subject</label>
-                <CustomDropdown
-                  isMulti
-                  options={[
-                    { value: 'General Knowledge', label: 'General Knowledge' },
-                    { value: 'Mathematics', label: 'Mathematics' },
-                    { value: 'Reasoning', label: 'Reasoning' },
-                    { value: 'English', label: 'English' },
-                    { value: 'Physics', label: 'Physics' }
-                  ]}
-                  value={copyTestsData.sourceSubject}
-                  onChange={(val: any) => setCopyTestsData({ ...copyTestsData, sourceSubject: val })}
-                  placeholder="--Select Subject--"
-                  searchPlaceholder="Searching..."
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-gray-500">Test Title / Quiz Title*</label>
-                <CustomDropdown
-                  isMulti
-                  showSelectAll
-                  options={tests.filter(t => !copyTestsData.sourceSeries || t.courseId === copyTestsData.sourceSeries).map(t => ({ value: t.id, label: t.name || 'Unnamed Test' }))}
-                  value={copyTestsData.sourceTitleSearch}
-                  onChange={(val: any) => setCopyTestsData({ ...copyTestsData, sourceTitleSearch: val })}
-                  placeholder="Search"
-                  searchPlaceholder="Searching..."
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Target Section */}
-          <div className="bg-[#F8F9FB] border border-gray-100 rounded-[1.5rem] p-6 space-y-6">
-            <div className="bg-[#E9F7EF] rounded-xl px-6 py-4">
-              <h4 className="text-[15px] font-bold text-[#155724]">Target</h4>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-gray-500">Test Series/Quiz Series *</label>
-                <CustomDropdown
-                  isMulti
-                  showSelectAll
-                  dropup
-                  options={courses.map(c => ({ value: c.id, label: c.name || c.title || '' }))}
-                  value={copyTestsData.targetSeriesSearch}
-                  onChange={(val: any) => setCopyTestsData({ ...copyTestsData, targetSeriesSearch: val })}
-                  placeholder="Search"
-                  searchPlaceholder="Search"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-gray-500">Subject</label>
-                <CustomDropdown
-                  options={['General Knowledge', 'Mathematics', 'Reasoning', 'English'].map(s => ({ value: s, label: s }))}
-                  value={copyTestsData.targetSubject}
-                  onChange={(val: any) => setCopyTestsData({ ...copyTestsData, targetSubject: val })}
-                  placeholder="--Select Subject--"
-                  dropup
-                />
-              </div>
-            </div>
-          </div>
-
-          <button
-            onClick={() => showToast('Copying tests... This may take a moment.')}
-            className="bg-[#4361EE] text-white px-8 py-2.5 rounded-lg font-bold text-[14px] hover:bg-[#3451DE] transition-colors shadow-lg active:scale-95"
-          >
-            Submit
-          </button>
-        </div>
-      )}
-
-      {
-        selectedContentType === 'copy_questions' && (
+        {selectedContentType === 'copy_tests' && (
           <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8 space-y-8 animate-in slide-in-from-top-4 duration-500">
             <div className="space-y-4">
-              <h3 className="text-[13px] font-black text-gray-900 uppercase tracking-[0.1em]">COPY PASTE TEST SERIES QUESTION</h3>
-
               {/* Alert Message */}
               <div className="bg-[#FFEFEF] border border-[#FFDADA] rounded-xl px-6 py-3">
                 <p className="text-[12px] font-medium text-[#E84E4E]">
@@ -3129,52 +3080,46 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 <h4 className="text-[15px] font-bold text-[#856404]">Source</h4>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">Test Series / Quiz Series *</label>
+                  <label className="text-[11px] font-bold text-gray-500">Test Series/Quiz Series *</label>
                   <CustomDropdown
-                    options={courses.map(c => ({ value: c.id, label: c.name || c.title || '' }))}
-                    value={copyData.sourceSeries}
-                    onChange={(val: any) => setCopyData({ ...copyData, sourceSeries: val, sourceTitle: '' })}
+                    options={courses.map(c => ({ value: c.id || (c as any)._id, label: c.name || c.title || '' }))}
+                    value={copyTestsData.sourceSeries}
+                    onChange={(val: any) => setCopyTestsData({ ...copyTestsData, sourceSeries: val })}
                     placeholder="Select Test Series"
+                    searchPlaceholder="Search"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-gray-500">Subject</label>
+                  <CustomDropdown
+                    isMulti
+                    options={[
+                      { value: 'General Knowledge', label: 'General Knowledge' },
+                      { value: 'Mathematics', label: 'Mathematics' },
+                      { value: 'Reasoning', label: 'Reasoning' },
+                      { value: 'English', label: 'English' },
+                      { value: 'Physics', label: 'Physics' }
+                    ]}
+                    value={copyTestsData.sourceSubject}
+                    onChange={(val: any) => setCopyTestsData({ ...copyTestsData, sourceSubject: val })}
+                    placeholder="--Select Subject--"
+                    searchPlaceholder="Searching..."
                   />
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-[11px] font-bold text-gray-500">Test Title / Quiz Title*</label>
                   <CustomDropdown
-                    options={tests.filter(t => !copyData.sourceSeries || t.courseId === copyData.sourceSeries || t.courseName === copyData.sourceSeries).map(t => ({ value: t.id, label: t.name || 'Unnamed Test' }))}
-                    value={copyData.sourceTitle}
-                    onChange={(val: any) => setCopyData({ ...copyData, sourceTitle: val })}
-                    placeholder="Select Test Title"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">Test Section / Quiz Section *</label>
-                  <CustomDropdown
-                    options={[{ value: 'section_1', label: 'Section 1' }, { value: 'section_2', label: 'Section 2' }]}
-                    value={copyData.sourceSection}
-                    onChange={(val: any) => setCopyData({ ...copyData, sourceSection: val })}
-                    placeholder="Select Test Section"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">Test Question / Quiz Question</label>
-                  <CustomDropdown
                     isMulti
                     showSelectAll
-                    selectAllVariant="buttons"
-                    options={[
-                      { value: 'all', label: 'All Questions' },
-                      { value: 'q1', label: 'Section 1 - Q1' },
-                      { value: 'q2', label: 'Section 1 - Q2' }
-                    ]}
-                    value={copyData.sourceSearch}
-                    onChange={(val: any) => setCopyData({ ...copyData, sourceSearch: val })}
+                    options={tests.filter(t => !copyTestsData.sourceSeries || (t.courseId === copyTestsData.sourceSeries || (t as any)._id === copyTestsData.sourceSeries)).map(t => ({ value: t.id || (t as any)._id, label: t.name || 'Unnamed Test' }))}
+                    value={copyTestsData.sourceTitleSearch}
+                    onChange={(val: any) => setCopyTestsData({ ...copyTestsData, sourceTitleSearch: val })}
                     placeholder="Search"
-                    searchPlaceholder="Search"
+                    searchPlaceholder="Searching..."
                   />
                 </div>
               </div>
@@ -3188,114 +3133,228 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
                 <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">Test Series / Quiz Series *</label>
+                  <label className="text-[11px] font-bold text-gray-500">Test Series/Quiz Series *</label>
                   <CustomDropdown
-                    options={courses.map(c => ({ value: c.id, label: c.name || c.title || '' }))}
-                    value={copyData.targetSeries}
-                    onChange={(val: any) => setCopyData({ ...copyData, targetSeries: val, targetTitle: '' })}
-                    placeholder="Select Test Series"
-                    dropup={true}
+                    isMulti
+                    showSelectAll
+                    dropup
+                    options={courses.map(c => ({ value: c.id || (c as any)._id, label: c.name || c.title || '' }))}
+                    value={copyTestsData.targetSeriesSearch}
+                    onChange={(val: any) => setCopyTestsData({ ...copyTestsData, targetSeriesSearch: val })}
+                    placeholder="Search"
+                    searchPlaceholder="Search"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">Test Title / Quiz Title*</label>
+                  <label className="text-[11px] font-bold text-gray-500">Subject</label>
                   <CustomDropdown
-                    options={tests.filter(t => !copyData.targetSeries || t.courseId === copyData.targetSeries || t.courseName === copyData.targetSeries).map(t => ({ value: t.id, label: t.name || 'Unnamed Test' }))}
-                    value={copyData.targetTitle}
-                    onChange={(val: any) => setCopyData({ ...copyData, targetTitle: val })}
-                    placeholder="Select Test Title"
-                    dropup={true}
+                    options={['General Knowledge', 'Mathematics', 'Reasoning', 'English'].map(s => ({ value: s, label: s }))}
+                    value={copyTestsData.targetSubject}
+                    onChange={(val: any) => setCopyTestsData({ ...copyTestsData, targetSubject: val })}
+                    placeholder="--Select Subject--"
+                    dropup
                   />
                 </div>
               </div>
             </div>
 
             <button
-              onClick={() => showToast('Copying questions... Please wait.')}
+              onClick={() => showToast('Copying tests... This may take a moment.')}
               className="bg-[#4361EE] text-white px-8 py-2.5 rounded-lg font-bold text-[14px] hover:bg-[#3451DE] transition-colors shadow-lg active:scale-95"
             >
               Submit
             </button>
-          </div >
-        )
-      }
-
-      {selectedContentType === 'copy_pdf_tests' && (
-        <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8 space-y-8 animate-in slide-in-from-top-4 duration-500">
-          {/* Alert Message */}
-          <div className="bg-[#FFEFEF] border border-[#FFDADA] rounded-xl px-6 py-3">
-            <p className="text-[12px] font-medium text-[#E84E4E]">
-              <span className="font-bold">Note :-</span> Please be careful while using this feature. Test PDF added accidentally using this will have to be removed individually and manually.
-            </p>
           </div>
+        )}
 
-          {/* Source Section */}
-          <div className="bg-[#F8F9FB] border border-gray-100 rounded-[1.5rem] p-6 space-y-6">
-            <div className="bg-[#FFF8E6] rounded-xl px-6 py-4">
-              <h4 className="text-[15px] font-bold text-[#856404]">Source</h4>
-            </div>
+        {
+          selectedContentType === 'copy_questions' && (
+            <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8 space-y-8 animate-in slide-in-from-top-4 duration-500">
+              <div className="space-y-4">
+                <h3 className="text-[13px] font-black text-gray-900 uppercase tracking-[0.1em]">COPY PASTE TEST SERIES QUESTION</h3>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-gray-500">Test Series/Quiz Series *</label>
-                <CustomDropdown
-                  options={courses.map(c => ({ value: c.id, label: c.name || c.title || '' }))}
-                  value={copyPdfData.sourceSeries}
-                  onChange={(val: any) => setCopyPdfData({ ...copyPdfData, sourceSeries: val, sourcePdf: [] })}
-                  placeholder="Select Test Series"
-                  searchPlaceholder="Search"
-                />
+                {/* Alert Message */}
+                <div className="bg-[#FFEFEF] border border-[#FFDADA] rounded-xl px-6 py-3">
+                  <p className="text-[12px] font-medium text-[#E84E4E]">
+                    <span className="font-bold">Note :-</span> Please be careful while using this feature. Test Title & Questions added accidentally using this will have to be removed individually and manually.
+                  </p>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-gray-500">Test PDF / Quiz PDF*</label>
-                <CustomDropdown
-                  isMulti
-                  showSelectAll
-                  selectAllVariant="buttons"
-                  options={courses
-                    .filter(c => !copyPdfData.sourceSeries || c.id === copyPdfData.sourceSeries)
-                    .map(c => ({ value: c.id, label: c.name || c.title || 'Select Test PDF' }))
-                  }
-                  value={copyPdfData.sourcePdf}
-                  onChange={(val: any) => setCopyPdfData({ ...copyPdfData, sourcePdf: val })}
-                  placeholder="Search"
-                  searchPlaceholder="Search"
-                />
+              {/* Source Section */}
+              <div className="bg-[#F8F9FB] border border-gray-100 rounded-[1.5rem] p-6 space-y-6">
+                <div className="bg-[#FFF8E6] rounded-xl px-6 py-4">
+                  <h4 className="text-[15px] font-bold text-[#856404]">Source</h4>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-gray-500">Test Series / Quiz Series *</label>
+                    <CustomDropdown
+                      options={courses.map(c => ({ value: c.id || (c as any)._id, label: c.name || c.title || '' }))}
+                      value={copyData.sourceSeries}
+                      onChange={(val: any) => setCopyData({ ...copyData, sourceSeries: val, sourceTitle: '' })}
+                      placeholder="Select Test Series"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-gray-500">Test Title / Quiz Title*</label>
+                    <CustomDropdown
+                      options={tests.filter(t => !copyData.sourceSeries || (t.courseId === copyData.sourceSeries || (t as any)._id === copyData.sourceSeries) || t.courseName === copyData.sourceSeries).map(t => ({ value: t.id || (t as any)._id, label: t.name || 'Unnamed Test' }))}
+                      value={copyData.sourceTitle}
+                      onChange={(val: any) => setCopyData({ ...copyData, sourceTitle: val })}
+                      placeholder="Select Test Title"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-gray-500">Test Section / Quiz Section *</label>
+                    <CustomDropdown
+                      options={[{ value: 'section_1', label: 'Section 1' }, { value: 'section_2', label: 'Section 2' }]}
+                      value={copyData.sourceSection}
+                      onChange={(val: any) => setCopyData({ ...copyData, sourceSection: val })}
+                      placeholder="Select Test Section"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-gray-500">Test Question / Quiz Question</label>
+                    <CustomDropdown
+                      isMulti
+                      showSelectAll
+                      selectAllVariant="buttons"
+                      options={[
+                        { value: 'all', label: 'All Questions' },
+                        { value: 'q1', label: 'Section 1 - Q1' },
+                        { value: 'q2', label: 'Section 1 - Q2' }
+                      ]}
+                      value={copyData.sourceSearch}
+                      onChange={(val: any) => setCopyData({ ...copyData, sourceSearch: val })}
+                      placeholder="Search"
+                      searchPlaceholder="Search"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Target Section */}
+              <div className="bg-[#F8F9FB] border border-gray-100 rounded-[1.5rem] p-6 space-y-6">
+                <div className="bg-[#E9F7EF] rounded-xl px-6 py-4">
+                  <h4 className="text-[15px] font-bold text-[#155724]">Target</h4>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-gray-500">Test Series / Quiz Series *</label>
+                    <CustomDropdown
+                      options={courses.map(c => ({ value: c.id || (c as any)._id, label: c.name || c.title || '' }))}
+                      value={copyData.targetSeries}
+                      onChange={(val: any) => setCopyData({ ...copyData, targetSeries: val, targetTitle: '' })}
+                      placeholder="Select Test Series"
+                      dropup={true}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold text-gray-500">Test Title / Quiz Title*</label>
+                    <CustomDropdown
+                      options={tests.filter(t => !copyData.targetSeries || (t.courseId === copyData.targetSeries || (t as any)._id === copyData.targetSeries) || t.courseName === copyData.targetSeries).map(t => ({ value: t.id || (t as any)._id, label: t.name || 'Unnamed Test' }))}
+                      value={copyData.targetTitle}
+                      onChange={(val: any) => setCopyData({ ...copyData, targetTitle: val })}
+                      placeholder="Select Test Title"
+                      dropup={true}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => showToast('Copying questions... Please wait.')}
+                className="bg-[#4361EE] text-white px-8 py-2.5 rounded-lg font-bold text-[14px] hover:bg-[#3451DE] transition-colors shadow-lg active:scale-95"
+              >
+                Submit
+              </button>
+            </div >
+          )
+        }
+
+        {selectedContentType === 'copy_pdf_tests' && (
+          <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8 space-y-8 animate-in slide-in-from-top-4 duration-500">
+            {/* Alert Message */}
+            <div className="bg-[#FFEFEF] border border-[#FFDADA] rounded-xl px-6 py-3">
+              <p className="text-[12px] font-medium text-[#E84E4E]">
+                <span className="font-bold">Note :-</span> Please be careful while using this feature. Test PDF added accidentally using this will have to be removed individually and manually.
+              </p>
+            </div>
+
+            {/* Source Section */}
+            <div className="bg-[#F8F9FB] border border-gray-100 rounded-[1.5rem] p-6 space-y-6">
+              <div className="bg-[#FFF8E6] rounded-xl px-6 py-4">
+                <h4 className="text-[15px] font-bold text-[#856404]">Source</h4>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-gray-500">Test Series/Quiz Series *</label>
+                  <CustomDropdown
+                    options={courses.map(c => ({ value: c.id || (c as any)._id, label: c.name || c.title || '' }))}
+                    value={copyPdfData.sourceSeries}
+                    onChange={(val: any) => setCopyPdfData({ ...copyPdfData, sourceSeries: val, sourcePdf: [] })}
+                    placeholder="Select Test Series"
+                    searchPlaceholder="Search"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-gray-500">Test PDF / Quiz PDF*</label>
+                  <CustomDropdown
+                    isMulti
+                    showSelectAll
+                    selectAllVariant="buttons"
+                    options={courses
+                      .filter(c => !copyPdfData.sourceSeries || (c.id === copyPdfData.sourceSeries || (c as any)._id === copyPdfData.sourceSeries))
+                      .map(c => ({ value: c.id || (c as any)._id, label: c.name || c.title || 'Select Test PDF' }))
+                    }
+                    value={copyPdfData.sourcePdf}
+                    onChange={(val: any) => setCopyPdfData({ ...copyPdfData, sourcePdf: val })}
+                    placeholder="Search"
+                    searchPlaceholder="Search"
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Target Section */}
-          <div className="bg-[#F8F9FB] border border-gray-100 rounded-[1.5rem] p-6 space-y-6">
-            <div className="bg-[#E9F7EF] rounded-xl px-6 py-4">
-              <h4 className="text-[15px] font-bold text-[#155724]">Target</h4>
-            </div>
+            {/* Target Section */}
+            <div className="bg-[#F8F9FB] border border-gray-100 rounded-[1.5rem] p-6 space-y-6">
+              <div className="bg-[#E9F7EF] rounded-xl px-6 py-4">
+                <h4 className="text-[15px] font-bold text-[#155724]">Target</h4>
+              </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-lg">
-              <div className="space-y-2">
-                <label className="text-[11px] font-bold text-gray-500">Test Series / Quiz Series*</label>
-                <CustomDropdown
-                  options={courses.map(c => ({ value: c.id, label: c.name || c.title || '' }))}
-                  value={copyPdfData.targetSeries}
-                  onChange={(val: any) => setCopyPdfData({ ...copyPdfData, targetSeries: val })}
-                  placeholder="Search"
-                  searchPlaceholder="Search"
-                  dropup
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-lg">
+                <div className="space-y-2">
+                  <label className="text-[11px] font-bold text-gray-500">Test Series / Quiz Series*</label>
+                  <CustomDropdown
+                    options={courses.map(c => ({ value: c.id || (c as any)._id, label: c.name || c.title || '' }))}
+                    value={copyPdfData.targetSeries}
+                    onChange={(val: any) => setCopyPdfData({ ...copyPdfData, targetSeries: val })}
+                    placeholder="Search"
+                    searchPlaceholder="Search"
+                    dropup
+                  />
+                </div>
               </div>
             </div>
-          </div>
 
-          <button
-            onClick={() => showToast('Syncing PDF content...')}
-            className="bg-[#4361EE] text-white px-8 py-2.5 rounded-lg font-bold text-[14px] hover:bg-[#3451DE] transition-colors shadow-lg active:scale-95"
-          >
-            Submit
-          </button>
-        </div>
-      )}
+            <button
+              onClick={() => showToast('Syncing PDF content...')}
+              className="bg-[#4361EE] text-white px-8 py-2.5 rounded-lg font-bold text-[14px] hover:bg-[#3451DE] transition-colors shadow-lg active:scale-95"
+            >
+              Submit
+            </button>
+          </div>
+        )}
       </div>
     );
   };
@@ -3351,7 +3410,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                               className="w-full h-[40px] pl-11 pr-4 bg-white border border-gray-200 rounded-xl text-[13px] font-medium text-gray-500 outline-none focus:border-gray-400 transition-all"
                             />
                           </div>
-                          
+
                           <button
                             onClick={() => setIsFilterOpen(!isFilterOpen)}
                             className="flex items-center gap-2 h-[40px] px-5 border border-gray-200 rounded-xl text-[13px] font-semibold text-gray-600 bg-white hover:bg-gray-50 transition-all"
@@ -3367,7 +3426,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                             >
                               <span className="material-symbols-outlined text-[22px]" style={{ transform: showAddMenu ? 'rotate(45deg)' : 'rotate(0)' }}>add</span>
                             </button>
-                            
+
                             {showAddMenu && (
                               <div className="absolute right-0 top-full mt-2 w-[220px] bg-white rounded-xl shadow-2xl border border-gray-100 py-3 animate-in fade-in zoom-in-95 duration-200 origin-top-right z-[101]">
                                 {[
@@ -3552,7 +3611,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                             >
                               <span className="material-symbols-outlined text-[20px]">chevron_left</span>
                             </button>
-                            
+
                             <div className="flex items-center justify-center w-6 h-6 bg-[#1a202c] text-white rounded-[4px] text-[12px] font-bold shadow-sm">
                               {currentPage}
                             </div>
@@ -3591,13 +3650,13 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         onSubmit={async (testData) => {
           try {
             // Auto-fill courseId from context if adding within a series
-            const effectiveCourseId = (Array.isArray(testData.testSeries) && testData.testSeries.length > 0) 
-              ? testData.testSeries[0] 
+            const effectiveCourseId = (Array.isArray(testData.testSeries) && testData.testSeries.length > 0)
+              ? testData.testSeries[0]
               : (viewingTestSeries?.id || (viewingTestSeries as any)._id);
-            
+
             // Map drawer fields to the schema used by the list and server
-            const payload = { 
-              ...testData, 
+            const payload = {
+              ...testData,
               name: testData.title || testData.name,
               courseId: effectiveCourseId,
               isSeries: false, // Explicitly mark as a test, not a series
@@ -3629,7 +3688,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 setDetailTests(Array.isArray(data) ? data : []);
               }
             }
-            
+
             loadData(); // Refresh global list
             setShowAddSingleTestDrawer(false);
             setEditingTest(null);
@@ -3965,19 +4024,19 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       {/* Bulk Edit Modal/Drawer */}
       {showBulkEditModal && (
         <div className="fixed inset-0 bg-black/40 z-[100000] flex justify-end backdrop-blur-[2px] animate-in fade-in duration-300">
-          <div 
+          <div
             className="w-full max-w-[650px] bg-white h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-500"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-8 py-6 border-b border-gray-100 relative overflow-hidden bg-white">
-               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 rounded-full -mr-16 -mt-16 blur-3xl"></div>
-               <h3 className="text-[17px] font-bold text-gray-800 tracking-tight">Edit Bulk Question</h3>
-               <button 
-                 onClick={() => setShowBulkEditModal(false)}
-                 className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-black hover:bg-gray-50 rounded-full transition-all z-10"
-               >
-                 <span className="material-symbols-outlined font-bold">close</span>
-               </button>
+              <div className="absolute top-0 right-0 w-32 h-32 bg-blue-50/50 rounded-full -mr-16 -mt-16 blur-3xl"></div>
+              <h3 className="text-[17px] font-bold text-gray-800 tracking-tight">Edit Bulk Question</h3>
+              <button
+                onClick={() => setShowBulkEditModal(false)}
+                className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-black hover:bg-gray-50 rounded-full transition-all z-10"
+              >
+                <span className="material-symbols-outlined font-bold">close</span>
+              </button>
             </div>
 
             {/* Scrollable Content */}
@@ -3989,7 +4048,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                   <div className="relative group">
                     <select className="w-full h-12 px-5 bg-white border border-gray-200 rounded-xl text-[14px] font-medium text-gray-700 outline-none appearance-none focus:border-blue-400 group-hover:border-gray-300 transition-all shadow-sm cursor-pointer">
                       <option>1</option>
-                      {Array.from({length: 50}, (_, i) => <option key={i+1}>{i+1}</option>)}
+                      {Array.from({ length: 50 }, (_, i) => <option key={i + 1}>{i + 1}</option>)}
                     </select>
                     <span className="material-symbols-outlined absolute right-4 top-3 text-gray-400 group-hover:text-gray-600 transition-colors pointer-events-none">expand_more</span>
                   </div>
@@ -3999,7 +4058,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                   <div className="relative group">
                     <select className="w-full h-12 px-5 bg-white border border-gray-200 rounded-xl text-[14px] font-medium text-gray-700 outline-none appearance-none focus:border-blue-400 group-hover:border-gray-300 transition-all shadow-sm cursor-pointer">
                       <option>1</option>
-                      {Array.from({length: 50}, (_, i) => <option key={i+1}>{i+1}</option>)}
+                      {Array.from({ length: 50 }, (_, i) => <option key={i + 1}>{i + 1}</option>)}
                     </select>
                     <span className="material-symbols-outlined absolute right-4 top-3 text-gray-400 group-hover:text-gray-600 transition-colors pointer-events-none">expand_more</span>
                   </div>
@@ -4056,24 +4115,24 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                   {[1, 2, 3, 4, 5].map((optNum) => (
                     <div key={optNum} className="space-y-5">
                       <label className="text-[13px] font-bold text-gray-700 ml-1">Option {optNum}</label>
-                      
+
                       <div className="flex flex-col gap-5 pl-2">
                         <div className="flex gap-3">
                           <div className="w-12 h-12 flex items-center justify-center bg-gray-50 border border-gray-100 rounded-xl">
-                            <input 
-                              type="radio" 
-                              name="correctBulkOpt" 
-                              className="w-[18px] h-[18px] accent-blue-600 cursor-pointer" 
-                              defaultChecked={optNum === 4} 
+                            <input
+                              type="radio"
+                              name="correctBulkOpt"
+                              className="w-[18px] h-[18px] accent-blue-600 cursor-pointer"
+                              defaultChecked={optNum === 4}
                             />
                           </div>
-                          <input 
-                            type="text" 
+                          <input
+                            type="text"
                             className="flex-1 h-12 px-5 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-blue-400 transition-all shadow-sm"
                             placeholder={`Type option ${optNum} content...`}
                           />
                         </div>
-                        
+
                         <div className="grid grid-cols-2 gap-5">
                           <div className="h-32 bg-[#F8F9FB] rounded-2xl flex flex-col items-center justify-center border border-gray-100/80 shadow-inner group">
                             <div className="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-sm mb-3 group-hover:scale-110 transition-transform">
@@ -4082,10 +4141,10 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                             <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">No File</span>
                           </div>
                           <div className="h-32 border-2 border-dashed border-gray-100 rounded-2xl flex flex-col items-center justify-center hover:border-blue-200 hover:bg-blue-50/20 transition-all cursor-pointer group">
-                             <div className="flex flex-col items-center gap-2">
-                               <span className="text-[13px] font-bold text-gray-500 group-hover:text-blue-500 transition-colors">Upload File</span>
-                               <p className="text-[10px] font-medium text-gray-300 text-center px-6">Click or Drag & Drop your file here.</p>
-                             </div>
+                            <div className="flex flex-col items-center gap-2">
+                              <span className="text-[13px] font-bold text-gray-500 group-hover:text-blue-500 transition-colors">Upload File</span>
+                              <p className="text-[10px] font-medium text-gray-300 text-center px-6">Click or Drag & Drop your file here.</p>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -4098,8 +4157,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
               <div className="grid grid-cols-2 gap-8 pb-10 border-t border-gray-50 pt-10">
                 <div className="space-y-3">
                   <label className="text-[13px] font-bold text-gray-700 ml-1">Positive Marks</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     placeholder="0.00"
                     step="0.01"
                     className="w-full h-12 px-5 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-blue-400 transition-all shadow-sm"
@@ -4107,8 +4166,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 </div>
                 <div className="space-y-3">
                   <label className="text-[13px] font-bold text-gray-700 ml-1">Negative Marks</label>
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     placeholder="0.00"
                     step="0.01"
                     className="w-full h-12 px-5 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-blue-400 transition-all shadow-sm"
@@ -4119,12 +4178,12 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
             {/* Sticky Footer */}
             <div className="p-0 border-t border-gray-100 bg-black">
-               <button 
-                 onClick={() => setShowBulkEditModal(false)}
-                 className="w-full h-16 bg-black text-white text-[15px] font-black uppercase tracking-[2px] hover:bg-white/5 transition-all flex items-center justify-center gap-2"
-               >
-                 <span>Save changes</span>
-               </button>
+              <button
+                onClick={() => setShowBulkEditModal(false)}
+                className="w-full h-16 bg-black text-white text-[15px] font-black uppercase tracking-[2px] hover:bg-white/5 transition-all flex items-center justify-center gap-2"
+              >
+                <span>Save changes</span>
+              </button>
             </div>
           </div>
         </div>
@@ -4133,92 +4192,117 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       {/* Bulk Delete Modal/Drawer */}
       {showBulkDeleteModal && (
         <div className="fixed inset-0 bg-black/40 z-[100000] flex justify-end backdrop-blur-[2px] animate-in fade-in duration-300">
-          <div 
+          <div
             className="w-full max-w-[650px] bg-white h-full flex flex-col shadow-2xl animate-in slide-in-from-right duration-500"
           >
             {/* Header */}
             <div className="flex items-center justify-between px-8 py-6 border-b border-gray-100 relative bg-white">
-               <h3 className="text-[17px] font-bold text-gray-800 tracking-tight">Delete Selected Question</h3>
-               <button 
-                 onClick={() => setShowBulkDeleteModal(false)}
-                 className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-black hover:bg-gray-50 rounded-full transition-all z-10"
-               >
-                 <span className="material-symbols-outlined font-bold">close</span>
-               </button>
+              <h3 className="text-[17px] font-bold text-gray-800 tracking-tight">Delete Selected Question</h3>
+              <button
+                onClick={() => setShowBulkDeleteModal(false)}
+                className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-black hover:bg-gray-50 rounded-full transition-all z-10"
+              >
+                <span className="material-symbols-outlined font-bold">close</span>
+              </button>
             </div>
 
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-10 space-y-6 bg-white">
-               {/* Select All */}
-               <div className="flex items-center gap-4 px-4 py-2">
-                 <input 
-                   type="checkbox" 
-                   id="selectAll"
-                   className="w-[18px] h-[18px] rounded border-gray-300 accent-blue-600 cursor-pointer"
-                   checked={selectedBulkDeleteQuestions.length === editorQuestions.length && editorQuestions.length > 0}
-                   onChange={(e) => {
-                     if (e.target.checked) {
-                       setSelectedBulkDeleteQuestions(editorQuestions.map((_, i) => i));
-                     } else {
-                       setSelectedBulkDeleteQuestions([]);
-                     }
-                   }}
-                 />
-                 <label htmlFor="selectAll" className="text-[14px] font-bold text-gray-600 cursor-pointer">Select All</label>
-               </div>
+              {/* Select All */}
+              <div className="flex items-center gap-4 px-4 py-2">
+                <input
+                  type="checkbox"
+                  id="selectAll"
+                  className="w-[18px] h-[18px] rounded border-gray-300 accent-blue-600 cursor-pointer"
+                  checked={selectedBulkDeleteQuestions.length === editorQuestions.length && editorQuestions.length > 0}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedBulkDeleteQuestions(editorQuestions.map((_, i) => i));
+                    } else {
+                      setSelectedBulkDeleteQuestions([]);
+                    }
+                  }}
+                />
+                <label htmlFor="selectAll" className="text-[14px] font-bold text-gray-600 cursor-pointer">Select All</label>
+              </div>
 
-               {/* Question List */}
-               <div className="space-y-4">
-                 {editorQuestions.map((q, idx) => {
-                   const isSelected = selectedBulkDeleteQuestions.includes(idx);
-                   return (
-                     <div 
-                       key={idx}
-                       onClick={() => {
-                         if (isSelected) {
-                           setSelectedBulkDeleteQuestions(selectedBulkDeleteQuestions.filter(i => i !== idx));
-                         } else {
-                           setSelectedBulkDeleteQuestions([...selectedBulkDeleteQuestions, idx]);
-                         }
-                       }}
-                       className={`flex items-center gap-5 p-5 border rounded-2xl cursor-pointer transition-all ${isSelected ? 'border-blue-200 bg-blue-50/10' : 'border-gray-100 bg-white hover:border-gray-200 shadow-sm'}`}
-                     >
-                       <input 
-                         type="checkbox" 
-                         checked={isSelected}
-                         readOnly
-                         className="w-[18px] h-[18px] rounded border-gray-300 accent-blue-600 pointer-events-none"
-                       />
-                       <div className="flex-1 min-w-0 px-2">
-                         <p className="text-[14px] font-bold text-gray-700 truncate">
-                           {idx + 1}. {q.questionEn || 'No question text'}
-                         </p>
-                       </div>
-                     </div>
-                   );
-                 })}
-               </div>
+              {/* Question List */}
+              <div className="space-y-4">
+                {editorQuestions.map((q, idx) => {
+                  const isSelected = selectedBulkDeleteQuestions.includes(idx);
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        if (isSelected) {
+                          setSelectedBulkDeleteQuestions(selectedBulkDeleteQuestions.filter(i => i !== idx));
+                        } else {
+                          setSelectedBulkDeleteQuestions([...selectedBulkDeleteQuestions, idx]);
+                        }
+                      }}
+                      className={`flex items-center gap-5 p-5 border rounded-2xl cursor-pointer transition-all ${isSelected ? 'border-blue-200 bg-blue-50/10' : 'border-gray-100 bg-white hover:border-gray-200 shadow-sm'}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        readOnly
+                        className="w-[18px] h-[18px] rounded border-gray-300 accent-blue-600 pointer-events-none"
+                      />
+                      <div className="flex-1 min-w-0 px-2">
+                        <p className="text-[14px] font-bold text-gray-700 truncate">
+                          {idx + 1}. {q.questionEn || 'No question text'}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Custom Footer Matching Screenshot */}
             <div className="px-8 py-5 border-t border-gray-100 flex items-center justify-between bg-white shadow-inner">
-               <span className="text-[13px] font-bold text-gray-400 italic px-2">
-                 {selectedBulkDeleteQuestions.length} Selected
-               </span>
-               <button 
-                 onClick={() => {
-                   showToast(`${selectedBulkDeleteQuestions.length} questions deleted successfully`, 'success');
-                   setShowBulkDeleteModal(false);
-                 }}
-                 disabled={selectedBulkDeleteQuestions.length === 0}
-                 className="px-10 py-3 bg-black text-white text-[13px] font-black rounded-xl hover:bg-gray-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed uppercase tracking-wider shadow-lg"
-               >
-                 Delete
-               </button>
+              <span className="text-[13px] font-bold text-gray-400 italic px-2">
+                {selectedBulkDeleteQuestions.length} Selected
+              </span>
+              <button
+                onClick={async () => {
+                  try {
+                    const idsToDelete = selectedBulkDeleteQuestions.map(idx => {
+                      const q = editorQuestions[idx];
+                      return q.id || q._id;
+                    }).filter(id => !!id);
+
+                    if (idsToDelete.length === 0) return;
+
+                    const deletedCount = idsToDelete.length;
+                    await questionsAPI.bulkDelete(idsToDelete.map(id => String(id)));
+                    invalidateCache('tests');
+
+                    // Refresh questions list for the editor
+                    const testId = viewingQuestionEditor?.id || viewingQuestionEditor?._id;
+                    if (testId) {
+                      const qs = await testsAPI.getQuestions(testId);
+                      setEditorQuestions(qs);
+                    }
+
+                    showToast(`${deletedCount} questions deleted successfully`, 'success');
+                    setShowBulkDeleteModal(false);
+                    setSelectedBulkDeleteQuestions([]);
+                    loadData();
+                  } catch (err: any) {
+                    showToast(err.message || 'Failed to delete questions', 'error');
+                  }
+                }}
+                disabled={selectedBulkDeleteQuestions.length === 0}
+                className="px-10 py-3 bg-black text-white text-[13px] font-black rounded-xl hover:bg-gray-800 transition-all disabled:opacity-30 disabled:cursor-not-allowed uppercase tracking-wider shadow-lg"
+              >
+                Delete
+              </button>
             </div>
           </div>
         </div>
       )}
+
 
       {/* Sort Question Order Modal */}
       {showSortModal && (
@@ -4227,7 +4311,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             {/* Header */}
             <div className="flex items-center justify-between px-8 py-5 border-b border-gray-100">
               <h3 className="text-[17px] font-bold text-gray-800 tracking-tight">Sort Question Order</h3>
-              <button 
+              <button
                 onClick={() => setShowSortModal(false)}
                 className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-black hover:bg-gray-50 rounded-full transition-all"
               >
@@ -4238,8 +4322,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             {/* Scrollable Content */}
             <div className="flex-1 overflow-y-auto p-10 space-y-4">
               {editorQuestions.map((q, idx) => (
-                <div 
-                  key={idx} 
+                <div
+                  key={idx}
                   className="flex items-center gap-6 p-4 border border-gray-100 rounded-xl bg-white hover:border-gray-200 hover:shadow-sm transition-all group cursor-move"
                 >
                   <div className="flex items-center justify-center text-gray-300 group-hover:text-gray-400 transition-colors">
@@ -4256,13 +4340,13 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
             {/* Footer */}
             <div className="px-8 py-5 border-t border-gray-100 flex items-center justify-end gap-3 bg-white rounded-b-2xl">
-              <button 
+              <button
                 onClick={() => setShowSortModal(false)}
                 className="px-8 py-2.5 border border-gray-200 rounded-lg text-[13px] font-bold text-gray-500 hover:bg-gray-50 transition-all"
               >
                 Close
               </button>
-              <button 
+              <button
                 onClick={() => {
                   showToast('Questions reordered successfully', 'success');
                   setShowSortModal(false);
@@ -4284,7 +4368,76 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         }}
         editingQuestion={viewingAddQuestionForm && typeof viewingAddQuestionForm === 'object' && Object.keys(viewingAddQuestionForm).length > 0 ? viewingAddQuestionForm : null}
         sections={[{ id: 'default', name: viewingQuestionEditor?.name || 'Default' }]}
-        testId={viewingQuestionEditor?.id || ''}
+        testId={(viewingQuestionEditor?.id || viewingQuestionEditor?._id) || ''}
+        onSaveAndGoToPrevious={(data) => {
+          handleSaveQuestion(data).then(() => {
+            // Find current question index and go to previous
+            const currentId = data.id || data._id;
+            const currentIdx = editorQuestions.findIndex((q: any) => (q.id || q._id) === currentId);
+            if (currentIdx > 0) {
+              setViewingAddQuestionForm(editorQuestions[currentIdx - 1]);
+            } else {
+              showToast('This is the first question', 'error');
+              setViewingAddQuestionForm(null);
+            }
+          });
+        }}
+        onSaveAndGoToNext={(data) => {
+          handleSaveQuestion(data).then(() => {
+            // Find current question index and go to next
+            const currentId = data.id || data._id;
+            const currentIdx = editorQuestions.findIndex((q: any) => (q.id || q._id) === currentId);
+            if (currentIdx < editorQuestions.length - 1) {
+              setViewingAddQuestionForm(editorQuestions[currentIdx + 1]);
+            } else {
+              showToast('This is the last question', 'error');
+              setViewingAddQuestionForm(null);
+            }
+          });
+        }}
+      />
+
+      <ImportGlobalLibraryDrawer
+        isOpen={showImportLibraryDrawer}
+        onClose={() => setShowImportLibraryDrawer(false)}
+        onImport={async (selectedQuestions) => {
+          const testId = viewingQuestionEditor?.id || viewingQuestionEditor?._id;
+          if (!testId) return;
+
+          try {
+            showToast(`Importing ${selectedQuestions.length} questions...`, 'success');
+
+            const importPromises = selectedQuestions.map(q => {
+              const payload = {
+                testId: testId,
+                questionEn: q.textEn || q.questionEn,
+                questionHi: q.textHi || q.questionHi || '',
+                type: q.type || "Multiple Choice Question",
+                marks: q.marks || 4,
+                negative: q.negative || -1,
+                displayOptions: q.options ? q.options.map((opt: string, i: number) => ({
+                  id: i + 1,
+                  text: opt,
+                  isCorrect: q.correctAnswer === String.fromCharCode(65 + i)
+                })) : (q.displayOptions || []),
+                solution: {
+                  heading: 'Full Solution',
+                  text: q.solution || ''
+                }
+              };
+              return questionsAPI.create(payload);
+            });
+
+            await Promise.all(importPromises);
+            invalidateCache('tests');
+
+            const qs = await testsAPI.getQuestions(testId);
+            setEditorQuestions(qs);
+            showToast('Questions imported successfully', 'success');
+          } catch (err: any) {
+            showToast(err.message || 'Failed to import questions', 'error');
+          }
+        }}
       />
     </div>
 

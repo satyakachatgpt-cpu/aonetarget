@@ -3,7 +3,6 @@ import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'reac
 import { Toaster } from 'sonner';
 import BottomNav from './components/BottomNav';
 import SplashScreen from './components/SplashScreen';
-import SecurityWrapper from './components/SecurityWrapper';
 import { useAuthStore } from './store/authStore';
 
 const Home = lazy(() => import('./screens/Home'));
@@ -38,7 +37,6 @@ const DemoContent = lazy(() => import('./screens/DemoContent'));
 const FreeContent = lazy(() => import('./screens/FreeContent'));
 const NewsArticle = lazy(() => import('./screens/NewsArticle'));
 const Batches = lazy(() => import('./screens/Batches'));
-const BatchContent = lazy(() => import('./components/student/BatchContent'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[60vh] w-full animate-in fade-in duration-300">
@@ -79,7 +77,7 @@ const MainLayout: React.FC<{ isLoggedIn: boolean; children: React.ReactNode }> =
 
 const App: React.FC = () => {
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => localStorage.getItem('isAdminAuthenticated') === 'true');
-  const { isAuthenticated: isStudentLoggedIn, isLoading, checkAuth, setAuth: setIsStudentLoggedIn, sessionRevoked, dismissRevoked } = useAuthStore();
+  const { isAuthenticated: isStudentLoggedIn, isLoading, checkAuth, setAuth: setIsStudentLoggedIn } = useAuthStore();
 
   useEffect(() => {
     checkAuth();
@@ -110,27 +108,9 @@ const App: React.FC = () => {
   }
 
   return (
-    <SecurityWrapper enableWatermark={false} enableAntiCopy={isStudentLoggedIn} enableDevToolsDetection={true}>
     <div className="min-h-screen bg-surface-100">
       <Toaster position="top-center" richColors />
 
-      {sessionRevoked && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl p-8 mx-4 max-w-sm w-full shadow-2xl text-center animate-in fade-in zoom-in duration-300">
-            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="material-symbols-outlined text-red-500 text-3xl">devices</span>
-            </div>
-            <h3 className="text-lg font-bold text-gray-900 mb-2">Logged in on Another Device</h3>
-            <p className="text-gray-500 text-sm mb-6">Your account is now active on another device. For security, only one device can be active at a time.</p>
-            <button
-              onClick={dismissRevoked}
-              className="w-full py-3 bg-[#283593] text-white rounded-xl font-bold text-sm hover:bg-[#1a237e] transition-colors"
-            >
-              OK, Log Me Out
-            </button>
-          </div>
-        </div>
-      )}
 
       {showSplash && <div className="font-outfit"><SplashScreen onComplete={handleSplashComplete} /></div>}
       <Router>
@@ -162,7 +142,6 @@ const App: React.FC = () => {
                     <Route path="/course/:id" element={<CourseDetails />} />
                     <Route path="/checkout/:id" element={<Checkout />} />
                     <Route path="/study/:id" element={<StudyDashboard />} />
-                    <Route path="/batch-content/:courseId" element={<BatchContent courseId="" isEnrolled={false} />} />
                     <Route path="/success" element={<Success />} />
                     <Route path="/purchase-success" element={<PurchaseSuccess />} />
 
@@ -218,7 +197,6 @@ const App: React.FC = () => {
         </Suspense>
       </Router>
     </div>
-    </SecurityWrapper>
   );
 };
 

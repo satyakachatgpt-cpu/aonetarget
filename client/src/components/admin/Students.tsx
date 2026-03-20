@@ -15,6 +15,8 @@ interface Student {
   status: 'active' | 'inactive';
   paymentStatus: 'paid' | 'pending' | 'failed';
   notes?: string;
+  isBanned?: boolean;
+  suspiciousActivityCount?: number;
 }
 
 interface Props {
@@ -243,6 +245,27 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       loadStudents();
     } catch (err) {
       showToast('Failed to unblock user', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBanUser = async (student: Student) => {
+    const reason = prompt(`Enter reason for banning ${student.name}:`, 'Terms of service violation');
+    if (reason === null) return;
+    try {
+      setLoading(true);
+      const res = await fetch('/api/security-admin/ban-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: student.id, reason })
+      });
+      if (res.ok) {
+        showToast(`${student.name} has been banned`, 'success');
+        loadStudents();
+      }
+    } catch (err) {
+      showToast('Failed to ban user', 'error');
     } finally {
       setLoading(false);
     }
@@ -485,7 +508,19 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                     </td>
                     <td className="px-6 py-5">
                       <div className="text-[14px] font-bold text-[#3f51b5] tracking-tight">{s.name}</div>
-                      <div className="mt-1 inline-flex px-1.5 py-0.5 bg-[#e8eaf6] text-[#3f51b5] text-[9px] font-black rounded uppercase tracking-wider">Student</div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="inline-flex px-1.5 py-0.5 bg-[#e8eaf6] text-[#3f51b5] text-[9px] font-black rounded uppercase tracking-wider">Student</div>
+                        {(s.suspiciousActivityCount || 0) > 0 && (
+                          <div className="inline-flex px-1.5 py-0.5 bg-amber-50 text-amber-600 text-[9px] font-black rounded uppercase tracking-wider border border-amber-100 animate-pulse">
+                            Suspicious ({s.suspiciousActivityCount})
+                          </div>
+                        )}
+                        {s.isBanned && (
+                           <div className="inline-flex px-1.5 py-0.5 bg-red-100 text-red-600 text-[9px] font-black rounded uppercase tracking-wider border border-red-200">
+                           Banned
+                           </div>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-5">
                       <p className="text-[13px] font-medium text-gray-500">{s.id}</p>
@@ -542,6 +577,12 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                                 className="w-full px-4 py-2.5 text-left text-[12px] font-bold text-gray-700 hover:bg-amber-50 flex items-center gap-2"
                               >
                                 <span className="material-symbols-outlined text-sm text-amber-500">sticky_note_2</span> Notes
+                              </button>
+                              <button
+                                onClick={() => handleBanUser(s)}
+                                className="w-full px-4 py-2.5 text-left text-[12px] font-bold text-red-600 hover:bg-red-50 flex items-center gap-2"
+                              >
+                                <span className="material-symbols-outlined text-sm text-red-600">block</span> Ban Account
                               </button>
                               <button
                                 onClick={() => handleDeleteStudent(s.id, s.name)}

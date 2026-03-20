@@ -7,7 +7,6 @@ interface AuthState {
     unreadNotificationsCount: number;
     accessToken: string | null;
     deviceId: string | null;
-    sessionRevoked: boolean;
     setAuth: (student: any, accessToken?: string, deviceId?: string) => void;
     clearAuth: () => void;
     checkAuth: () => Promise<void>;
@@ -15,7 +14,6 @@ interface AuthState {
     refreshToken: () => Promise<boolean>;
     startHeartbeat: () => void;
     stopHeartbeat: () => void;
-    dismissRevoked: () => void;
 }
 
 let heartbeatInterval: ReturnType<typeof setInterval> | null = null;
@@ -44,7 +42,6 @@ function scheduleTokenRefresh(store: any) {
 export const useAuthStore = create<AuthState>((set, get) => ({
     ..._cached,
     unreadNotificationsCount: 0,
-    sessionRevoked: false,
 
     setAuth: (student, accessToken?: string, deviceId?: string) => {
         if (!student) {
@@ -71,8 +68,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 isAuthenticated: true,
                 isLoading: false,
                 accessToken: accessToken || get().accessToken,
-                deviceId: deviceId || get().deviceId,
-                sessionRevoked: false
+                deviceId: deviceId || get().deviceId
             });
 
             get().startHeartbeat();
@@ -97,7 +93,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         localStorage.removeItem('studentSessionToken');
         localStorage.removeItem('accessToken');
         localStorage.removeItem('deviceId');
-        set({ student: null, isAuthenticated: false, accessToken: null, deviceId: null, sessionRevoked: false });
+        set({ student: null, isAuthenticated: false, accessToken: null, deviceId: null });
     },
 
     checkAuth: async () => {
@@ -182,10 +178,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 const data = await response.json();
 
                 if (!data.valid) {
-                    if (data.reason === 'another_device') {
-                        set({ sessionRevoked: true });
-                        get().stopHeartbeat();
-                    } else if (data.reason === 'not_authenticated') {
+                    if (data.reason === 'another_device' || data.reason === 'not_authenticated') {
                         get().clearAuth();
                     }
                 }
@@ -201,11 +194,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             clearInterval(heartbeatInterval);
             heartbeatInterval = null;
         }
-    },
-
-    dismissRevoked: () => {
-        set({ sessionRevoked: false });
-        get().clearAuth();
     },
 
     setUnreadCount: (count: number) => set({ unreadNotificationsCount: count })

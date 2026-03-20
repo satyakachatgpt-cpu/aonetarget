@@ -19,6 +19,7 @@ const studentSchema = new mongoose.Schema({
     status: { type: String, default: 'active' },
     sessionToken: { type: String },
     sessionCreatedAt: { type: Date },
+
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
 });
