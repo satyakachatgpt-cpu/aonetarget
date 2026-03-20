@@ -1,7 +1,8 @@
+import dotenv from 'dotenv';
+dotenv.config();
 import express from 'express';
 import cors from 'cors';
 import Razorpay from 'razorpay';
-import dotenv from 'dotenv';
 import { fileURLToPath } from "url";
 import path from 'path';
 import fs from 'fs';
@@ -26,7 +27,7 @@ dns.setServers(['8.8.8.8', '8.8.4.4']);
 console.log('[DEBUG] DNS Servers forced to Google (8.8.8.8) to fix ECONNREFUSED');
 
 
-dotenv.config();
+console.log('[DEBUG] Environment Variables Loaded. Port:', process.env.PORT, 'KeyId Prefix:', (process.env.RAZORPAY_KEY_ID || '').slice(0, 8));
 
 const app = express();
 app.use(compression());

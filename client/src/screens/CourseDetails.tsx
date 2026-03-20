@@ -509,6 +509,51 @@ const CourseDetails: React.FC = () => {
 
         {activeTab === 'videos' && (
           <div className="space-y-3">
+            {/* Course Content Header/Grid similar to Reference */}
+            {!currentFolderId && (
+              <div className="card-premium p-6 mb-6 border border-primary-50">
+                <div className="flex items-center gap-2 mb-6">
+                  <span className="w-1 h-5 bg-primary-600 rounded-full"></span>
+                  <span className="material-symbols-rounded text-primary-200">business_center</span>
+                  <h3 className="text-base font-black text-gray-900 tracking-tight">What's Included</h3>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-primary-50/50 p-4 rounded-[1.5rem] flex flex-col gap-2 border border-primary-50">
+                    <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center text-primary-700">
+                      <span className="material-symbols-rounded text-base">play_circle</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-gray-900 leading-none">{videos.length} Videos</p>
+                    </div>
+                  </div>
+                  <div className="bg-orange-50/50 p-4 rounded-[1.5rem] flex flex-col gap-2 border border-orange-50">
+                    <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-600">
+                      <span className="material-symbols-rounded text-base">description</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-gray-900 leading-none">{course.notesCount || 0} Notes</p>
+                    </div>
+                  </div>
+                  <div className="bg-purple-50/50 p-4 rounded-[1.5rem] flex flex-col gap-2 border border-purple-50">
+                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center text-purple-600">
+                      <span className="material-symbols-rounded text-base">quiz</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-gray-900 leading-none">{tests.length} Tests</p>
+                    </div>
+                  </div>
+                  <div className="bg-red-50/50 p-4 rounded-[1.5rem] flex flex-col gap-2 border border-red-50">
+                    <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center text-red-600">
+                      <span className="material-symbols-rounded text-base">sensors</span>
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-gray-900 leading-none">Live Classes</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {currentFolderId && (
               <button
                 onClick={() => {
@@ -517,35 +562,40 @@ const CourseDetails: React.FC = () => {
                   setCurrentFolderId(lastFolder ? lastFolder.id : null);
                   setNavigationHistory(newHistory);
                 }}
-                className="flex items-center gap-1.5 text-primary-600 font-bold text-[10px] mb-4 px-2 py-1 bg-primary-50 w-fit rounded-lg hover:bg-primary-100 transition-colors uppercase tracking-wider"
+                className="flex items-center gap-1.5 text-primary-600 font-black text-[10px] mb-4 px-3 py-2 bg-primary-50 w-fit rounded-xl hover:bg-primary-100 transition-all uppercase tracking-widest border border-primary-100/50 active:scale-95"
               >
-                <span className="material-symbols-rounded text-sm">arrow_back</span>
-                Back to {navigationHistory.length > 0 ? navigationHistory[navigationHistory.length - 1].title : 'Main'}
+                <span className="material-symbols-rounded text-base">chevron_left</span>
+                Back to {navigationHistory.length > 0 ? navigationHistory[navigationHistory.length - 1].title : 'All Content'}
               </button>
             )}
 
-            {folders.filter(f => String(f.parentId || '') === String(currentFolderId || '')).map((folder) => (
-              <div
-                key={folder.id}
-                onClick={() => {
-                  const currentFolder = folders.find(f => f.id === currentFolderId);
-                  setNavigationHistory([...navigationHistory, ...(currentFolder ? [currentFolder] : [])]);
-                  setCurrentFolderId(folder.id);
-                }}
-                className="glass-card mb-3 p-3.5 cursor-pointer active:scale-[0.98] transition-all flex items-center justify-between group border border-white/40 shadow-card"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex items-center justify-center text-white shadow-lg group-hover:rotate-6 transition-transform">
-                    <span className="material-symbols-rounded text-xl">folder</span>
+            <div className="space-y-4">
+              {folders.filter(f => String(f.parentId || '') === String(currentFolderId || '')).map((folder) => (
+                <div
+                  key={folder.id}
+                  onClick={() => {
+                    const currentFolder = folders.find(f => f.id === currentFolderId);
+                    setNavigationHistory([...navigationHistory, ...(currentFolder ? [currentFolder] : [])]);
+                    setCurrentFolderId(folder.id);
+                  }}
+                  className="bg-white p-4 cursor-pointer active:scale-[0.98] transition-all flex items-center justify-between group rounded-[1.8rem] border-[1.5px] border-gray-50 shadow-sm hover:shadow-md hover:border-primary-100"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 bg-[#3F51B5] rounded-[1.2rem] flex items-center justify-center text-white shadow-lg overflow-hidden relative">
+                      <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                      <span className="material-symbols-rounded text-2xl">folder</span>
+                    </div>
+                    <div>
+                      <h4 className="font-black text-gray-900 text-sm tracking-tight leading-none mb-1.5 transition-colors group-hover:text-primary-600">
+                        {folder.title || (folder as any).name || 'Chapter'}
+                      </h4>
+                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.15em] opacity-40">SECTION</p>
+                    </div>
                   </div>
-                  <div>
-                    <h4 className="font-bold text-gray-860 text-[13px] leading-tight mb-0.5">{folder.title || (folder as any).name || 'Chapter'}</h4>
-                    <p className="text-[9px] text-gray-400 font-black uppercase tracking-[0.15em] opacity-40">Section</p>
-                  </div>
+                  <span className="material-symbols-rounded text-gray-300 group-hover:text-primary-500 transition-all mr-1">chevron_right</span>
                 </div>
-                <span className="material-symbols-rounded text-gray-300 group-hover:text-primary-500 transition-colors">chevron_right</span>
-              </div>
-            ))}
+              ))}
+            </div>
 
             {videos.filter(v => 
               (!currentFolderId && (!v.folderId || v.folderId === 'null' || v.folderId === 'undefined')) || 
@@ -790,14 +840,14 @@ const CourseDetails: React.FC = () => {
           </div>
         )}
         {!isEnrolled && (
-          <div className="mt-4 mb-24 px-4">
-            <div className="bg-[#0D1B2A] p-4 rounded-[2rem] shadow-2xl flex items-center justify-between border border-white/5 mx-auto max-w-sm">
-              <div className="flex flex-col gap-0">
-                <span className="text-[8px] font-black text-white/30 uppercase tracking-widest">Enrollment Fee</span>
-                <div className="flex items-center gap-2">
-                  <span className="text-xl font-black text-white">₹{course.price}</span>
+          <div className="mt-8 mb-24 px-4 sticky bottom-4 z-40">
+            <div className="bg-[#0D1B2A] p-5 rounded-[2.2rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex items-center justify-between border border-white/10 mx-auto max-w-sm animate-fade-in-up">
+              <div className="flex flex-col gap-0.5 ml-1">
+                <span className="text-[9px] font-black text-white/30 uppercase tracking-[0.15em]">ENROLLMENT FEE</span>
+                <div className="flex items-center gap-2.5">
+                  <span className="text-2xl font-[900] text-white tracking-tight">₹{course.price}</span>
                   {course.mrp && course.mrp > (course.price || 0) && (
-                    <span className="text-[10px] text-white/20 line-through font-bold">₹{course.mrp}</span>
+                    <span className="text-xs text-white/20 line-through font-bold">₹{course.mrp}</span>
                   )}
                 </div>
               </div>
@@ -805,17 +855,17 @@ const CourseDetails: React.FC = () => {
               {isPaidCourse ? (
                 <button
                   onClick={handleBuyNow}
-                  className="px-6 py-3 bg-[#E0E1DD] text-[#0D1B2A] rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+                  className="px-8 py-3.5 bg-white text-[#0D1B2A] rounded-2xl text-[10px] font-black uppercase tracking-[0.1em] shadow-xl active:scale-[0.98] transition-all"
                 >
-                  Purchase Course
+                  PURCHASE COURSE
                 </button>
               ) : (
                 <button
                   onClick={handleEnroll}
                   disabled={enrolling}
-                  className="px-6 py-3 bg-green-500 text-white rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+                  className="px-8 py-3.5 bg-green-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.1em] shadow-xl active:scale-[0.98] transition-all"
                 >
-                  {enrolling ? '...' : 'Enroll Free'}
+                  {enrolling ? 'ENROLLING...' : 'ENROLL FREE'}
                 </button>
               )}
             </div>
