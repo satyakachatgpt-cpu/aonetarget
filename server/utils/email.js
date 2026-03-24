@@ -119,5 +119,22 @@ export const templates = {
         <p>Best Regards,<br>Security Team, Aone Target</p>
       </div>
     `
+  }),
+  unauthorizedLogin: (name, time) => ({
+    subject: 'Security Alert: Account Access from New Device',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 10px; border-top: 5px solid #FF9800;">
+        <h2 style="color: #E65100;">Security Alert!</h2>
+        <p>Hello ${name},</p>
+        <p>Your Aone Target account was just logged into from a new device/browser at ${time}.</p>
+        <p>If this was you, you can safely ignore this email. Your previous session on other devices has been automatically logged out to ensure security.</p>
+        <div style="background-color: #FFF3E0; padding: 15px; border-radius: 5px; margin: 20px 0;">
+          <strong>Action:</strong> New Session Started (Previous sessions revoked)
+        </div>
+        <p>If you did <strong>NOT</strong> perform this login, someone else may have access to your account. Please contact our support team immediately.</p>
+        <br>
+        <p>Best Regards,<br>Security Team, Aone Target</p>
+      </div>
+    `
   })
 };

@@ -4292,6 +4292,12 @@ app.post('/api/otp/verify', authLimiter, async (req, res) => {
       sendEmail({ to: student.email, subject, html }).catch(e => console.error('Login email error:', e));
     }
 
+    // Send Security Alert if a previous session was active (New Device/Browser login)
+    if (hadPreviousSession && student.email) {
+      const { subject, html } = templates.unauthorizedLogin(student.name, new Date().toLocaleString());
+      sendEmail({ to: student.email, subject, html }).catch(e => console.error('Unauthorized login alert error:', e));
+    }
+
     return res.json({
       success: true,
       verified: true,
@@ -4545,17 +4551,17 @@ app.post('/api/students/register', async (req, res) => {
     const cleanPhone = phone.replace(/\D/g, '');
     const cleanWA = whatsAppNumber ? whatsAppNumber.replace(/\D/g, '') : '';
     const cleanAlt = alternateNumber ? alternateNumber.replace(/\D/g, '') : '';
+    const normalizedEmail = email ? email.toLowerCase().trim() : '';
 
     const existingStudent = await Student.findOne({
       $or: [
-        { phone },
         { phone: cleanPhone },
-        ...(email ? [{ email }] : [])
+        ...(normalizedEmail ? [{ email: normalizedEmail }] : [])
       ]
     });
 
     if (existingStudent) {
-      if (email && existingStudent.email === email) {
+      if (normalizedEmail && existingStudent.email === normalizedEmail) {
         return res.status(400).json({ error: 'This email address is already registered.' });
       }
       return res.status(400).json({ error: 'Phone number already registered' });
@@ -4565,7 +4571,7 @@ app.post('/api/students/register', async (req, res) => {
     const student = new Student({
       id: studentId,
       name,
-      email: email || '',
+      email: normalizedEmail,
       phone: cleanPhone,
       whatsAppNumber: cleanWA,
       alternateNumber: cleanAlt,
@@ -4681,22 +4687,18 @@ app.post('/api/students/check-phone', async (req, res) => {
     if (!phone) {
       return res.status(400).json({ error: 'Phone number is required' });
 
-// Check if a student email is already registered
-app.post('/api/students/check-email', async (req, res) => {
-  try {
-    const { email } = req.body || {};
-    if (!email) {
-      return res.status(400).json({ error: 'Email address is required' });
-    }
+      // Check if a student email is already registered
+      app.post('/api/students/check-email', async (req, res) => {
+        try {
+          const normalizedEmail = email ? email.toLowerCase().trim() : '';
+          const existingStudent = await db.collection('students').findOne({ email: normalizedEmail });
 
-    const existingStudent = await db.collection('students').findOne({ email });
-
-    return res.json({ exists: !!existingStudent });
-  } catch (error) {
-    console.error('Check email error:', error);
-    res.status(500).json({ error: 'Failed to check email' });
-  }
-});
+          return res.json({ exists: !!existingStudent });
+        } catch (error) {
+          console.error('Check email error:', error);
+          res.status(500).json({ error: 'Failed to check email' });
+        }
+      });
 
     }
 
@@ -4729,6 +4731,21 @@ app.get('/api/students/:id', async (req, res) => {
 app.put('/api/students/:id', async (req, res) => {
   try {
     const { _id, id: bodyId, ...updateData } = req.body;
+    
+    // Normalize email if provided
+    if (updateData.email) {
+      updateData.email = updateData.email.toLowerCase().trim();
+      
+      // Check for email conflicts (excluding self)
+      const existing = await db.collection('students').findOne({ 
+        email: updateData.email, 
+        id: { $ne: req.params.id } 
+      });
+      if (existing) {
+        return res.status(400).json({ error: 'This email address is already registered to another student.' });
+      }
+    }
+
     const result = await db.collection('students').updateOne(
       { id: req.params.id },
       { $set: { ...updateData, updatedAt: new Date() } }

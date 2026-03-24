@@ -201,21 +201,27 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth }) => {
   }, [dobDay, dobMonth, dobYear, setProfileValue]);
 
   const ScrollPicker = ({ value, options, onChange, label }: { value: string, options: any[], onChange: (val: string) => void, label: string }) => {
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+      const index = options.findIndex(opt => opt.value === value);
+      if (index !== -1 && scrollRef.current) {
+        scrollRef.current.scrollTo({
+          top: index * 44,
+          behavior: 'smooth'
+        });
+      }
+    }, [value, options]);
+
     return (
       <div className="relative group flex-1">
         <label className="text-[10px] uppercase tracking-[0.15em] text-[#1A237E] font-black mb-2 block text-center opacity-70">{label}</label>
         <div className="relative h-36 overflow-hidden bg-white rounded-3xl border border-gray-100 shadow-[inset_0_2px_10px_rgba(0,0,0,0.02)]">
-          {/* Enhanced Highlight Indicator */}
           <div className="absolute top-1/2 left-0 right-0 h-11 -translate-y-1/2 bg-[#1A237E]/5 border-y border-[#1A237E]/10 pointer-events-none z-10 mx-2 rounded-xl"></div>
 
           <div
+            ref={scrollRef}
             className="h-full overflow-y-auto snap-y snap-mandatory hide-scrollbar flex flex-col items-center py-[62px]"
-            onScroll={(e) => {
-              const target = e.target as HTMLDivElement;
-              const index = Math.round(target.scrollTop / 44);
-              const selectedValue = options[index]?.value || '';
-              // if (selectedValue !== value) onChange(selectedValue);
-            }}
           >
             {options.map((opt, idx) => (
               <div
@@ -231,7 +237,6 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth }) => {
             ))}
           </div>
 
-          {/* Stronger Gradient Overlays for depth */}
           <div className="absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-white via-white/80 to-transparent pointer-events-none z-10"></div>
           <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-white via-white/80 to-transparent pointer-events-none z-10"></div>
         </div>
@@ -712,6 +717,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth }) => {
             <input type="hidden" {...profileReg('gender')} />
           </div>
           <div>
+            <label className="text-xs font-semibold text-gray-600 block mb-2">Date of Birth *</label>
             <div className="flex gap-3 mb-4">
               <ScrollPicker
                 label="Day"
