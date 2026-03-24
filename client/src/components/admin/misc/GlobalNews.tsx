@@ -22,7 +22,22 @@ const GlobalNews: React.FC<Props> = ({ showToast }) => {
   const loadItems = async () => {
     try {
       const data = await newsAPI.getAll().catch(() => []);
-      setItems(Array.isArray(data) ? data : []);
+      const sortedData = (Array.isArray(data) ? data : []).sort((a: any, b: any) => {
+        const getTimestamp = (item: any) => {
+          if (!item) return 0;
+          if (item.id && typeof item.id === 'string') {
+            const numStr = item.id.replace(/\D/g, '');
+            if (numStr.length >= 13) {
+              const parsed = parseInt(numStr.substring(0, 13));
+              if (!isNaN(parsed)) return parsed;
+            }
+          }
+          const d = new Date(item.createdAt || item.publishDate || item.createdDate || 0).getTime();
+          return isNaN(d) ? 0 : d;
+        };
+        return getTimestamp(b) - getTimestamp(a);
+      });
+      setItems(sortedData);
     } catch (error) {
       showToast('Failed to load', 'error');
     } finally {

@@ -37,7 +37,11 @@ const ContentTypeDetail = lazy(() => import('./screens/ContentTypeDetail'));
 const DemoContent = lazy(() => import('./screens/DemoContent'));
 const FreeContent = lazy(() => import('./screens/FreeContent'));
 const NewsArticle = lazy(() => import('./screens/NewsArticle'));
+const AllNews = lazy(() => import('./screens/AllNews'));
 const Batches = lazy(() => import('./screens/Batches'));
+const TermsOfService = lazy(() => import('./screens/TermsOfService'));
+const PrivacyPolicy = lazy(() => import('./screens/PrivacyPolicy'));
+const RefundPolicy = lazy(() => import('./screens/RefundPolicy'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[60vh] w-full animate-in fade-in duration-300">
@@ -59,14 +63,21 @@ const LoadingSpinner = () => (
 
 const MainLayout: React.FC<{ isLoggedIn: boolean; children: React.ReactNode }> = ({ isLoggedIn, children }) => {
   const location = useLocation();
+  const scrollRef = React.useRef<HTMLDivElement>(null);
   const currentPath = location.pathname;
   const hideOnPaths = ['/news/', '/test/', '/checkout/', '/video-player', '/test-series/', '/live-session/'];
   const shouldHide = hideOnPaths.some(path => currentPath.startsWith(path));
 
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTo(0, 0);
+    }
+  }, [location.pathname]);
+
   return (
     <div className="max-w-md mx-auto h-screen bg-white shadow-xl relative overflow-hidden flex flex-col">
       <div id="sidebar-root" />
-      <div className="flex-1 overflow-y-auto hide-scrollbar relative smooth-scroll">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto hide-scrollbar relative smooth-scroll">
         <div className={`${shouldHide ? '' : 'pb-32'} font-outfit`}>
           {children}
         </div>
@@ -125,6 +136,7 @@ const App: React.FC = () => {
 
             <Route path="/student-login" element={isStudentLoggedIn ? <Navigate to="/" replace /> : <div className="font-outfit"><StudentLogin setAuth={setIsStudentLoggedIn} /></div>} />
 
+            <Route path="/news" element={<AllNews />} />
             <Route path="/news/:id" element={<NewsArticle />} />
 
             <Route path="*" element={
@@ -136,6 +148,9 @@ const App: React.FC = () => {
                     <Route path="/courses" element={<CoursesScreen />} />
                     <Route path="/explore" element={<ExploreCourses />} />
                     <Route path="/explore/:categoryId" element={<CategoryPage />} />
+                    <Route path="/terms" element={<TermsOfService />} />
+                    <Route path="/privacy" element={<PrivacyPolicy />} />
+                    <Route path="/refund" element={<RefundPolicy />} />
                     <Route path="/explore/:categoryId/:subId" element={<SubCategoryDetail />} />
                     <Route path="/content/:contentType" element={<ContentTypeDetail />} />
                     <Route path="/demo" element={<DemoContent />} />

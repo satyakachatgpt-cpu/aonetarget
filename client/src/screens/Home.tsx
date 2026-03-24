@@ -139,7 +139,21 @@ const Home: React.FC = () => {
           thumbnail: getImageUrl(n.thumbnail || n.imageUrl || n.image)
         })).filter((n: any) =>
           (n.status === 'published' || n.status === 'active' || n.isActive !== false) && n.status !== 'draft'
-        );
+        ).sort((a: any, b: any) => {
+          const getTimestamp = (item: any) => {
+            if (!item) return 0;
+            if (item.id && typeof item.id === 'string') {
+              const numStr = item.id.replace(/\D/g, '');
+              if (numStr.length >= 13) {
+                const parsed = parseInt(numStr.substring(0, 13));
+                if (!isNaN(parsed)) return parsed;
+              }
+            }
+            const d = new Date(item.createdAt || item.publishDate || item.createdDate || item.date || 0).getTime();
+            return isNaN(d) ? 0 : d;
+          };
+          return getTimestamp(b) - getTimestamp(a);
+        });
 
         setAllNews(activeNews.slice(0, 8));
 
@@ -820,7 +834,7 @@ const Home: React.FC = () => {
                 </div>
               </div>
               <div className="space-y-3">
-                {displayNews.map((news: any, i: number) => (
+                {displayNews.slice(0, 4).map((news: any, i: number) => (
                   <div 
                     key={news.id || i}
                     onClick={() => {
@@ -855,6 +869,17 @@ const Home: React.FC = () => {
                   </div>
                 ))}
               </div>
+              {displayNews.length > 4 && (
+                <div className="mt-4 flex justify-center">
+                  <button 
+                    onClick={() => navigate('/news')}
+                    className="btn-primary text-xs px-6 py-2.5 rounded-xl flex items-center gap-2 active:scale-[0.97] transition-all duration-200"
+                  >
+                    Read More News
+                    <span className="material-symbols-rounded text-[16px]">arrow_forward</span>
+                  </button>
+                </div>
+              )}
             </section>
           );
         })()}

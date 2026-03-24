@@ -12,7 +12,6 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
   const navigate = useNavigate();
   const { student, isAuthenticated, clearAuth } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showLegalModal, setShowLegalModal] = useState<{ type: 'privacy' | 'terms' | 'refund' | null }>({ type: null });
 
   const [settings, setSettings] = useState({
     notifications: true,
@@ -41,7 +40,7 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
   }, [settings.autoPlay, settings.downloadOverWifi, settings.videoQuality]);
 
   useEffect(() => {
-    const isModalOpen = !!showLegalModal.type || showQualityModal;
+    const isModalOpen = showQualityModal;
     if (isModalOpen) {
       document.body.classList.add('modal-open-nav-hide');
       document.body.style.overflow = 'hidden';
@@ -53,7 +52,7 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
       document.body.classList.remove('modal-open-nav-hide');
       document.body.style.overflow = 'unset';
     };
-  }, [showLegalModal, showQualityModal]);
+  }, [showQualityModal]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -71,9 +70,9 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
   };
 
   const handleAction = (key: string) => {
-    if (key === 'privacy') setShowLegalModal({ type: 'privacy' });
-    if (key === 'terms') setShowLegalModal({ type: 'terms' });
-    if (key === 'refund') setShowLegalModal({ type: 'refund' });
+    if (key === 'privacy') navigate('/privacy');
+    if (key === 'terms') navigate('/terms');
+    if (key === 'refund') navigate('/refund');
     if (key === 'videoQuality') setShowQualityModal(true);
   };
 
@@ -225,82 +224,6 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
         </div>
       )}
 
-      {/* Legal Content Modal */}
-      {showLegalModal.type && (
-        <div className="fixed inset-0 z-[110] flex items-end justify-center p-0 sm:p-4 animate-in fade-in duration-300">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setShowLegalModal({ type: null })}></div>
-          <div className="relative bg-white w-full max-w-lg max-h-[85vh] rounded-t-[2.5rem] sm:rounded-2xl p-5 pb-4 shadow-2xl animate-in slide-in-from-bottom duration-500 overflow-y-auto">
-            <h3 className="text-xl font-bold mb-3 capitalize">
-              {showLegalModal.type === 'refund' ? 'Refund & Return Policy' : `${showLegalModal.type.replace('_', ' ')} Policy`}
-            </h3>
-            {showLegalModal.type === 'refund' && (
-              <div className="prose prose-sm text-gray-600">
-                <p className="font-bold">Last Updated: February 2026</p>
-                <p>Welcome to Aone Target Institute's Refund and Return Policy. Please read this carefully before purchasing any of our courses or digital materials.</p>
-
-                <h4 className="font-bold text-gray-800 mt-4">1. Digital Products and Services</h4>
-                <p>All our products, including course enrollments, test series, and e-books, are digital in nature. Once access is granted to these resources, they are considered "used" or "consumed."</p>
-
-                <h4 className="font-bold text-gray-800 mt-4">2. Non-Refundable Purchases</h4>
-                <p>Due to the digital nature of our educational content, all sales are final. We do not offer refunds, returns, or exchanges for any courses, test series, or PDF materials once the purchase is complete and access has been provided.</p>
-
-                <h4 className="font-bold text-gray-800 mt-4">3. Exceptional Circumstances</h4>
-                <p>Refunds may only be considered under exceptional circumstances, such as duplicate payments for the exact same course/product due to a technical error on our platform. In such cases, you must contact our support team within 48 hours of the transaction.</p>
-
-                <h4 className="font-bold text-gray-800 mt-4">4. Course Cancellation by Institute</h4>
-                <p>If Aone Target Institute cancels a live batch or course before its scheduled start date, enrolled students will be eligible for a full refund or can opt to transfer the amount to another available course.</p>
-
-                <h4 className="font-bold text-gray-800 mt-4">5. Contact Support</h4>
-                <p>If you experience any technical issues accessing your purchased content, please contact our support team immediately so we can assist you in resolving the issue.</p>
-              </div>
-            )}
-
-            {showLegalModal.type === 'privacy' && (
-              <div className="prose prose-sm text-gray-600">
-                <p className="font-bold">Last Updated: February 2026</p>
-                <p>Welcome to Aone Target Institute. Your privacy and trust are our most important assets.</p>
-
-                <h4 className="font-bold text-gray-800 mt-4">1. Information Collection</h4>
-                <p>We collect information that you provide directly to us when you create an account, such as your name, email, and phone number.</p>
-
-                <h4 className="font-bold text-gray-800 mt-4">2. Usage</h4>
-                <p>The information we collect is used to provide, maintain, and improve our educational services, process transactions, and send related information.</p>
-
-                <h4 className="font-bold text-gray-800 mt-4">3. Data Security</h4>
-                <p>We implement a variety of security measures to maintain the safety of your personal information when you access our platform.</p>
-
-                <h4 className="font-bold text-gray-800 mt-4">4. Cookie Policy</h4>
-                <p>We use cookies to enhance your experience, analyze site usage, and assist in our marketing efforts.</p>
-              </div>
-            )}
-
-            {showLegalModal.type === 'terms' && (
-              <div className="prose prose-sm text-gray-600">
-                <p className="font-bold">Last Updated: February 2026</p>
-                <p>These Terms of Service govern your use of the Aone Target Institute platform and services.</p>
-
-                <h4 className="font-bold text-gray-800 mt-4">1. Acceptance of Terms</h4>
-                <p>By accessing or using our application, you agree to be bound by these Terms. If you do not agree to all the terms, you may not access the services.</p>
-
-                <h4 className="font-bold text-gray-800 mt-4">2. User Accounts</h4>
-                <p>You are responsible for safeguarding the password that you use to access the service and for any activities or actions under your password.</p>
-
-                <h4 className="font-bold text-gray-800 mt-4">3. Intellectual Property</h4>
-                <p>The service and its original content, features, and functionality are and will remain the exclusive property of Aone Target Institute and its licensors. Course materials may not be distributed or shared without permission.</p>
-
-                <h4 className="font-bold text-gray-800 mt-4">4. Code of Conduct</h4>
-                <p>Users must maintain respectful behavior during live classes, in chat sections, and forums. Any form of harassment or disruption may result in account termination.</p>
-              </div>
-            )}
-            <button
-              onClick={() => setShowLegalModal({ type: null })}
-              className="mt-2 w-full bg-gray-100 text-gray-700 py-2.5 rounded-xl font-bold active:scale-95 transition-all"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

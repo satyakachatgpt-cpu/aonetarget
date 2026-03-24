@@ -3535,7 +3535,7 @@ app.delete('/api/messages/:id', async (req, res) => {
 // Routes for Blog
 app.get('/api/blog', async (req, res) => {
   try {
-    const posts = await db.collection('blog').find({}).toArray();
+    const posts = await db.collection('blog').find({}).sort({ createdAt: -1 }).toArray();
     res.json(posts);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch blog posts' });
@@ -3933,7 +3933,7 @@ app.delete('/api/exam-documents/:id', async (req, res) => {
 
 app.get('/api/news', async (req, res) => {
   try {
-    const news = await db.collection('news').find({}).toArray();
+    const news = await db.collection('news').find({}).sort({ createdAt: -1 }).toArray();
     res.json(news);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch news' });
