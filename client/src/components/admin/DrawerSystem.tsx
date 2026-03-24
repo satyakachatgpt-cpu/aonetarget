@@ -86,7 +86,7 @@ export const DrawerHeader: React.FC<{ title: string; onClose: () => void }> = ({
 );
 
 export const DrawerBody: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className = "" }) => (
-    <div className={`flex-1 overflow-y-auto px-6 py-6 scroll-smooth hide-scrollbar ${className}`}>
+    <div className={`flex-1 overflow-y-auto px-6 py-6 scroll-smooth custom-scrollbar ${className}`}>
         {children}
     </div>
 );

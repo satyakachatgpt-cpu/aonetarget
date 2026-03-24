@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { videosAPI, pdfsAPI, testsAPI, coursesAPI, liveVideosAPI, subjectsAPI } from '../../services/apiClient';
-import { VideoDrawer, UploadDrawer } from './FeatureDrawers';
+import { VideoDrawer, UploadDrawer, LiveStreamDrawer } from './FeatureDrawers';
 import {
     RightSideDrawer,
     DrawerBody,
@@ -73,6 +73,7 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
     const [showActionDrawer, setShowActionDrawer] = useState(false);
     const [selectedItemForAction, setSelectedItemForAction] = useState<ContentItem | null>(null);
     const [showOverviewDrawer, setShowOverviewDrawer] = useState(false);
+    const [isLiveStreamDrawerOpen, setIsLiveStreamDrawerOpen] = useState(false);
     const bulkDropdownRef = useRef<HTMLDivElement>(null);
 
     const handleAddClick = () => {
@@ -189,7 +190,7 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
                 subjectId: data.subjectId || ''
             });
             fetchData();
-            setIsVideoDrawerOpen(false);
+            setIsLiveStreamDrawerOpen(false);
         } catch (error) {
             console.error(error);
         }
@@ -1040,9 +1041,7 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
                             color="bg-red-50 text-red-600"
                             onClick={() => {
                                 setShowTypeSelector(false);
-                                // For live, we can use the same video drawer but change the submit handler temporarily or add a flag
-                                setIsVideoDrawerOpen(true);
-                                (window as any)._addingLive = true;
+                                setIsLiveStreamDrawerOpen(true);
                             }}
                         />
                         {mode === 'free' && (
@@ -1078,6 +1077,13 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
                 subtitle="Select study documents"
                 onSubmit={handleAddPDF}
                 accept=".pdf,.doc,.docx"
+            />
+            <LiveStreamDrawer
+                isOpen={isLiveStreamDrawerOpen}
+                onClose={() => setIsLiveStreamDrawerOpen(false)}
+                onSubmit={handleAddLive}
+                courses={courses}
+                subjects={subjects}
             />
         </div>
     );

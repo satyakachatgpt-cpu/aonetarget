@@ -778,13 +778,19 @@ export const liveVideosAPI = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error('Failed to update live video');
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Failed' }));
+        throw new Error(err.error || 'Failed to update live video');
+    }
     invalidateCache('live-videos');
     return response.json();
   },
   delete: async (id: string) => {
     const response = await fetch(`${API_BASE_URL}/live-videos/${id}`, { method: 'DELETE' });
-    if (!response.ok) throw new Error('Failed to delete live video');
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Failed' }));
+        throw new Error(err.error || 'Failed to delete live video');
+    }
     invalidateCache('live-videos');
     return response.json();
   }
@@ -848,6 +854,9 @@ export const packagesAPI = {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || errorData.details || 'Failed to update package');
     }
+    // Invalidate courses and test-series cache as packages often contain both
+    invalidateCache('courses');
+    invalidateCache('packages'); 
     return response.json();
   },
   delete: async (id: string) => {

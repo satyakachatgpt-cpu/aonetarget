@@ -27,8 +27,8 @@ const LiveClasses: React.FC = () => {
     try {
       const data = await liveVideosAPI.getAll();
       if (Array.isArray(data)) {
-        setLiveClasses(data.filter((c: any) => c.isLive));
-        setUpcomingClasses(data.filter((c: any) => !c.isLive));
+        setLiveClasses(data.filter((c: any) => c.status === 'live'));
+        setUpcomingClasses(data.filter((c: any) => c.status === 'upcoming' || c.status === 'scheduled'));
       }
     } catch (error) {
       console.error('Error fetching live classes:', error);

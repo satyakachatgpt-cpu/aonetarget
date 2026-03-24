@@ -1152,15 +1152,37 @@ export const ImportContentDrawer: React.FC<{
 /**
  * 9. LIVE STREAM DRAWER
  */
-export const LiveStreamDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSubmit: (data: any) => void }> = ({ isOpen, onClose, onSubmit }) => {
+export const LiveStreamDrawer: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    onSubmit: (data: any) => void;
+    courses?: any[];
+    subjects?: any[];
+}> = ({ isOpen, onClose, onSubmit, courses = [], subjects = [] }) => {
     const [formData, setFormData] = useState({
         title: '',
         streamSource: 'YouTube',
         streamId: '',
-        scheduledTime: '2026-03-02 10:15',
+        scheduledTime: new Date().toISOString().slice(0, 16).replace('T', ' '),
         isFree: false,
+        courseId: '',
+        subjectId: ''
     });
     const [showAdvanced, setShowAdvanced] = useState(false);
+
+    useEffect(() => {
+        if (!isOpen) {
+            setFormData({
+                title: '',
+                streamSource: 'YouTube',
+                streamId: '',
+                scheduledTime: new Date().toISOString().slice(0, 16).replace('T', ' '),
+                isFree: false,
+                courseId: '',
+                subjectId: ''
+            });
+        }
+    }, [isOpen]);
 
     return (
         <RightSideDrawer isOpen={isOpen} onClose={onClose}>
@@ -1177,17 +1199,27 @@ export const LiveStreamDrawer: React.FC<{ isOpen: boolean; onClose: () => void; 
                             />
                         </div>
 
-                        <div className="space-y-2">
-                            <FormLabel label="Stream Source" />
-                            <FormSelect
-                                value={formData.streamSource}
-                                onChange={(val) => setFormData({ ...formData, streamSource: val })}
-                                options={[
-                                    { value: 'YouTube', label: 'YouTube Live' },
-                                    { value: 'Standard', label: 'Standard HLS' },
-                                    { value: 'Zoom', label: 'Zoom Meeting' }
-                                ]}
-                            />
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <FormLabel label="Stream Source" />
+                                <FormSelect
+                                    value={formData.streamSource}
+                                    onChange={(val) => setFormData({ ...formData, streamSource: val })}
+                                    options={[
+                                        { value: 'YouTube', label: 'YouTube Live' },
+                                        { value: 'Standard', label: 'Standard HLS' },
+                                        { value: 'Zoom', label: 'Zoom Meeting' }
+                                    ]}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <FormLabel label="Scheduled For" required />
+                                <FormInput
+                                    value={formData.scheduledTime}
+                                    onChange={(e) => setFormData({ ...formData, scheduledTime: e.target.value })}
+                                    placeholder="YYYY-MM-DD HH:MM"
+                                />
+                            </div>
                         </div>
 
                         <div className="space-y-2">
@@ -1199,19 +1231,35 @@ export const LiveStreamDrawer: React.FC<{ isOpen: boolean; onClose: () => void; 
                             />
                         </div>
 
-                        <div className="space-y-2">
-                            <FormLabel label="Scheduled For" required />
-                            <FormInput
-                                value={formData.scheduledTime}
-                                onChange={(e) => setFormData({ ...formData, scheduledTime: e.target.value })}
-                                placeholder="YYYY-MM-DD HH:MM"
-                            />
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <FormLabel label="Select Product" required />
+                                <FormSelect
+                                    value={formData.courseId}
+                                    onChange={(val) => setFormData({ ...formData, courseId: val })}
+                                    options={[
+                                        { value: '', label: 'Select Course' },
+                                        ...courses.map(c => ({ value: c.id || c._id, label: c.name || c.title }))
+                                    ]}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <FormLabel label="Select Subject" required />
+                                <FormSelect
+                                    value={formData.subjectId}
+                                    onChange={(val) => setFormData({ ...formData, subjectId: val })}
+                                    options={[
+                                        { value: '', label: 'Select Subject' },
+                                        ...subjects.map(s => ({ value: s.id || s._id, label: s.name || s.title }))
+                                    ]}
+                                />
+                            </div>
                         </div>
 
                         <div className="pt-2">
                             <button
                                 onClick={() => setShowAdvanced(!showAdvanced)}
-                                className="flex items-center gap-1.5 text-[#3b82f6] text-[13px] font-bold hover:text-blue-700 transition-all font-bold"
+                                className="flex items-center gap-1.5 text-[#3b82f6] text-[13px] font-bold hover:text-blue-700 transition-all"
                             >
                                 <span className={`material-symbols-outlined text-[20px] transition-transform duration-300 ${showAdvanced ? 'rotate-90' : ''}`}>arrow_right</span>
                                 Advanced Options
@@ -1234,19 +1282,20 @@ export const LiveStreamDrawer: React.FC<{ isOpen: boolean; onClose: () => void; 
 
                 </div>
             </DrawerBody>
-            <div className="px-8 pb-10">
+            <div className="px-8 pb-10 shadow-[0_-10px_40px_rgba(0,0,0,0.02)]">
                 <div className="flex gap-4">
                     <button
                         type="button"
                         onClick={onClose}
-                        className="flex-1 h-[60px] bg-gray-100 text-gray-700 rounded-2xl font-bold text-[15px] hover:bg-gray-200 transition-all active:scale-[0.98]"
+                        className="flex-1 h-[60px] bg-gray-50 text-gray-400 border border-gray-100 rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-gray-100 transition-all active:scale-[0.98]"
                     >
                         CANCEL
                     </button>
                     <button
                         type="button"
                         onClick={() => onSubmit(formData)}
-                        className="flex-[2] h-[60px] bg-[#1a1c1e] text-white rounded-2xl font-bold text-[15px] hover:bg-black transition-all shadow-lg active:scale-[0.98]"
+                        disabled={!formData.title || !formData.streamId}
+                        className={`flex-[1.8] h-[60px] rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all active:scale-[0.98] shadow-lg shadow-gray-200 ${(!formData.title || !formData.streamId) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#1a1c1e] text-white hover:bg-black'}`}
                     >
                         SCHEDULE STREAM
                     </button>

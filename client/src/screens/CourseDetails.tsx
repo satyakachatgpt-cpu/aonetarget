@@ -8,6 +8,7 @@ import { CATEGORY_GRADIENTS } from '../constants';
 
 interface Video {
   id: string;
+  _id?: string;
   title: string;
   duration: string;
   thumbnail?: string;
@@ -19,6 +20,13 @@ interface Video {
   topicName?: string;
   order?: number;
   completed?: boolean;
+  publishOn?: string;
+  contentType?: string;
+  endTime?: string;
+  joinBeforeMinutes?: number;
+  meetingLink?: string;
+  instructor?: string;
+  url?: string;
 }
 
 interface Note {
@@ -86,11 +94,13 @@ const CourseDetails: React.FC = () => {
   const [shareSuccess, setShareSuccess] = useState(false);
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
+
+
   const tabConfig = [
     { key: 'videos' as const, label: 'Recorded', icon: 'play_circle' },
     { key: 'notes' as const, label: 'Notes', icon: 'description' },
     { key: 'tests' as const, label: 'Tests', icon: 'quiz' },
-    { key: 'live' as const, label: 'Live Classes', icon: 'sensors' },
+    { key: 'live' as const, label: 'Live stream', icon: 'sensors' },
   ];
 
 
@@ -510,49 +520,7 @@ const CourseDetails: React.FC = () => {
         {activeTab === 'videos' && (
           <div className="space-y-3">
             {/* Course Content Header/Grid similar to Reference */}
-            {!currentFolderId && (
-              <div className="card-premium p-6 mb-6 border border-primary-50">
-                <div className="flex items-center gap-2 mb-6">
-                  <span className="w-1 h-5 bg-primary-600 rounded-full"></span>
-                  <span className="material-symbols-rounded text-primary-200">business_center</span>
-                  <h3 className="text-base font-black text-gray-900 tracking-tight">What's Included</h3>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-primary-50/50 p-4 rounded-[1.5rem] flex flex-col gap-2 border border-primary-50">
-                    <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center text-primary-700">
-                      <span className="material-symbols-rounded text-base">play_circle</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-gray-900 leading-none">{videos.length} Videos</p>
-                    </div>
-                  </div>
-                  <div className="bg-orange-50/50 p-4 rounded-[1.5rem] flex flex-col gap-2 border border-orange-50">
-                    <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-600">
-                      <span className="material-symbols-rounded text-base">description</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-gray-900 leading-none">{course.notesCount || 0} Notes</p>
-                    </div>
-                  </div>
-                  <div className="bg-purple-50/50 p-4 rounded-[1.5rem] flex flex-col gap-2 border border-purple-50">
-                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center text-purple-600">
-                      <span className="material-symbols-rounded text-base">quiz</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-gray-900 leading-none">{tests.length} Tests</p>
-                    </div>
-                  </div>
-                  <div className="bg-red-50/50 p-4 rounded-[1.5rem] flex flex-col gap-2 border border-red-50">
-                    <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center text-red-600">
-                      <span className="material-symbols-rounded text-base">sensors</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-gray-900 leading-none">Live Classes</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
+
 
             {currentFolderId && (
               <button
@@ -598,8 +566,9 @@ const CourseDetails: React.FC = () => {
             </div>
 
             {videos.filter(v => 
-              (!currentFolderId && (!v.folderId || v.folderId === 'null' || v.folderId === 'undefined')) || 
-              (currentFolderId && String(v.folderId) === String(currentFolderId))
+              (v.contentType !== 'youtube_zoom' && v.contentType !== 'live_stream') &&
+              ((!currentFolderId && (!v.folderId || v.folderId === 'null' || v.folderId === 'undefined')) || 
+               (currentFolderId && String(v.folderId) === String(currentFolderId)))
             ).length === 0 && folders.filter(f => String(f.parentId || '') === String(currentFolderId || '')).length === 0 ? (
               <div className="card-premium p-10 text-center animate-fade-in-up">
                 <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -609,8 +578,9 @@ const CourseDetails: React.FC = () => {
               </div>
             ) : (
               videos.filter(v => 
-                (!currentFolderId && (!v.folderId || v.folderId === 'null' || v.folderId === 'undefined')) || 
-                (currentFolderId && String(v.folderId) === String(currentFolderId))
+                (v.contentType !== 'youtube_zoom' && v.contentType !== 'live_stream') &&
+                ((!currentFolderId && (!v.folderId || v.folderId === 'null' || v.folderId === 'undefined')) || 
+                 (currentFolderId && String(v.folderId) === String(currentFolderId)))
               ).map((video, index) => {
                 const isCompleted = progress.completedVideos.includes(video.id);
                 const canPlay = isEnrolled || video.isFree || (index === 0 && !currentFolderId);

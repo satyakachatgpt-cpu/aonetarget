@@ -1,5 +1,4 @@
-import dotenv from 'dotenv';
-dotenv.config();
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import Razorpay from 'razorpay';
@@ -662,12 +661,30 @@ app.post('/api/courses/:id/videos', async (req, res) => {
       folderId = String(folderId);
     }
 
+    const videoData = { ...req.body };
+    const isLiveStream = videoData.contentType === 'live_stream';
+
     const video = {
-      ...req.body,
+      ...(isLiveStream ? {
+        title: videoData.title,
+        platform: videoData.platform,
+        instructor: videoData.instructor,
+        meetingLink: videoData.meetingLink || videoData.link || videoData.url,
+        startDateTime: videoData.startDateTime || videoData.publishOn,
+        endDateTime: videoData.endDateTime || videoData.endTime,
+        joinBeforeMinutes: videoData.joinBeforeMinutes,
+        isFree: videoData.isFree,
+        thumbnail: videoData.thumbnail || videoData.image,
+        contentType: 'live_stream',
+        type: 'video',
+        url: videoData.meetingLink || videoData.link || videoData.url,
+        publishOn: videoData.startDateTime || videoData.publishOn
+      } : videoData),
       courseId: String(courseId),
       folderId: folderId,
       createdAt: new Date().toISOString()
     };
+
     const result = await db.collection('videos').insertOne(video);
     res.status(201).json({ _id: result.insertedId, ...video });
   } catch (error) {
@@ -693,22 +710,39 @@ app.put('/api/courses/:id/videos/:videoId', async (req, res) => {
     }
 
     const { _id, ...updateData } = req.body;
-    
+    const isLiveStream = updateData.contentType === 'live_stream';
+
+    const finalUpdate = isLiveStream ? {
+      title: updateData.title,
+      platform: updateData.platform,
+      instructor: updateData.instructor,
+      meetingLink: updateData.meetingLink || updateData.link || updateData.url,
+      startDateTime: updateData.startDateTime || updateData.publishOn,
+      endDateTime: updateData.endDateTime || updateData.endTime,
+      joinBeforeMinutes: updateData.joinBeforeMinutes,
+      isFree: updateData.isFree,
+      thumbnail: updateData.thumbnail || updateData.image,
+      contentType: 'live_stream',
+      type: 'video',
+      url: updateData.meetingLink || updateData.link || updateData.url,
+      publishOn: updateData.startDateTime || updateData.publishOn
+    } : updateData;
+
     // Sanitize folderId if present in update
-    if (updateData.folderId !== undefined) {
-      if (updateData.folderId === 'null' || updateData.folderId === 'undefined' || !updateData.folderId) {
-        updateData.folderId = null;
+    if (finalUpdate.folderId !== undefined) {
+      if (finalUpdate.folderId === 'null' || finalUpdate.folderId === 'undefined' || !finalUpdate.folderId) {
+        finalUpdate.folderId = null;
       } else {
-        updateData.folderId = String(updateData.folderId);
+        finalUpdate.folderId = String(finalUpdate.folderId);
       }
     }
 
     const result = await db.collection('videos').updateOne(
       query,
-      { $set: { ...updateData, updatedAt: new Date().toISOString() } }
+      { $set: { ...finalUpdate, updatedAt: new Date().toISOString() } }
     );
     if (result.matchedCount === 0) return res.status(404).json({ error: 'Video not found' });
-    res.json({ success: true, message: 'Video updated' });
+    res.json({ success: true, message: isLiveStream ? 'Live stream updated' : 'Video updated' });
   } catch (error) {
     console.error('Video update error:', error);
     res.status(500).json({ error: 'Failed to update video' });
@@ -1064,11 +1098,46 @@ app.get('/api/courses/:id/live-classes', async (req, res) => {
     const query = {
       courseId: { $in: idVariants }
     };
-    const [c1, c2] = await Promise.all([
+    const [c1, c2, c3] = await Promise.all([
       db.collection('liveVideos').find(query).toArray(),
-      db.collection('liveClasses').find(query).toArray()
+      db.collection('liveClasses').find(query).toArray(),
+      db.collection('videos').find({ ...query, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).toArray()
     ]);
-    const merged = [...c1, ...c2].sort((a,b) => new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt));
+    const merged = [...c1, ...c2, ...c3].map(item => {
+      const now = new Date();
+      const startTime = new Date(item.publishOn || item.date || item.createdAt);
+      const targetEnd = item.endTime || item.endDateTime;
+      const endTime = targetEnd ? new Date(targetEnd) : new Date(startTime.getTime() + 60 * 60 * 1000); // Default 1 hour
+      const joinBeforeMin = parseInt(item.joinBeforeMinutes) || 10;
+      const joinTime = new Date(startTime.getTime() - joinBeforeMin * 60 * 1000);
+
+      // Dynamic Status Calculation
+      if (item.status === 'inactive' || item.status === 'ended' || item.status === 'completed') {
+        item.status = 'ended';
+      } else if (now < joinTime) {
+        item.status = 'upcoming';
+      } else if (now >= joinTime && now <= endTime) {
+        item.status = 'live';
+      } else {
+        item.status = 'ended';
+      }
+
+      // Ensure date/startTime properties exist for the calendar view if they are missing
+      if (!item.date && item.publishOn) {
+        const d = new Date(item.publishOn);
+        if (!isNaN(d.getTime())) {
+          item.date = d.toISOString().split('T')[0]; // YYYY-MM-DD
+          item.startTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; // HH:MM
+        }
+      }
+      
+      // Map 'url' or 'meetingLink' consistently
+      if (!item.meetingLink) {
+        item.meetingLink = item.url || item.videoUrl || item.link;
+      }
+      
+      return item;
+    }).sort((a,b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
     res.json(merged);
   } catch (error) {
     res.status(500).json({ error: 'Failed' });
@@ -2830,7 +2899,34 @@ app.put('/api/videos/update-all', async (req, res) => {
 app.get('/api/live-videos', async (req, res) => {
   try {
     const liveVideos = await db.collection('liveVideos').find({}).toArray();
-    res.json(liveVideos);
+    const now = new Date();
+    const calculated = liveVideos.map(item => {
+      const startTime = new Date(item.publishOn || item.date || item.createdAt);
+      const targetEnd = item.endTime || item.endDateTime;
+      const endTime = targetEnd ? new Date(targetEnd) : new Date(startTime.getTime() + 60 * 60 * 1000);
+      const joinBeforeMin = parseInt(item.joinBeforeMinutes || 10);
+      const joinTime = new Date(startTime.getTime() - joinBeforeMin * 60 * 1000);
+
+      // Dynamic Status Calculation
+      let status = item.status;
+      if (item.status === 'inactive' || item.status === 'ended' || item.status === 'completed') {
+        status = 'ended';
+      } else if (now < joinTime) {
+        status = 'upcoming';
+      } else if (now >= joinTime && now <= endTime) {
+        status = 'live';
+      } else {
+        status = 'ended';
+      }
+
+      return {
+        ...item,
+        status,
+        isLive: status === 'live'
+      };
+    }).sort((a,b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
+    
+    res.json(calculated);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch live videos' });
   }
@@ -2848,10 +2944,14 @@ app.post('/api/live-videos', async (req, res) => {
 app.put('/api/live-videos/:id', async (req, res) => {
   try {
     const { _id, ...updateData } = req.body;
-    const result = await db.collection('liveVideos').updateOne(
-      { id: req.params.id },
-      { $set: updateData }
-    );
+    const filter = {
+      $or: [
+        { id: req.params.id },
+        { _id: req.params.id },
+        { _id: ObjectId.isValid(req.params.id) ? new ObjectId(req.params.id) : null }
+      ].filter(f => f.id || f._id)
+    };
+    const result = await db.collection('liveVideos').updateOne(filter, { $set: updateData });
     if (result.matchedCount === 0) return res.status(404).json({ error: 'Live video not found' });
     res.json({ success: true, message: 'Live video updated' });
   } catch (error) {
@@ -2861,7 +2961,14 @@ app.put('/api/live-videos/:id', async (req, res) => {
 
 app.delete('/api/live-videos/:id', async (req, res) => {
   try {
-    const result = await db.collection('liveVideos').deleteOne({ id: req.params.id });
+    const filter = {
+      $or: [
+        { id: req.params.id },
+        { _id: req.params.id },
+        { _id: ObjectId.isValid(req.params.id) ? new ObjectId(req.params.id) : null }
+      ].filter(f => f.id || f._id)
+    };
+    const result = await db.collection('liveVideos').deleteOne(filter);
     if (result.deletedCount === 0) return res.status(404).json({ error: 'Live video not found' });
     res.json({ success: true, message: 'Live video deleted' });
   } catch (error) {
@@ -4922,9 +5029,61 @@ app.delete('/api/courses/:courseId/live-classes/:id', async (req, res) => {
 app.get('/api/students/:studentId/live-classes', async (req, res) => {
   try {
     const enrollments = await db.collection('enrollments').find({ studentId: req.params.studentId }).toArray();
-    const courseIds = enrollments.map(e => e.courseId);
-    const classes = await db.collection('liveClasses').find({ courseId: { $in: courseIds } }).toArray();
-    res.json(classes);
+    let courseIds = enrollments.map(e => e.courseId);
+    
+    // Expand to idVariants for each courseId to ensure robust matching across collections
+    let expandedIds = [];
+    for (const cId of courseIds) {
+      if (cId) {
+        const variants = await getCourseIdVariants(String(cId));
+        expandedIds.push(...variants);
+      }
+    }
+    const query = { courseId: { $in: [...new Set(expandedIds)] } };
+
+    const [c1, c2, c3] = await Promise.all([
+      db.collection('liveVideos').find(query).toArray(),
+      db.collection('liveClasses').find(query).toArray(),
+      db.collection('videos').find({ ...query, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).toArray()
+    ]);
+
+    const merged = [...c1, ...c2, ...c3].map(item => {
+      const now = new Date();
+      const startTime = new Date(item.publishOn || item.date || item.createdAt);
+      const targetEnd = item.endTime || item.endDateTime;
+      const endTime = targetEnd ? new Date(targetEnd) : new Date(startTime.getTime() + 60 * 60 * 1000); // Default 1 hour
+      const joinBeforeMin = parseInt(item.joinBeforeMinutes) || 10;
+      const joinTime = new Date(startTime.getTime() - joinBeforeMin * 60 * 1000);
+
+      // Dynamic Status Calculation
+      if (item.status === 'inactive' || item.status === 'ended' || item.status === 'completed') {
+        item.status = 'ended';
+      } else if (now < joinTime) {
+        item.status = 'upcoming';
+      } else if (now >= joinTime && now <= endTime) {
+        item.status = 'live';
+      } else {
+        item.status = 'ended';
+      }
+
+      // Ensure date/startTime properties exist for the calendar view if they are missing
+      if (!item.date && item.publishOn) {
+        const d = new Date(item.publishOn);
+        if (!isNaN(d.getTime())) {
+          item.date = d.toISOString().split('T')[0]; // YYYY-MM-DD
+          item.startTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; // HH:MM
+        }
+      }
+      
+      // Map 'url' or 'meetingLink' consistently
+      if (!item.meetingLink) {
+        item.meetingLink = item.url || item.videoUrl || item.link;
+      }
+      
+      return item;
+    }).sort((a,b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
+
+    res.json(merged);
   } catch (error) {
     console.error('Error fetching student live classes:', error);
     res.status(500).json({ error: 'Failed to fetch live classes' });
@@ -5794,20 +5953,37 @@ async function startServer() {
 
   let currentPort = parseInt(PORT, 10);
 
+  const startListen = () => {
+    httpServer.listen(currentPort, '0.0.0.0', () => {
+      console.log(`Server running on http://0.0.0.0:${currentPort}`);
+    });
+  };
+
   httpServer.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
-      console.log(`Port ${currentPort} is busy, trying ${currentPort + 1}...`);
-      currentPort++;
-      httpServer.close();
-      httpServer.listen(currentPort, '0.0.0.0');
+      console.log(`Port ${currentPort} is busy. Killing existing process on port ${currentPort}...`);
+      // Use exec to kill whatever is on the port, then retry
+      import('child_process').then(({ exec }) => {
+        // Windows: use netstat + taskkill
+        exec(`for /f "tokens=5" %a in ('netstat -ano ^| findstr :${currentPort} ^| findstr LISTENING') do taskkill /F /PID %a`, { shell: 'cmd' }, (err) => {
+          if (err) {
+            console.log(`Could not kill process on port ${currentPort}, err: ${err.message}`);
+          } else {
+            console.log(`Killed process on port ${currentPort}. Retrying...`);
+          }
+          setTimeout(() => {
+            httpServer.listen(currentPort, '0.0.0.0', () => {
+              console.log(`Server running on http://0.0.0.0:${currentPort}`);
+            });
+          }, 1000);
+        });
+      });
     } else {
       console.error(e);
     }
   });
 
-  httpServer.listen(currentPort, '0.0.0.0', () => {
-    console.log(`Server running on http://0.0.0.0:${currentPort}`);
-  });
+  startListen();
 }
 
 startServer();

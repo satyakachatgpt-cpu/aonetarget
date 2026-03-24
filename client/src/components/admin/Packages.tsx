@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { packagesAPI, coursesAPI, testSeriesAPI } from '../../services/apiClient';
+import React, { useState, useEffect, useRef } from 'react';
+import { packagesAPI, coursesAPI, testSeriesAPI, liveVideosAPI, subjectsAPI } from '../../services/apiClient';
 import AddCourse from './AddCourse';
 import LiveSessions from './LiveSessions';
 import ForumManager from './ForumManager';
@@ -151,7 +151,8 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
   const filterDropdownRef = React.useRef<HTMLDivElement>(null);
-  const bulkDropdownRef = React.useRef<HTMLDivElement>(null);
+  const bulkDropdownRef = useRef<HTMLDivElement>(null);
+  const [subjects, setSubjects] = useState<any[]>([]);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -249,6 +250,9 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
       // Combine both types into the main packages state for display
       setPackages([...normalizedPkgs, ...normalizedCourses]);
       setAvailableCourses(normalizedCourses);
+      
+      const subs = await subjectsAPI.getAll();
+      setSubjects(Array.isArray(subs) ? subs : (subs?.data || []));
     } catch (error) {
       console.error('Data loading error:', error);
       showToast('Failed to load data', 'error');
@@ -258,8 +262,10 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
   };
 
   const filteredPackages = packages.filter(pkg => {
-    const matchesSearch = pkg.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      pkg.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const nameStr = String(pkg?.name || pkg?.title || '');
+    const descStr = String(pkg?.description || '');
+    const matchesSearch = nameStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      descStr.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || pkg.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -299,6 +305,24 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
       loadData();
     } catch (error) {
       showToast('Failed to save package', 'error');
+    }
+  };
+
+  const handleAddLiveStream = async (data: any) => {
+    try {
+      await liveVideosAPI.create({
+        ...data,
+        status: 'upcoming',
+        courseId: data.courseId || '',
+        subjectId: data.subjectId || ''
+      });
+      showToast('Live stream scheduled successfully!', 'success');
+      setShowLiveStreamDrawer(false);
+      // If we are on the Live tab, we might need a way to refresh it.
+      // Since LiveSessions fetches its own data, switching to it will refresh it.
+    } catch (error) {
+      console.error(error);
+      showToast('Failed to schedule live stream', 'error');
     }
   };
 
@@ -496,7 +520,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                 </button>
 
                 {isBulkDropdownOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-[240px] bg-white border border-gray-100 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.12)] z-[200] p-5 animate-in fade-in zoom-in duration-200 origin-top-right max-h-[75vh] overflow-y-auto custom-scrollbar">
+                  <div className="absolute right-0 top-full mt-2 w-[240px] bg-white border border-gray-100 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.12)] z-[200] p-5 animate-in fade-in zoom-in duration-200 origin-top-right max-h-[400px] overflow-y-auto custom-scrollbar">
                     <div className="mb-6">
                       <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.1em] mb-4 ml-1">Table View</h4>
                       <div className="flex gap-2">
@@ -514,7 +538,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                         </button>
                       </div>
                     </div>
-
+ 
                     <div>
                       <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.1em] mb-4 ml-1">Bulk Actions</h4>
                       <div className="flex flex-col gap-0.5">
@@ -524,6 +548,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                           { id: 'video', icon: 'videocam', label: 'Add Video' },
                           { id: 'pdf', icon: 'picture_as_pdf', label: 'Add PDF' },
                           { id: 'test', icon: 'quiz', label: 'Add Test' },
+                          { id: 'live_stream', icon: 'sensors', label: 'Add Live Stream' },
                           { id: 'image', icon: 'image', label: 'Add Image' },
                           { id: 'youtube_zoom', icon: 'video_camera_front', label: 'Add YouTube/Zoom Video' },
                           { id: 'document', icon: 'description', label: 'Add Document' }
@@ -1171,10 +1196,9 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
       <LiveStreamDrawer
         isOpen={showLiveStreamDrawer}
         onClose={() => setShowLiveStreamDrawer(false)}
-        onSubmit={() => {
-          showToast('Live stream scheduled successfully', 'success');
-          setShowLiveStreamDrawer(false);
-        }}
+        onSubmit={handleAddLiveStream}
+        courses={availableCourses}
+        subjects={subjects}
       />
 
       <WebinarDrawer
