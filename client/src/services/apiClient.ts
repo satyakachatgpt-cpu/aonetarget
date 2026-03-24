@@ -1204,7 +1204,7 @@ export const notificationsAPI = {
     const response = await fetch(`${API_BASE_URL}/notifications/bulk`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ notifications: data }),
     });
     if (!response.ok) throw new Error('Failed to bulk create notifications');
     invalidateCache('notifications');
@@ -1214,7 +1214,7 @@ export const notificationsAPI = {
     const response = await fetch(`${API_BASE_URL}/notifications/bulk-update`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify({ updates: data }),
     });
     if (!response.ok) throw new Error('Failed to update all notifications');
     invalidateCache('notifications');

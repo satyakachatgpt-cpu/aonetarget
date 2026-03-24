@@ -15,6 +15,7 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api': 'http://localhost:5000',
         '/uploads': 'http://localhost:5000',
+        '/attach-assist': 'http://localhost:5000',
         '/attached_assets': 'http://localhost:5000',
       }
     },
@@ -27,7 +28,7 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: {
         "@": path.resolve(__dirname, "./src"),
-        "@assets": path.resolve(__dirname, "../attached_assets"),
+        "@assets": path.resolve(__dirname, "../attach-assist"),
       },
     },
 

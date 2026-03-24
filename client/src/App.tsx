@@ -10,6 +10,7 @@ const CourseDetails = lazy(() => import('./screens/CourseDetails'));
 const Checkout = lazy(() => import('./screens/Checkout'));
 const StudyDashboard = lazy(() => import('./screens/StudyDashboard'));
 const Success = lazy(() => import('./screens/Success'));
+const VideoPlayer = lazy(() => import('./screens/VideoPlayer'));
 const AdminDashboard = lazy(() => import('./screens/AdminDashboard'));
 const AdminLogin = lazy(() => import('./screens/AdminLogin'));
 const StudentLogin = lazy(() => import('./screens/StudentLogin'));
@@ -142,6 +143,7 @@ const App: React.FC = () => {
                     <Route path="/course/:id" element={<CourseDetails />} />
                     <Route path="/checkout/:id" element={<Checkout />} />
                     <Route path="/study/:id" element={<StudyDashboard />} />
+                    <Route path="/video-player" element={<VideoPlayer />} />
                     <Route path="/success" element={<Success />} />
                     <Route path="/purchase-success" element={<PurchaseSuccess />} />
 

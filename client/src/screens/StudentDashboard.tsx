@@ -143,7 +143,10 @@ const StudentDashboard: React.FC = () => {
           </button>
           <div className="flex gap-2">
             <button
-              onClick={() => navigate('/notifications')}
+              onClick={() => {
+                setUnreadCount?.(0);
+                navigate('/notifications');
+              }}
               className="p-2 rounded-full hover:bg-white/20 relative"
             >
               <span className="material-symbols-rounded">notifications</span>

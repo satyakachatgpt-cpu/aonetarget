@@ -1,46 +1,47 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useNavigate, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import Dashboard from '../components/admin/Dashboard';
-import MiscSection from '../components/admin/MiscSection';
-import Students from '../components/admin/Students';
-import Store from '../components/admin/store/StoreManagement';
-import Institute from '../components/admin/Institute';
-import Questions from '../components/admin/Questions';
-import Passages from '../components/admin/Passages';
-import Tests from '../components/admin/Tests';
-import SubjectiveTest from '../components/admin/SubjectiveTest';
-import TestSeries from '../components/admin/TestSeries';
-import AllReports from '../components/admin/AllReports';
-import Videos from '../components/admin/Videos';
-import VideoSeries from '../components/admin/VideoSeries';
-import LiveVideos from '../components/admin/LiveVideos';
-import PDFs from '../components/admin/PDFs';
-import Packages from '../components/admin/Packages';
-import Messages from '../components/admin/Messages';
-import Blog from '../components/admin/Blog';
-import Settings from '../components/admin/Settings';
-import SecurityCenter from '../components/admin/SecurityCenter';
-import Banners from '../components/admin/Banners';
-import Buyers from '../components/admin/shopping/Buyers';
-import Tokens from '../components/admin/shopping/Tokens';
-import Coupons from '../components/admin/shopping/Coupons';
-import Courses from '../components/admin/misc/Courses';
-import QuickLinks from '../components/admin/QuickLinks';
-import CourseContentManager from '../components/admin/CourseContentManager';
-import LiveClassScheduler from '../components/admin/LiveClassScheduler';
-import SubCourses from '../components/admin/misc/SubCourses';
-import Subjects from '../components/admin/misc/Subjects';
-import Topics from '../components/admin/misc/Topics';
-import Instructions from '../components/admin/misc/Instructions';
-import ExamDocuments from '../components/admin/misc/ExamDocuments';
-import GlobalNews from '../components/admin/misc/GlobalNews';
-import PushNotifications from '../components/admin/misc/PushNotifications';
-import Categories from '../components/admin/Categories';
-import Referrals from '../components/admin/Referrals';
-import ChatSupport from '../components/admin/ChatSupport';
-import LiveSessions from '../components/admin/LiveSessions';
-import ContentManager from '../components/admin/ContentManager';
-import ViewFormatPage from '../components/admin/ViewFormatPage';
+
+const Dashboard = lazy(() => import('../components/admin/Dashboard'));
+const MiscSection = lazy(() => import('../components/admin/MiscSection'));
+const Students = lazy(() => import('../components/admin/Students'));
+const Store = lazy(() => import('../components/admin/store/StoreManagement'));
+const Institute = lazy(() => import('../components/admin/Institute'));
+const Questions = lazy(() => import('../components/admin/Questions'));
+const Passages = lazy(() => import('../components/admin/Passages'));
+const Tests = lazy(() => import('../components/admin/Tests'));
+const SubjectiveTest = lazy(() => import('../components/admin/SubjectiveTest'));
+const TestSeries = lazy(() => import('../components/admin/TestSeries'));
+const AllReports = lazy(() => import('../components/admin/AllReports'));
+const Videos = lazy(() => import('../components/admin/Videos'));
+const VideoSeries = lazy(() => import('../components/admin/VideoSeries'));
+const LiveVideos = lazy(() => import('../components/admin/LiveVideos'));
+const PDFs = lazy(() => import('../components/admin/PDFs'));
+const Packages = lazy(() => import('../components/admin/Packages'));
+const Messages = lazy(() => import('../components/admin/Messages'));
+const Blog = lazy(() => import('../components/admin/Blog'));
+const Settings = lazy(() => import('../components/admin/Settings'));
+const SecurityCenter = lazy(() => import('../components/admin/SecurityCenter'));
+const Banners = lazy(() => import('../components/admin/Banners'));
+const Buyers = lazy(() => import('../components/admin/shopping/Buyers'));
+const Tokens = lazy(() => import('../components/admin/shopping/Tokens'));
+const Coupons = lazy(() => import('../components/admin/shopping/Coupons'));
+const Courses = lazy(() => import('../components/admin/misc/Courses'));
+const QuickLinks = lazy(() => import('../components/admin/QuickLinks'));
+const CourseContentManager = lazy(() => import('../components/admin/CourseContentManager'));
+const LiveClassScheduler = lazy(() => import('../components/admin/LiveClassScheduler'));
+const SubCourses = lazy(() => import('../components/admin/misc/SubCourses'));
+const Subjects = lazy(() => import('../components/admin/misc/Subjects'));
+const Topics = lazy(() => import('../components/admin/misc/Topics'));
+const Instructions = lazy(() => import('../components/admin/misc/Instructions'));
+const ExamDocuments = lazy(() => import('../components/admin/misc/ExamDocuments'));
+const GlobalNews = lazy(() => import('../components/admin/misc/GlobalNews'));
+const PushNotifications = lazy(() => import('../components/admin/misc/PushNotifications'));
+const Categories = lazy(() => import('../components/admin/Categories'));
+const Referrals = lazy(() => import('../components/admin/Referrals'));
+const ChatSupport = lazy(() => import('../components/admin/ChatSupport'));
+const LiveSessions = lazy(() => import('../components/admin/LiveSessions'));
+const ContentManager = lazy(() => import('../components/admin/ContentManager'));
+const ViewFormatPage = lazy(() => import('../components/admin/ViewFormatPage'));
 
 export type AdminView = 'dashboard' | 'students' | 'buyers' | 'tokens' | 'coupons' | 'store' | 'institute' | 'questions' | 'question-bank' | 'passages' | 'tests' | 'subjective-test' | 'test-series' | 'all-reports' | 'videos' | 'video-series' | 'live-videos' | 'live-sessions' | 'pdfs' | 'packages' | 'messages' | 'blog' | 'settings' | 'banners' | 'courses' | 'course-content' | 'live-class-scheduler' | 'subcourses' | 'subjects' | 'topics' | 'instructions' | 'exam-documents' | 'global-news' | 'quick-links' | 'push-notifications' | 'categories' | 'misc' | 'referrals' | 'chat-support' | 'free-content' | 'demo-content' | 'blocked-users' | 'security-center';
 
@@ -222,54 +223,60 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
   const renderContent = () => {
     const props = { showToast };
     return (
-      <Routes>
-        <Route path="/" element={<Navigate to="dashboard" replace />} />
-        <Route path="dashboard" element={<Dashboard {...props} />} />
-        <Route path="categories" element={<Categories {...props} />} />
-        <Route path="misc" element={<MiscSection {...props} />} />
-        <Route path="students" element={<Students {...props} />} />
-        <Route path="blocked-users" element={<Students {...props} initialStatus="inactive" viewMode="blocked" />} />
-        <Route path="buyers" element={<Buyers {...props} />} />
-        <Route path="tokens" element={<Tokens {...props} />} />
-        <Route path="coupons" element={<Coupons {...props} />} />
-        <Route path="store" element={<Store {...props} />} />
-        <Route path="institute" element={<Institute {...props} />} />
-        <Route path="questions" element={<Questions {...props} />} />
-        <Route path="question-bank" element={<Questions {...props} view="bank" />} />
-        <Route path="passages" element={<Passages {...props} />} />
-        <Route path="tests" element={<Tests {...props} />} />
-        <Route path="tests/:id" element={<Tests {...props} />} />
-        <Route path="subjective-test" element={<SubjectiveTest {...props} />} />
-        <Route path="test-series" element={<TestSeries {...props} />} />
-        <Route path="all-reports" element={<AllReports {...props} />} />
-        <Route path="videos" element={<Videos {...props} />} />
-        <Route path="video-series" element={<VideoSeries {...props} />} />
-        <Route path="live-videos" element={<LiveVideos {...props} />} />
-        <Route path="live-sessions" element={<LiveSessions />} />
-        <Route path="pdfs" element={<PDFs {...props} />} />
-        <Route path="packages" element={<Packages {...props} onCourseSelect={handleSelectCourseForContent} />} />
-        <Route path="free-content" element={<ContentManager mode="free" />} />
-        <Route path="demo-content" element={<ContentManager mode="demo" />} />
-        <Route path="chat-support" element={<ChatSupport {...props} />} />
-        <Route path="messages" element={<Messages {...props} />} />
-        <Route path="blog" element={<Blog {...props} />} />
-        <Route path="settings" element={<Settings {...props} />} />
-        <Route path="security-center" element={<SecurityCenter />} />
-        <Route path="banners" element={<Banners {...props} />} />
-        <Route path="referrals" element={<Referrals {...props} />} />
-        <Route path="courses" element={<Courses {...props} />} />
-        <Route path="course-content" element={<CourseContentManager {...props} setActiveView={setActiveView} initialCourse={selectedCourseForContent} initialMainTab={initialContentTab} onClearInitialCourse={() => { setSelectedCourseForContent(null); localStorage.removeItem('admin_selected_course'); }} onBack={() => { navigate('/admin/packages'); localStorage.removeItem('admin_selected_course'); localStorage.removeItem('admin_content_tab'); }} />} />
-        <Route path="live-class-scheduler" element={<LiveClassScheduler {...props} />} />
-        <Route path="subcourses" element={<SubCourses {...props} />} />
-        <Route path="subjects" element={<Subjects {...props} />} />
-        <Route path="topics" element={<Topics {...props} />} />
-        <Route path="instructions" element={<Instructions {...props} />} />
-        <Route path="exam-documents" element={<ExamDocuments {...props} />} />
-        <Route path="global-news" element={<GlobalNews {...props} />} />
-        <Route path="quick-links" element={<QuickLinks {...props} />} />
-        <Route path="push-notifications" element={<PushNotifications {...props} />} />
-        <Route path="view-format/:formatId" element={<ViewFormatPage />} />
-      </Routes>
+      <Suspense fallback={
+        <div className="flex items-center justify-center p-12">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        </div>
+      }>
+        <Routes>
+          <Route path="/" element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<Dashboard {...props} />} />
+          <Route path="categories" element={<Categories {...props} />} />
+          <Route path="misc" element={<MiscSection {...props} />} />
+          <Route path="students" element={<Students {...props} />} />
+          <Route path="blocked-users" element={<Students {...props} initialStatus="inactive" viewMode="blocked" />} />
+          <Route path="buyers" element={<Buyers {...props} />} />
+          <Route path="tokens" element={<Tokens {...props} />} />
+          <Route path="coupons" element={<Coupons {...props} />} />
+          <Route path="store" element={<Store {...props} />} />
+          <Route path="institute" element={<Institute {...props} />} />
+          <Route path="questions" element={<Questions {...props} />} />
+          <Route path="question-bank" element={<Questions {...props} view="bank" />} />
+          <Route path="passages" element={<Passages {...props} />} />
+          <Route path="tests" element={<Tests {...props} />} />
+          <Route path="tests/:id" element={<Tests {...props} />} />
+          <Route path="subjective-test" element={<SubjectiveTest {...props} />} />
+          <Route path="test-series" element={<TestSeries {...props} />} />
+          <Route path="all-reports" element={<AllReports {...props} />} />
+          <Route path="videos" element={<Videos {...props} />} />
+          <Route path="video-series" element={<VideoSeries {...props} />} />
+          <Route path="live-videos" element={<LiveVideos {...props} />} />
+          <Route path="live-sessions" element={<LiveSessions />} />
+          <Route path="pdfs" element={<PDFs {...props} />} />
+          <Route path="packages" element={<Packages {...props} onCourseSelect={handleSelectCourseForContent} />} />
+          <Route path="free-content" element={<ContentManager mode="free" />} />
+          <Route path="demo-content" element={<ContentManager mode="demo" />} />
+          <Route path="chat-support" element={<ChatSupport {...props} />} />
+          <Route path="messages" element={<Messages {...props} />} />
+          <Route path="blog" element={<Blog {...props} />} />
+          <Route path="settings" element={<Settings {...props} />} />
+          <Route path="security-center" element={<SecurityCenter />} />
+          <Route path="banners" element={<Banners {...props} />} />
+          <Route path="referrals" element={<Referrals {...props} />} />
+          <Route path="courses" element={<Courses {...props} />} />
+          <Route path="course-content" element={<CourseContentManager {...props} setActiveView={setActiveView} initialCourse={selectedCourseForContent} initialMainTab={initialContentTab} onClearInitialCourse={() => { setSelectedCourseForContent(null); localStorage.removeItem('admin_selected_course'); }} onBack={() => { navigate('/admin/packages'); localStorage.removeItem('admin_selected_course'); localStorage.removeItem('admin_content_tab'); }} />} />
+          <Route path="live-class-scheduler" element={<LiveClassScheduler {...props} />} />
+          <Route path="subcourses" element={<SubCourses {...props} />} />
+          <Route path="subjects" element={<Subjects {...props} />} />
+          <Route path="topics" element={<Topics {...props} />} />
+          <Route path="instructions" element={<Instructions {...props} />} />
+          <Route path="exam-documents" element={<ExamDocuments {...props} />} />
+          <Route path="global-news" element={<GlobalNews {...props} />} />
+          <Route path="quick-links" element={<QuickLinks {...props} />} />
+          <Route path="push-notifications" element={<PushNotifications {...props} />} />
+          <Route path="view-format/:formatId" element={<ViewFormatPage />} />
+        </Routes>
+      </Suspense>
     );
   };
 

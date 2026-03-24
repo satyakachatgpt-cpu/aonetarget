@@ -1,8 +1,7 @@
+import express from 'express';
 import dotenv from 'dotenv';
 dotenv.config();
-import express from 'express';
 import cors from 'cors';
-import Razorpay from 'razorpay';
 import { fileURLToPath } from "url";
 import path from 'path';
 import fs from 'fs';
@@ -20,16 +19,19 @@ import {
   generateSignedUrl, verifySignedUrl
 } from './middleware/auth.js';
 import compression from 'compression';
-import { globalLimiter, authLimiter, videoLimiter, securityHeaders, sanitizeInput } from './middleware/security.js';
+import { globalLimiter, authLimiter, securityHeaders, sanitizeInput } from './middleware/security.js';
+import { sendEmail, templates } from './utils/email.js';
 
-// Force Google DNS to fix MongoDB SRV resolution issues (ECONNRFRUSED)
+// Force Google DNS to fix MongoDB SRV resolution issues (ECONNREFUSED)
 dns.setServers(['8.8.8.8', '8.8.4.4']);
-console.log('[DEBUG] DNS Servers forced to Google (8.8.8.8) to fix ECONNREFUSED');
 
 
-console.log('[DEBUG] Environment Variables Loaded. Port:', process.env.PORT, 'KeyId Prefix:', (process.env.RAZORPAY_KEY_ID || '').slice(0, 8));
+// Config moved to top
 
 const app = express();
+console.log('============================================');
+console.log('SERVER IS STARTING (VERSION: EMAIL_FIX_v1)');
+console.log('============================================');
 app.use(compression());
 app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
@@ -39,23 +41,33 @@ const isProduction = process.env.NODE_ENV === 'production';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+app.use(securityHeaders);
 
 app.use(cors({
   origin: '*',
   credentials: false,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'x-client-id'
+  ],
   maxAge: 86400
 }));
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
-app.use(cookieParser());
-app.use(securityHeaders);
 app.use(sanitizeInput);
+app.use(cookieParser());
 app.use('/api/', globalLimiter);
-app.use('/attached_assets', express.static(path.join(__dirname, '../attached_assets')));
 
-app.get('/api/secure-video/:filename', authMiddleware, videoLimiter, async (req, res) => {
+const rootPath = path.resolve(__dirname, '..');
+app.use('/attach-assist', express.static(path.join(__dirname, '../client/public/attach-assist')));
+// Redirect old path to new path for database compatibility
+app.use('/attached_assets', (req, res) => {
+  res.redirect(301, `/attach-assist${req.path}`);
+});
+
+app.get('/api/secure-video/:filename', authMiddleware, async (req, res) => {
   try {
     const { filename } = req.params;
     const { sig, exp } = req.query;
@@ -160,6 +172,13 @@ const excelUpload = multer({
 });
 
 app.use((req, res, next) => {
+  if (req.path.startsWith('/api') || req.path === '/health') {
+    const logMsg = `[${new Date().toISOString()}] ${req.method} ${req.path}\n`;
+    console.log(logMsg);
+    try {
+      fs.appendFileSync(path.join(__dirname, 'api_requests.log'), logMsg);
+    } catch (e) { }
+  }
   if (req.path.startsWith('/api') && !db) {
     return res.status(503).json({ error: 'Database connecting, please retry' });
   }
@@ -172,6 +191,7 @@ if (isProduction) {
 
 
 import mongoose from 'mongoose';
+const { ObjectId } = mongoose.Types;
 
 // Import Mongoose Models
 import Student from './models/Student.js';
@@ -192,9 +212,6 @@ const connectDB = async () => {
     });
 
     db = mongoose.connection.db;
-    const { ObjectId: MongoObjectId } = mongoose.mongo;
-    // Make ObjectId available globally in this file without re-importing
-    global.ObjectId = MongoObjectId;
     console.log('MongoDB connected successfully with Mongoose');
 
     try {
@@ -232,15 +249,16 @@ connectDB();
 // File Upload endpoint
 app.get('/api/ping', (req, res) => {
   console.log('Ping received');
-  res.json({ message: 'pong', timestamp: new Date(), version: '1.0.2' });
+  res.json({ message: 'pong', timestamp: new Date(), version: '1.0.3' });
 });
 
 // Routes for Folders
 app.get('/api/courses/:courseId/folders', async (req, res) => {
   try {
-    const idVariants = await getCourseIdVariants(req.params.courseId);
-    console.log(`GET /api/courses/${req.params.courseId}/folders - Resolved IDs:`, idVariants);
-    
+    const course = await findCourse(req.params.courseId);
+    if (!course) return res.json([]);
+
+    const idVariants = await getRelatedCourseIds(course, req.params.courseId);
     const query = {
       courseId: { $in: idVariants }
     };
@@ -248,7 +266,7 @@ app.get('/api/courses/:courseId/folders', async (req, res) => {
     res.json(folders || []);
   } catch (error) {
     console.error('Fetch folders error:', error);
-    res.status(500).json({ error: 'Failed' });
+    res.status(500).json({ error: 'Failed to fetch' });
   }
 });
 
@@ -274,7 +292,7 @@ app.put('/api/courses/:courseId/folders/:folderId', async (req, res) => {
   try {
     const course = await findCourse(req.params.courseId);
     const folderId = req.params.folderId;
-    
+
     const query = {
       $or: [
         { id: folderId },
@@ -309,11 +327,11 @@ app.delete('/api/courses/:courseId/folders/:folderId', async (req, res) => {
     // Recursive function to find all nested folder IDs
     const getAllNestedFolderIds = async (id) => {
       let ids = [id];
-      const subFolders = await Folder.find({ 
-        parentId: id, 
-        courseId: courseId 
+      const subFolders = await Folder.find({
+        parentId: id,
+        courseId: courseId
       }).lean();
-      
+
       for (const sub of subFolders) {
         const subId = sub.id || sub._id.toString();
         const nestedIds = await getAllNestedFolderIds(subId);
@@ -561,82 +579,92 @@ app.get('/api/instructors', async (req, res) => {
 
 // Routes for Course Videos
 // Helper to find a course by any ID (custom or ObjectId)
-// Helper to find all relevant IDs for a course/package (including sub-courses)
-async function getCourseIdVariants(identifier) {
-  if (!identifier) return [];
-  
-  let idVariants = [String(identifier)];
-  const course = await findCourse(identifier);
-  
-  if (course) {
-    idVariants.push(String(course.id || ''));
-    idVariants.push(String(course._id || ''));
-    idVariants.push(course._id.toString());
-    
-    // 1. If it's a package, fetch IDs of all included courses
-    if (course.courses && Array.isArray(course.courses)) {
-      for (const name of course.courses) {
-        const subCourse = await db.collection('courses').findOne({ 
-          $or: [{ name: name }, { title: name }] 
-        });
-        if (subCourse) {
-          idVariants.push(String(subCourse.id || ''));
-          idVariants.push(String(subCourse._id || ''));
-          idVariants.push(subCourse._id.toString());
-        }
-      }
-    }
-
-    // 2. Also find any packages that might INCLUDE this course
-    const parentPackages = await db.collection('packages').find({ 
-      courses: { $in: [course.name, course.title].filter(Boolean) } 
-    }).toArray();
-    
-    for (const p of parentPackages) {
-      if (p.id) idVariants.push(String(p.id));
-      idVariants.push(p._id.toString());
-    }
-  }
-  
-  return [...new Set(idVariants.filter(Boolean))];
-}
-
 async function findCourse(id) {
   if (!id) return null;
-  const collections = ['courses', 'packages', 'testSeries', 'test-series', 'subcourses', 'tests'];
-  
+  const collections = ['courses', 'packages', 'testSeries', 'test-series', 'subcourses', 'tests', 'test_series'];
+
   for (const colName of collections) {
     try {
-      let item = await db.collection(colName).findOne({ id: id });
+      // Try custom id or slug first
+      let item = await db.collection(colName).findOne({
+        $or: [
+          { id: id },
+          { slug: id }
+        ]
+      });
+
+      // Try _id as string or ObjectId
       if (!item) {
         item = await db.collection(colName).findOne({ _id: id });
       }
       if (!item && ObjectId.isValid(id)) {
         item = await db.collection(colName).findOne({ _id: new ObjectId(id) });
       }
+
       if (item) return item;
     } catch (e) {
       console.warn(`Search in ${colName} failed:`, e.message);
     }
   }
+
   return null;
+}
+
+// Function to find all related IDs by name and/or slug/id for content linking
+async function getRelatedCourseIds(course, originalId) {
+  if (!course) return [originalId].filter(Boolean);
+
+  const relatedIds = new Set([
+    String(course.id || ''),
+    String(course._id || ''),
+    originalId
+  ].filter(Boolean));
+
+  // Also check names or titles for cross-collection linking
+  const names = [course.name, course.title].filter(Boolean);
+  if (names.length > 0) {
+    const allPossibleCollections = ['courses', 'packages', 'subcourses', 'testSeries', 'test-series', 'test_series'];
+    for (const col of allPossibleCollections) {
+      try {
+        // Escape special regex characters in names
+        const escapedNames = names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const matchedItems = await db.collection(col).find({
+          $or: [
+            { name: { $in: names } },
+            { title: { $in: names } },
+            { name: { $regex: new RegExp("^" + escapedNames[0] + "$", "i") } }, // Case-insensitive exact name match
+            { title: { $regex: new RegExp("^" + escapedNames[0] + "$", "i") } } // Case-insensitive exact title match
+          ]
+        }).project({ _id: 1, id: 1 }).toArray();
+
+        matchedItems.forEach(item => {
+          if (item._id) relatedIds.add(item._id.toString());
+          if (item.id) relatedIds.add(item.id.toString());
+        });
+      } catch (e) { }
+    }
+  }
+
+  return Array.from(relatedIds);
 }
 
 // Routes for Course Videos
 app.get('/api/courses/:id/videos', async (req, res) => {
   try {
-    const idVariants = await getCourseIdVariants(req.params.id);
-    
-    let videos = await db.collection('videos').find({ 
-      courseId: { $in: idVariants } 
-    }).sort({ order: 1 }).toArray();
+    const course = await findCourse(req.params.id);
+    if (!course) return res.json([]);
+
+    const idVariants = await getRelatedCourseIds(course, req.params.id);
+    let videos = await db.collection('videos').find({ courseId: { $in: idVariants } }).sort({ order: 1 }).toArray();
 
     if (videos.length === 0) {
-      const course = await findCourse(req.params.id);
-      if (course) {
-        const courseNames = [course.name, course.title].filter(Boolean);
-        videos = await db.collection('videos').find({ 
-          course: { $in: courseNames } 
+      const courseNames = [course.name, course.title].filter(Boolean);
+      if (courseNames.length > 0) {
+        videos = await db.collection('videos').find({
+          $or: [
+            { course: { $in: courseNames } },
+            { courseId: { $in: idVariants } }
+          ]
         }).sort({ order: 1 }).toArray();
       }
     }
@@ -644,7 +672,7 @@ app.get('/api/courses/:id/videos', async (req, res) => {
     res.json(videos);
   } catch (error) {
     console.error('Fetch videos error:', error);
-    res.status(500).json({ error: 'Failed' });
+    res.status(500).json({ error: 'Failed to fetch videos' });
   }
 });
 
@@ -693,7 +721,7 @@ app.put('/api/courses/:id/videos/:videoId', async (req, res) => {
     }
 
     const { _id, ...updateData } = req.body;
-    
+
     // Sanitize folderId if present in update
     if (updateData.folderId !== undefined) {
       if (updateData.folderId === 'null' || updateData.folderId === 'undefined' || !updateData.folderId) {
@@ -873,12 +901,13 @@ app.delete('/api/pdfs/:id', async (req, res) => {
 app.delete('/api/tests/:id', async (req, res) => {
   try {
     const id = req.params.id;
-    const query = {
-      $or: [
-        { id: id },
-        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
-      ].filter(v => v.id || v._id)
-    };
+    const orConditions = [
+      { id: id },
+      { id: !isNaN(id) ? Number(id) : null },
+      { _id: id },
+      { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
+    ].filter(v => v.id !== null && v.id !== undefined || v._id !== null && v._id !== undefined);
+    const query = { $or: orConditions };
     await db.collection('tests').deleteOne(query);
     res.json({ success: true });
   } catch (error) {
@@ -889,17 +918,19 @@ app.delete('/api/tests/:id', async (req, res) => {
 app.put('/api/tests/:id', async (req, res) => {
   try {
     const id = req.params.id;
-    const query = {
-      $or: [
-        { id: id },
-        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
-      ].filter(v => v.id || v._id)
-    };
+    const orConditions = [
+      { id: id },
+      { id: !isNaN(id) ? Number(id) : null },
+      { _id: id },
+      { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
+    ].filter(v => v.id !== null && v.id !== undefined || v._id !== null && v._id !== undefined);
+    const query = { $or: orConditions };
     const { _id, ...updateData } = req.body;
-    await db.collection('tests').updateOne(query, { $set: updateData });
+    await db.collection('tests').updateOne(query, { $set: updateData }, { upsert: true });
     res.json({ success: true });
   } catch (error) {
-    res.status(500).json({ error: 'Failed' });
+    console.error('Error updating test:', error);
+    res.status(500).json({ error: 'Failed to update test' });
   }
 });
 
@@ -941,20 +972,24 @@ app.get('/api/demo-content', async (req, res) => {
 // Routes for Course Notes (uses pdfs collection - consistent with admin uploads)
 app.get('/api/courses/:id/notes', async (req, res) => {
   try {
-    const idVariants = await getCourseIdVariants(req.params.id);
+    const course = await findCourse(req.params.id);
+    if (!course) return res.json([]);
+
+    const idVariants = await getRelatedCourseIds(course, req.params.id);
     const query = {
       courseId: { $in: idVariants }
     };
-    // Check both pdfs and notes collections
+    // Check both pdfs and notes collections for backward compatibility
     const pdfs = await db.collection('pdfs').find(query).sort({ order: 1 }).toArray();
     const notes = await db.collection('notes').find(query).sort({ order: 1 }).toArray();
+    // Merge both, deduplicating by id
     const allNotes = [...pdfs];
     notes.forEach(n => {
-      if (!allNotes.find(p => p.id === n.id || p._id.toString() === n._id.toString())) allNotes.push(n);
+      if (!allNotes.find(p => (p.id && n.id && p.id === n.id) || p._id.toString() === n._id.toString())) allNotes.push(n);
     });
     res.json(allNotes);
   } catch (error) {
-    res.status(500).json({ error: 'Failed' });
+    res.status(500).json({ error: 'Failed to fetch notes' });
   }
 });
 
@@ -1042,36 +1077,44 @@ app.delete('/api/courses/:id/notes/:noteId', async (req, res) => {
 // Routes for Course Tests
 app.get('/api/courses/:id/tests', async (req, res) => {
   try {
-    const idVariants = await getCourseIdVariants(req.params.id);
-    const query = {
+    const course = await findCourse(req.params.id);
+    if (!course) return res.json([]);
+
+    const idVariants = await getRelatedCourseIds(course, req.params.id);
+
+    // Initial query to find tests directly associated with this course
+    let query = {
       $or: [
         { courseId: { $in: idVariants } },
         { testSeriesId: { $in: idVariants } }
       ],
+      isSeries: { $ne: true }, // Filter out Test Series containers
       $and: [{ $or: [{ status: 'active' }, { status: { $exists: false } }] }]
     };
 
+    // Include tests from explicitly attached test series
+    if (course.content && Array.isArray(course.content.testSeries) && course.content.testSeries.length > 0) {
+      const attachedSeries = await db.collection('tests').find({
+        $or: [
+          { name: { $in: course.content.testSeries } },
+          { title: { $in: course.content.testSeries } },
+          { seriesName: { $in: course.content.testSeries } }
+        ],
+        isSeries: true
+      }).toArray();
+
+      const attachedSeriesIds = attachedSeries.map(s => String(s.id || s._id || ''));
+      if (attachedSeriesIds.length > 0) {
+        query.$or.push({ testSeriesId: { $in: attachedSeriesIds } });
+      }
+    }
+
     const tests = await db.collection('tests').find(query).toArray();
+    console.log(`GET /api/courses/${req.params.id}/tests - Found ${tests.length} tests (filtered for course and attached series)`);
     res.json(tests);
   } catch (error) {
-    res.status(500).json({ error: 'Failed' });
-  }
-});
-
-app.get('/api/courses/:id/live-classes', async (req, res) => {
-  try {
-    const idVariants = await getCourseIdVariants(req.params.id);
-    const query = {
-      courseId: { $in: idVariants }
-    };
-    const [c1, c2] = await Promise.all([
-      db.collection('liveVideos').find(query).toArray(),
-      db.collection('liveClasses').find(query).toArray()
-    ]);
-    const merged = [...c1, ...c2].sort((a,b) => new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt));
-    res.json(merged);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed' });
+    console.error('Error fetching course tests:', error);
+    res.status(500).json({ error: 'Failed to fetch course tests' });
   }
 });
 
@@ -1128,7 +1171,12 @@ app.get('/api/courses/:id', async (req, res) => {
     const course = await findCourse(req.params.id);
 
     if (course) {
-      res.json({ ...course, id: course.id || course._id.toString() });
+      const relatedIds = await getRelatedCourseIds(course, req.params.id);
+      res.json({
+        ...course,
+        id: course.id || course._id.toString(),
+        relatedIds: relatedIds
+      });
     } else {
       res.status(404).json({ error: 'Course not found' });
     }
@@ -2032,7 +2080,7 @@ app.get('/api/questions', async (req, res) => {
     const filter = {};
     if (req.query.testId) filter.testId = req.query.testId;
     if (req.query.courseId) filter.courseId = req.query.courseId;
-    const questions = await db.collection('questions').find(filter).toArray();
+    const questions = await db.collection('questions').find(filter).sort({ orderIndex: 1, id: 1 }).toArray();
     res.json(questions);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch questions' });
@@ -2049,26 +2097,122 @@ app.post('/api/questions', async (req, res) => {
 });
 
 app.put('/api/questions/:id', async (req, res) => {
+  const id = req.params.id;
+  const logToFile = (msg) => {
+    try {
+      fs.appendFileSync(path.join(__dirname, 'api_requests.log'), `[DEBUG][Question Update] ${msg}\n`);
+    } catch (e) { }
+    console.log(`[Question Update] ${msg}`);
+  };
+
+  logToFile(`Started update for ID: ${id}`);
   try {
     const { _id, ...updateData } = req.body;
-    const result = await db.collection('questions').updateOne(
-      { id: req.params.id },
-      { $set: updateData }
+
+    // Build flexible query
+    const orConditions = [{ id: id }];
+    if (!isNaN(id)) orConditions.push({ id: Number(id) });
+
+    if (id && id.length === 24) {
+      try {
+        const oid = new mongoose.Types.ObjectId(id);
+        orConditions.push({ _id: oid });
+        logToFile(`Added ObjectId condition: ${oid}`);
+      } catch (e) {
+        logToFile(`Skipped ObjectId creation: invalid format`);
+      }
+    }
+    orConditions.push({ _id: id });
+
+    logToFile(`Final query conditions: ${JSON.stringify(orConditions)}`);
+
+    // Plan A
+    const mainResult = await db.collection('questions').updateOne(
+      { $or: orConditions },
+      { $set: { ...updateData, updatedAt: new Date().toISOString() } }
     );
-    if (result.matchedCount === 0) return res.status(404).json({ error: 'Question not found' });
-    res.json({ success: true, message: 'Question updated' });
+
+    logToFile(`Plan A (Standalone) Matched: ${mainResult.matchedCount}, Modified: ${mainResult.modifiedCount}`);
+
+    if (mainResult.matchedCount > 0) {
+      return res.json({ success: true, message: 'Question updated in global collection' });
+    }
+
+    // Plan B
+    logToFile(`Searching embedded questions...`);
+    let embeddedMatch = false;
+    for (const condition of orConditions) {
+      const searchKey = Object.keys(condition)[0];
+      const searchValue = condition[searchKey];
+      const testQuery = { [`questions.${searchKey}`]: searchValue };
+
+      const testUpdate = await db.collection('tests').updateMany(
+        testQuery,
+        { $set: { ...Object.fromEntries(Object.entries(updateData).map(([k, v]) => [`questions.$.${k}`, v])) } }
+      );
+
+      if (testUpdate.matchedCount > 0) {
+        logToFile(`Plan B (Embedded) SUCCESS using ${JSON.stringify(condition)}`);
+        embeddedMatch = true;
+        break;
+      }
+    }
+
+    if (embeddedMatch) {
+      return res.json({ success: true, message: 'Question updated in tests' });
+    }
+
+    logToFile(`FAILED: No match found for ${id}`);
+    return res.status(404).json({ error: 'Question not found' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to update question' });
+    logToFile(`CRASH: ${error.message}`);
+    res.status(500).json({ error: 'Failed to update question: ' + error.message });
   }
 });
 
 app.delete('/api/questions/:id', async (req, res) => {
   try {
-    const result = await db.collection('questions').deleteOne({ id: req.params.id });
-    if (result.deletedCount === 0) return res.status(404).json({ error: 'Question not found' });
-    res.json({ success: true, message: 'Question deleted' });
+    const id = req.params.id;
+
+    // Build flexible query to match by id field, _id string, or ObjectId
+    const orConditions = [
+      { id: id }
+    ];
+    if (!isNaN(id)) orConditions.push({ id: Number(id) });
+    if (mongoose && mongoose.Types && mongoose.Types.ObjectId.isValid(id)) {
+      orConditions.push({ _id: new mongoose.Types.ObjectId(id) });
+    }
+    orConditions.push({ _id: id });
+
+    // Deleting from global questions collection
+    const mainResult = await db.collection('questions').deleteMany({ $or: orConditions });
+
+    // Clean up embedded questions in any test
+    const testResult = await db.collection('tests').updateMany(
+      {},
+      {
+        $pull: {
+          questions: {
+            $or: orConditions.map(c => {
+              const key = Object.keys(c)[0];
+              const val = c[key];
+              return { [key]: val };
+            })
+          }
+        }
+      }
+    );
+
+    if (mainResult.deletedCount === 0 && testResult.matchedCount === 0) {
+      console.warn(`[Question Delete] No match found for ID: ${id} to delete`);
+      return res.status(404).json({ error: 'Question not found' });
+    }
+
+    console.log(`[Question Delete] Deleted ${mainResult.deletedCount} from global and removed from matching tests`);
+    res.json({ success: true, message: 'Question deleted successfully' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to delete question' });
+    console.error('[Question Delete] Error:', error);
+    res.status(500).json({ error: 'Failed to delete question: ' + error.message });
   }
 });
 
@@ -2093,6 +2237,73 @@ app.post('/api/questions/bulk', async (req, res) => {
     res.status(500).json({ error: 'Failed to bulk create questions' });
   }
 });
+
+// Bulk delete questions (Using POST to ensure body is sent/parsed correctly)
+app.post('/api/questions/bulk-delete', async (req, res) => {
+  try {
+    const { questionIds } = req.body;
+    console.log('[Bulk Delete] Processing IDs:', (questionIds || []).length);
+
+    if (!Array.isArray(questionIds) || questionIds.length === 0) {
+      return res.status(400).json({ error: 'No IDs provided for bulk delete' });
+    }
+
+    // Ensure all IDs are strings for consistency
+    const stringIds = questionIds.map(id => String(id));
+
+    // Collect possible Mongo ObjectIds
+    const mongoIds = [];
+    stringIds.forEach(id => {
+      if (id && id.length === 24 && /^[0-9a-fA-F]{24}$/.test(id)) {
+        try {
+          mongoIds.push(new mongoose.mongo.ObjectId(id));
+        } catch (e) { }
+      }
+    });
+
+    // Delete from both the separate questions collection and potentially from ALL test embedded arrays
+    const qFilter = {
+      $or: [
+        { id: { $in: questionIds } },  // Might be numbers
+        { id: { $in: stringIds } },    // As strings
+        { _id: { $in: mongoIds } }     // As ObjectIds
+      ]
+    };
+
+    const result = await db.collection('questions').deleteMany(qFilter);
+
+    // Also remove from any tests that might have these questions embedded
+    try {
+      await db.collection('tests').updateMany(
+        {},
+        {
+          $pull: {
+            questions: {
+              $or: [
+                { id: { $in: questionIds } },
+                { id: { $in: stringIds } },
+                { _id: { $in: stringIds } }
+              ]
+            }
+          }
+        }
+      );
+    } catch (pullErr) {
+      console.warn('[Bulk Delete] Embedded cleanup warning:', pullErr.message);
+    }
+
+    console.log(`[Bulk Delete] Result: ${result.deletedCount} items permanently deleted`);
+    res.json({ success: true, deleted: result.deletedCount });
+  } catch (error) {
+    console.error('[Bulk Delete] Server Crash:', error);
+    res.status(500).json({
+      error: 'Bulk delete operation failed internally',
+      details: error.message,
+      stack: isProduction ? undefined : error.stack
+    });
+  }
+});
+
 
 // Update-all questions
 app.put('/api/questions/update-all', async (req, res) => {
@@ -2135,6 +2346,34 @@ app.post('/api/questions/bulk-excel', excelUpload.single('file'), async (req, re
 });
 
 // Routes for Tests
+app.get('/api/courses/:courseId/tests', async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const query = { $or: [{ courseId }, { course: courseId }] };
+    const tests = await db.collection('tests').find(query).toArray();
+
+    // Fetch question counts
+    const testsWithCounts = await Promise.all(tests.map(async (test) => {
+      const testId = test.id || test._id?.toString();
+      const questionFilter = { $or: [{ testId: testId }, { testId: String(testId) }, { testId: testId?.toString() }] };
+      if (testId && !isNaN(testId)) questionFilter.$or.push({ testId: Number(testId) });
+      if (test._id && global.ObjectId && ObjectId.isValid(test._id.toString())) {
+        questionFilter.$or.push({ testId: new ObjectId(test._id.toString()) });
+      }
+      const questionCount = await db.collection('questions').countDocuments(questionFilter);
+
+      return {
+        ...test,
+        questions: questionCount || (Array.isArray(test.questions) ? test.questions.length : (test.questions || 0))
+      };
+    }));
+
+    res.json(testsWithCounts);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch course tests' });
+  }
+});
+
 app.get('/api/tests', async (req, res) => {
   try {
     const { courseId } = req.query;
@@ -2143,11 +2382,17 @@ app.get('/api/tests', async (req, res) => {
 
     // Fetch question counts for each test
     const testsWithCounts = await Promise.all(tests.map(async (test) => {
-      const testId = test.id || test._id.toString();
-      const questionCount = await db.collection('questions').countDocuments({ testId });
+      const testId = test.id || test._id?.toString();
+      const questionFilter = { $or: [{ testId: testId }, { testId: String(testId) }, { testId: testId?.toString() }] };
+      if (testId && !isNaN(testId)) questionFilter.$or.push({ testId: Number(testId) });
+      if (test._id && global.ObjectId && ObjectId.isValid(test._id.toString())) {
+        questionFilter.$or.push({ testId: new ObjectId(test._id.toString()) });
+      }
+      const questionCount = await db.collection('questions').countDocuments(questionFilter);
+
       return {
         ...test,
-        questions: questionCount || (test.questions ? (Array.isArray(test.questions) ? test.questions.length : test.questions) : 0)
+        questions: questionCount || (test.questions ? (Array.isArray(test.questions) ? test.questions.length : (test.questions || 0)) : 0)
       };
     }));
 
@@ -2162,17 +2407,58 @@ app.get('/api/tests', async (req, res) => {
 // Get single test by ID
 app.get('/api/tests/:id', async (req, res) => {
   try {
-    let test = await db.collection('tests').findOne({ id: req.params.id });
-    if (!test) {
-      try {
-        test = await db.collection('tests').findOne({ _id: new mongoose.Types.ObjectId(req.params.id) });
-      } catch (e) { }
+    const id = req.params.id;
+    // Build flexible query to match id as string, number, or _id
+    const orConditions = [
+      { id: id },
+      { id: !isNaN(id) ? Number(id) : null },
+      { _id: id }
+    ].filter(v => v.id !== null && v.id !== undefined || v._id !== null && v._id !== undefined);
+
+    // Also try ObjectId for _id
+    if (ObjectId.isValid(id)) {
+      orConditions.push({ _id: new ObjectId(id) });
     }
+
+    let test = await db.collection('tests').findOne({ $or: orConditions });
+
+    // Fallback: If test doc is missing but questions exist, create a virtual placeholder
     if (!test) {
-      return res.status(404).json({ error: 'Test not found' });
+      const questionCount = await db.collection('questions').countDocuments({
+        $or: [{ testId: id }, { testId: !isNaN(id) ? Number(id) : id }]
+      });
+      if (questionCount > 0) {
+        test = {
+          id,
+          name: `Unregistered Test ${id}`,
+          questions: [],
+          temp: true
+        };
+      } else {
+        return res.status(404).json({ error: 'Test not found' });
+      }
     }
-    const separateQuestions = await db.collection('questions').find({ testId: req.params.id }).toArray();
-    const embeddedQuestions = test.questions || [];
+
+    // Also search questions by both string and number id, and ObjectId
+    const testId = test.id || test._id?.toString();
+    const questionFilter = {
+      $or: [
+        { testId: id },
+        { testId: testId },
+        { testId: String(id) },
+        { testId: String(testId) }
+      ]
+    };
+
+    if (!isNaN(id)) questionFilter.$or.push({ testId: Number(id) });
+    if (testId && !isNaN(testId)) questionFilter.$or.push({ testId: Number(testId) });
+    if (global.ObjectId && ObjectId.isValid(id)) questionFilter.$or.push({ testId: new ObjectId(id) });
+    if (test._id && global.ObjectId && ObjectId.isValid(test._id.toString())) {
+      questionFilter.$or.push({ testId: new ObjectId(test._id.toString()) });
+    }
+
+    const separateQuestions = await db.collection('questions').find(questionFilter).sort({ orderIndex: 1, id: 1 }).toArray();
+    const embeddedQuestions = Array.isArray(test.questions) ? test.questions : [];
     const questions = separateQuestions.length > 0 ? separateQuestions : embeddedQuestions;
     res.json({ ...test, questions });
   } catch (error) {
@@ -2181,19 +2467,79 @@ app.get('/api/tests/:id', async (req, res) => {
   }
 });
 
+app.post('/api/tests/:id/publish', async (req, res) => {
+  const id = req.params.id;
+  const logToFile = (msg) => {
+    try {
+      fs.appendFileSync(path.join(__dirname, 'api_requests.log'), `[DEBUG][Publish] ${msg}\n`);
+    } catch (e) { }
+    console.log(`[Publish] ${msg}`);
+  };
+
+  logToFile(`Starting publish for ID: ${id}`);
+  try {
+    const now = new Date();
+    const formatted = now.toLocaleString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    // Check by string, number id, or ObjectId
+    const orConditions = [{ id: id }];
+    if (!isNaN(id)) orConditions.push({ id: Number(id) });
+    if (global.ObjectId && ObjectId.isValid(id)) {
+      orConditions.push({ _id: new ObjectId(id) });
+    }
+    orConditions.push({ _id: id });
+
+    logToFile(`Query conditions: ${JSON.stringify(orConditions)}`);
+
+    const result = await db.collection('tests').updateOne(
+      { $or: orConditions },
+      { $set: { published: formatted, status: 'active', updatedAt: now.toISOString() } },
+      { upsert: true }
+    );
+
+    logToFile(`Result: matched=${result.matchedCount}, upserted=${result.upsertedCount}, modified=${result.modifiedCount}`);
+
+    res.json({ success: true, published: formatted });
+  } catch (error) {
+    logToFile(`ERROR: ${error.message}`);
+    res.status(500).json({ error: 'Failed to publish test: ' + error.message });
+  }
+});
+
 // Submit test answers
 app.post('/api/tests/:testId/submit', async (req, res) => {
   try {
     const { studentId, answers, timeTaken } = req.body;
-    let test = await db.collection('tests').findOne({ id: req.params.testId });
+    const tid = req.params.testId;
+    const orConditions = [
+      { id: tid },
+      { id: !isNaN(tid) ? Number(tid) : null },
+      { _id: tid }
+    ].filter(v => v.id !== null && v.id !== undefined || v._id !== null && v._id !== undefined);
+    if (ObjectId.isValid(tid)) orConditions.push({ _id: new ObjectId(tid) });
+
+    let test = await db.collection('tests').findOne({ $or: orConditions });
     if (!test) {
-      try { test = await db.collection('tests').findOne({ _id: new mongoose.Types.ObjectId(req.params.testId) }); } catch (e) { }
-    }
-    if (!test) {
-      return res.status(404).json({ error: 'Test not found' });
+      const questionCount = await db.collection('questions').countDocuments({
+        $or: [{ testId: tid }, { testId: !isNaN(tid) ? Number(tid) : tid }]
+      });
+      if (questionCount > 0) {
+        test = { id: tid, temp: true };
+      } else {
+        return res.status(404).json({ error: 'Test not found' });
+      }
     }
 
-    const separateQuestions = await db.collection('questions').find({ testId: req.params.testId }).toArray();
+    const questionFilter = { $or: [{ testId: tid }, { testId: test.id || test._id.toString() }] };
+    if (!isNaN(tid)) questionFilter.$or.push({ testId: Number(tid) });
+    const separateQuestions = await db.collection('questions').find(questionFilter).toArray();
     const questions = separateQuestions.length > 0 ? separateQuestions : (test.questions || []);
     const testNegativeMarking = test.negativeMarking || 0;
     let correctCount = 0;
@@ -2274,19 +2620,7 @@ app.post('/api/tests/:testId/submit', async (req, res) => {
 });
 
 // Get tests by course
-app.get('/api/courses/:courseId/tests', async (req, res) => {
-  try {
-    const tests = await db.collection('tests').find({
-      $or: [
-        { courseId: req.params.courseId },
-        { testSeriesId: req.params.courseId }
-      ]
-    }).toArray();
-    res.json(tests);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch course tests' });
-  }
-});
+
 
 app.post('/api/tests', async (req, res) => {
   try {
@@ -2300,35 +2634,7 @@ app.post('/api/tests', async (req, res) => {
   }
 });
 
-app.put('/api/tests/:id', async (req, res) => {
-  try {
-    console.log('PUT /api/tests/:id - Updating test:', req.params.id, req.body);
-    const { _id, ...updateData } = req.body;
-    const result = await db.collection('tests').updateOne(
-      { id: req.params.id },
-      { $set: updateData }
-    );
-    if (result.matchedCount === 0) return res.status(404).json({ error: 'Test not found' });
-    console.log('Test updated successfully:', req.params.id);
-    res.json({ success: true, message: 'Test updated' });
-  } catch (error) {
-    console.error('Error updating test:', error);
-    res.status(500).json({ error: 'Failed to update test', details: error.message });
-  }
-});
-
-app.delete('/api/tests/:id', async (req, res) => {
-  try {
-    console.log('DELETE /api/tests/:id - Deleting test:', req.params.id);
-    const result = await db.collection('tests').deleteOne({ id: req.params.id });
-    if (result.deletedCount === 0) return res.status(404).json({ error: 'Test not found' });
-    console.log('Test deleted successfully:', req.params.id);
-    res.json({ success: true, message: 'Test deleted' });
-  } catch (error) {
-    console.error('Error deleting test:', error);
-    res.status(500).json({ error: 'Failed to delete test', details: error.message });
-  }
-});
+// NOTE: PUT and DELETE /api/tests/:id are handled by the routes defined earlier in the file
 
 // DELETE ALL tests
 app.delete('/api/tests', async (req, res) => {
@@ -2713,7 +3019,7 @@ app.put('/api/courses/:courseId/videos/:videoId', async (req, res) => {
   try {
     const videoId = req.params.videoId;
     const { _id, ...updateData } = req.body;
-    
+
     // Search by both id and _id for maximum compatibility
     const query = {
       $or: [
@@ -2908,7 +3214,7 @@ app.put('/api/courses/:courseId/notes/:noteId', async (req, res) => {
   try {
     const noteId = req.params.noteId;
     const { _id, ...updateData } = req.body;
-    
+
     const query = {
       $or: [
         { id: noteId },
@@ -2993,25 +3299,41 @@ app.put('/api/courses/:courseId/tests/:testId', async (req, res) => {
 
 // Delete test from course
 app.delete('/api/courses/:courseId/tests/:testId', async (req, res) => {
+  const { courseId, testId } = req.params;
+  console.log(`[DELETE TEST] Attempting to delete test ${testId} from course ${courseId}`);
   try {
-    const course = await findCourse(req.params.courseId);
-    const testId = req.params.testId;
+    const course = await findCourse(courseId);
+    const idVariants = await getRelatedCourseIds(course, courseId);
+
+    // Support string, ObjectId, and Numeric IDs just like the generic route
+    const idConditions = [
+      { id: testId },
+      { id: !isNaN(testId) ? Number(testId) : null },
+      { _id: testId },
+      { _id: mongoose.Types.ObjectId.isValid(testId) ? new mongoose.Types.ObjectId(testId) : null }
+    ].filter(v => (v.id !== null && v.id !== undefined) || (v._id !== null && v._id !== undefined));
 
     const query = {
-      $or: [
-        { id: testId },
-        { _id: mongoose.Types.ObjectId.isValid(testId) ? new mongoose.Types.ObjectId(testId) : null }
-      ].filter(v => v.id || v._id)
+      $or: idConditions,
+      $and: [{
+        $or: [
+          { courseId: { $in: idVariants } },
+          { testSeriesId: { $in: idVariants } }
+        ]
+      }]
     };
 
-    if (course) {
-      query.courseId = { $in: [course.id, course._id.toString(), req.params.courseId] };
-    }
-
+    console.log('[DELETE TEST] Query:', JSON.stringify(query));
     const result = await db.collection('tests').deleteOne(query);
-    if (result.deletedCount === 0) return res.status(404).json({ error: 'Test not found' });
+    console.log('[DELETE TEST] Result:', result);
+
+    if (result.deletedCount === 0) {
+      console.warn('[DELETE TEST] No test found matching criteria');
+      return res.status(404).json({ error: 'Test not found' });
+    }
     res.json({ success: true, message: 'Test deleted' });
   } catch (error) {
+    console.error('[DELETE TEST] Error:', error);
     res.status(500).json({ error: 'Failed to delete test' });
   }
 });
@@ -3287,7 +3609,7 @@ app.get('/api/splash-screen', async (req, res) => {
     const splash = await db.collection('settings').findOne({ type: 'splash_screen' });
     const defaultSplash = {
       type: 'splash_screen',
-      imageUrl: '/attached_assets/ChatGPT_Image_Feb_8,_2026,_05_51_58_PM_1770553325908.png',
+      imageUrl: '/attach-assist/ChatGPT_Image_Feb_8,_2026,_05_51_58_PM_1770553325908.png',
       isActive: true,
       duration: 3000
     };
@@ -3296,7 +3618,7 @@ app.get('/api/splash-screen', async (req, res) => {
     console.error('Error fetching splash screen:', error);
     const defaultSplash = {
       type: 'splash_screen',
-      imageUrl: '/attached_assets/ChatGPT_Image_Feb_8,_2026,_05_51_58_PM_1770553325908.png',
+      imageUrl: '/attach-assist/ChatGPT_Image_Feb_8,_2026,_05_51_58_PM_1770553325908.png',
       isActive: true,
       duration: 3000
     };
@@ -3898,12 +4220,25 @@ app.post('/api/otp/verify', authLimiter, async (req, res) => {
 
     stored.attempts++;
 
+    if (stored.attempts >= 3) {
+      // Send security alert for multiple failed OTP attempts
+      try {
+        const student = await db.collection('students').findOne({ $or: [{ phone: cleanPhone }, { phone }] });
+        if (student && student.email) {
+          const { subject, html } = templates.securityAlert(student.name || 'Student', new Date().toLocaleString(), 'OTP Verification');
+          sendEmail({ to: student.email, subject, html }).catch(e => console.error('Security alert email error:', e));
+        }
+      } catch (e) {
+        console.error('Error sending security alert:', e);
+      }
+    }
+
     if (Date.now() - stored.createdAt > 5 * 60 * 1000) {
       otpStore.delete(cleanPhone);
       return res.status(400).json({ error: 'OTP expired. Please request a new OTP.' });
     }
 
-    if (stored.otp !== otp) {
+    if (String(stored.otp) !== String(otp)) {
       return res.status(400).json({ error: 'Invalid OTP. Please try again.' });
     }
 
@@ -3915,7 +4250,6 @@ app.post('/api/otp/verify', authLimiter, async (req, res) => {
       return res.status(404).json({ error: 'Account not found. Please register first.' });
     }
 
-    const crypto = await import('crypto');
     const deviceId = generateDeviceId();
     const sessionToken = crypto.randomBytes(32).toString('hex');
 
@@ -3924,9 +4258,14 @@ app.post('/api/otp/verify', authLimiter, async (req, res) => {
     student.sessionToken = sessionToken;
     student.sessionCreatedAt = new Date();
     student.activeDeviceId = deviceId;
-    student.lastLoginAt = new Date();
-    student.lastLoginIP = req.ip || req.connection?.remoteAddress || '';
+    student.lastLoginIP = req.realIP || req.ip || req.connection?.remoteAddress || '';
+    student.failedAttempts = 0; // Reset failed attempts on success
     await student.save();
+
+    // Fallback to standard token approach
+    const secureSessionToken = sessionToken;
+
+    console.log(`[LOGIN_SUCCESS] phone: ${student.phone}, deviceId: ${deviceId}`);
 
     const tokens = generateTokens(student.toObject());
 
@@ -3947,12 +4286,19 @@ app.post('/api/otp/verify', authLimiter, async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000
     });
 
+    // Send Login Success Email
+    if (student.email) {
+      const { subject, html } = templates.login(student.name, new Date().toLocaleString());
+      sendEmail({ to: student.email, subject, html }).catch(e => console.error('Login email error:', e));
+    }
+
     return res.json({
       success: true,
       verified: true,
-      student: { ...studentData, sessionToken },
+      student: { ...studentData, sessionToken: secureSessionToken },
       accessToken: tokens.accessToken,
       deviceId,
+      sessionToken: secureSessionToken,
       previousSessionRevoked: hadPreviousSession
     });
   } catch (error) {
@@ -4023,7 +4369,7 @@ app.post('/api/heartbeat', async (req, res) => {
             ...(decoded.studentId && /^[a-f\d]{24}$/i.test(decoded.studentId) ? [{ _id: new ObjectId(decoded.studentId) }] : [])
           ]
         });
-      } catch (e) {}
+      } catch (e) { }
     }
 
     if (!student && req.cookies.sessionToken) {
@@ -4128,22 +4474,27 @@ app.get('/api/me', async (req, res) => {
     if (token) {
       try {
         const decoded = verifyAccessToken(token);
-        student = await Student.findOne({
-          $or: [
-            { id: decoded.studentId },
-            ...(decoded.studentId && /^[a-f\d]{24}$/i.test(decoded.studentId) ? [{ _id: new ObjectId(decoded.studentId) }] : [])
-          ]
-        });
+        if (decoded && decoded.studentId) {
+          student = await Student.findOne({
+            $or: [
+              { id: decoded.studentId },
+              ...(typeof decoded.studentId === 'string' && /^[a-f\d]{24}$/i.test(decoded.studentId) ? [{ _id: new ObjectId(decoded.studentId) }] : [])
+            ]
+          });
+        }
       } catch (e) {
         if (e.name === 'TokenExpiredError') {
           return res.status(401).json({ error: 'Token expired', code: 'TOKEN_EXPIRED' });
         }
+        console.error('Access token verify error:', e.message);
       }
     }
 
     if (!student) {
       const sessionToken = req.cookies.sessionToken;
-      if (!sessionToken) return res.status(401).json({ error: 'Not authenticated' });
+      if (!sessionToken) {
+        return res.status(401).json({ error: 'Not authenticated' });
+      }
 
       student = await Student.findOne({ sessionToken });
       if (!student) {
@@ -4152,9 +4503,14 @@ app.get('/api/me', async (req, res) => {
       }
     }
 
+    if (!student) {
+      return res.status(401).json({ error: 'Student not found' });
+    }
+
     const { sessionToken: __, password: _pw, ...studentData } = student.toObject();
     return res.json({ student: studentData });
   } catch (err) {
+    console.error('API /me error:', err);
     return res.status(500).json({ error: 'Server error' });
   }
 });
@@ -4190,8 +4546,18 @@ app.post('/api/students/register', async (req, res) => {
     const cleanWA = whatsAppNumber ? whatsAppNumber.replace(/\D/g, '') : '';
     const cleanAlt = alternateNumber ? alternateNumber.replace(/\D/g, '') : '';
 
-    const existingStudent = await Student.findOne({ $or: [{ phone }, { phone: cleanPhone }] });
+    const existingStudent = await Student.findOne({
+      $or: [
+        { phone },
+        { phone: cleanPhone },
+        ...(email ? [{ email }] : [])
+      ]
+    });
+
     if (existingStudent) {
+      if (email && existingStudent.email === email) {
+        return res.status(400).json({ error: 'This email address is already registered.' });
+      }
       return res.status(400).json({ error: 'Phone number already registered' });
     }
 
@@ -4215,6 +4581,12 @@ app.post('/api/students/register', async (req, res) => {
     });
 
     await student.save();
+
+    // Send Registration Success Email
+    if (student.email) {
+      const { subject, html } = templates.registration(student.name);
+      sendEmail({ to: student.email, subject, html }).catch(e => console.error('Registration email error:', e));
+    }
 
     res.status(201).json({
       success: true,
@@ -4245,7 +4617,27 @@ app.post('/api/students/login', async (req, res) => {
     }
 
     if (password && student.password && student.password !== password) {
+      // Track failed attempts for legacy password login
+      const newFailedAttempts = (student.failedAttempts || 0) + 1;
+      await db.collection('students').updateOne(
+        { _id: student._id },
+        { $set: { failedAttempts: newFailedAttempts } }
+      );
+
+      if (newFailedAttempts >= 3 && student.email) {
+        const { subject, html } = templates.securityAlert(student.name || 'Student', new Date().toLocaleString(), 'Password Login');
+        sendEmail({ to: student.email, subject, html }).catch(e => console.error('Security alert email error:', e));
+      }
+
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Reset failed attempts on success
+    if (student.failedAttempts > 0) {
+      await db.collection('students').updateOne(
+        { _id: student._id },
+        { $set: { failedAttempts: 0 } }
+      );
     }
 
     const { password: _, ...studentWithoutPassword } = student;
@@ -4288,30 +4680,24 @@ app.post('/api/students/check-phone', async (req, res) => {
     const { phone } = req.body || {};
     if (!phone) {
       return res.status(400).json({ error: 'Phone number is required' });
-    }
 
-    const cleanPhone = phone.replace(/\D/g, '');
-    if (cleanPhone.length < 10) {
-      return res.status(400).json({ error: 'Invalid phone number' });
-    }
-
-    const existingStudent = await db.collection('students').findOne({
-      $or: [{ phone }, { phone: cleanPhone }]
-    });
-
-    return res.json({ exists: !!existingStudent });
-  } catch (error) {
-    console.error('Check phone error:', error);
-    res.status(500).json({ error: 'Failed to check phone' });
-  }
-});
-
-// Check if a student phone is already registered
-app.post('/api/students/check-phone', async (req, res) => {
+// Check if a student email is already registered
+app.post('/api/students/check-email', async (req, res) => {
   try {
-    const { phone } = req.body || {};
-    if (!phone) {
-      return res.status(400).json({ error: 'Phone number is required' });
+    const { email } = req.body || {};
+    if (!email) {
+      return res.status(400).json({ error: 'Email address is required' });
+    }
+
+    const existingStudent = await db.collection('students').findOne({ email });
+
+    return res.json({ exists: !!existingStudent });
+  } catch (error) {
+    console.error('Check email error:', error);
+    res.status(500).json({ error: 'Failed to check email' });
+  }
+});
+
     }
 
     const cleanPhone = phone.replace(/\D/g, '');
@@ -4329,6 +4715,7 @@ app.post('/api/students/check-phone', async (req, res) => {
     res.status(500).json({ error: 'Failed to check phone' });
   }
 });
+
 app.get('/api/students/:id', async (req, res) => {
   try {
     const student = await db.collection('students').findOne({ id: req.params.id });
@@ -4429,52 +4816,41 @@ app.post('/api/students/:id/enroll', async (req, res) => {
       { $inc: { studentsEnrolled: 1 } }
     );
 
+    // Send Manual Enrollment Email
+    if (student.email) {
+      const { subject, html } = templates.purchase(student.name || 'Student', course.name || course.title, course.price || 0);
+      sendEmail({ to: student.email, subject, html }).catch(e => console.error('Enrollment email error:', e));
+    }
+
     res.json({ success: true, message: 'Enrolled successfully' });
   } catch (error) {
     console.error('Enrollment error:', error);
     res.status(500).json({ error: 'Failed to enroll' });
   }
 });
-// Check if student is enrolled in a cour// Check if student is enrolled in a course or its parent package
+// Check if student is enrolled in a course
 app.get('/api/students/:id/enrolled/:courseId', async (req, res) => {
   try {
-    const studentId = req.params.id;
-    const identifier = req.params.courseId;
-    
-    // 1. Get all relevant IDs for this course/package
-    const course = await findCourse(identifier);
-    if (!course) return res.json({ enrolled: false });
-    
-    const canonicalId = course.id || course._id.toString();
-    const hexId = course._id.toString();
-    
-    // 2. Determine all packages that contain this course
-    const parentPackages = await db.collection('packages').find({ 
-      courses: { $in: [course.name, course.title].filter(Boolean) } 
-    }).toArray();
-    
-    const relevantIds = [canonicalId, hexId, identifier, ...parentPackages.map(p => p.id), ...parentPackages.map(p => p._id.toString())];
-    const uniqueRelevantIds = [...new Set(relevantIds.filter(Boolean))];
-
-    // 3. Check student's enrolledCourses array
-    const student = await db.collection('students').findOne({ id: studentId });
-    if (student) {
-      const studentEnrolled = student.enrolledCourses || [];
-      if (uniqueRelevantIds.some(id => studentEnrolled.includes(id))) {
-        return res.json({ enrolled: true });
-      }
+    const student = await db.collection('students').findOne({ id: req.params.id });
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
     }
 
-    // 4. Check enrollments collection (more robust)
-    const enrollment = await db.collection('enrollments').findOne({
-      studentId: studentId,
-      courseId: { $in: uniqueRelevantIds }
-    });
+    const course = await findCourse(req.params.courseId);
+    if (!course) {
+      return res.json({ enrolled: false });
+    }
 
-    res.json({ enrolled: !!enrollment });
+    const idVariants = await getRelatedCourseIds(course, req.params.courseId);
+    const enrolledCourses = student.enrolledCourses || [];
+
+    // Check if any variant of the course ID is in the student's enrolled list
+    const isEnrolled = idVariants.some(id => enrolledCourses.includes(id));
+
+    res.json({ enrolled: isEnrolled });
   } catch (error) {
     console.error('Error checking enrollment:', error);
-    res.status(500).json({ enrolled: false });
+    res.status(500).json({ error: 'Failed to check enrollment' });
   }
 });
 
@@ -5327,34 +5703,23 @@ app.post('/api/razorpay/create-order', async (req, res) => {
 
     let keyId = process.env.RAZORPAY_KEY_ID;
     let keySecret = process.env.RAZORPAY_KEY_SECRET;
-    let source = '.env File (Recommended)';
 
-    // settings is already declared above or we use it here
-    if (!keyId || keyId.includes('your_') || keyId.trim() === '') {
-      keyId = settings?.razorpayKeyId;
-      source = 'Database Settings (Admin Panel)';
-    }
-    if (!keySecret || keySecret.includes('your_') || keySecret.trim() === '') {
-      keySecret = settings?.razorpayKeySecret;
-      source = 'Database Settings (Admin Panel)';
-    }
+    // Fallback if env vars aren't set
+    if (!keyId || keyId.trim() === '') keyId = settings?.razorpayKeyId;
+    if (!keySecret || keySecret.trim() === '') keySecret = settings?.razorpayKeySecret;
 
-    // AGGRESSIVE CLEANING: remove ALL whitespace/new-lines/tabs/etc.
-    keyId = (keyId || '').toString().replace(/\s/g, '');
-    keySecret = (keySecret || '').toString().replace(/\s/g, '');
+    keyId = (keyId || '').toString().trim();
+    keySecret = (keySecret || '').toString().trim();
 
-    console.log(`[RAZORPAY] Buying attempt for courseId: ${courseId}`);
-    console.log(`[RAZORPAY] Credentials Source: ${source}`);
-    console.log(`[RAZORPAY] KeyId in use: ${keyId}`); // Full log for verification
-    console.log(`[RAZORPAY] Secret Length: ${keySecret.length}`);
+    // Log for debugging (masked)
+    const maskedId = keyId ? `${keyId.substring(0, 4)}...${keyId.slice(-4)}` : 'NULL';
+    console.log(`[Razorpay Debug] ID: ${maskedId}, State: ${(!keyId || !keySecret) ? 'MISSING' : 'OK'}`);
 
     if (!keyId || !keySecret) {
-      return res.status(500).json({ error: 'Razorpay keys missing from both .env and Settings.' });
+      return res.status(500).json({ error: 'Razorpay keys missing from .env and settings collection.' });
     }
 
     console.log(`Razorpay Mode: ${keyId.startsWith('rzp_live') ? 'LIVE (Real Money)' : 'TEST (Sandbox)'}`);
-    console.log(`KeyId: ${keyId.slice(0, 8)}...${keyId.slice(-4)}`);
-    console.log(`Secret length: ${keySecret.length}`);
 
     const student = await db.collection('students').findOne({ id: studentId });
     if (!student) {
@@ -5371,23 +5736,27 @@ app.post('/api/razorpay/create-order', async (req, res) => {
       return res.status(400).json({ error: 'This course is free, no payment needed' });
     }
 
-    const razorpay = new Razorpay({
-      key_id: keyId,
-      key_secret: keySecret
-    });
-
-    const orderOptions = {
+    const orderData = {
       amount: Math.round(coursePrice * 100),
       currency: 'INR',
       receipt: `receipt_${Date.now()}`,
       notes: { courseId: course.id || course._id.toString(), studentId }
     };
 
-    const order = await razorpay.orders.create(orderOptions);
+    const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+    const response = await fetch('https://api.razorpay.com/v1/orders', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Basic ${auth}`
+      },
+      body: JSON.stringify(orderData)
+    });
 
-    if (!order || order.status === 'failed') {
+    const order = await response.json();
+    if (!response.ok) {
       console.error('Razorpay order creation failed:', order);
-      return res.status(500).json({ error: 'Failed to create Razorpay order' });
+      return res.status(500).json({ error: order.error?.description || 'Failed to create Razorpay order' });
     }
 
     res.json({ orderId: order.id, amount: order.amount, currency: order.currency, keyId });
@@ -5403,31 +5772,32 @@ app.post('/api/razorpay/verify', async (req, res) => {
   try {
     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, courseId, studentId, referralCode } = req.body;
 
-    // Get credentials (same logic as create-order to ensure consistency)
+    // Get credentials (same logic as create-order)
     const settings = await db.collection('settings').findOne({});
-    let keyId = process.env.RAZORPAY_KEY_ID;
-    let keySecret = process.env.RAZORPAY_KEY_SECRET;
-
-    if (!keyId || keyId.includes('your_key') || keyId.trim() === '') {
-      keyId = settings?.razorpayKeyId;
-    }
-    if (!keySecret || keySecret.includes('your_key') || keySecret.trim() === '') {
-      keySecret = settings?.razorpayKeySecret;
-    }
-
-    keyId = (keyId || '').toString().trim();
-    keySecret = (keySecret || '').toString().trim();
+    let keyId = (process.env.RAZORPAY_KEY_ID || settings?.razorpayKeyId || '').toString().trim();
+    let keySecret = (process.env.RAZORPAY_KEY_SECRET || settings?.razorpayKeySecret || '').toString().trim();
 
     if (!keyId || !keySecret) {
-      console.error('Razorpay credentials missing during verification');
       return res.status(500).json({ error: 'Razorpay credentials not configured' });
     }
 
+    const crypto = await import('crypto');
     const generated_signature = crypto.createHmac('sha256', keySecret)
       .update(razorpay_order_id + '|' + razorpay_payment_id)
       .digest('hex');
 
     if (generated_signature !== razorpay_signature) {
+      // Send Failure Email if studentId and courseId are present
+      if (studentId && courseId) {
+        try {
+          const student = await db.collection('students').findOne({ id: studentId });
+          const course = await findCourse(courseId);
+          if (student && student.email && course) {
+            const { subject, html } = templates.paymentFailed(student.name || 'Student', course.name || course.title, course.price, 'Invalid payment signature');
+            sendEmail({ to: student.email, subject, html }).catch(e => console.error('Payment failure email error:', e));
+          }
+        } catch (e) { }
+      }
       return res.status(400).json({ error: 'Payment verification failed - invalid signature' });
     }
 
@@ -5439,6 +5809,17 @@ app.post('/api/razorpay/verify', async (req, res) => {
 
     if (!paymentRes.ok || paymentData.status !== 'captured') {
       console.error('Payment not captured:', paymentData);
+      // Send Failure Email
+      if (studentId && courseId) {
+        try {
+          const student = await db.collection('students').findOne({ id: studentId });
+          const course = await findCourse(courseId);
+          if (student && student.email && course) {
+            const { subject, html } = templates.paymentFailed(student.name || 'Student', course.name || course.title, course.price, paymentData.error?.description || 'Payment was not captured');
+            sendEmail({ to: student.email, subject, html }).catch(e => console.error('Payment failure email error:', e));
+          }
+        } catch (e) { }
+      }
       return res.status(400).json({ error: 'Payment not captured or failed' });
     }
 
@@ -5457,6 +5838,16 @@ app.post('/api/razorpay/verify', async (req, res) => {
     const expectedAmount = Math.round((course.price || 0) * 100);
     if (paymentData.amount < expectedAmount) {
       console.error('Payment amount mismatch:', paymentData.amount, 'vs expected', expectedAmount);
+      // Send Failure Email
+      if (studentId && courseId) {
+        try {
+          const student = await db.collection('students').findOne({ id: studentId });
+          if (student && student.email) {
+            const { subject, html } = templates.paymentFailed(student.name || 'Student', course.name || course.title, course.price, 'Payment amount mismatch');
+            sendEmail({ to: student.email, subject, html }).catch(e => console.error('Payment failure email error:', e));
+          }
+        } catch (e) { }
+      }
       return res.status(400).json({ error: 'Payment amount does not match course price' });
     }
 
@@ -5511,6 +5902,12 @@ app.post('/api/razorpay/verify', async (req, res) => {
           );
         }
       }
+    }
+
+    // Send Payment Success Email
+    if (student.email) {
+      const { subject, html } = templates.purchase(student.name || 'Student', purchase.courseName, purchase.amount);
+      sendEmail({ to: student.email, subject, html }).catch(e => console.error('Payment email error:', e));
     }
 
     res.status(201).json({ success: true, purchase });
@@ -5778,36 +6175,49 @@ async function startServer() {
       });
     }
   } else {
-    const vite = await createViteServer({
-      server: {
-        middlewareMode: {
-          server: httpServer,
+    // We already have a separate Vite dev server, so we only need the API here
+    // But we keep this for backward compatibility if needed
+    try {
+      const vite = await createViteServer({
+        server: {
+          middlewareMode: {
+            server: httpServer,
+          },
+          hmr: {
+            server: httpServer,
+          },
         },
-        hmr: {
-          server: httpServer,
-        },
-      },
-      appType: 'spa',
-    });
-    app.use(vite.middlewares);
+        appType: 'spa',
+      });
+      app.use(vite.middlewares);
+    } catch (e) {
+      console.warn('Vite middleware initialization skipped (likely already running separately)');
+    }
   }
 
   let currentPort = parseInt(PORT, 10);
 
   httpServer.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
-      console.log(`Port ${currentPort} is busy, trying ${currentPort + 1}...`);
-      currentPort++;
-      httpServer.close();
-      httpServer.listen(currentPort, '0.0.0.0');
+      console.error(`\n[CRITICAL ERROR] Port ${currentPort} is already in use.`);
+      console.error(`The server is trying to start on 5000, but another process is already there.`);
+      console.error(`PLEASE KILL THE PREVIOUS PROCESS OR RESTART YOUR SYSTEM.\n`);
+      process.exit(1); // Fail fast so the user knows what's wrong
     } else {
       console.error(e);
     }
   });
 
   httpServer.listen(currentPort, '0.0.0.0', () => {
-    console.log(`Server running on http://0.0.0.0:${currentPort}`);
+    console.log(`\n🚀 API Server running on http://localhost:${currentPort}`);
+    console.log(`🔗 Proxy configured to handle /api requests from :5173 to :${currentPort}\n`);
+    if (process.env.JWT_SECRET) {
+      console.log('✅ JWT_SECRET loaded from environment.');
+    } else {
+      console.error('⚠️ WARNING: JWT_SECRET not found in .env. Using temporary secret (Will log out on restart).');
+    }
   });
 }
+
 
 startServer();

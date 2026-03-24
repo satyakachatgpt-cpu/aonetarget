@@ -72,7 +72,7 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ isOpen, onClose, studen
         <div className="bg-gradient-to-r from-brandBlue to-[#1A237E] p-4 shrink-0">
           <div className="flex items-center justify-between mb-4">
             <img
-              src="/attached_assets/alonelogo_1770810181717.jpg"
+              src="/attach-assist/alonelogo_1770810181717.jpg"
               alt="Aone Target"
               className="h-10 rounded"
               onError={(e) => {

@@ -149,6 +149,31 @@ const Checkout: React.FC = () => {
           ondismiss: function () {
             setProcessing(false);
           }
+        },
+        methods: {
+          upi: true,
+          netbanking: true,
+          card: true,
+          wallet: true,
+          paylater: true
+        },
+        config: {
+          display: {
+            blocks: {
+              upi: {
+                name: 'UPI / Google Pay / PhonePe',
+                instruments: [
+                  {
+                    method: 'upi'
+                  }
+                ]
+              }
+            },
+            sequence: ['block.upi', 'card', 'netbanking', 'wallet'],
+            preferences: {
+              show_default_blocks: true
+            }
+          }
         }
       };
 

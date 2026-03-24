@@ -250,7 +250,7 @@ const StudyDashboard: React.FC = () => {
                 </h3>
                 <div
                   className="bg-white rounded-xl shadow-sm p-3 border border-gray-100 flex gap-4 items-center cursor-pointer active:scale-[0.98] transition-all"
-                  onClick={() => window.open(videos[0].youtubeUrl, '_blank')}
+                  onClick={() => navigate('/video-player', { state: { video: videos[0], courseTitle: course?.title || course?.name } })}
                 >
                   <div className="relative w-24 h-16 bg-gray-200 rounded-lg overflow-hidden shrink-0">
                     <img src={`https://img.youtube.com/vi/${videos[0].youtubeUrl?.includes('v=') ? videos[0].youtubeUrl.split('v=')[1].split('&')[0] : (videos[0].youtubeUrl?.includes('be/') ? videos[0].youtubeUrl.split('be/')[1].split('?')[0] : '')}/mqdefault.jpg`} className="w-full h-full object-cover" alt="Thumb" />
@@ -272,14 +272,14 @@ const StudyDashboard: React.FC = () => {
             {/* Tabs */}
             <section>
               <div className="flex border-b border-gray-200 mb-4">
-                {['वीडियो (Videos)', 'नोट्स (Notes)', 'टेस्ट (Tests)'].map((tab) => {
-                  const key = tab.toLowerCase().includes('video') ? 'videos' : tab.toLowerCase().includes('note') ? 'notes' : 'tests';
+                {['Recorded', 'Notes', 'Tests', 'Live Classes'].map((tab) => {
+                  const key = tab.toLowerCase().includes('recorded') ? 'videos' : tab.toLowerCase().includes('note') ? 'notes' : tab.toLowerCase().includes('live') ? 'live' : 'tests';
                   const isActive = activeTab === key;
                   return (
                     <button
                       key={key}
                       onClick={() => setActiveTab(key)}
-                      className={`flex-1 pb-3 text-xs font-bold transition-all ${isActive ? 'text-brandBlue border-b-2 border-brandBlue' : 'text-gray-400'}`}
+                      className={`flex-1 pb-3 text-[11px] font-black uppercase tracking-wider transition-all ${isActive ? 'text-brandBlue border-b-2 border-brandBlue' : 'text-gray-400'}`}
                     >
                       {tab}
                     </button>
@@ -342,11 +342,11 @@ const StudyDashboard: React.FC = () => {
                         <div className="p-4 flex gap-4 items-center">
                           <div
                             className="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center text-gray-400 group-hover:bg-brandBlue group-hover:text-white transition-all cursor-pointer flex-shrink-0"
-                            onClick={() => window.open(video.youtubeUrl, '_blank')}
+                            onClick={() => navigate('/video-player', { state: { video: video, courseTitle: course?.title || course?.name } })}
                           >
-                            <span className="material-symbols-rounded font-bold">{idx === 0 ? 'play_arrow' : 'lock'}</span>
+                            <span className="material-symbols-rounded font-bold">{video.isLocked ? 'lock' : 'play_arrow'}</span>
                           </div>
-                          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => window.open(video.youtubeUrl, '_blank')}>
+                          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate('/video-player', { state: { video: video, courseTitle: course?.title || course?.name } })}>
                             <h4 className="font-bold text-sm truncate">{video.title}</h4>
                             <div className="flex gap-2 mt-1">
                               <span className="text-[8px] bg-blue-50 text-brandBlue px-1.5 py-0.5 rounded font-bold uppercase">Video</span>

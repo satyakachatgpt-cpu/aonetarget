@@ -400,7 +400,7 @@ const Home: React.FC = () => {
               <div className="flex-1 flex justify-center items-center">
                 <div className="bg-white rounded-[20px] px-4 py-1 shadow-md flex items-center justify-center h-[54px] w-[230px] overflow-hidden mix-blend-normal">
                   <img
-                    src="/attached_assets/alonelogo_1770810181717.jpg"
+                    src="/attach-assist/alonelogo_1770810181717.jpg"
                     alt="Aone Target"
                     className="h-full w-full object-contain"
                   />

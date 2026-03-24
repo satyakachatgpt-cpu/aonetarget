@@ -62,9 +62,9 @@ const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
 
   if (isYouTube) {
     let embedUrl = src;
-    const match = src.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/|user\/\S+|shorts\/))([^?&#\s]+)/);
+    const match = src.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([^?&#]+)/);
     if (match) {
-      embedUrl = `https://www.youtube.com/embed/${match[1]}?autoplay=1&modestbranding=1&rel=0&showinfo=0`;
+      embedUrl = `https://www.youtube.com/embed/${match[1]}?autoplay=0&modestbranding=1&rel=0&showinfo=0`;
     }
 
     return (

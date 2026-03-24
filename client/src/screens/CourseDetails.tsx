@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import LiveClassesCalendar from '../components/student/LiveClassesCalendar';
-import SecureVideoPlayer from '../components/SecureVideoPlayer';
 import { useAuthStore } from '../store/authStore';
 import { getYouTubeThumbnail, getGradientPlaceholder } from '../lib/utils';
 import { CATEGORY_GRADIENTS } from '../constants';
@@ -13,7 +12,6 @@ interface Video {
   thumbnail?: string;
   videoUrl?: string;
   youtubeUrl?: string;
-  folderId?: string;
   isFree?: boolean;
   topicId?: string;
   topicName?: string;
@@ -56,20 +54,9 @@ interface Progress {
   completedNotes: string[];
 }
 
-interface Folder {
-  _id?: string;
-  id: string;
-  title: string;
-  courseId: string;
-  parentId?: string;
-}
-
 const CourseDetails: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [folders, setFolders] = useState<Folder[]>([]);
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
-  const [navigationHistory, setNavigationHistory] = useState<Folder[]>([]);
   const { student } = useAuthStore();
   const [course, setCourse] = useState<Course | null>(null);
   const [videos, setVideos] = useState<Video[]>([]);
@@ -80,9 +67,6 @@ const CourseDetails: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'videos' | 'notes' | 'tests' | 'live'>('videos');
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
-  const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
-  const [showVideoPlayer, setShowVideoPlayer] = useState(false);
-  const [videoPlaying, setVideoPlaying] = useState(false);
   const [shareSuccess, setShareSuccess] = useState(false);
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
@@ -100,20 +84,11 @@ const CourseDetails: React.FC = () => {
 
 
 
-
   const handleVideoClick = (video: Video) => {
-    console.log('Video clicked:', video.title, 'Playable:', isEnrolled || video.isFree, 'URL:', video.youtubeUrl || video.videoUrl);
     const canPlay = isEnrolled || video.isFree;
     if (canPlay && (video.youtubeUrl || video.videoUrl)) {
-      setSelectedVideo(video);
-      setShowVideoPlayer(true);
+      navigate('/video-player', { state: { video, courseTitle: course?.title || course?.name } });
     }
-  };
-
-  const closeVideoPlayer = () => {
-    setShowVideoPlayer(false);
-    setVideoPlaying(false);
-    setSelectedVideo(null);
   };
 
   const handleShare = async () => {
@@ -158,29 +133,28 @@ const CourseDetails: React.FC = () => {
   };
   const studentId = getStudentId();
 
-  useEffect(() => {
-    fetchCourseData();
-  }, [id]);
+  const [folders, setFolders] = useState<any[]>([]);
+  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [folderStack, setFolderStack] = useState<any[]>([]);
 
   const fetchCourseData = async () => {
     try {
-      const [courseData, foldersData, videosData, notesData, testsData] = await Promise.all([
+      const [courseData, videosData, notesData, testsData, foldersData] = await Promise.all([
         fetch(`/api/courses/${id}`).then(r => r.json()).catch(() => null),
-        fetch(`/api/courses/${id}/folders`).then(r => r.json()).catch(() => []),
         fetch(`/api/courses/${id}/videos`).then(r => r.json()).catch(() => []),
         fetch(`/api/courses/${id}/notes`).then(r => r.json()).catch(() => []),
         fetch(`/api/courses/${id}/tests`).then(r => r.json()).catch(() => []),
+        fetch(`/api/courses/${id}/folders`).then(r => r.json()).catch(() => []),
       ]);
 
       if (courseData && !courseData.error) {
         setCourse(courseData);
       }
 
-      setFolders(Array.isArray(foldersData) ? foldersData : []);
-
       setVideos(Array.isArray(videosData) ? videosData : []);
       setNotes(Array.isArray(notesData) ? notesData : []);
       setTests(Array.isArray(testsData) ? testsData.filter((t: Test) => !t.status || t.status === 'active') : []);
+      setFolders(Array.isArray(foldersData) ? foldersData : []);
 
       if (studentId) {
         try {
@@ -258,6 +232,29 @@ const CourseDetails: React.FC = () => {
         // Update failed
       }
   };
+
+  useEffect(() => {
+    fetchCourseData();
+  }, [id]);
+
+  const navigateIntoFolder = (folder: any) => {
+    setCurrentFolderId(folder.id || folder._id);
+    setFolderStack([...folderStack, folder]);
+  };
+
+  const navigateUp = () => {
+    const newStack = [...folderStack];
+    newStack.pop();
+    setFolderStack(newStack);
+    setCurrentFolderId(newStack.length > 0 ? (newStack[newStack.length - 1].id || newStack[newStack.length - 1]._id) : null);
+  };
+
+  const currentFolder = folderStack.length > 0 ? folderStack[folderStack.length - 1] : null;
+
+  const filteredVideos = videos.filter(v => (v as any).folderId === currentFolderId || (!(v as any).folderId && !currentFolderId));
+  const filteredNotes = notes.filter(n => (n as any).folderId === currentFolderId || (!(n as any).folderId && !currentFolderId));
+  const filteredTests = tests.filter(t => (t as any).folderId === currentFolderId || (!(t as any).folderId && !currentFolderId));
+  const filteredFolders = folders.filter(f => f.parentId === currentFolderId || (!f.parentId && !currentFolderId));
 
   const totalVideos = videos.length;
   const completedVideos = progress.completedVideos.length;
@@ -457,9 +454,23 @@ const CourseDetails: React.FC = () => {
         </div>
       </div>
 
-      <main className="p-4 space-y-4">
+      <main className="p-4 origin-top transition-transform duration-200 space-y-4">
+        {folderStack.length > 0 && (
+          <div className="flex items-center gap-3 animate-fade-in-up">
+            <button
+              onClick={navigateUp}
+              className="w-10 h-10 rounded-2xl bg-white shadow-card flex items-center justify-center text-primary-600 active:scale-[0.97] transition-all duration-200"
+            >
+              <span className="material-symbols-rounded">arrow_back</span>
+            </button>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-sm font-bold text-gray-800 truncate">{currentFolder?.title || currentFolder?.name || 'Folder Content'}</h2>
+              <p className="text-[10px] text-gray-400 font-medium">Back to previous level</p>
+            </div>
+          </div>
+        )}
 
-        {course.description && (
+        {course.description && !currentFolderId && (
           <div className="card-premium p-4 animate-fade-in-up">
             <h3 className="font-bold text-sm text-primary-800 mb-3 flex items-center gap-2">
               <div className="w-1 h-4 bg-gradient-to-b from-primary-600 to-primary-400 rounded-full" />
@@ -473,7 +484,7 @@ const CourseDetails: React.FC = () => {
           </div>
         )}
 
-        {(videos.length > 0 || notes.length > 0 || tests.length > 0) && (
+        {(videos.length > 0 || notes.length > 0 || tests.length > 0) && !currentFolderId && (
           <div className="card-premium p-4 animate-fade-in-up" style={{ animationDelay: '80ms' }}>
             <h3 className="font-bold text-sm text-primary-800 mb-3 flex items-center gap-2">
               <div className="w-1 h-4 bg-gradient-to-b from-primary-600 to-primary-400 rounded-full" />
@@ -507,400 +518,308 @@ const CourseDetails: React.FC = () => {
           </div>
         )}
 
-        {activeTab === 'videos' && (
-          <div className="space-y-3">
-            {/* Course Content Header/Grid similar to Reference */}
-            {!currentFolderId && (
-              <div className="card-premium p-6 mb-6 border border-primary-50">
-                <div className="flex items-center gap-2 mb-6">
-                  <span className="w-1 h-5 bg-primary-600 rounded-full"></span>
-                  <span className="material-symbols-rounded text-primary-200">business_center</span>
-                  <h3 className="text-base font-black text-gray-900 tracking-tight">What's Included</h3>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-primary-50/50 p-4 rounded-[1.5rem] flex flex-col gap-2 border border-primary-50">
-                    <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center text-primary-700">
-                      <span className="material-symbols-rounded text-base">play_circle</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-gray-900 leading-none">{videos.length} Videos</p>
-                    </div>
-                  </div>
-                  <div className="bg-orange-50/50 p-4 rounded-[1.5rem] flex flex-col gap-2 border border-orange-50">
-                    <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-600">
-                      <span className="material-symbols-rounded text-base">description</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-gray-900 leading-none">{course.notesCount || 0} Notes</p>
-                    </div>
-                  </div>
-                  <div className="bg-purple-50/50 p-4 rounded-[1.5rem] flex flex-col gap-2 border border-purple-50">
-                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center text-purple-600">
-                      <span className="material-symbols-rounded text-base">quiz</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-gray-900 leading-none">{tests.length} Tests</p>
-                    </div>
-                  </div>
-                  <div className="bg-red-50/50 p-4 rounded-[1.5rem] flex flex-col gap-2 border border-red-50">
-                    <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center text-red-600">
-                      <span className="material-symbols-rounded text-base">sensors</span>
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-gray-900 leading-none">Live Classes</p>
-                    </div>
-                  </div>
-                </div>
+        <div className="space-y-3">
+          {/* Folders List */}
+          {filteredFolders.map((folder: any, i: number) => (
+            <div
+              key={folder.id || folder._id}
+              onClick={() => navigateIntoFolder(folder)}
+              className="card-premium p-4 flex items-center gap-4 cursor-pointer active:scale-[0.97] transition-all duration-200 animate-fade-in-up"
+              style={{ animationDelay: `${i * 50}ms` }}
+            >
+              <div className="w-14 h-14 bg-gradient-to-br from-primary-100 to-primary-50 rounded-2xl flex items-center justify-center flex-shrink-0">
+                <span className="material-symbols-rounded text-primary-600 text-3xl">folder</span>
               </div>
-            )}
-
-            {currentFolderId && (
-              <button
-                onClick={() => {
-                  const newHistory = [...navigationHistory];
-                  const lastFolder = newHistory.pop();
-                  setCurrentFolderId(lastFolder ? lastFolder.id : null);
-                  setNavigationHistory(newHistory);
-                }}
-                className="flex items-center gap-1.5 text-primary-600 font-black text-[10px] mb-4 px-3 py-2 bg-primary-50 w-fit rounded-xl hover:bg-primary-100 transition-all uppercase tracking-widest border border-primary-100/50 active:scale-95"
-              >
-                <span className="material-symbols-rounded text-base">chevron_left</span>
-                Back to {navigationHistory.length > 0 ? navigationHistory[navigationHistory.length - 1].title : 'All Content'}
-              </button>
-            )}
-
-            <div className="space-y-4">
-              {folders.filter(f => String(f.parentId || '') === String(currentFolderId || '')).map((folder) => (
-                <div
-                  key={folder.id}
-                  onClick={() => {
-                    const currentFolder = folders.find(f => f.id === currentFolderId);
-                    setNavigationHistory([...navigationHistory, ...(currentFolder ? [currentFolder] : [])]);
-                    setCurrentFolderId(folder.id);
-                  }}
-                  className="bg-white p-4 cursor-pointer active:scale-[0.98] transition-all flex items-center justify-between group rounded-[1.8rem] border-[1.5px] border-gray-50 shadow-sm hover:shadow-md hover:border-primary-100"
-                >
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 bg-[#3F51B5] rounded-[1.2rem] flex items-center justify-center text-white shadow-lg overflow-hidden relative">
-                      <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                      <span className="material-symbols-rounded text-2xl">folder</span>
-                    </div>
-                    <div>
-                      <h4 className="font-black text-gray-900 text-sm tracking-tight leading-none mb-1.5 transition-colors group-hover:text-primary-600">
-                        {folder.title || (folder as any).name || 'Chapter'}
-                      </h4>
-                      <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.15em] opacity-40">SECTION</p>
-                    </div>
-                  </div>
-                  <span className="material-symbols-rounded text-gray-300 group-hover:text-primary-500 transition-all mr-1">chevron_right</span>
-                </div>
-              ))}
+              <div className="flex-1 min-w-0">
+                <h4 className="font-extrabold text-base text-gray-800">{folder.title || folder.name}</h4>
+                <p className="text-[11px] text-gray-400 font-medium mt-0.5">Click to view contents</p>
+              </div>
+              <span className="material-symbols-rounded text-gray-300">chevron_right</span>
             </div>
+          ))}
 
-            {videos.filter(v => 
-              (!currentFolderId && (!v.folderId || v.folderId === 'null' || v.folderId === 'undefined')) || 
-              (currentFolderId && String(v.folderId) === String(currentFolderId))
-            ).length === 0 && folders.filter(f => String(f.parentId || '') === String(currentFolderId || '')).length === 0 ? (
-              <div className="card-premium p-10 text-center animate-fade-in-up">
-                <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <span className="material-symbols-rounded text-3xl text-gray-300">video_library</span>
+          {activeTab === 'videos' && (
+            <>
+              {filteredVideos.length === 0 && filteredFolders.length === 0 ? (
+                <div className="card-premium p-10 text-center animate-fade-in-up">
+                  <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <span className="material-symbols-rounded text-3xl text-gray-300">video_library</span>
+                  </div>
+                  <p className="text-gray-400 font-medium text-sm">No videos available here</p>
                 </div>
-                <p className="text-gray-400 font-medium text-sm">No items in this folder</p>
-              </div>
-            ) : (
-              videos.filter(v => 
-                (!currentFolderId && (!v.folderId || v.folderId === 'null' || v.folderId === 'undefined')) || 
-                (currentFolderId && String(v.folderId) === String(currentFolderId))
-              ).map((video, index) => {
-                const isCompleted = progress.completedVideos.includes(video.id);
-                const canPlay = isEnrolled || video.isFree || (index === 0 && !currentFolderId);
-                const isLocked = !canPlay;
-                return (
-                  <div
-                    key={video.id}
-                    onClick={() => !isLocked && handleVideoClick(video)}
-                    className={`card-premium overflow-hidden cursor-pointer active:scale-[0.97] transition-all duration-200 animate-fade-in-up ${isLocked ? 'opacity-70' : ''}`}
-                    style={{ animationDelay: `${index * 60}ms` }}
-                  >
-                    <div className="flex gap-3 p-3">
-                      <div className="relative w-28 h-20 rounded-2xl overflow-hidden flex-shrink-0">
-                        {!failedImages.has(video.id) ? (
-                          <img
-                            src={video.thumbnail || getYouTubeThumbnail(video.youtubeUrl || video.videoUrl || '') || `https://picsum.photos/400/225?sig=${video.id}`}
-                            alt={video.title}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                            onError={() => handleImageError(video.id)}
-                          />
-                        ) : (
-                          <div className={`w-full h-full bg-gradient-to-br ${getGradientPlaceholder(video.title, CATEGORY_GRADIENTS).gradient} flex items-center justify-center`}>
-                            <span className="text-white text-2xl font-bold opacity-60">{getGradientPlaceholder(video.title, CATEGORY_GRADIENTS).initial}</span>
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                          {isLocked ? (
-                            <div className="w-9 h-9 bg-gray-800/80 rounded-full flex items-center justify-center">
-                              <span className="material-symbols-rounded text-lg text-white">lock</span>
-                            </div>
+              ) : (
+                filteredVideos.map((video, index) => {
+                  const isCompleted = progress.completedVideos.includes(video.id);
+                  const canPlay = isEnrolled || video.isFree || index === 0;
+                  const isLocked = !canPlay;
+                  return (
+                    <div
+                      key={video.id}
+                      onClick={() => !isLocked && handleVideoClick(video)}
+                      className={`card-premium overflow-hidden cursor-pointer active:scale-[0.97] transition-all duration-200 animate-fade-in-up ${isLocked ? 'opacity-70' : ''}`}
+                      style={{ animationDelay: `${(filteredFolders.length + index) * 60}ms` }}
+                    >
+                      <div className="flex gap-3 p-3">
+                        <div className="relative w-28 h-20 rounded-2xl overflow-hidden flex-shrink-0">
+                          {!failedImages.has(video.id) ? (
+                            <img
+                              src={video.thumbnail || getYouTubeThumbnail(video.youtubeUrl || video.videoUrl || '') || `https://picsum.photos/400/225?sig=${video.id}`}
+                              alt={video.title}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              onError={() => handleImageError(video.id)}
+                            />
                           ) : (
-                            <div className="w-9 h-9 bg-white/90 rounded-full flex items-center justify-center shadow-card">
-                              <span className="material-symbols-rounded text-lg text-primary-600">play_arrow</span>
+                            <div className={`w-full h-full bg-gradient-to-br ${getGradientPlaceholder(video.title, CATEGORY_GRADIENTS).gradient} flex items-center justify-center`}>
+                              <span className="text-white text-2xl font-bold opacity-60">{getGradientPlaceholder(video.title, CATEGORY_GRADIENTS).initial}</span>
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                            {isLocked ? (
+                              <div className="w-9 h-9 bg-gray-800/80 rounded-full flex items-center justify-center">
+                                <span className="material-symbols-rounded text-lg text-white">lock</span>
+                              </div>
+                            ) : (
+                              <div className="w-9 h-9 bg-white/90 rounded-full flex items-center justify-center shadow-card">
+                                <span className="material-symbols-rounded text-lg text-primary-600">play_arrow</span>
+                              </div>
+                            )}
+                          </div>
+                          <div className="absolute bottom-1.5 right-1.5 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md">
+                            {video.duration || '00:00'}
+                          </div>
+                          {(video.isFree || index === 0) && !isEnrolled && (
+                            <div className="absolute top-1.5 left-1.5 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">
+                              FREE
                             </div>
                           )}
                         </div>
-                        <div className="absolute bottom-1.5 right-1.5 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md">
-                          {video.duration || '00:00'}
-                        </div>
-                        {(video.isFree || (index === 0 && !currentFolderId)) && !isEnrolled && (
-                          <div className="absolute top-1.5 left-1.5 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">
-                            FREE
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0 flex flex-col justify-center">
-                        <div className="flex items-start gap-2">
-                          <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] flex-shrink-0 mt-0.5 ${isLocked ? 'bg-surface-200 text-gray-400' : isCompleted ? 'bg-green-100 text-green-600' : 'bg-primary-50 text-primary-600'}`}>
-                            {isCompleted ? <span className="material-symbols-rounded text-xs">check</span> : index + 1}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-bold text-sm text-gray-800 line-clamp-2 leading-tight">{video.title}</h4>
-                            <div className="flex items-center gap-2 mt-1">
-                              <span className="text-[10px] text-gray-400 font-medium">{video.duration || '00:00'} min</span>
-                              {isCompleted && (
-                                <span className="text-[10px] text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded">Completed</span>
-                              )}
-                              {isLocked && (
-                                <span className="text-[10px] text-orange-600 font-bold bg-orange-50 px-1.5 py-0.5 rounded">Locked</span>
-                              )}
+                        <div className="flex-1 min-w-0 flex flex-col justify-center">
+                          <div className="flex items-start gap-2">
+                            <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-[10px] flex-shrink-0 mt-0.5 ${isLocked ? 'bg-surface-200 text-gray-400' : isCompleted ? 'bg-green-100 text-green-600' : 'bg-primary-50 text-primary-600'}`}>
+                              {isCompleted ? <span className="material-symbols-rounded text-xs">check</span> : index + 1}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-bold text-sm text-gray-800 line-clamp-2 leading-tight">{video.title}</h4>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-[10px] text-gray-400 font-medium">{video.duration || '00:00'} min</span>
+                                {isCompleted && (
+                                  <span className="text-[10px] text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded">Completed</span>
+                                )}
+                                {isLocked && (
+                                  <span className="text-[10px] text-orange-600 font-bold bg-orange-50 px-1.5 py-0.5 rounded">Locked</span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         </div>
+                        {isEnrolled && !isCompleted && !isLocked && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); markVideoComplete(video.id); }}
+                            className="self-center w-8 h-8 rounded-full bg-surface-100 flex items-center justify-center text-gray-400 hover:text-green-500 hover:bg-green-50 transition-all duration-200 flex-shrink-0"
+                          >
+                            <span className="material-symbols-rounded text-lg">check_circle</span>
+                          </button>
+                        )}
                       </div>
-                      {isEnrolled && !isCompleted && !isLocked && (
+                    </div>
+                  );
+                })
+              )}
+            </>
+          )}
+
+          {activeTab === 'notes' && (
+            <>
+              {!isEnrolled ? (
+                <div className="card-premium p-10 text-center animate-fade-in-up">
+                  <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <span className="material-symbols-rounded text-3xl text-gray-300">lock</span>
+                  </div>
+                  <p className="text-gray-500 font-medium text-sm">Enroll to access notes</p>
+                  {isPaidCourse ? (
+                    <button onClick={handleBuyNow} className="mt-4 btn-accent px-6 py-2.5 text-sm">Buy Now - ₹{course.price}</button>
+                  ) : (
+                    <button onClick={handleEnroll} disabled={enrolling} className="mt-4 btn-primary px-6 py-2.5 text-sm disabled:opacity-50">{enrolling ? 'Enrolling...' : 'Enroll Free'}</button>
+                  )}
+                </div>
+              ) : filteredNotes.length === 0 && filteredFolders.length === 0 ? (
+                <div className="card-premium p-10 text-center animate-fade-in-up">
+                  <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <span className="material-symbols-rounded text-3xl text-gray-300">description</span>
+                  </div>
+                  <p className="text-gray-400 font-medium text-sm">No notes available here</p>
+                </div>
+              ) : (
+                filteredNotes.map((note, i) => (
+                  <div
+                    key={note.id}
+                    className="card-premium p-4 flex items-center gap-4 animate-fade-in-up"
+                    style={{ animationDelay: `${(filteredFolders.length + i) * 60}ms` }}
+                  >
+                    <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-amber-50 rounded-2xl flex items-center justify-center flex-shrink-0">
+                      <span className="material-symbols-rounded text-orange-500 text-xl">description</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-sm text-gray-800 line-clamp-1">{note.title}</h4>
+                      <p className="text-[11px] text-gray-400 font-medium mt-0.5 flex items-center gap-1">
+                        <span className="material-symbols-rounded text-[10px]">picture_as_pdf</span>
+                        PDF • {note.fileSize || '2.5 MB'}
+                      </p>
+                    </div>
+                    <a
+                      href={note.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-10 h-10 bg-primary-50 rounded-xl flex items-center justify-center text-primary-600 active:scale-[0.97] transition-all duration-200 hover:bg-primary-100"
+                    >
+                      <span className="material-symbols-rounded text-xl">download</span>
+                    </a>
+                  </div>
+                ))
+              )}
+            </>
+          )}
+
+          {activeTab === 'tests' && (
+            <>
+              {filteredTests.length === 0 && filteredFolders.length === 0 ? (
+                <div className="card-premium p-10 text-center animate-fade-in-up">
+                  <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <span className="material-symbols-rounded text-3xl text-gray-300">quiz</span>
+                  </div>
+                  <p className="text-gray-400 font-medium text-sm">No tests available here</p>
+                </div>
+              ) : (
+                filteredTests.map((test: any, i: number) => {
+                  const isAttempted = progress.completedTests.includes(test.id);
+                  const canAccess = isEnrolled || test.isFree;
+                  const isLocked = !canAccess;
+                  return (
+                    <div
+                      key={test.id}
+                      className={`card-premium p-4 animate-fade-in-up ${isLocked ? 'opacity-70' : ''}`}
+                      style={{ animationDelay: `${(filteredFolders.length + i) * 60}ms` }}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isLocked ? 'bg-surface-200' : 'bg-gradient-to-br from-purple-100 to-purple-50'}`}>
+                            <span className={`material-symbols-rounded text-xl ${isLocked ? 'text-gray-400' : 'text-purple-500'}`}>
+                              {isLocked ? 'lock' : 'quiz'}
+                            </span>
+                          </div>
+                          <div>
+                            <h4 className="font-bold text-sm text-gray-800">{test.name}</h4>
+                            <p className="text-[11px] text-gray-400 font-medium mt-0.5">
+                              {test.numberOfQuestions || test.questions || 0} Questions • {test.duration || 60} mins
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {test.isFree && !isEnrolled && (
+                            <span className="bg-green-50 text-green-600 text-[10px] font-bold px-2 py-1 rounded-lg">
+                              FREE
+                            </span>
+                          )}
+                          {isAttempted && (
+                            <span className="bg-green-50 text-green-600 text-[10px] font-bold px-2 py-1 rounded-lg flex items-center gap-0.5">
+                              <span className="material-symbols-rounded text-[10px]">check_circle</span>
+                              Done
+                            </span>
+                          )}
+                          {isLocked && (
+                            <span className="bg-orange-50 text-orange-600 text-[10px] font-bold px-2 py-1 rounded-lg">
+                              LOCKED
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {canAccess ? (
                         <button
-                          onClick={(e) => { e.stopPropagation(); markVideoComplete(video.id); }}
-                          className="self-center w-8 h-8 rounded-full bg-surface-100 flex items-center justify-center text-gray-400 hover:text-green-500 hover:bg-green-50 transition-all duration-200 flex-shrink-0"
+                          onClick={() => navigate(`/test/${test.id}`)}
+                          className="w-full btn-primary py-3 text-sm active:scale-[0.97] transition-all duration-200"
                         >
-                          <span className="material-symbols-rounded text-lg">check_circle</span>
+                          {isAttempted ? 'View Result / Retake' : 'Start Test'}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handleBuyNow}
+                          className="w-full bg-surface-200 text-gray-500 py-3 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.97] transition-all duration-200"
+                        >
+                          <span className="material-symbols-rounded text-sm">lock</span>
+                          Buy Course to Unlock
                         </button>
                       )}
                     </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
+                  );
+                })
+              )}
+            </>
+          )}
 
-        {activeTab === 'notes' && (isEnrolled ? (
-          <div className="space-y-3">
-            {notes.length === 0 ? (
-              <div className="card-premium p-10 text-center animate-fade-in-up">
-                <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <span className="material-symbols-rounded text-3xl text-gray-300">description</span>
-                </div>
-                <p className="text-gray-400 font-medium text-sm">No notes available yet</p>
-              </div>
-            ) : (
-              notes.map((note, i) => (
-                <div
-                  key={note.id}
-                  className="card-premium p-4 flex items-center gap-4 animate-fade-in-up"
-                  style={{ animationDelay: `${i * 60}ms` }}
-                >
-                  <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-amber-50 rounded-2xl flex items-center justify-center flex-shrink-0">
-                    <span className="material-symbols-rounded text-orange-500 text-xl">description</span>
+          {activeTab === 'live' && (
+            <div className="card-premium p-4 animate-fade-in-up">
+              <LiveClassesCalendar studentId={studentId} courseId={id} />
+              {!isEnrolled && (
+                <div className="text-center mt-6 py-6 border-t border-surface-200">
+                  <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <span className="material-symbols-rounded text-3xl text-gray-300">lock</span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-sm text-gray-800 line-clamp-1">{note.title}</h4>
-                    <p className="text-[11px] text-gray-400 font-medium mt-0.5 flex items-center gap-1">
-                      <span className="material-symbols-rounded text-[10px]">picture_as_pdf</span>
-                      PDF • {note.fileSize || '2.5 MB'}
-                    </p>
-                  </div>
-                  <a
-                    href={note.fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-10 h-10 bg-primary-50 rounded-xl flex items-center justify-center text-primary-600 active:scale-[0.97] transition-all duration-200 hover:bg-primary-100"
-                  >
-                    <span className="material-symbols-rounded text-xl">download</span>
-                  </a>
-                </div>
-              ))
-            )}
-          </div>
-        ) : (
-          <div className="card-premium p-10 text-center animate-fade-in-up">
-            <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
-              <span className="material-symbols-rounded text-3xl text-gray-300">lock</span>
-            </div>
-            <p className="text-gray-500 font-medium text-sm">Enroll to access notes</p>
-            {isPaidCourse ? (
-              <button onClick={handleBuyNow} className="mt-4 btn-accent px-6 py-2.5 text-sm">Buy Now - ₹{course.price}</button>
-            ) : (
-              <button onClick={handleEnroll} disabled={enrolling} className="mt-4 btn-primary px-6 py-2.5 text-sm disabled:opacity-50">{enrolling ? 'Enrolling...' : 'Enroll Free'}</button>
-            )}
-          </div>
-        ))}
-
-        {activeTab === 'tests' && (
-          <div className="space-y-3">
-            {tests.length === 0 ? (
-              <div className="card-premium p-10 text-center animate-fade-in-up">
-                <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <span className="material-symbols-rounded text-3xl text-gray-300">quiz</span>
-                </div>
-                <p className="text-gray-400 font-medium text-sm">No tests available yet</p>
-              </div>
-            ) : (
-              tests.map((test: any, i: number) => {
-                const isAttempted = progress.completedTests.includes(test.id);
-                const canAccess = isEnrolled || test.isFree;
-                const isLocked = !canAccess;
-                return (
-                  <div
-                    key={test.id}
-                    className={`card-premium p-4 animate-fade-in-up ${isLocked ? 'opacity-70' : ''}`}
-                    style={{ animationDelay: `${i * 60}ms` }}
-                  >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isLocked ? 'bg-surface-200' : 'bg-gradient-to-br from-purple-100 to-purple-50'}`}>
-                          <span className={`material-symbols-rounded text-xl ${isLocked ? 'text-gray-400' : 'text-purple-500'}`}>
-                            {isLocked ? 'lock' : 'quiz'}
-                          </span>
-                        </div>
-                        <div>
-                          <h4 className="font-bold text-sm text-gray-800">{test.name}</h4>
-                          <p className="text-[11px] text-gray-400 font-medium mt-0.5">
-                            {test.numberOfQuestions || test.questions || 0} Questions • {test.duration || 60} mins
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {test.isFree && !isEnrolled && (
-                          <span className="bg-green-50 text-green-600 text-[10px] font-bold px-2 py-1 rounded-lg">
-                            FREE
-                          </span>
-                        )}
-                        {isAttempted && (
-                          <span className="bg-green-50 text-green-600 text-[10px] font-bold px-2 py-1 rounded-lg flex items-center gap-0.5">
-                            <span className="material-symbols-rounded text-[10px]">check_circle</span>
-                            Done
-                          </span>
-                        )}
-                        {isLocked && (
-                          <span className="bg-orange-50 text-orange-600 text-[10px] font-bold px-2 py-1 rounded-lg">
-                            LOCKED
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {canAccess ? (
-                      <button
-                        onClick={() => navigate(`/test/${test.id}`)}
-                        className="w-full btn-primary py-3 text-sm active:scale-[0.97] transition-all duration-200"
-                      >
-                        {isAttempted ? 'View Result / Retake' : 'Start Test'}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handleBuyNow}
-                        className="w-full bg-surface-200 text-gray-500 py-3 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.97] transition-all duration-200"
-                      >
-                        <span className="material-symbols-rounded text-sm">lock</span>
-                        Buy Course to Unlock
-                      </button>
-                    )}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
-
-        {activeTab === 'live' && (
-          <div className="card-premium p-4 animate-fade-in-up">
-            <LiveClassesCalendar studentId={studentId} courseId={id} />
-          </div>
-        )}
-
-        {activeTab === 'live' && !isEnrolled && (
-          <div className="card-premium p-10 text-center mt-3 animate-fade-in-up" style={{ animationDelay: '80ms' }}>
-            <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
-              <span className="material-symbols-rounded text-3xl text-gray-300">lock</span>
-            </div>
-            <p className="text-gray-500 font-medium text-sm">Enroll to access live classes</p>
-            {isPaidCourse ? (
-              <button onClick={handleBuyNow} className="mt-4 btn-accent px-6 py-2.5 text-sm">Buy Now - ₹{course.price}</button>
-            ) : (
-              <button onClick={handleEnroll} disabled={enrolling} className="mt-4 btn-primary px-6 py-2.5 text-sm disabled:opacity-50">{enrolling ? 'Enrolling...' : 'Enroll Free'}</button>
-            )}
-          </div>
-        )}
-        {!isEnrolled && (
-          <div className="mt-8 mb-24 px-4 sticky bottom-4 z-40">
-            <div className="bg-[#0D1B2A] p-5 rounded-[2.2rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex items-center justify-between border border-white/10 mx-auto max-w-sm animate-fade-in-up">
-              <div className="flex flex-col gap-0.5 ml-1">
-                <span className="text-[9px] font-black text-white/30 uppercase tracking-[0.15em]">ENROLLMENT FEE</span>
-                <div className="flex items-center gap-2.5">
-                  <span className="text-2xl font-[900] text-white tracking-tight">₹{course.price}</span>
-                  {course.mrp && course.mrp > (course.price || 0) && (
-                    <span className="text-xs text-white/20 line-through font-bold">₹{course.mrp}</span>
+                  <p className="text-gray-500 font-medium text-sm">Enroll to access live classes</p>
+                  {isPaidCourse ? (
+                    <button onClick={handleBuyNow} className="mt-4 btn-accent px-6 py-2.5 text-sm">Buy Now - ₹{course.price}</button>
+                  ) : (
+                    <button onClick={handleEnroll} disabled={enrolling} className="mt-4 btn-primary px-6 py-2.5 text-sm disabled:opacity-50">{enrolling ? 'Enrolling...' : 'Enroll Free'}</button>
                   )}
                 </div>
-              </div>
-
-              {isPaidCourse ? (
-                <button
-                  onClick={handleBuyNow}
-                  className="px-8 py-3.5 bg-white text-[#0D1B2A] rounded-2xl text-[10px] font-black uppercase tracking-[0.1em] shadow-xl active:scale-[0.98] transition-all"
-                >
-                  PURCHASE COURSE
-                </button>
-              ) : (
-                <button
-                  onClick={handleEnroll}
-                  disabled={enrolling}
-                  className="px-8 py-3.5 bg-green-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.1em] shadow-xl active:scale-[0.98] transition-all"
-                >
-                  {enrolling ? 'ENROLLING...' : 'ENROLL FREE'}
-                </button>
               )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </main>
 
-      {showVideoPlayer && selectedVideo && (
-        <div className="fixed inset-0 bg-black z-50 flex flex-col animate-fade-in sm:p-4">
-          <div className="flex items-center justify-between p-3 text-white bg-black/40 backdrop-blur-md z-10 border-b border-white/5">
-            <button onClick={closeVideoPlayer} className="flex items-center gap-1.5 active:scale-[0.97] transition-all duration-200">
-              <span className="material-symbols-rounded text-xl">arrow_back</span>
-              <span className="font-bold text-xs uppercase tracking-wider">Back</span>
-            </button>
-            <h3 className="text-[10px] font-black truncate max-w-[140px] opacity-60 uppercase tracking-widest">{selectedVideo.title}</h3>
-            <button
-              onClick={() => { markVideoComplete(selectedVideo.id); closeVideoPlayer(); }}
-              className="px-4 py-1.5 bg-green-600 text-white text-[10px] font-black rounded-lg active:scale-[0.97] transition-all duration-200 shadow-lg border border-green-500/50"
-            >
-              FINISH
-            </button>
-          </div>
-          <div className="flex-1 flex items-center justify-center overflow-hidden bg-black relative">
-            <div className="w-full h-full max-w-none aspect-video bg-black relative flex items-center justify-center">
-              <SecureVideoPlayer
-                src={selectedVideo.youtubeUrl || selectedVideo.videoUrl || ''}
-                title={selectedVideo.title}
-                poster={selectedVideo.thumbnail || getYouTubeThumbnail(selectedVideo.youtubeUrl || selectedVideo.videoUrl || '') || undefined}
-                className="w-full h-full object-contain"
-              />
+
+
+      {!isEnrolled && (
+        <div className="fixed bottom-[72px] left-0 right-0 z-40 max-w-md mx-auto">
+          <div className="glass border-t border-surface-200 shadow-elevated px-4 py-3.5 flex items-center justify-between rounded-t-3xl">
+            <div>
+              {isPaidCourse ? (
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl font-extrabold text-primary-800">₹{course.price}</span>
+                    {course.mrp && course.mrp > (course.price || 0) && (
+                      <span className="text-sm text-gray-400 line-through">₹{course.mrp}</span>
+                    )}
+                  </div>
+                  {course.mrp && course.mrp > (course.price || 0) && (
+                    <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded-lg inline-block mt-0.5">
+                      {Math.round(((course.mrp - (course.price || 0)) / course.mrp) * 100)}% OFF
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <span className="text-lg font-extrabold text-green-600">Free Course</span>
+              )}
             </div>
-          </div>
-          <div className="p-4 py-6 bg-gradient-to-t from-black via-black/90 to-transparent text-white hidden sm:block">
-            <h4 className="font-bold text-lg">{selectedVideo.title}</h4>
-            <p className="text-gray-400 text-sm">{selectedVideo.duration || '00:00'} min • Class Recording</p>
+            {isPaidCourse ? (
+              <button
+                onClick={handleBuyNow}
+                className="btn-accent px-8 py-3 text-sm active:scale-[0.97] transition-all duration-200 flex items-center gap-2"
+              >
+                <span className="material-symbols-rounded text-lg">shopping_cart</span>
+                Buy Now
+              </button>
+            ) : (
+              <button
+                onClick={handleEnroll}
+                disabled={enrolling}
+                className="btn-primary px-8 py-3 text-sm active:scale-[0.97] transition-all duration-200 disabled:opacity-50 flex items-center gap-2"
+              >
+                <span className="material-symbols-rounded text-lg">school</span>
+                {enrolling ? 'Enrolling...' : 'Enroll Free'}
+              </button>
+            )}
           </div>
         </div>
       )}

@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const studentSchema = new mongoose.Schema({
     id: { type: String, unique: true }, // Legacy ID support
     name: { type: String, required: true },
-    email: { type: String },
+    email: { type: String, unique: true, sparse: true },
     phone: { type: String, required: true, unique: true },
     alternateNumber: { type: String, required: false },
     whatsAppNumber: { type: String, required: false },
@@ -19,6 +19,7 @@ const studentSchema = new mongoose.Schema({
     status: { type: String, default: 'active' },
     sessionToken: { type: String },
     sessionCreatedAt: { type: Date },
+    failedAttempts: { type: Number, default: 0 },
 
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }

@@ -32,7 +32,21 @@ const Notifications: React.FC = () => {
         )
         : [];
       setNotifications(studentNotifications);
-      setUnreadCount(studentNotifications.filter(n => !n.isRead).length);
+      
+      // Automatically mark all as read when opening the page
+      const unreadCount = studentNotifications.filter(n => !n.isRead).length;
+      if (unreadCount > 0) {
+        // Mark as read immediately on fetch
+        const unreadIds = studentNotifications.filter(n => !n.isRead);
+        notificationsAPI.updateAll(
+          unreadIds.map(notif => ({ ...notif, isRead: true }))
+        ).then(() => {
+          setUnreadCount(0);
+          setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+        }).catch(err => console.error('Failed to mark all as read:', err));
+      } else {
+        setUnreadCount(0);
+      }
     } catch (error) {
       console.error('Error fetching notifications:', error);
       setNotifications([]);
