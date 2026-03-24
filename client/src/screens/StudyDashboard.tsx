@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import LiveClassesCalendar from '../components/student/LiveClassesCalendar';
 
 const QUIZ_QUESTIONS = [
   {
@@ -272,8 +273,8 @@ const StudyDashboard: React.FC = () => {
             {/* Tabs */}
             <section>
               <div className="flex border-b border-gray-200 mb-4">
-                {['वीडियो (Videos)', 'नोट्स (Notes)', 'टेस्ट (Tests)'].map((tab) => {
-                  const key = tab.toLowerCase().includes('video') ? 'videos' : tab.toLowerCase().includes('note') ? 'notes' : 'tests';
+                {['वीडियो (Videos)', 'नोट्स (Notes)', 'टेस्ट (Tests)', 'लाइव (Live)'].map((tab) => {
+                  const key = tab.toLowerCase().includes('video') ? 'videos' : tab.toLowerCase().includes('note') ? 'notes' : tab.toLowerCase().includes('live') ? 'live' : 'tests';
                   const isActive = activeTab === key;
                   return (
                     <button
@@ -336,8 +337,8 @@ const StudyDashboard: React.FC = () => {
                     </div>
                   )}
 
-                  {videos.filter(v => normalizeId(v.folderId) === currentFolderId).length > 0 ? (
-                    videos.filter(v => normalizeId(v.folderId) === currentFolderId).map((video, idx) => (
+                  {videos.filter(v => normalizeId(v.folderId) === currentFolderId && v.contentType !== 'youtube_zoom' && v.contentType !== 'live_stream').length > 0 ? (
+                    videos.filter(v => normalizeId(v.folderId) === currentFolderId && v.contentType !== 'youtube_zoom' && v.contentType !== 'live_stream').map((video, idx) => (
                       <div key={video._id || idx} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group hover:border-brandBlue transition-all">
                         <div className="p-4 flex gap-4 items-center">
                           <div
@@ -372,12 +373,20 @@ const StudyDashboard: React.FC = () => {
                     ))
                   ) : null}
                   
-                  {videos.filter(v => normalizeId(v.folderId) === currentFolderId).length === 0 && folders.filter(f => normalizeId(f.parentId) === currentFolderId).length === 0 && (
+                  {videos.filter(v => normalizeId(v.folderId) === currentFolderId && v.contentType !== 'youtube_zoom' && v.contentType !== 'live_stream').length === 0 && folders.filter(f => normalizeId(f.parentId) === currentFolderId).length === 0 && (
                     <div className="bg-white p-12 rounded-2xl text-center border-2 border-dashed border-gray-200">
                       <span className="material-symbols-rounded text-gray-200 text-5xl">smart_display</span>
                       <p className="text-sm font-bold text-gray-400 mt-4">No content found in this folder</p>
                     </div>
                   )}
+                </div>
+              )}
+
+              {activeTab === 'live' && (
+                <div className="space-y-4">
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                    <LiveClassesCalendar studentId={student?.id} courseId={id} />
+                  </div>
                 </div>
               )}
 

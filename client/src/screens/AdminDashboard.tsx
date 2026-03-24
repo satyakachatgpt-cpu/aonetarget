@@ -324,7 +324,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         </div>
 
         {/* Navigation Content */}
-        <nav className="flex-1 overflow-y-auto hide-scrollbar py-2 px-3 space-y-0.5">
+        <nav className="flex-1 overflow-y-auto custom-scrollbar py-2 px-3 space-y-0.5">
           {filteredMenuItems.map((item) => (
             <div
               key={item.id}
@@ -419,7 +419,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 lg:p-6 bg-[#fcfcfc] min-h-0">
+        <div className="flex-1 overflow-y-auto p-4 lg:p-6 bg-[#fcfcfc] min-h-0 custom-scrollbar">
           <div className="h-full">
             {renderContent()}
           </div>

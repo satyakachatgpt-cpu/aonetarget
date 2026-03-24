@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { couponsAPI, coursesAPI, categoriesAPI, testSeriesAPI, pdfsAPI } from '../../services/apiClient';
+import { couponsAPI, coursesAPI, categoriesAPI, testSeriesAPI, pdfsAPI, packagesAPI } from '../../services/apiClient';
 import RichTextEditor from '../shared/RichTextEditor';
 
 interface Props {
@@ -11,7 +11,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
     const isEditMode = !!courseData && !courseData.isDuplicate;
     const [activeStep, setActiveStep] = useState(1);
     const [validityTab, setValidityTab] = useState<'set' | 'end' | 'lifetime'>('set');
-    const [isFeatured, setIsFeatured] = useState(false);
+    const [isFeatured, setIsFeatured] = useState(!!courseData?.isFeatured);
     const [showCategories, setShowCategories] = useState(false);
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [validityUnit, setValidityUnit] = useState('Months');
@@ -20,16 +20,16 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
     const [endDay, setEndDay] = useState('');
     const [endMonth, setEndMonth] = useState('');
     const [endYear, setEndYear] = useState('');
-    const [coverImage, setCoverImage] = useState<string | null>(null);
-    const [demoVideo, setDemoVideo] = useState<string | null>(null);
+    const [coverImage, setCoverImage] = useState<string | null>(courseData?.thumbnail || courseData?.imageUrl || null);
+    const [demoVideo, setDemoVideo] = useState<string | null>(courseData?.demoVideo || null);
     const [isUploadingImage, setIsUploadingImage] = useState(false);
     const [isUploadingVideo, setIsUploadingVideo] = useState(false);
-    const [title, setTitle] = useState('');
-    const [price, setPrice] = useState('');
-    const [originalPrice, setOriginalPrice] = useState('');
-    const [gstIncluded, setGstIncluded] = useState(false);
-    const [gstPercentage, setGstPercentage] = useState('');
-    const [description, setDescription] = useState('');
+    const [title, setTitle] = useState(courseData?.name || courseData?.title || '');
+    const [price, setPrice] = useState(courseData?.price?.toString() || '');
+    const [originalPrice, setOriginalPrice] = useState(courseData?.originalPrice?.toString() || '');
+    const [gstIncluded, setGstIncluded] = useState(courseData?.gstIncluded || false);
+    const [gstPercentage, setGstPercentage] = useState(courseData?.gstPercentage?.toString() || '');
+    const [description, setDescription] = useState(courseData?.description || '');
     const [showAdditionalSettings, setShowAdditionalSettings] = useState(false);
     const [coupons, setCoupons] = useState<any[]>([]);
     const [loadingCoupons, setLoadingCoupons] = useState(false);
@@ -163,19 +163,28 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
+            // Show a local object URL immediately as preview
+            const localUrl = URL.createObjectURL(file);
+            setCoverImage(localUrl);
             setIsUploadingImage(true);
             try {
                 const formData = new FormData();
                 formData.append('file', file);
                 const res = await fetch('/api/upload', { method: 'POST', body: formData });
-                if (!res.ok) throw new Error('Upload failed');
+                if (!res.ok) {
+                    const errData = await res.json().catch(() => ({}));
+                    throw new Error(errData.error || `Server error: ${res.status}`);
+                }
                 const data = await res.json();
-                setCoverImage(data.url);
-            } catch (error) {
+                setCoverImage(data.url); // Replace local URL with server URL
+            } catch (error: any) {
                 console.error('Image upload failed:', error);
-                alert('Image upload failed');
+                alert(`Image upload failed: ${error.message || 'Check that the server is running.'}`);
+                setCoverImage(null); // Reset on failure
             } finally {
                 setIsUploadingImage(false);
+                // Reset file input so same file can be re-selected
+                if (imageInputRef.current) imageInputRef.current.value = '';
             }
         }
     };
@@ -338,11 +347,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
             if (isEditMode) {
                 console.log("Updating Course Data:", coursePayload);
                 if (isPackage) {
-                    await fetch(`/api/packages/${courseId}`, {
-                        method: 'PUT',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(coursePayload)
-                    });
+                    await packagesAPI.update(courseId, coursePayload);
                 } else {
                     await coursesAPI.update(courseId, coursePayload);
                 }
@@ -457,6 +462,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                                  {/* Batch Description */}
                                  <div className="space-y-1.5 mb-8">
                                      <RichTextEditor
+                                         key={courseData?._id || courseData?.id || 'new'}
                                          label="Batch Description"
                                          content={description}
                                          onChange={(content) => setDescription(content)}
@@ -469,10 +475,34 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                                     <div className="space-y-1.5">
                                         <label className="text-[13px] font-semibold text-gray-700">Cover Image</label>
                                         <input type="file" ref={imageInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
-                                        <div onClick={() => !isUploadingImage && imageInputRef.current?.click()} className="border border-dashed border-gray-300 rounded-sm p-6 flex flex-col items-center justify-center bg-white hover:bg-gray-50 transition-all cursor-pointer min-h-[140px] relative overflow-hidden shadow-sm">
+                                        <div onClick={() => !isUploadingImage && !coverImage && imageInputRef.current?.click()} className={`border border-dashed border-gray-300 rounded-sm p-6 flex flex-col items-center justify-center bg-white transition-all min-h-[140px] relative overflow-hidden shadow-sm ${coverImage ? '' : 'hover:bg-gray-50 cursor-pointer'}`}>
                                             {isUploadingImage ? (
-                                                <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
-                                            ) : coverImage ? <img src={coverImage} className="absolute inset-0 w-full h-full object-cover" alt="Preview" /> : (
+                                                <div className="flex flex-col items-center gap-2">
+                                                    <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
+                                                    <p className="text-[11px] text-gray-400 font-medium">Uploading...</p>
+                                                </div>
+                                            ) : coverImage ? (
+                                                <>
+                                                    <img
+                                                        src={coverImage}
+                                                        className="absolute inset-0 w-full h-full object-cover"
+                                                        alt="Preview"
+                                                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                                    />
+                                                    <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => { e.stopPropagation(); imageInputRef.current?.click(); }}
+                                                            className="bg-white text-gray-800 text-[11px] font-bold px-3 py-1.5 rounded-sm shadow hover:bg-gray-100 transition-all"
+                                                        >Change</button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => { e.stopPropagation(); setCoverImage(null); }}
+                                                            className="bg-red-500 text-white text-[11px] font-bold px-3 py-1.5 rounded-sm shadow hover:bg-red-600 transition-all"
+                                                        >Remove</button>
+                                                    </div>
+                                                </>
+                                            ) : (
                                                 <>
                                                     <span className="material-symbols-outlined text-gray-300 text-[32px] mb-2">image</span>
                                                     <p className="text-[13px] font-medium text-gray-500">Upload Image</p>
@@ -1054,7 +1084,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                         <div className="border border-gray-200 rounded-sm overflow-hidden bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.02]">
                             <div className="aspect-[16/10] bg-gray-50 flex items-center justify-center relative overflow-hidden group">
                                 {coverImage ? (
-                                    <img src={coverImage} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="Preview" />
+                                    <img src={coverImage} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="Preview" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                                 ) : (
                                     <div className="flex flex-col items-center">
                                         <div className="w-20 h-20 rounded-full border border-dashed border-gray-200 flex items-center justify-center mb-3 bg-white/50">
@@ -1084,6 +1114,15 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                                             <span key={cat} className="text-[10px] text-gray-500 bg-gray-50 px-2 py-0.5 rounded border border-gray-100">{cat}</span>
                                         ))}
                                     </div>
+                                    
+                                    {description && (
+                                        <div className="mt-3 overflow-hidden border-l-2 border-gray-100 pl-3">
+                                            <div 
+                                                className="text-[12px] text-gray-500 max-h-[80px] overflow-y-auto prose prose-sm max-w-none [&_p]:m-0 custom-scrollbar"
+                                                dangerouslySetInnerHTML={{ __html: description }}
+                                            />
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="pt-5 border-t border-gray-100 flex items-center justify-between">
