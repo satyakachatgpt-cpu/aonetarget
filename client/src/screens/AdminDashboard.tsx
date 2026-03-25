@@ -43,7 +43,7 @@ const LiveSessions = lazy(() => import('../components/admin/LiveSessions'));
 const ContentManager = lazy(() => import('../components/admin/ContentManager'));
 const ViewFormatPage = lazy(() => import('../components/admin/ViewFormatPage'));
 
-export type AdminView = 'dashboard' | 'students' | 'buyers' | 'tokens' | 'coupons' | 'store' | 'institute' | 'questions' | 'question-bank' | 'passages' | 'tests' | 'subjective-test' | 'test-series' | 'all-reports' | 'videos' | 'video-series' | 'live-videos' | 'live-sessions' | 'pdfs' | 'packages' | 'messages' | 'blog' | 'settings' | 'banners' | 'courses' | 'course-content' | 'live-class-scheduler' | 'subcourses' | 'subjects' | 'topics' | 'instructions' | 'exam-documents' | 'global-news' | 'quick-links' | 'push-notifications' | 'categories' | 'misc' | 'referrals' | 'chat-support' | 'free-content' | 'demo-content' | 'blocked-users' | 'security-center';
+export type AdminView = 'dashboard' | 'students' | 'buyers' | 'tokens' | 'coupons' | 'store' | 'institute' | 'questions' | 'question-bank' | 'passages' | 'tests' | 'subjective-test' | 'test-series' | 'all-reports' | 'videos' | 'video-series' | 'live-videos' | 'live-sessions' | 'pdfs' | 'packages' | 'messages' | 'blog' | 'settings' | 'banners' | 'courses' | 'course-content' | 'live-class-scheduler' | 'subcourses' | 'subjects' | 'topics' | 'instructions' | 'exam-documents' | 'global-news' | 'quick-links' | 'push-notifications' | 'categories' | 'misc' | 'referrals' | 'chat-support' | 'free-content' | 'blocked-users' | 'security-center';
 
 interface Props {
   setAuth: (val: boolean) => void;
@@ -139,7 +139,6 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
       submenu: [
         { id: 'packages', label: 'Batches', icon: 'category' },
         { id: 'free-content', label: 'Free Content', icon: 'auto_awesome' },
-        { id: 'demo-content', label: 'Demo Content', icon: 'play_lesson' },
         { id: 'quick-links', label: ' Quick Links', icon: 'public' },
         { id: 'pdfs', label: 'E-Books', icon: 'book' }
       ]
@@ -255,7 +254,6 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
           <Route path="pdfs" element={<PDFs {...props} />} />
           <Route path="packages" element={<Packages {...props} onCourseSelect={handleSelectCourseForContent} />} />
           <Route path="free-content" element={<ContentManager mode="free" />} />
-          <Route path="demo-content" element={<ContentManager mode="demo" />} />
           <Route path="chat-support" element={<ChatSupport {...props} />} />
           <Route path="messages" element={<Messages {...props} />} />
           <Route path="blog" element={<Blog {...props} />} />

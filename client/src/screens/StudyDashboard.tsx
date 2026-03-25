@@ -37,10 +37,13 @@ const StudyDashboard: React.FC = () => {
   const [course, setCourse] = useState<any>(null);
   const [student, setStudent] = useState<any>(null);
   const [toastMsg, setToastMsg] = useState('');
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [folders, setFolders] = useState<any[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [folderStack, setFolderStack] = useState<any[]>([]);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadedIds, setDownloadedIds] = useState<Set<string>>(new Set());
+  const [activeSubject, setActiveSubject] = useState('All Subjects');
+  const [subjects, setSubjects] = useState<any[]>([]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -70,14 +73,46 @@ const StudyDashboard: React.FC = () => {
         setNotes(Array.isArray(nRes) ? nRes : []);
         setTests(Array.isArray(tRes) ? tRes : []);
         setFolders(Array.isArray(fRes) ? fRes : []);
+
+        // Fetch user downloads to check what's already offline
+        if (storedStudent) {
+          const s = JSON.parse(storedStudent);
+          const dRes = await fetch(`/api/students/${s.id}/downloads`).then(r => r.json());
+          if (Array.isArray(dRes)) {
+            setDownloadedIds(new Set(dRes.map(d => d.id || d._id)));
+          }
+        }
       } catch (err) {
         console.error('Fetch error:', err);
       } finally {
         setLoading(false);
       }
     };
-    if (id) fetchCourseData();
+    const fetchSubjects = async () => {
+      try {
+        const res = await fetch('/api/subjects');
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          setSubjects([{ id: 'all', name: 'All Subjects' }, ...data]);
+        }
+      } catch (err) {
+        console.error('Failed to fetch subjects:', err);
+      }
+    };
+
+    if (id) {
+      fetchCourseData();
+      fetchSubjects();
+    }
   }, [id]);
+
+  const isFreeContent = course?.price === 0 || course?.isFree === true ||
+    course?.categoryId === 'free-content' ||
+    course?.type === 'free';
+  const isYouTubeUrl = (url: string) => {
+    if (!url) return false;
+    return url.includes('youtube.com') || url.includes('youtu.be') || url.includes('youtube-nocookie.com');
+  };
 
   // Download handler - saves to app's downloads collection AND caches file for offline use
   const handleDownload = async (item: any, type: 'video' | 'pdf' | 'audio') => {
@@ -132,6 +167,7 @@ const StudyDashboard: React.FC = () => {
       });
 
       if (response.ok) {
+        setDownloadedIds(prev => new Set([...prev, item._id || item.id]));
         showToast('Successfully downloaded to app library!');
       } else {
         showToast('Error: Failed to sync metadata.');
@@ -141,6 +177,18 @@ const StudyDashboard: React.FC = () => {
       showToast('Error saving file offline.');
     } finally {
       setDownloadingId(null);
+    }
+  };
+
+  const handleView = (item: any, type: 'video' | 'pdf') => {
+    if (type === 'video') {
+      navigate('/video-player', { state: { video: item, courseTitle: course?.title || course?.name, courseId: id } });
+    } else {
+      if (item.fileUrl || item.url || item.link) {
+        navigate('/pdf-viewer', { state: { pdf: item, title: item.title || item.name } });
+      } else {
+        showToast('Error: No file URL available to view.');
+      }
     }
   };
   const normalizeId = (id: any): string | null => {
@@ -250,17 +298,28 @@ const StudyDashboard: React.FC = () => {
                 </h3>
                 <div
                   className="bg-white rounded-xl shadow-sm p-3 border border-gray-100 flex gap-4 items-center cursor-pointer active:scale-[0.98] transition-all"
-                  onClick={() => navigate('/video-player', { state: { video: videos[0], courseTitle: course?.title || course?.name } })}
+                  onClick={() => {
+                    const firstVideo = videos[0];
+                    if (isFreeContent || downloadedIds.has(firstVideo._id || firstVideo.id) || isYouTubeUrl(firstVideo.videoUrl || firstVideo.url || firstVideo.youtubeUrl)) {
+                      handleView(firstVideo, 'video');
+                    } else {
+                      showToast('Please download the lesson to start watching.');
+                    }
+                  }}
                 >
                   <div className="relative w-24 h-16 bg-gray-200 rounded-lg overflow-hidden shrink-0">
                     <img src={`https://img.youtube.com/vi/${videos[0].youtubeUrl?.includes('v=') ? videos[0].youtubeUrl.split('v=')[1].split('&')[0] : (videos[0].youtubeUrl?.includes('be/') ? videos[0].youtubeUrl.split('be/')[1].split('?')[0] : '')}/mqdefault.jpg`} className="w-full h-full object-cover" alt="Thumb" />
                     <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                      <span className="material-symbols-rounded text-white">play_arrow</span>
+                      <span className="material-symbols-rounded text-white">
+                        {isFreeContent || downloadedIds.has(videos[0]._id || videos[0].id) ? 'play_arrow' : 'download'}
+                      </span>
                     </div>
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="font-bold text-xs truncate">{videos[0].title}</h4>
-                    <p className="text-[10px] text-gray-400 mt-1">{videos[0].duration} • Lesson 1</p>
+                    <p className="text-[10px] text-gray-400 mt-1">
+                      {isFreeContent || downloadedIds.has(videos[0]._id || videos[0].id) ? 'Resume Lesson' : 'Download to Resume'}
+                    </p>
                     <div className="w-full h-1 bg-gray-100 rounded-full mt-2 overflow-hidden">
                       <div className="bg-brandBlue h-full w-0"></div>
                     </div>
@@ -286,6 +345,24 @@ const StudyDashboard: React.FC = () => {
                   );
                 })}
               </div>
+
+              {/* Subject Filter Pills */}
+              {subjects.length > 1 && (
+                <div className="flex gap-2 overflow-x-auto hide-scrollbar -mx-4 px-4 mb-6">
+                  {subjects.map((sub, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setActiveSubject(sub.name || sub)}
+                      className={`flex-shrink-0 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${activeSubject === (sub.name || sub)
+                        ? 'bg-brandBlue text-white shadow-md active:scale-95'
+                        : 'bg-white text-gray-400 border border-gray-100 active:scale-95'
+                        }`}
+                    >
+                      {sub.name || sub}
+                    </button>
+                  ))}
+                </div>
+              )}
 
               {/* Breadcrumb / Back Navigation */}
               {currentFolderId && (
@@ -336,42 +413,47 @@ const StudyDashboard: React.FC = () => {
                     </div>
                   )}
 
-                  {videos.filter(v => normalizeId(v.folderId) === currentFolderId).length > 0 ? (
-                    videos.filter(v => normalizeId(v.folderId) === currentFolderId).map((video, idx) => (
+                  {videos
+                    .filter(v => normalizeId(v.folderId) === currentFolderId && (activeSubject === 'All Subjects' || v.subject === activeSubject))
+                    .length > 0 ? (
+                    videos
+                      .filter(v => normalizeId(v.folderId) === currentFolderId && (activeSubject === 'All Subjects' || v.subject === activeSubject))
+                      .map((video, idx) => (
                       <div key={video._id || idx} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group hover:border-brandBlue transition-all">
                         <div className="p-4 flex gap-4 items-center">
-                          <div
-                            className="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center text-gray-400 group-hover:bg-brandBlue group-hover:text-white transition-all cursor-pointer flex-shrink-0"
-                            onClick={() => navigate('/video-player', { state: { video: video, courseTitle: course?.title || course?.name } })}
-                          >
-                            <span className="material-symbols-rounded font-bold">{video.isLocked ? 'lock' : 'play_arrow'}</span>
-                          </div>
-                          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate('/video-player', { state: { video: video, courseTitle: course?.title || course?.name } })}>
+                          <div className="flex-1 min-w-0">
                             <h4 className="font-bold text-sm truncate">{video.title}</h4>
                             <div className="flex gap-2 mt-1">
                               <span className="text-[8px] bg-blue-50 text-brandBlue px-1.5 py-0.5 rounded font-bold uppercase">Video</span>
                               <span className="text-[8px] text-gray-400">{video.duration}</span>
                             </div>
                           </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDownload(video, 'video');
-                            }}
-                            className="p-2 text-gray-400 group-hover:text-brandBlue group-hover:bg-blue-50 rounded-lg transition-all flex-shrink-0"
-                            title="Add to Downloads"
-                          >
-                            {downloadingId === (video._id || video.id) ? (
-                              <span className="material-symbols-rounded animate-spin">progress_activity</span>
-                            ) : (
-                              <span className="material-symbols-rounded">download</span>
-                            )}
-                          </button>
+                          {isFreeContent || downloadedIds.has(video._id || video.id) || isYouTubeUrl(video.videoUrl || video.url || video.youtubeUrl) ? (
+                            <button
+                              onClick={() => handleView(video, 'video')}
+                              className="bg-brandBlue text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center gap-2"
+                            >
+                              <span className="material-symbols-rounded text-sm">play_arrow</span>
+                              Watch
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleDownload(video, 'video')}
+                              className="p-2 text-gray-400 group-hover:text-brandBlue group-hover:bg-blue-50 rounded-lg transition-all flex-shrink-0"
+                              title="Add to Downloads"
+                            >
+                              {downloadingId === (video._id || video.id) ? (
+                                <span className="material-symbols-rounded animate-spin">progress_activity</span>
+                              ) : (
+                                <span className="material-symbols-rounded">download</span>
+                              )}
+                            </button>
+                          )}
                         </div>
                       </div>
                     ))
                   ) : null}
-                  
+
                   {videos.filter(v => normalizeId(v.folderId) === currentFolderId).length === 0 && folders.filter(f => normalizeId(f.parentId) === currentFolderId).length === 0 && (
                     <div className="bg-white p-12 rounded-2xl text-center border-2 border-dashed border-gray-200">
                       <span className="material-symbols-rounded text-gray-200 text-5xl">smart_display</span>
@@ -401,8 +483,12 @@ const StudyDashboard: React.FC = () => {
                     </div>
                   ))}
 
-                  {notes.filter(n => normalizeId(n.folderId) === currentFolderId).length > 0 ? (
-                    notes.filter(n => normalizeId(n.folderId) === currentFolderId).map((note, idx) => (
+                  {notes
+                    .filter(n => normalizeId(n.folderId) === currentFolderId && (activeSubject === 'All Subjects' || n.subject === activeSubject))
+                    .length > 0 ? (
+                    notes
+                      .filter(n => normalizeId(n.folderId) === currentFolderId && (activeSubject === 'All Subjects' || n.subject === activeSubject))
+                      .map((note, idx) => (
                       <div key={note._id || idx} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex gap-4 items-center group hover:border-brandBlue transition-all">
                         <div className="w-10 h-10 bg-brandBlue/10 rounded-full flex items-center justify-center text-brandBlue flex-shrink-0">
                           <span className="material-symbols-rounded">description</span>
@@ -411,17 +497,26 @@ const StudyDashboard: React.FC = () => {
                           <h4 className="font-bold text-sm">{note.title}</h4>
                           <p className="text-[10px] text-gray-400 mt-0.5">PDF Document</p>
                         </div>
-                        <button
-                          onClick={() => handleDownload(note, 'pdf')}
-                          className="p-2 text-gray-400 group-hover:text-brandBlue group-hover:bg-blue-50 rounded-lg transition-all flex-shrink-0"
-                          title="Add to Downloads"
-                        >
-                          {downloadingId === (note._id || note.id) ? (
-                            <span className="material-symbols-rounded animate-spin">progress_activity</span>
-                          ) : (
-                            <span className="material-symbols-rounded">download</span>
-                          )}
-                        </button>
+                        {isFreeContent || downloadedIds.has(note._id || note.id) ? (
+                          <button
+                            onClick={() => handleView(note, 'pdf')}
+                            className="bg-brandBlue text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+                          >
+                            View
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => handleDownload(note, 'pdf')}
+                            className="p-2 text-gray-400 group-hover:text-brandBlue group-hover:bg-blue-50 rounded-lg transition-all flex-shrink-0"
+                            title="Add to Downloads"
+                          >
+                            {downloadingId === (note._id || note.id) ? (
+                              <span className="material-symbols-rounded animate-spin">progress_activity</span>
+                            ) : (
+                              <span className="material-symbols-rounded">download</span>
+                            )}
+                          </button>
+                        )}
                       </div>
                     ))
                   ) : null}
@@ -455,9 +550,13 @@ const StudyDashboard: React.FC = () => {
                     </div>
                   ))}
 
-                  {tests.filter(t => normalizeId(t.folderId) === currentFolderId).length > 0 ? (
+                  {tests
+                    .filter(t => normalizeId(t.folderId) === currentFolderId && (activeSubject === 'All Subjects' || t.subject === activeSubject))
+                    .length > 0 ? (
                     <div className="grid grid-cols-1 gap-4">
-                      {tests.filter(t => normalizeId(t.folderId) === currentFolderId).map((test, idx) => (
+                      {tests
+                        .filter(t => normalizeId(t.folderId) === currentFolderId && (activeSubject === 'All Subjects' || t.subject === activeSubject))
+                        .map((test, idx) => (
                         <div key={test._id || idx} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex gap-4 items-center">
                           <div className="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center text-green-600">
                             <span className="material-symbols-rounded">rule</span>
@@ -477,134 +576,6 @@ const StudyDashboard: React.FC = () => {
                     </div>
                   )}
 
-                  {/* Legacy Quiz for Demo purpose if no tests found */}
-                  {tests.length === 0 && !quizCompleted && (
-                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 animate-fade-in mt-12">
-                      {/* Quiz Progress */}
-                      <div className="flex justify-between items-center mb-6">
-                        <span className="text-[10px] font-black text-brandBlue uppercase tracking-widest">
-                          Demo Quiz: Q{currentQuestionIndex + 1} of {QUIZ_QUESTIONS.length}
-                        </span>
-                        <span className="text-[10px] font-bold text-gray-400 bg-gray-50 px-2 py-1 rounded">
-                          Score: {score}
-                        </span>
-                      </div>
-
-                      <div className="w-full h-1.5 bg-gray-100 rounded-full mb-8 overflow-hidden">
-                        <div
-                          className="bg-brandBlue h-full transition-all duration-300"
-                          style={{ width: `${((currentQuestionIndex + 1) / QUIZ_QUESTIONS.length) * 100}%` }}
-                        ></div>
-                      </div>
-
-                      {/* Question */}
-                      <h3 className="text-base font-bold text-[#1E293B] leading-relaxed mb-8">
-                        {QUIZ_QUESTIONS[currentQuestionIndex].question}
-                      </h3>
-
-                      {/* Options */}
-                      <div className="space-y-3 mb-8">
-                        {QUIZ_QUESTIONS[currentQuestionIndex].options.map((option, idx) => {
-                          let optionStyles = "border-gray-100 bg-white text-gray-700";
-                          let icon = "";
-
-                          if (selectedOption === idx) {
-                            optionStyles = "border-[#1E293B] bg-[#1E293B]/5 text-[#1E293B]";
-                          }
-
-                          if (isAnswered) {
-                            if (idx === QUIZ_QUESTIONS[currentQuestionIndex].correct) {
-                              optionStyles = "border-green-500 bg-green-50 text-green-700";
-                              icon = "check_circle";
-                            } else if (selectedOption === idx) {
-                              optionStyles = "border-red-500 bg-red-50 text-red-700";
-                              icon = "cancel";
-                            } else {
-                              optionStyles = "border-gray-100 bg-white text-gray-400 opacity-50";
-                            }
-                          }
-
-                          return (
-                            <button
-                              key={idx}
-                              onClick={() => handleOptionSelect(idx)}
-                              disabled={isAnswered}
-                              className={`w-full p-4 rounded-xl border-2 text-left transition-all flex justify-between items-center group ${optionStyles}`}
-                            >
-                              <div className="flex items-center gap-3">
-                                <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] font-black ${selectedOption === idx ? 'border-[#1E293B] bg-[#1E293B] text-white' : 'border-gray-200 text-gray-400'}`}>
-                                  {String.fromCharCode(65 + idx)}
-                                </span>
-                                <span className="text-xs font-bold">{option}</span>
-                              </div>
-                              {icon && <span className={`material-symbols-rounded text-lg ${idx === QUIZ_QUESTIONS[currentQuestionIndex].correct ? 'text-green-500' : 'text-red-500'}`}>{icon}</span>}
-                            </button>
-                          );
-                        })}
-                      </div>
-
-                      {/* Feedback Explanation */}
-                      {isAnswered && (
-                        <div className="mb-8 p-4 bg-gray-50 rounded-xl border border-gray-100 animate-fade-in">
-                          <p className="text-[10px] font-black text-gray-400 uppercase mb-1 tracking-widest">Explanation:</p>
-                          <p className="text-xs text-gray-600 leading-relaxed">
-                            {QUIZ_QUESTIONS[currentQuestionIndex].explanation}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Actions */}
-                      {!isAnswered ? (
-                        <button
-                          onClick={handleCheckAnswer}
-                          disabled={selectedOption === null}
-                          className={`w-full py-4 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg transition-all ${selectedOption === null ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-[#1E293B] text-white hover:bg-[#1E293B]/90'}`}
-                        >
-                          Check Answer
-                        </button>
-                      ) : (
-                        <button
-                          onClick={handleNextQuestion}
-                          className="w-full bg-gradient-to-r from-brandBlue to-[#1A237E] text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center justify-center gap-2 hover:opacity-90 transition-all"
-                        >
-                          {currentQuestionIndex < QUIZ_QUESTIONS.length - 1 ? 'Next Question' : 'Finish Quiz'}
-                          <span className="material-symbols-rounded text-base">arrow_forward</span>
-                        </button>
-                      )
-                      }
-                    </div>
-                  )}
-
-                  {tests.length === 0 && quizCompleted && (
-                    <div className="bg-white rounded-2xl shadow-xl border border-white p-8 text-center animate-fade-in mt-12">
-                      <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                        <span className="material-symbols-rounded text-green-500 text-5xl">military_tech</span>
-                      </div>
-                      <h3 className="text-xl font-black text-[#1E293B] mb-2 uppercase">Quiz Completed!</h3>
-                      <p className="text-sm text-gray-400 mb-8">Excellent effort!</p>
-
-                      <div className="bg-gray-50 rounded-2xl p-6 mb-8 flex justify-around">
-                        <div>
-                          <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest block mb-1">Score</span>
-                          <span className="text-2xl font-black text-[#1E293B]">{score}/{QUIZ_QUESTIONS.length}</span>
-                        </div>
-                        <div className="w-px bg-gray-200"></div>
-                        <div>
-                          <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest block mb-1">Accuracy</span>
-                          <span className="text-2xl font-black text-green-600">{Math.round((score / QUIZ_QUESTIONS.length) * 100)}%</span>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        <button
-                          onClick={resetQuiz}
-                          className="w-full bg-[#1E293B] text-white py-4 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg"
-                        >
-                          Retry Quiz
-                        </button>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
             </section>
@@ -616,6 +587,8 @@ const StudyDashboard: React.FC = () => {
       <button className="fixed bottom-24 right-4 h-14 w-14 bg-brandBlue text-white rounded-full shadow-2xl flex items-center justify-center z-40">
         <span className="material-symbols-rounded">quiz</span>
       </button>
+
+      {/* No dynamic modals here anymore, uses next-page navigation */}
 
       {/* Toast Notification */}
       {toastMsg && (

@@ -4,11 +4,13 @@ import { Toaster } from 'sonner';
 import BottomNav from './components/BottomNav';
 import SplashScreen from './components/SplashScreen';
 import { useAuthStore } from './store/authStore';
+import FreeContent from './screens/FreeContent';
+import FreeVideosList from './screens/FreeVideosList';
+import StudyDashboard from './screens/StudyDashboard';
 
 const Home = lazy(() => import('./screens/Home'));
 const CourseDetails = lazy(() => import('./screens/CourseDetails'));
 const Checkout = lazy(() => import('./screens/Checkout'));
-const StudyDashboard = lazy(() => import('./screens/StudyDashboard'));
 const Success = lazy(() => import('./screens/Success'));
 const VideoPlayer = lazy(() => import('./screens/VideoPlayer'));
 const AdminDashboard = lazy(() => import('./screens/AdminDashboard'));
@@ -34,14 +36,13 @@ const Settings = lazy(() => import('./screens/Settings'));
 const ReferEarn = lazy(() => import('./screens/ReferEarn'));
 const PurchaseSuccess = lazy(() => import('./screens/PurchaseSuccess'));
 const ContentTypeDetail = lazy(() => import('./screens/ContentTypeDetail'));
-const DemoContent = lazy(() => import('./screens/DemoContent'));
-const FreeContent = lazy(() => import('./screens/FreeContent'));
 const NewsArticle = lazy(() => import('./screens/NewsArticle'));
 const AllNews = lazy(() => import('./screens/AllNews'));
 const Batches = lazy(() => import('./screens/Batches'));
 const TermsOfService = lazy(() => import('./screens/TermsOfService'));
 const PrivacyPolicy = lazy(() => import('./screens/PrivacyPolicy'));
 const RefundPolicy = lazy(() => import('./screens/RefundPolicy'));
+const PDFViewerScreen = lazy(() => import('./screens/PDFViewerScreen'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[60vh] w-full animate-in fade-in duration-300">
@@ -153,13 +154,14 @@ const App: React.FC = () => {
                     <Route path="/refund" element={<RefundPolicy />} />
                     <Route path="/explore/:categoryId/:subId" element={<SubCategoryDetail />} />
                     <Route path="/content/:contentType" element={<ContentTypeDetail />} />
-                    <Route path="/demo" element={<DemoContent />} />
                     <Route path="/free-content" element={<FreeContent />} />
+                    <Route path="/free-videos" element={<FreeVideosList />} />
                     <Route path="/course/:id" element={<CourseDetails />} />
                     <Route path="/checkout/:id" element={<Checkout />} />
                     <Route path="/study/:id" element={<StudyDashboard />} />
-                    <Route path="/video-player" element={<VideoPlayer />} />
-                    <Route path="/success" element={<Success />} />
+                     <Route path="/video-player" element={<VideoPlayer />} />
+                     <Route path="/pdf-viewer" element={<PDFViewerScreen />} />
+                     <Route path="/success" element={<Success />} />
                     <Route path="/purchase-success" element={<PurchaseSuccess />} />
 
                     <Route path="/student-dashboard" element={

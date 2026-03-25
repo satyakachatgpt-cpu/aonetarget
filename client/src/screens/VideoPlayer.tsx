@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import SecureVideoPlayer from '../components/SecureVideoPlayer';
 
 const VideoPlayer: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { video, courseTitle } = location.state || {};
+  const { video, courseTitle, courseId } = location.state || {};
   const [isLandscape, setIsLandscape] = useState(false);
 
   useEffect(() => {
@@ -33,9 +34,7 @@ const VideoPlayer: React.FC = () => {
 
   if (!video) return null;
 
-  const videoId = video.youtubeUrl?.includes('v=') 
-    ? video.youtubeUrl.split('v=')[1].split('&')[0] 
-    : (video.youtubeUrl?.includes('be/') ? video.youtubeUrl.split('be/')[1].split('?')[0] : '');
+  const videoUrl = video.videoUrl || video.url || video.link || video.youtubeUrl || '';
 
   const handleMarkDone = () => {
     // We could call an API here if needed, but for now just navigate back
@@ -73,13 +72,16 @@ const VideoPlayer: React.FC = () => {
         )}
         
         <div className={`w-full ${isLandscape ? 'h-full' : 'aspect-video shadow-[0_0_100px_rgba(0,0,0,0.5)]'}`}>
-          <iframe
-            src={`https://www.youtube.com/embed/${videoId}?autoplay=1&modestbranding=1&rel=0&playsinline=1&controls=1&showinfo=0`}
+          <SecureVideoPlayer
+            src={videoUrl}
+            title={video.title}
             className="w-full h-full"
-            frameBorder="0"
-            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-            allowFullScreen
-          ></iframe>
+            videoId={video._id || video.id || video.videoId || videoUrl}
+            courseId={courseId || video.courseId || ''}
+            courseTitle={courseTitle || ''}
+            thumbnail={video.thumbnail || video.thumbnailUrl || ''}
+            duration={video.duration || ''}
+          />
         </div>
       </div>
 

@@ -453,7 +453,6 @@ const Home: React.FC = () => {
               { label: 'All Courses', icon: 'school', color: 'text-indigo-600', bg: 'bg-indigo-50', path: '/explore' },
               { label: 'Live Classes', icon: 'sensors', color: 'text-rose-600', bg: 'bg-rose-50', path: '/live-classes' },
               { label: 'Test', icon: 'quiz', color: 'text-amber-600', bg: 'bg-amber-50', path: '/mock-tests' },
-              { label: 'Demo Content', icon: 'play_lesson', color: 'text-purple-600', bg: 'bg-purple-50', path: '/demo' },
               { label: 'Free Content', icon: 'auto_awesome', color: 'text-emerald-600', bg: 'bg-emerald-50', path: '/free-content' },
             ];
             // Duplicate chips for seamless infinite loop

@@ -87,7 +87,7 @@ const CourseDetails: React.FC = () => {
   const handleVideoClick = (video: Video) => {
     const canPlay = isEnrolled || video.isFree;
     if (canPlay && (video.youtubeUrl || video.videoUrl)) {
-      navigate('/video-player', { state: { video, courseTitle: course?.title || course?.name } });
+      navigate('/video-player', { state: { video, courseTitle: course?.title || course?.name, courseId: id } });
     }
   };
 

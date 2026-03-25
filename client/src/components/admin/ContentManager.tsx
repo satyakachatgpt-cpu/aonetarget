@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { videosAPI, pdfsAPI, testsAPI, coursesAPI, liveVideosAPI, subjectsAPI } from '../../services/apiClient';
+import { videosAPI, pdfsAPI, testsAPI, coursesAPI, liveVideosAPI, subjectsAPI, uploadAPI } from '../../services/apiClient';
 import { VideoDrawer, UploadDrawer } from './FeatureDrawers';
 import {
     RightSideDrawer,
@@ -103,9 +103,11 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
             if (Array.isArray(data)) {
                 // Legacy bulk upload (just files)
                 for (const file of data) {
+                    const uploadRes = await uploadAPI.upload(file);
                     await videosAPI.create({
                         title: file.name,
-                        link: 'https://youtube.com',
+                        url: uploadRes.url,
+                        link: uploadRes.url,
                         isFree: mode === 'free' || mode === 'demo',
                         isDemo: mode === 'demo',
                         status: mode === 'free' || mode === 'demo' ? 'Free' : 'Paid',
@@ -115,9 +117,11 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
             } else if (data.files && Array.isArray(data.files)) {
                 // Bulk upload with metadata from drawer
                 for (const file of data.files) {
+                    const uploadRes = await uploadAPI.upload(file);
                     await videosAPI.create({
                         title: file.name,
-                        link: 'https://youtube.com',
+                        url: uploadRes.url,
+                        link: uploadRes.url,
                         isFree: mode === 'free' || mode === 'demo' || data.status === 'Free',
                         isDemo: mode === 'demo' || data.isDemo,
                         status: data.status || (mode === 'free' || mode === 'demo' ? 'Free' : 'Paid'),
@@ -127,8 +131,15 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
                 }
             } else {
                 // Single video with metadata
+                let finalUrl = data.url || data.link;
+                if (data.file && data.file instanceof File) {
+                    const uploadRes = await uploadAPI.upload(data.file);
+                    finalUrl = uploadRes.url;
+                }
                 await videosAPI.create({
                     ...data,
+                    url: finalUrl,
+                    link: finalUrl,
                     isFree: mode === 'free' || mode === 'demo' || data.status === 'Free',
                     isDemo: mode === 'demo' || data.isDemo,
                     status: data.status || (mode === 'free' || mode === 'demo' ? 'Free' : 'Paid'),
@@ -140,6 +151,7 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
             setIsVideoDrawerOpen(false);
         } catch (error) {
             console.error(error);
+            alert('Video upload failed');
         }
     };
 
@@ -147,19 +159,30 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
         try {
             if (Array.isArray(data)) {
                 for (const file of data) {
+                    const uploadRes = await uploadAPI.upload(file);
                     await pdfsAPI.create({
                         title: file.name,
-                        fileUrl: 'https://placeholder.com',
+                        fileUrl: uploadRes.url,
                         isFree: mode === 'free',
                         isDemo: mode === 'demo',
                         courseId: courseFilter !== 'all' ? courseFilter : ''
                     });
                 }
+            } else if (data.file && data.file instanceof File) {
+                const uploadRes = await uploadAPI.upload(data.file);
+                await pdfsAPI.create({
+                    ...data,
+                    fileUrl: uploadRes.url,
+                    isFree: mode === 'free' || data.isFree,
+                    isDemo: mode === 'demo' || data.isDemo,
+                    courseId: data.courseId || (courseFilter !== 'all' ? courseFilter : '')
+                });
             }
             fetchData();
             setIsPDFDrawerOpen(false);
         } catch (error) {
             console.error(error);
+            alert('PDF upload failed');
         }
     };
 
@@ -341,6 +364,13 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
         if (!editingItem) return;
         setActionLoading(editingItem.id);
         try {
+            let finalUrl = editLink;
+
+            if (selectedEditFile) {
+                const uploadRes = await uploadAPI.upload(selectedEditFile);
+                finalUrl = uploadRes.url;
+            }
+
             const updated = {
                 ...editingItem.raw,
                 title: editTitle,
@@ -353,16 +383,8 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
                 pages: editDuration // PDF uses pages, others use duration
             };
 
-            if (selectedEditFile) {
-                // In a real app, you'd upload the file here and get a URL
-                const mockUrl = `https://aonetarget.storage/${selectedEditFile.name}`;
-                if (editingItem.type === 'PDF') updated.fileUrl = mockUrl;
-                else updated.url = mockUrl;
-            } else {
-                // If no file selected, use the manual link
-                if (editingItem.type === 'PDF') updated.fileUrl = editLink;
-                else updated.url = editLink;
-            }
+            if (editingItem.type === 'PDF') updated.fileUrl = finalUrl;
+            else updated.url = finalUrl;
 
             if (editingItem.type === 'PDF') await pdfsAPI.update(editingItem.id, updated);
             else if (editingItem.type === 'Test') await testsAPI.update(editingItem.id, updated);
@@ -378,7 +400,9 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
                 raw: updated
             } : c));
             setEditingItem(null);
+            setSelectedEditFile(null);
         } catch (error) {
+            console.error(error);
             alert('Failed to update item. Please try again.');
         } finally {
             setActionLoading(null);

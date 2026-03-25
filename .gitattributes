@@ -1,0 +1,26 @@
+# Auto detect text files and normalize line endings
+* text=auto
+
+# Force CRLF for all source code files on Windows
+*.tsx text eol=crlf
+*.ts text eol=crlf
+*.js text eol=crlf
+*.jsx text eol=crlf
+*.css text eol=crlf
+*.html text eol=crlf
+*.json text eol=crlf
+*.md text eol=crlf
+*.env text eol=crlf
+
+# Binary files - no line ending conversion
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.svg binary
+*.pdf binary
+*.apk binary
+*.mp4 binary
+*.webm binary

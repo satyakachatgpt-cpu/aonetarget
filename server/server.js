@@ -252,6 +252,56 @@ app.get('/api/ping', (req, res) => {
   res.json({ message: 'pong', timestamp: new Date(), version: '1.0.3' });
 });
 
+// === Watch History Routes ===
+app.get('/api/students/:studentId/watch-history', async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const history = await db.collection('watchHistory')
+      .find({ studentId })
+      .sort({ watchedAt: -1 })
+      .limit(100)
+      .toArray();
+    res.json(history);
+  } catch (error) {
+    console.error('Fetch watch history error:', error);
+    res.status(500).json({ error: 'Failed to fetch watch history' });
+  }
+});
+
+app.post('/api/students/:studentId/watch-history', async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const { videoId, title, courseId, courseTitle, thumbnail, duration, watchProgress } = req.body;
+
+    if (!videoId) return res.status(400).json({ error: 'videoId is required' });
+
+    const now = new Date();
+    await db.collection('watchHistory').updateOne(
+      { studentId, videoId },
+      {
+        $set: {
+          studentId,
+          videoId,
+          title: title || '',
+          courseId: courseId || '',
+          courseTitle: courseTitle || '',
+          thumbnail: thumbnail || '',
+          duration: duration || '',
+          watchProgress: watchProgress || 0,
+          watchedAt: now
+        }
+      },
+      { upsert: true }
+    );
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Update watch history error:', error);
+    res.status(500).json({ error: 'Failed to update watch history' });
+  }
+});
+// === End Watch History Routes ===
+
 // Routes for Folders
 app.get('/api/courses/:courseId/folders', async (req, res) => {
   try {
@@ -934,40 +984,7 @@ app.put('/api/tests/:id', async (req, res) => {
   }
 });
 
-// Routes for Demo Videos
-app.get('/api/videos/demos', async (req, res) => {
-  try {
-    const query = { $or: [{ isDemo: true }, { isDemo: "true" }, { isDemo: 1 }] };
-    const demos = await db.collection('videos').find(query).sort({ createdAt: -1 }).toArray();
-    res.json(demos);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch demo videos' });
-  }
-});
-
-app.get('/api/demo-content', async (req, res) => {
-  try {
-    const query = { $or: [{ isDemo: true }, { isDemo: "true" }, { isDemo: 1 }] };
-    const [videos, pdfs, tests, live] = await Promise.all([
-      db.collection('videos').find(query).toArray(),
-      db.collection('pdfs').find(query).toArray(),
-      db.collection('tests').find(query).toArray(),
-      db.collection('liveVideos').find(query).toArray()
-    ]);
-
-    // Add type field for frontend
-    const demos = [
-      ...videos.map(v => ({ ...v, type: 'video' })),
-      ...pdfs.map(p => ({ ...p, type: 'pdf' })),
-      ...tests.map(t => ({ ...t, type: 'test' })),
-      ...live.map(l => ({ ...l, type: 'live' }))
-    ].sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
-
-    res.json(demos);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch demo content' });
-  }
-});
+// Removed Demo Content routes
 
 // Routes for Course Notes (uses pdfs collection - consistent with admin uploads)
 app.get('/api/courses/:id/notes', async (req, res) => {

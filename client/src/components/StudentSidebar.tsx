@@ -51,7 +51,6 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ isOpen, onClose, studen
     { icon: 'history', label: 'Watch History', path: '/watch-history' },
     { icon: 'redeem', label: 'Refer & Earn', path: '/refer-earn' },
     { icon: 'download', label: 'Downloads', path: '/downloads' },
-    { icon: 'play_lesson', label: 'Demo Lessons', path: '/demo' },
     { icon: 'auto_awesome', label: 'Free Content', path: '/free-content' },
   ];
 

@@ -7,6 +7,12 @@ interface SecureVideoPlayerProps {
   poster?: string;
   onEnded?: () => void;
   className?: string;
+  // Watch History tracking props
+  videoId?: string;
+  courseId?: string;
+  courseTitle?: string;
+  thumbnail?: string;
+  duration?: string;
 }
 
 const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
@@ -14,13 +20,19 @@ const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
   title,
   poster,
   onEnded,
-  className = ''
+  className = '',
+  videoId,
+  courseId,
+  courseTitle,
+  thumbnail,
+  duration,
 }) => {
   const student = useAuthStore(s => s.student);
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [watermarkText, setWatermarkText] = useState('');
+  const progressSavedRef = useRef(0); // last saved progress %
 
   const updateWatermark = useCallback(() => {
     if (!student) return;
@@ -58,14 +70,75 @@ const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
     }
   }, []);
 
-  const isYouTube = src?.includes('youtube.com') || src?.includes('youtu.be');
+  // Save watch history progress
+  const saveProgress = useCallback((progressPercent: number) => {
+    if (!student || !videoId) return;
+    const studentId = student.id || (student as any)._id;
+    if (!studentId) return;
+
+    fetch(`/api/students/${studentId}/watch-history`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        videoId,
+        title: title || '',
+        courseId: courseId || '',
+        courseTitle: courseTitle || '',
+        thumbnail: thumbnail || '',
+        duration: duration || '',
+        watchProgress: progressPercent,
+      }),
+    }).catch(() => { /* silent fail - don't interrupt playback */ });
+  }, [student, videoId, title, courseId, courseTitle, thumbnail, duration]);
+
+  // Track video progress every 10% increment
+  const handleTimeUpdate = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || !video.duration) return;
+    const pct = Math.round((video.currentTime / video.duration) * 100);
+    // Save every 10% increment
+    if (pct - progressSavedRef.current >= 10) {
+      progressSavedRef.current = pct;
+      saveProgress(pct);
+    }
+  }, [saveProgress]);
+
+  // Save on video end (100%)
+  const handleEnded = useCallback(() => {
+    setIsPlaying(false);
+    saveProgress(100);
+    onEnded?.();
+  }, [saveProgress, onEnded]);
+
+  const isYouTube = !!src && (src.includes('youtube.com') || src.includes('youtu.be') || src.includes('youtube-nocookie.com'));
+
+  // Save initial entry when video starts playing (for YouTube too)
+  const handlePlay = useCallback(() => {
+    setIsPlaying(true);
+    if (progressSavedRef.current === 0) {
+      saveProgress(0);
+    }
+  }, [saveProgress]);
 
   if (isYouTube) {
-    let embedUrl = src;
-    const match = src.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/))([^?&#]+)/);
-    if (match) {
-      embedUrl = `https://www.youtube.com/embed/${match[1]}?autoplay=0&modestbranding=1&rel=0&showinfo=0`;
-    }
+    const getYouTubeId = (url: string) => {
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/|live\/)([^#&?]*).*/;
+      const match = url.match(regExp);
+      return (match && match[2].length === 11) ? match[2] : null;
+    };
+
+    const videoId_ = getYouTubeId(src);
+    const embedUrl = videoId_ 
+      ? `https://www.youtube.com/embed/${videoId_}?autoplay=1&modestbranding=1&rel=0&showinfo=0&mute=0`
+      : src;
+
+    // Save history entry for YouTube when component mounts (can't track time in iframe)
+    useEffect(() => {
+      if (student && videoId) {
+        saveProgress(0);
+      }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     return (
       <div ref={containerRef} className={`relative ${className}`} style={{ position: 'relative' }}>
@@ -98,15 +171,17 @@ const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
         ref={videoRef}
         src={src}
         poster={poster}
-        className="w-full aspect-video rounded-lg bg-black"
+        className="w-full aspect-video rounded-lg bg-black cursor-pointer"
         controls
+        autoPlay
         controlsList="nodownload noplaybackrate"
         disablePictureInPicture
         playsInline
-        onPlay={() => setIsPlaying(true)}
+        onPlay={handlePlay}
         onPause={() => setIsPlaying(false)}
-        onEnded={() => { setIsPlaying(false); onEnded?.(); }}
-        style={{ WebkitMediaControls: 'none' } as any}
+        onEnded={handleEnded}
+        onTimeUpdate={handleTimeUpdate}
+        onError={(e) => console.error("Video playback error", e)}
       />
       <div style={{
         position: 'absolute', top: 0, left: 0,
