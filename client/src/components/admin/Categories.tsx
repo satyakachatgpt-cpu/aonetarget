@@ -343,22 +343,25 @@ const Categories: React.FC<Props> = ({ showToast }) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredCategories.map(cat => (
               <div key={cat._id || cat.id} className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-                <div className={`bg-gradient-to-r ${cat.gradient} p-5 text-white`}>
-                  <div className="flex items-center justify-between">
+                <div className={`bg-gradient-to-r ${cat.gradient} p-5 text-white relative overflow-hidden`}>
+                  {cat.imageUrl && (
+                    <img src={cat.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover opacity-20" />
+                  )}
+                  <div className="flex items-center justify-between relative z-10">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                      <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
                         <span className="material-icons-outlined text-2xl">{cat.icon}</span>
                       </div>
                       <div>
-                        <h3 className="font-black text-lg">{cat.title}</h3>
-                        <p className="text-white/70 text-xs">{cat.subtitle}</p>
+                        <h3 className="font-black text-lg tracking-tight">{cat.title}</h3>
+                        <p className="text-white/70 text-xs font-medium">{cat.subtitle}</p>
                       </div>
                     </div>
                     <div className="flex gap-1">
-                      <button onClick={() => openEditCategory(cat)} className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-all">
+                      <button onClick={() => openEditCategory(cat)} className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-all backdrop-blur-sm">
                         <span className="material-icons-outlined text-sm">edit</span>
                       </button>
-                      <button onClick={() => handleDeleteCategory(cat)} className="p-2 bg-white/20 rounded-lg hover:bg-red-500/50 transition-all">
+                      <button onClick={() => handleDeleteCategory(cat)} className="p-2 bg-white/20 rounded-lg hover:bg-red-500/50 transition-all backdrop-blur-sm">
                         <span className="material-icons-outlined text-sm">delete</span>
                       </button>
                     </div>

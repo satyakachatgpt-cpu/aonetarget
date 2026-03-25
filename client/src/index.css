@@ -132,3 +132,12 @@ select {
 .material-symbols-outlined {
   pointer-events: none;
 }
+
+/* Hide bottom navigation and fix body scroll when a modal is open */
+.modal-open-nav-hide nav.fixed.bottom-0 {
+  display: none !important;
+}
+
+.modal-open-nav-hide {
+  overflow: hidden !important;
+}

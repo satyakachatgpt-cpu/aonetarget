@@ -531,7 +531,7 @@ const Home: React.FC = () => {
           </div>
           {filteredCategories.length > 0 ? (
             <div className="grid grid-cols-2 gap-3">
-              {filteredCategories.map((cat, i) => (
+              {filteredCategories.slice(0, 6).map((cat, i) => (
                 <div
                   key={cat._id || cat.id || i}
                   onClick={() => {

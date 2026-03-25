@@ -16,7 +16,6 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
   const [settings, setSettings] = useState({
     notifications: true,
     emailUpdates: true,
-    darkMode: localStorage.getItem('darkMode') === 'true',
     autoPlay: localStorage.getItem('autoPlay') !== 'false',
     downloadOverWifi: localStorage.getItem('downloadOverWifi') !== 'false',
     videoQuality: localStorage.getItem('videoQuality') || 'Auto'
@@ -24,14 +23,7 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
 
   const [showQualityModal, setShowQualityModal] = useState(false);
 
-  useEffect(() => {
-    if (settings.darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    localStorage.setItem('darkMode', settings.darkMode.toString());
-  }, [settings.darkMode]);
+
 
   useEffect(() => {
     localStorage.setItem('autoPlay', settings.autoPlay.toString());
@@ -84,12 +76,7 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
         { key: 'emailUpdates', label: 'Email Updates', icon: 'mail', toggle: true }
       ]
     },
-    {
-      title: 'Appearance',
-      items: [
-        { key: 'darkMode', label: 'Dark Mode', icon: 'dark_mode', toggle: true }
-      ]
-    },
+
     {
       title: 'Video',
       items: [
