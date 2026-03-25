@@ -258,8 +258,9 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
   };
 
   const filteredPackages = packages.filter(pkg => {
-    const matchesSearch = pkg.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      pkg.description.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesSearch = (pkg.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (pkg.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (pkg.title || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || pkg.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
@@ -304,20 +305,15 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
 
   const handleDelete = (id: string) => {
     setConfirmAction({
-      title: 'Delete Item',
-      desc: 'Are you sure you want to delete this product? This action cannot be undone.',
+      title: 'Delete Batch',
+      desc: 'Are you sure you want to delete this batch? This action cannot be undone.',
       onConfirm: async () => {
         try {
-          const isPackage = id?.toString().startsWith('pkg_');
-          if (isPackage) {
-            await packagesAPI.delete(id);
-          } else {
-            await coursesAPI.delete(id);
-          }
-          showToast('Deleted successfully!');
+          await coursesAPI.delete(id);
+          showToast('Batch deleted successfully!');
           loadData();
         } catch (error) {
-          showToast('Failed to delete item', 'error');
+          showToast('Failed to delete batch', 'error');
         }
         setShowConfirmDrawer(false);
       }
@@ -351,15 +347,8 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
   const handleToggleStatus = async (pkg: any) => {
     try {
       const newStatus = pkg.status === 'active' ? 'inactive' : 'active';
-      const isPackage = pkg.id?.toString().startsWith('pkg_');
-
-      if (isPackage) {
-        await packagesAPI.update(pkg.id, { ...pkg, status: newStatus });
-      } else {
-        await coursesAPI.update(pkg.id, { ...pkg, status: newStatus });
-      }
-
-      showToast(`${isPackage ? 'Package' : 'Course'} ${newStatus === 'active' ? 'enabled' : 'disabled'} successfully`, 'success');
+      await coursesAPI.update(pkg.id || pkg._id, { ...pkg, status: newStatus });
+      showToast(`Batch ${newStatus === 'active' ? 'enabled' : 'disabled'} successfully`, 'success');
       loadData();
     } catch (error) {
       showToast('Failed to toggle status', 'error');
@@ -644,7 +633,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                         </td>
                         <td className="px-6 py-6 text-right">
                           <div className="flex items-center justify-center gap-3">
-                            <div className="relative">
+                            <div className="relative row-action-menu-container">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
