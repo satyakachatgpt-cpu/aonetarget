@@ -17,35 +17,44 @@ const Notifications: React.FC = () => {
     if (storedStudent) {
       const studentData = JSON.parse(storedStudent);
       setStudent(studentData);
-      fetchNotifications();
+      fetchNotifications(studentData);
     } else {
       navigate('/student-login');
     }
   }, []);
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = async (currentStudent?: any) => {
+    const studentToUse = currentStudent || student;
+    if (!studentToUse) return;
+    
     try {
       const data = await notificationsAPI.getAll();
       const studentNotifications = Array.isArray(data)
-        ? data.filter(notif =>
-          !notif.targetStudentId || notif.targetStudentId === student?.id || notif.targetStudentId === 'all'
-        )
+        ? data.filter(notif => {
+            const targetsStudent = !notif.targetStudentId || notif.targetStudentId === studentToUse.id || notif.targetStudentId === 'all';
+            let targetsCourse = true;
+            if (notif.targetCourseId && notif.targetCourseId !== 'all') {
+              targetsCourse = !!studentToUse.enrolledCourses?.includes(notif.targetCourseId);
+            }
+            return targetsStudent && targetsCourse;
+          })
         : [];
       setNotifications(studentNotifications);
       
-      // Automatically mark all as read when opening the page
-      const unreadCount = studentNotifications.filter(n => !n.isRead).length;
+      // Update local storage to permanently hide the red dot for current notifications
+      localStorage.setItem('lastSeenNotifications', Date.now().toString());
+      setUnreadCount(0);
+
+      // We still mark them as read in the DB for backend status tracking
+      const unreadCount = studentNotifications.filter((n: any) => !n.isRead).length;
       if (unreadCount > 0) {
         // Mark as read immediately on fetch
-        const unreadIds = studentNotifications.filter(n => !n.isRead);
+        const unreadIds = studentNotifications.filter((n: any) => !n.isRead);
         notificationsAPI.updateAll(
-          unreadIds.map(notif => ({ ...notif, isRead: true }))
+          unreadIds.map((notif: any) => ({ ...notif, isRead: true }))
         ).then(() => {
-          setUnreadCount(0);
           setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
         }).catch(err => console.error('Failed to mark all as read:', err));
-      } else {
-        setUnreadCount(0);
       }
     } catch (error) {
       console.error('Error fetching notifications:', error);
@@ -118,9 +127,9 @@ const Notifications: React.FC = () => {
 
       <header className="bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white pt-8 pb-6 px-4">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-full hover:bg-white/20">
-              <span className="material-symbols-rounded">menu</span>
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate(-1)} className="p-2 -ml-2 rounded-full hover:bg-white/20 transition-all">
+              <span className="material-symbols-rounded">arrow_back</span>
             </button>
             <h1 className="text-lg font-bold">Notifications</h1>
           </div>

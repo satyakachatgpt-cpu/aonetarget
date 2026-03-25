@@ -31,7 +31,7 @@ import { getImageUrl } from '../lib/utils';
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
-  const { student, isAuthenticated } = useAuthStore();
+  const { student, isAuthenticated, unreadNotificationsCount } = useAuthStore();
   const [courses, setCourses] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [filteredCategories, setFilteredCategories] = useState<any[]>([]);
@@ -433,7 +433,9 @@ const Home: React.FC = () => {
                   className="w-[42px] h-[42px] rounded-[14px] bg-white/10 hover:bg-white/20 transition-all duration-200 active:scale-95 relative flex items-center justify-center"
                 >
                   <span className="material-symbols-rounded text-white text-[22px] font-medium">notifications</span>
-                  <span className="absolute top-[10px] right-[10px] w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#283593] animate-pulse"></span>
+                  {unreadNotificationsCount > 0 && (
+                    <span className="absolute top-[10px] right-[10px] w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-[#283593] animate-pulse"></span>
+                  )}
                 </button>
               </div>
             </>

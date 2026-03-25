@@ -181,6 +181,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                     if (data.reason === 'another_device' || data.reason === 'not_authenticated') {
                         get().clearAuth();
                     }
+                } else if (data.latestNotificationTime) {
+                    const lastSeenStr = localStorage.getItem('lastSeenNotifications');
+                    const lastSeen = lastSeenStr ? parseInt(lastSeenStr, 10) : 0;
+                    if (data.latestNotificationTime > lastSeen) {
+                        set({ unreadNotificationsCount: 1 });
+                    } else {
+                        set({ unreadNotificationsCount: 0 });
+                    }
                 }
             } catch (e) { }
         };

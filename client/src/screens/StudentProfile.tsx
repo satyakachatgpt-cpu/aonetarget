@@ -9,7 +9,7 @@ interface StudentProfileProps {
 
 const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
   const navigate = useNavigate();
-  const { student: globalStudent, isAuthenticated, clearAuth, setAuth: updateAuth } = useAuthStore();
+  const { student: globalStudent, isAuthenticated, clearAuth, setAuth: updateAuth, unreadNotificationsCount } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [student, setStudent] = useState<any>(null);
   const [stats, setStats] = useState({
@@ -260,6 +260,9 @@ const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
                 <span className="material-symbols-rounded text-gray-600 text-xl">{item.icon}</span>
               </div>
               <span className="flex-1 text-left font-medium text-sm text-gray-800">{item.label}</span>
+              {item.label === 'Notifications' && unreadNotificationsCount > 0 && (
+                <span className="w-2 h-2 bg-red-500 rounded-full shrink-0 mr-1 animate-pulse"></span>
+              )}
               <span className="material-symbols-rounded text-gray-300 text-lg">chevron_right</span>
               {idx < menuItems.length - 1 && (
                 <div className="absolute bottom-0 left-[4.25rem] right-4 h-px bg-gray-100" />

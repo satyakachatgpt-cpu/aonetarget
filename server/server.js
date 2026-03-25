@@ -4408,7 +4408,36 @@ app.post('/api/heartbeat', async (req, res) => {
       { $set: { lastHeartbeat: new Date() } }
     );
 
-    return res.json({ valid: true });
+    // Fetch the latest notification timestamp relevant to the student
+    const enrolledCourses = student.enrolledCourses || [];
+    
+    const latestNotif = await db.collection('notifications').findOne(
+      {
+        $and: [
+          {
+            $or: [
+              { targetStudentId: student.id },
+              { targetStudentId: student._id.toString() },
+              { targetStudentId: 'all' },
+              { targetStudentId: { $exists: false } }
+            ]
+          },
+          {
+            $or: [
+              { targetCourseId: { $in: enrolledCourses } },
+              { targetCourseId: 'all' },
+              { targetCourseId: null },
+              { targetCourseId: { $exists: false } }
+            ]
+          }
+        ]
+      },
+      { sort: { createdAt: -1 } }
+    );
+    
+    const latestNotificationTime = latestNotif ? new Date(latestNotif.createdAt || latestNotif.updatedAt).getTime() : null;
+
+    return res.json({ valid: true, latestNotificationTime });
   } catch (error) {
     return res.json({ valid: true });
   }

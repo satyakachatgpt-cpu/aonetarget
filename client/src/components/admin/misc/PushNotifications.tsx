@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { notificationsAPI } from '../../../services/apiClient';
+import { notificationsAPI, coursesAPI } from '../../../services/apiClient';
 import { RightSideDrawer, DrawerHeader, DrawerBody, DrawerFooter } from '../DrawerSystem';
 
-interface Notification { id: string; title: string; message: string; type: string; status: 'sent' | 'pending'; createdDate: string; }
+interface Notification { id: string; title: string; message: string; type: string; status: 'sent' | 'pending'; createdDate: string; targetCourseId?: string; }
 
 interface Props { showToast: (m: string, type?: 'success' | 'error') => void; }
 
@@ -17,10 +17,12 @@ const PushNotifications: React.FC<Props> = ({ showToast }) => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ title: '', message: '', type: '', status: 'pending' as 'sent' | 'pending' });
+  const [courses, setCourses] = useState<any[]>([]);
+  const [formData, setFormData] = useState({ title: '', message: '', type: '', status: 'pending' as 'sent' | 'pending', targetCourseId: 'all' });
 
   useEffect(() => { 
     loadItems(); 
+    loadCourses();
 
     const handleClickOutside = () => setActiveMenuId(null);
     window.addEventListener('click', handleClickOutside);
@@ -35,6 +37,19 @@ const PushNotifications: React.FC<Props> = ({ showToast }) => {
       showToast('Failed to load', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCourses = async () => {
+    try {
+      const data = await coursesAPI.getAll();
+      if (Array.isArray(data)) {
+        setCourses(data);
+      } else if (data && Array.isArray(data.courses)) {
+        setCourses(data.courses);
+      }
+    } catch (error) {
+      console.error('Failed to load courses', error);
     }
   };
 
@@ -55,6 +70,7 @@ const PushNotifications: React.FC<Props> = ({ showToast }) => {
         message: formData.message,
         type: formData.type,
         status: formData.status,
+        targetCourseId: formData.targetCourseId,
         createdDate: editingItem?.createdDate || new Date().toISOString()
       };
       if (editingItem) {
@@ -66,7 +82,7 @@ const PushNotifications: React.FC<Props> = ({ showToast }) => {
       }
       setShowModal(false);
       setEditingItem(null);
-      setFormData({ title: '', message: '', type: '', status: 'pending' });
+      setFormData({ title: '', message: '', type: '', status: 'pending', targetCourseId: 'all' });
       loadItems();
     } catch (error) {
       showToast('Failed to save', 'error');
@@ -107,7 +123,7 @@ const PushNotifications: React.FC<Props> = ({ showToast }) => {
           </div>
 
           <button
-            onClick={() => { setEditingItem(null); setFormData({ title: '', message: '', type: '', status: 'pending' }); setShowModal(true); }}
+            onClick={() => { setEditingItem(null); setFormData({ title: '', message: '', type: '', status: 'pending', targetCourseId: 'all' }); setShowModal(true); }}
             className="w-9 h-9 bg-[#1a1c1e] text-white rounded-full flex items-center justify-center shadow-lg hover:bg-black transition-all"
           >
             <span className="material-icons-outlined text-lg">add</span>
@@ -203,7 +219,9 @@ const PushNotifications: React.FC<Props> = ({ showToast }) => {
                       <td className="px-6 py-5 min-w-[240px]">
                         <div>
                           <p className="text-[13px] font-bold text-[#4361EE] group-hover:text-blue-700 transition-colors">{item.title}</p>
-                          <span className="inline-block mt-1 px-2 py-0.5 bg-[#e5eaff] text-[#4361EE] text-[10px] font-bold rounded capitalize">One Time</span>
+                          <span className={`inline-block mt-1 px-2 py-0.5 text-[10px] font-bold rounded capitalize ${item.targetCourseId && item.targetCourseId !== 'all' ? 'bg-purple-100 text-purple-700' : 'bg-[#e5eaff] text-[#4361EE]'}`}>
+                            {item.targetCourseId && item.targetCourseId !== 'all' ? 'Batch specific' : 'All Students'}
+                          </span>
                         </div>
                       </td>
                       <td className="px-6 py-5 text-[13px] font-medium text-gray-500 max-w-md truncate">{item.message}</td>
@@ -221,7 +239,7 @@ const PushNotifications: React.FC<Props> = ({ showToast }) => {
                           </button>
 
                           <div className={`absolute right-0 ${idx >= paginatedItems.length - 2 ? 'bottom-full mb-1 origin-bottom-right' : 'top-full mt-1 origin-top-right'} w-32 bg-white border border-gray-100 rounded-lg shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[100] py-1 transition-all duration-200 ${activeMenuId === item.id ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'}`}>
-                            <button onClick={() => { setEditingItem(item); setFormData({ title: item.title, message: item.message, type: item.type, status: item.status }); setShowModal(true); }} className="w-full px-4 py-2.5 text-left text-[12px] font-bold text-gray-600 hover:bg-gray-50 flex items-center gap-2">
+                            <button onClick={() => { setEditingItem(item); setFormData({ title: item.title, message: item.message, type: item.type, status: item.status, targetCourseId: item.targetCourseId || 'all' }); setShowModal(true); }} className="w-full px-4 py-2.5 text-left text-[12px] font-bold text-gray-600 hover:bg-gray-50 flex items-center gap-2">
                               <span className="material-icons-outlined text-sm">edit</span> Edit
                             </button>
                             <button onClick={() => handleDelete(item.id)} className="w-full px-4 py-2.5 text-left text-[12px] font-bold text-red-500 hover:bg-red-50 flex items-center gap-2">
@@ -301,6 +319,23 @@ const PushNotifications: React.FC<Props> = ({ showToast }) => {
                 rows={4}
                 className="w-full h-[120px] px-5 py-4 border border-gray-200 rounded-2xl text-[15px] font-medium outline-none focus:border-navy transition-all resize-none placeholder:text-gray-300 bg-white shadow-sm"
               />
+            </div>
+
+            {/* Target Batch */}
+            <div className="space-y-2">
+              <label className="text-[13px] font-bold text-gray-700 ml-1">Send To (Batch) <span className="text-red-500">*</span></label>
+              <select
+                value={formData.targetCourseId || 'all'}
+                onChange={(e) => setFormData({ ...formData, targetCourseId: e.target.value })}
+                className="w-full h-[54px] px-5 border border-gray-200 rounded-2xl text-[15px] font-medium outline-none focus:border-navy transition-all bg-white shadow-sm"
+              >
+                <option value="all">All Students (Global)</option>
+                {courses.map(course => (
+                  <option key={course.id || course._id} value={course.id || course._id}>
+                    {course.title || course.name || 'Unnamed Course'}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="grid grid-cols-2 gap-6">
