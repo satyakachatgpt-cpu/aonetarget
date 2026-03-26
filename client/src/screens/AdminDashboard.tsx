@@ -236,8 +236,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         <Route path="questions" element={<Questions {...props} />} />
         <Route path="question-bank" element={<Questions {...props} view="bank" />} />
         <Route path="passages" element={<Passages {...props} />} />
-        <Route path="tests" element={<Tests {...props} />} />
-        <Route path="tests/:id" element={<Tests {...props} />} />
+        <Route path="tests/*" element={<Tests {...props} />} />
         <Route path="subjective-test" element={<SubjectiveTest {...props} />} />
         <Route path="test-series" element={<TestSeries {...props} />} />
         <Route path="all-reports" element={<AllReports {...props} />} />

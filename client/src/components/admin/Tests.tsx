@@ -2064,7 +2064,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           </p>
                         </div>
                       </td>
-                      <td className="px-4 py-8 align-top text-center border-b border-gray-50/50 action-menu-container">
+                      <td className="px-4 py-8 align-top text-center border-b border-gray-50/50 action-menu-container" onMouseDown={(e) => e.stopPropagation()}>
                         <div className="relative inline-block">
                           <button
                             onClick={() =>
@@ -2073,15 +2073,15 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                               )
                             }
                             className={`flex items-center justify-center gap-1.5 px-3 py-1.5 border rounded-lg text-[13px] font-bold transition-all shadow-sm group ${activeActionMenuId === rq.id
-                                ? "bg-blue-50 border-blue-200 text-blue-700"
-                                : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                              ? "bg-blue-50 border-blue-200 text-blue-700"
+                              : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
                               }`}
                           >
                             Actions
                             <span
                               className={`material-symbols-outlined text-[18px] transition-transform duration-200 ${activeActionMenuId === rq.id
-                                  ? "rotate-180 text-blue-500"
-                                  : "text-gray-400 group-hover:text-gray-600 font-normal"
+                                ? "rotate-180 text-blue-500"
+                                : "text-gray-400 group-hover:text-gray-600 font-normal"
                                 }`}
                             >
                               expand_more
@@ -2091,12 +2091,12 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           {activeActionMenuId === rq.id && (
                             <div
                               className={`absolute right-0 w-[140px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${filteredReported.length > 3
-                                  ? idx >= filteredReported.length - 2
-                                    ? "bottom-full mb-1"
-                                    : "top-full mt-1"
-                                  : idx >= filteredReported.length - 1
-                                    ? "bottom-full mb-1"
-                                    : "top-full mt-1"
+                                ? idx >= filteredReported.length - 2
+                                  ? "bottom-full mb-1"
+                                  : "top-full mt-1"
+                                : idx >= filteredReported.length - 1
+                                  ? "bottom-full mb-1"
+                                  : "top-full mt-1"
                                 }`}
                             >
                               <button className="w-full px-4 py-1.5 flex items-center gap-3 text-left hover:bg-blue-50/50 transition-colors group">
@@ -2543,8 +2543,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
               key={tab}
               onClick={() => setViewingTestSeriesTab(tab as DetailSubTab)}
               className={`py-4 text-[11.5px] font-bold tracking-[0.12em] uppercase transition-all relative whitespace-nowrap ${viewingTestSeriesTab === tab
-                  ? "text-black"
-                  : "text-gray-400 hover:text-gray-800"
+                ? "text-black"
+                : "text-gray-400 hover:text-gray-800"
                 }`}
             >
               {tab}
@@ -2661,7 +2661,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                             />
                           </button>
 
-                          <div className="relative">
+                          <div className="relative action-menu-container" onMouseDown={(e) => e.stopPropagation()}>
                             <button
                               onClick={() =>
                                 setActiveActionMenuId(
@@ -3281,7 +3281,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-8 align-top text-right pr-6 border-b border-gray-50/50 action-menu-container">
+                      <td className="px-6 py-8 align-top text-right pr-6 border-b border-gray-50/50 action-menu-container" onMouseDown={(e) => e.stopPropagation()}>
                         <div className="relative inline-block">
                           <button
                             onClick={(e) => {
@@ -3298,17 +3298,17 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                               }
                             }}
                             className={`flex items-center justify-between gap-2 px-4 py-2 border rounded-lg text-[13px] font-bold transition-all shadow-sm w-[110px] ${activeActionMenuId ===
-                                (q.id || (q as any)._id) + 20000
-                                ? "bg-blue-50 border-blue-200 text-blue-700"
-                                : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                              (q.id || (q as any)._id) + 20000
+                              ? "bg-blue-50 border-blue-200 text-blue-700"
+                              : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
                               }`}
                           >
                             Actions
                             <span
                               className={`material-symbols-outlined text-[18px] transition-transform duration-200 ${activeActionMenuId ===
-                                  (q.id || (q as any)._id) + 20000
-                                  ? "rotate-180 text-blue-500"
-                                  : "text-gray-400 group-hover:text-gray-600"
+                                (q.id || (q as any)._id) + 20000
+                                ? "rotate-180 text-blue-500"
+                                : "text-gray-400 group-hover:text-gray-600"
                                 }`}
                             >
                               expand_more
@@ -3319,12 +3319,12 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                             (q.id || (q as any)._id) + 20000 && (
                               <div
                                 className={`absolute right-0 w-[140px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${filteredMaster.length > 3
-                                    ? idx >= filteredMaster.length - 2
-                                      ? "bottom-full mb-1"
-                                      : "top-full mt-1"
-                                    : idx >= filteredMaster.length - 1
-                                      ? "bottom-full mb-1"
-                                      : "top-full mt-1"
+                                  ? idx >= filteredMaster.length - 2
+                                    ? "bottom-full mb-1"
+                                    : "top-full mt-1"
+                                  : idx >= filteredMaster.length - 1
+                                    ? "bottom-full mb-1"
+                                    : "top-full mt-1"
                                   }`}
                               >
                                 <button
@@ -3665,8 +3665,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                     setBulkUploadData({ ...bulkUploadData, format: fmt.key })
                   }
                   className={`relative cursor-pointer rounded-lg border-2 transition-all duration-200 overflow-hidden select-none flex-shrink-0 ${bulkUploadData.format === fmt.key
-                      ? "border-black"
-                      : "border-gray-200 hover:border-gray-300"
+                    ? "border-black"
+                    : "border-gray-200 hover:border-gray-300"
                     }`}
                   style={{ width: "135px" }}
                 >
