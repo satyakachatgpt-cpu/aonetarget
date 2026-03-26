@@ -43,6 +43,8 @@ const TermsOfService = lazy(() => import('./screens/TermsOfService'));
 const PrivacyPolicy = lazy(() => import('./screens/PrivacyPolicy'));
 const RefundPolicy = lazy(() => import('./screens/RefundPolicy'));
 const PDFViewerScreen = lazy(() => import('./screens/PDFViewerScreen'));
+const WatchPage = lazy(() => import('./screens/WatchPage'));
+const MyTests = lazy(() => import('./screens/MyTests'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[60vh] w-full animate-in fade-in duration-300">
@@ -139,6 +141,7 @@ const App: React.FC = () => {
 
             <Route path="/news" element={<AllNews />} />
             <Route path="/news/:id" element={<NewsArticle />} />
+            <Route path="/watch/:batchId/:videoId" element={<WatchPage />} />
 
             <Route path="*" element={
               <MainLayout isLoggedIn={isStudentLoggedIn}>
@@ -159,9 +162,9 @@ const App: React.FC = () => {
                     <Route path="/course/:id" element={<CourseDetails />} />
                     <Route path="/checkout/:id" element={<Checkout />} />
                     <Route path="/study/:id" element={<StudyDashboard />} />
-                     <Route path="/video-player" element={<VideoPlayer />} />
-                     <Route path="/pdf-viewer" element={<PDFViewerScreen />} />
-                     <Route path="/success" element={<Success />} />
+                    <Route path="/video-player" element={<VideoPlayer />} />
+                    <Route path="/pdf-viewer" element={<PDFViewerScreen />} />
+                    <Route path="/success" element={<Success />} />
                     <Route path="/purchase-success" element={<PurchaseSuccess />} />
 
                     <Route path="/student-dashboard" element={
@@ -175,6 +178,9 @@ const App: React.FC = () => {
                     } />
                     <Route path="/mock-tests" element={
                       isStudentLoggedIn ? <MockTests /> : <Navigate to="/student-login" />
+                    } />
+                    <Route path="/my-tests" element={
+                      isStudentLoggedIn ? <MyTests /> : <Navigate to="/student-login" />
                     } />
                     <Route path="/test/:testId" element={
                       isStudentLoggedIn ? <TestTaking /> : <Navigate to="/student-login" />

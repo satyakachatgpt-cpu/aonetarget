@@ -591,7 +591,7 @@ export const testsAPI = {
   },
   publish: async (id: string) => {
     const response = await fetch(`${API_BASE_URL}/tests/${id}/publish`, {
-      method: 'POST',
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' }
     });
     if (!response.ok) {
@@ -600,6 +600,28 @@ export const testsAPI = {
     }
     invalidateCache('tests');
     return response.json();
+  },
+  duplicate: async (id: string) => {
+    const response = await fetch(`${API_BASE_URL}/tests/${id}/duplicate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!response.ok) throw new Error('Failed to duplicate test');
+    invalidateCache('tests');
+    return response.json();
+  },
+  reevaluate: async (id: string) => {
+    const response = await fetch(`${API_BASE_URL}/tests/${id}/reevaluate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!response.ok) throw new Error('Failed to recompute results');
+    return response.json();
+  },
+  export: async (id: string, solution = true) => {
+    const response = await fetch(`${API_BASE_URL}/tests/${id}/export?solution=${solution}`);
+    if (!response.ok) throw new Error('Failed to export PDF');
+    return response.blob();
   }
 };
 
@@ -792,13 +814,19 @@ export const liveVideosAPI = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error('Failed to update live video');
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Failed' }));
+        throw new Error(err.error || 'Failed to update live video');
+    }
     invalidateCache('live-videos');
     return response.json();
   },
   delete: async (id: string) => {
     const response = await fetch(`${API_BASE_URL}/live-videos/${id}`, { method: 'DELETE' });
-    if (!response.ok) throw new Error('Failed to delete live video');
+    if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Failed' }));
+        throw new Error(err.error || 'Failed to delete live video');
+    }
     invalidateCache('live-videos');
     return response.json();
   }
@@ -862,6 +890,9 @@ export const packagesAPI = {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || errorData.details || 'Failed to update package');
     }
+    // Invalidate courses and test-series cache as packages often contain both
+    invalidateCache('courses');
+    invalidateCache('packages'); 
     return response.json();
   },
   delete: async (id: string) => {

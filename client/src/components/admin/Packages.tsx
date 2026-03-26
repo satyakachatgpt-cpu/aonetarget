@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { packagesAPI, coursesAPI, testSeriesAPI } from '../../services/apiClient';
+import React, { useState, useEffect, useRef } from 'react';
+import { packagesAPI, coursesAPI, testSeriesAPI, liveVideosAPI, subjectsAPI } from '../../services/apiClient';
 import AddCourse from './AddCourse';
 import LiveSessions from './LiveSessions';
 import ForumManager from './ForumManager';
@@ -114,7 +114,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
   const [editingPackage, setEditingPackage] = useState<Package | null>(null);
   const [formData, setFormData] = useState({ name: '', description: '', courses: '', price: '', status: 'active' });
   const [availableCourses, setAvailableCourses] = useState<CourseItem[]>([]);
-  const [activeTab, setActiveTab] = useState('Batches');
+  const [activeTab, setActiveTab] = useState('Featured Batches');
   const [isMoreOpen, setIsMoreOpen] = useState(false);
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
@@ -151,7 +151,8 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [isFilterDropdownOpen, setIsFilterDropdownOpen] = useState(false);
   const filterDropdownRef = React.useRef<HTMLDivElement>(null);
-  const bulkDropdownRef = React.useRef<HTMLDivElement>(null);
+  const bulkDropdownRef = useRef<HTMLDivElement>(null);
+  const [subjects, setSubjects] = useState<any[]>([]);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -249,6 +250,9 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
       // Combine both types into the main packages state for display
       setPackages([...normalizedPkgs, ...normalizedCourses]);
       setAvailableCourses(normalizedCourses);
+
+      const subs = await subjectsAPI.getAll();
+      setSubjects(Array.isArray(subs) ? subs : (subs?.data || []));
     } catch (error) {
       console.error('Data loading error:', error);
       showToast('Failed to load data', 'error');
@@ -258,8 +262,10 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
   };
 
   const filteredPackages = packages.filter(pkg => {
-    const matchesSearch = (pkg.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (pkg.description || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+    const nameStr = String(pkg?.name || pkg?.title || '');
+    const descStr = String(pkg?.description || '');
+    const matchesSearch = nameStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (descStr || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
       (pkg.title || '').toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || pkg.status === statusFilter;
     return matchesSearch && matchesStatus;
@@ -300,6 +306,24 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
       loadData();
     } catch (error) {
       showToast('Failed to save package', 'error');
+    }
+  };
+
+  const handleAddLiveStream = async (data: any) => {
+    try {
+      await liveVideosAPI.create({
+        ...data,
+        status: 'upcoming',
+        courseId: data.courseId || '',
+        subjectId: data.subjectId || ''
+      });
+      showToast('Live stream scheduled successfully!', 'success');
+      setShowLiveStreamDrawer(false);
+      // If we are on the Live tab, we might need a way to refresh it.
+      // Since LiveSessions fetches its own data, switching to it will refresh it.
+    } catch (error) {
+      console.error(error);
+      showToast('Failed to schedule live stream', 'error');
     }
   };
 
@@ -386,7 +410,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
     <div className="space-y-4 animate-fade-in pb-10">
       {/* Navigation Tabs Container */}
       <div className="bg-white px-8 py-1 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-10 overflow-x-auto scrollbar-hide">
-        {['Batches', 'Live & Upcoming', 'Forum', 'Content'].map((tab) => (
+        {['Featured Batches', 'Live & Upcoming', 'Forum', 'Content'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -410,13 +434,13 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
         <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-visible">
           {/* Header Section */}
           <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-50 bg-white rounded-t-[2rem]">
-            <h3 className="text-[20px] font-bold text-gray-900 tracking-tight">Batches</h3>
+            <h3 className="text-[20px] font-bold text-gray-900 tracking-tight">Featured Batches</h3>
             <div className="flex items-center gap-3">
               <div className="relative group flex-1 md:flex-none">
                 <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-[20px] group-focus-within:text-navy transition-colors">search</span>
                 <input
                   type="text"
-                  placeholder="Search batches..."
+                  placeholder="Search featured batches..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full md:w-[320px] pl-12 pr-4 py-3 bg-gray-50/50 border border-gray-100 rounded-2xl text-[14px] font-bold outline-none focus:bg-white focus:border-navy focus:ring-4 focus:ring-navy/5 transition-all shadow-sm placeholder:text-gray-400"
@@ -438,7 +462,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                 {isFilterDropdownOpen && (
                   <div className="absolute right-0 top-full mt-2 w-64 bg-white border border-gray-100 rounded-2xl shadow-2xl z-[200] p-5 animate-in fade-in zoom-in duration-200 origin-top-right">
                     <div className="flex justify-between items-center mb-5">
-                      <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Filter Batches</h4>
+                      <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Filter Featured Batches</h4>
                       <button
                         onClick={() => { setStatusFilter('all'); setIsFilterDropdownOpen(false); }}
                         className="text-[10px] font-bold text-blue-600 hover:underline"
@@ -451,7 +475,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                       <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-2">Publish Status</label>
                       <div className="flex flex-col gap-1">
                         {[
-                          { id: 'all', label: 'All Batches', icon: 'inventory_2' },
+                          { id: 'all', label: 'All Featured Batches', icon: 'inventory_2' },
                           { id: 'active', label: 'Published', icon: 'check_circle', color: 'text-green-500' },
                           { id: 'inactive', label: 'Drafts', icon: 'pending', color: 'text-amber-500' }
                         ].map((item) => (
@@ -485,7 +509,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                 </button>
 
                 {isBulkDropdownOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-[240px] bg-white border border-gray-100 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.12)] z-[200] p-5 animate-in fade-in zoom-in duration-200 origin-top-right max-h-[75vh] overflow-y-auto custom-scrollbar">
+                  <div className="absolute right-0 top-full mt-2 w-[240px] bg-white border border-gray-100 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.12)] z-[200] p-5 animate-in fade-in zoom-in duration-200 origin-top-right max-h-[400px] overflow-y-auto custom-scrollbar">
                     <div className="mb-6">
                       <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.1em] mb-4 ml-1">Table View</h4>
                       <div className="flex gap-2">
@@ -513,6 +537,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                           { id: 'video', icon: 'videocam', label: 'Add Video' },
                           { id: 'pdf', icon: 'picture_as_pdf', label: 'Add PDF' },
                           { id: 'test', icon: 'quiz', label: 'Add Test' },
+                          { id: 'live_stream', icon: 'sensors', label: 'Add Live Stream' },
                           { id: 'image', icon: 'image', label: 'Add Image' },
                           { id: 'youtube_zoom', icon: 'video_camera_front', label: 'Add YouTube/Zoom Video' },
                           { id: 'document', icon: 'description', label: 'Add Document' }
@@ -917,7 +942,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Connect Existing Batches</label>
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Connect Existing Featured Batches</label>
               <div className="bg-gray-50 border border-gray-100 rounded-2xl p-2 max-h-52 overflow-y-auto custom-scrollbar shadow-inner">
                 {availableCourses.length === 0 ? (
                   <p className="text-[10px] text-gray-400 p-4 italic text-center">No batches found in database</p>
@@ -1160,10 +1185,9 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
       <LiveStreamDrawer
         isOpen={showLiveStreamDrawer}
         onClose={() => setShowLiveStreamDrawer(false)}
-        onSubmit={() => {
-          showToast('Live stream scheduled successfully', 'success');
-          setShowLiveStreamDrawer(false);
-        }}
+        onSubmit={handleAddLiveStream}
+        courses={availableCourses}
+        subjects={subjects}
       />
 
       <WebinarDrawer

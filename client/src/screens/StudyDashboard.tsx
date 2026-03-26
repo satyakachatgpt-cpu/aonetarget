@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import LiveClassesCalendar from '../components/student/LiveClassesCalendar';
 
 const QUIZ_QUESTIONS = [
   {
@@ -419,47 +420,55 @@ const StudyDashboard: React.FC = () => {
                     videos
                       .filter(v => normalizeId(v.folderId) === currentFolderId && (activeSubject === 'All Subjects' || v.subject === activeSubject))
                       .map((video, idx) => (
-                      <div key={video._id || idx} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group hover:border-brandBlue transition-all">
-                        <div className="p-4 flex gap-4 items-center">
-                          <div className="flex-1 min-w-0">
-                            <h4 className="font-bold text-sm truncate">{video.title}</h4>
-                            <div className="flex gap-2 mt-1">
-                              <span className="text-[8px] bg-blue-50 text-brandBlue px-1.5 py-0.5 rounded font-bold uppercase">Video</span>
-                              <span className="text-[8px] text-gray-400">{video.duration}</span>
+                        <div key={video._id || idx} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group hover:border-brandBlue transition-all">
+                          <div className="p-4 flex gap-4 items-center">
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-bold text-sm truncate">{video.title}</h4>
+                              <div className="flex gap-2 mt-1">
+                                <span className="text-[8px] bg-blue-50 text-brandBlue px-1.5 py-0.5 rounded font-bold uppercase">Video</span>
+                                <span className="text-[8px] text-gray-400">{video.duration}</span>
+                              </div>
                             </div>
+                            {isFreeContent || downloadedIds.has(video._id || video.id) || isYouTubeUrl(video.videoUrl || video.url || video.youtubeUrl) ? (
+                              <button
+                                onClick={() => handleView(video, 'video')}
+                                className="bg-brandBlue text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center gap-2"
+                              >
+                                <span className="material-symbols-rounded text-sm">play_arrow</span>
+                                Watch
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleDownload(video, 'video')}
+                                className="p-2 text-gray-400 group-hover:text-brandBlue group-hover:bg-blue-50 rounded-lg transition-all flex-shrink-0"
+                                title="Add to Downloads"
+                              >
+                                {downloadingId === (video._id || video.id) ? (
+                                  <span className="material-symbols-rounded animate-spin">progress_activity</span>
+                                ) : (
+                                  <span className="material-symbols-rounded">download</span>
+                                )}
+                              </button>
+                            )}
                           </div>
-                          {isFreeContent || downloadedIds.has(video._id || video.id) || isYouTubeUrl(video.videoUrl || video.url || video.youtubeUrl) ? (
-                            <button
-                              onClick={() => handleView(video, 'video')}
-                              className="bg-brandBlue text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center gap-2"
-                            >
-                              <span className="material-symbols-rounded text-sm">play_arrow</span>
-                              Watch
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleDownload(video, 'video')}
-                              className="p-2 text-gray-400 group-hover:text-brandBlue group-hover:bg-blue-50 rounded-lg transition-all flex-shrink-0"
-                              title="Add to Downloads"
-                            >
-                              {downloadingId === (video._id || video.id) ? (
-                                <span className="material-symbols-rounded animate-spin">progress_activity</span>
-                              ) : (
-                                <span className="material-symbols-rounded">download</span>
-                              )}
-                            </button>
-                          )}
                         </div>
-                      </div>
-                    ))
+                      ))
                   ) : null}
 
-                  {videos.filter(v => normalizeId(v.folderId) === currentFolderId).length === 0 && folders.filter(f => normalizeId(f.parentId) === currentFolderId).length === 0 && (
+                  {videos.filter(v => normalizeId(v.folderId) === currentFolderId && v.contentType !== 'youtube_zoom' && v.contentType !== 'live_stream').length === 0 && folders.filter(f => normalizeId(f.parentId) === currentFolderId).length === 0 && (
                     <div className="bg-white p-12 rounded-2xl text-center border-2 border-dashed border-gray-200">
                       <span className="material-symbols-rounded text-gray-200 text-5xl">smart_display</span>
                       <p className="text-sm font-bold text-gray-400 mt-4">No content found in this folder</p>
                     </div>
                   )}
+                </div>
+              )}
+
+              {activeTab === 'live' && (
+                <div className="space-y-4">
+                  <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+                    <LiveClassesCalendar studentId={student?.id} courseId={id} />
+                  </div>
                 </div>
               )}
 
@@ -489,36 +498,36 @@ const StudyDashboard: React.FC = () => {
                     notes
                       .filter(n => normalizeId(n.folderId) === currentFolderId && (activeSubject === 'All Subjects' || n.subject === activeSubject))
                       .map((note, idx) => (
-                      <div key={note._id || idx} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex gap-4 items-center group hover:border-brandBlue transition-all">
-                        <div className="w-10 h-10 bg-brandBlue/10 rounded-full flex items-center justify-center text-brandBlue flex-shrink-0">
-                          <span className="material-symbols-rounded">description</span>
+                        <div key={note._id || idx} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex gap-4 items-center group hover:border-brandBlue transition-all">
+                          <div className="w-10 h-10 bg-brandBlue/10 rounded-full flex items-center justify-center text-brandBlue flex-shrink-0">
+                            <span className="material-symbols-rounded">description</span>
+                          </div>
+                          <div className="flex-1">
+                            <h4 className="font-bold text-sm">{note.title}</h4>
+                            <p className="text-[10px] text-gray-400 mt-0.5">PDF Document</p>
+                          </div>
+                          {isFreeContent || downloadedIds.has(note._id || note.id) ? (
+                            <button
+                              onClick={() => handleView(note, 'pdf')}
+                              className="bg-brandBlue text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+                            >
+                              View
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleDownload(note, 'pdf')}
+                              className="p-2 text-gray-400 group-hover:text-brandBlue group-hover:bg-blue-50 rounded-lg transition-all flex-shrink-0"
+                              title="Add to Downloads"
+                            >
+                              {downloadingId === (note._id || note.id) ? (
+                                <span className="material-symbols-rounded animate-spin">progress_activity</span>
+                              ) : (
+                                <span className="material-symbols-rounded">download</span>
+                              )}
+                            </button>
+                          )}
                         </div>
-                        <div className="flex-1">
-                          <h4 className="font-bold text-sm">{note.title}</h4>
-                          <p className="text-[10px] text-gray-400 mt-0.5">PDF Document</p>
-                        </div>
-                        {isFreeContent || downloadedIds.has(note._id || note.id) ? (
-                          <button
-                            onClick={() => handleView(note, 'pdf')}
-                            className="bg-brandBlue text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
-                          >
-                            View
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => handleDownload(note, 'pdf')}
-                            className="p-2 text-gray-400 group-hover:text-brandBlue group-hover:bg-blue-50 rounded-lg transition-all flex-shrink-0"
-                            title="Add to Downloads"
-                          >
-                            {downloadingId === (note._id || note.id) ? (
-                              <span className="material-symbols-rounded animate-spin">progress_activity</span>
-                            ) : (
-                              <span className="material-symbols-rounded">download</span>
-                            )}
-                          </button>
-                        )}
-                      </div>
-                    ))
+                      ))
                   ) : null}
 
                   {notes.filter(n => normalizeId(n.folderId) === currentFolderId).length === 0 && folders.filter(f => normalizeId(f.parentId) === currentFolderId).length === 0 && (
@@ -557,17 +566,17 @@ const StudyDashboard: React.FC = () => {
                       {tests
                         .filter(t => normalizeId(t.folderId) === currentFolderId && (activeSubject === 'All Subjects' || t.subject === activeSubject))
                         .map((test, idx) => (
-                        <div key={test._id || idx} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex gap-4 items-center">
-                          <div className="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center text-green-600">
-                            <span className="material-symbols-rounded">rule</span>
+                          <div key={test._id || idx} className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 flex gap-4 items-center">
+                            <div className="w-10 h-10 bg-green-50 rounded-full flex items-center justify-center text-green-600">
+                              <span className="material-symbols-rounded">rule</span>
+                            </div>
+                            <div className="flex-1">
+                              <h4 className="font-bold text-sm">{test.title || test.name}</h4>
+                              <p className="text-[10px] text-gray-400">{test.questions?.length || 0} Questions</p>
+                            </div>
+                            <button className="bg-brandBlue text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg">Start</button>
                           </div>
-                          <div className="flex-1">
-                            <h4 className="font-bold text-sm">{test.title || test.name}</h4>
-                            <p className="text-[10px] text-gray-400">{test.questions?.length || 0} Questions</p>
-                          </div>
-                          <button className="bg-brandBlue text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg">Start</button>
-                        </div>
-                      ))}
+                        ))}
                     </div>
                   ) : (
                     <div className="bg-white p-12 rounded-2xl text-center border-2 border-dashed border-gray-200">

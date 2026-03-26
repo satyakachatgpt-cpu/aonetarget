@@ -35,3 +35,5 @@ server/node_modules/
 client/node_modules/
 *.mp4
 *.tmp
+.temp_bulk_server.txt
+.temp_bulk_uploader.txt

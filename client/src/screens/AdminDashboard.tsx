@@ -89,9 +89,9 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
     const secondToLastPart = pathParts[pathParts.length - 2];
 
     if (secondToLastPart === 'tests') {
-       setActiveViewState('tests');
+      setActiveViewState('tests');
     } else if (lastPart && lastPart !== 'admin' && lastPart !== '') {
-       setActiveViewState(lastPart as AdminView);
+      setActiveViewState(lastPart as AdminView);
     }
   }, [location.pathname]);
 
@@ -137,7 +137,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
       icon: 'inventory_2',
       color: 'text-gray-700',
       submenu: [
-        { id: 'packages', label: 'Batches', icon: 'category' },
+        { id: 'packages', label: 'Featured Batches', icon: 'category' },
         { id: 'free-content', label: 'Free Content', icon: 'auto_awesome' },
         { id: 'quick-links', label: ' Quick Links', icon: 'public' },
         { id: 'pdfs', label: 'E-Books', icon: 'book' }
@@ -184,7 +184,6 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         { id: 'institute', label: 'Profile', icon: 'person' },
         { id: 'categories', label: 'Categories', icon: 'category' },
         { id: 'settings', label: 'Configurations', icon: 'admin_panel_settings' },
-        { id: 'security-center', label: 'Security Center', icon: 'shield' },
         { id: 'blocked-users', label: 'Blocked Users', icon: 'block' }
       ]
     },
@@ -222,59 +221,54 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
   const renderContent = () => {
     const props = { showToast };
     return (
-      <Suspense fallback={
-        <div className="flex items-center justify-center p-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-        </div>
-      }>
-        <Routes>
-          <Route path="/" element={<Navigate to="dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard {...props} />} />
-          <Route path="categories" element={<Categories {...props} />} />
-          <Route path="misc" element={<MiscSection {...props} />} />
-          <Route path="students" element={<Students {...props} />} />
-          <Route path="blocked-users" element={<Students {...props} initialStatus="inactive" viewMode="blocked" />} />
-          <Route path="buyers" element={<Buyers {...props} />} />
-          <Route path="tokens" element={<Tokens {...props} />} />
-          <Route path="coupons" element={<Coupons {...props} />} />
-          <Route path="store" element={<Store {...props} />} />
-          <Route path="institute" element={<Institute {...props} />} />
-          <Route path="questions" element={<Questions {...props} />} />
-          <Route path="question-bank" element={<Questions {...props} view="bank" />} />
-          <Route path="passages" element={<Passages {...props} />} />
-          <Route path="tests" element={<Tests {...props} />} />
-          <Route path="tests/:id" element={<Tests {...props} />} />
-          <Route path="subjective-test" element={<SubjectiveTest {...props} />} />
-          <Route path="test-series" element={<TestSeries {...props} />} />
-          <Route path="all-reports" element={<AllReports {...props} />} />
-          <Route path="videos" element={<Videos {...props} />} />
-          <Route path="video-series" element={<VideoSeries {...props} />} />
-          <Route path="live-videos" element={<LiveVideos {...props} />} />
-          <Route path="live-sessions" element={<LiveSessions />} />
-          <Route path="pdfs" element={<PDFs {...props} />} />
-          <Route path="packages" element={<Packages {...props} onCourseSelect={handleSelectCourseForContent} />} />
-          <Route path="free-content" element={<ContentManager mode="free" />} />
-          <Route path="chat-support" element={<ChatSupport {...props} />} />
-          <Route path="messages" element={<Messages {...props} />} />
-          <Route path="blog" element={<Blog {...props} />} />
-          <Route path="settings" element={<Settings {...props} />} />
-          <Route path="security-center" element={<SecurityCenter />} />
-          <Route path="banners" element={<Banners {...props} />} />
-          <Route path="referrals" element={<Referrals {...props} />} />
-          <Route path="courses" element={<Courses {...props} />} />
-          <Route path="course-content" element={<CourseContentManager {...props} setActiveView={setActiveView} initialCourse={selectedCourseForContent} initialMainTab={initialContentTab} onClearInitialCourse={() => { setSelectedCourseForContent(null); localStorage.removeItem('admin_selected_course'); }} onBack={() => { navigate('/admin/packages'); localStorage.removeItem('admin_selected_course'); localStorage.removeItem('admin_content_tab'); }} />} />
-          <Route path="live-class-scheduler" element={<LiveClassScheduler {...props} />} />
-          <Route path="subcourses" element={<SubCourses {...props} />} />
-          <Route path="subjects" element={<Subjects {...props} />} />
-          <Route path="topics" element={<Topics {...props} />} />
-          <Route path="instructions" element={<Instructions {...props} />} />
-          <Route path="exam-documents" element={<ExamDocuments {...props} />} />
-          <Route path="global-news" element={<GlobalNews {...props} />} />
-          <Route path="quick-links" element={<QuickLinks {...props} />} />
-          <Route path="push-notifications" element={<PushNotifications {...props} />} />
-          <Route path="view-format/:formatId" element={<ViewFormatPage />} />
-        </Routes>
-      </Suspense>
+      <Routes>
+        <Route path="/" element={<Navigate to="dashboard" replace />} />
+        <Route path="dashboard" element={<Dashboard {...props} />} />
+        <Route path="categories" element={<Categories {...props} />} />
+        <Route path="misc" element={<MiscSection {...props} />} />
+        <Route path="students" element={<Students {...props} />} />
+        <Route path="blocked-users" element={<Students {...props} initialStatus="inactive" viewMode="blocked" />} />
+        <Route path="buyers" element={<Buyers {...props} />} />
+        <Route path="tokens" element={<Tokens {...props} />} />
+        <Route path="coupons" element={<Coupons {...props} />} />
+        <Route path="store" element={<Store {...props} />} />
+        <Route path="institute" element={<Institute {...props} />} />
+        <Route path="questions" element={<Questions {...props} />} />
+        <Route path="question-bank" element={<Questions {...props} view="bank" />} />
+        <Route path="passages" element={<Passages {...props} />} />
+        <Route path="tests" element={<Tests {...props} />} />
+        <Route path="tests/:id" element={<Tests {...props} />} />
+        <Route path="subjective-test" element={<SubjectiveTest {...props} />} />
+        <Route path="test-series" element={<TestSeries {...props} />} />
+        <Route path="all-reports" element={<AllReports {...props} />} />
+        <Route path="videos" element={<Videos {...props} />} />
+        <Route path="video-series" element={<VideoSeries {...props} />} />
+        <Route path="live-videos" element={<LiveVideos {...props} />} />
+        <Route path="live-sessions" element={<LiveSessions />} />
+        <Route path="pdfs" element={<PDFs {...props} />} />
+        <Route path="packages" element={<Packages {...props} onCourseSelect={handleSelectCourseForContent} />} />
+        <Route path="free-content" element={<ContentManager mode="free" />} />
+        <Route path="demo-content" element={<ContentManager mode="demo" />} />
+        <Route path="chat-support" element={<ChatSupport {...props} />} />
+        <Route path="messages" element={<Messages {...props} />} />
+        <Route path="blog" element={<Blog {...props} />} />
+        <Route path="settings" element={<Settings {...props} />} />
+        <Route path="security-center" element={<SecurityCenter {...props} />} />
+        <Route path="banners" element={<Banners {...props} />} />
+        <Route path="referrals" element={<Referrals {...props} />} />
+        <Route path="courses" element={<Courses {...props} />} />
+        <Route path="course-content" element={<CourseContentManager {...props} setActiveView={setActiveView} initialCourse={selectedCourseForContent} initialMainTab={initialContentTab} onClearInitialCourse={() => { setSelectedCourseForContent(null); localStorage.removeItem('admin_selected_course'); }} onBack={() => { navigate('/admin/packages'); localStorage.removeItem('admin_selected_course'); localStorage.removeItem('admin_content_tab'); }} />} />
+        <Route path="live-class-scheduler" element={<LiveClassScheduler {...props} />} />
+        <Route path="subcourses" element={<SubCourses {...props} />} />
+        <Route path="subjects" element={<Subjects {...props} />} />
+        <Route path="topics" element={<Topics {...props} />} />
+        <Route path="instructions" element={<Instructions {...props} />} />
+        <Route path="exam-documents" element={<ExamDocuments {...props} />} />
+        <Route path="global-news" element={<GlobalNews {...props} />} />
+        <Route path="quick-links" element={<QuickLinks {...props} />} />
+        <Route path="push-notifications" element={<PushNotifications {...props} />} />
+        <Route path="view-format/:formatId" element={<ViewFormatPage />} />
+      </Routes>
     );
   };
 
@@ -329,7 +323,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         </div>
 
         {/* Navigation Content */}
-        <nav className="flex-1 overflow-y-auto hide-scrollbar py-2 px-3 space-y-0.5">
+        <nav className="flex-1 overflow-y-auto custom-scrollbar py-2 px-3 space-y-0.5">
           {filteredMenuItems.map((item) => (
             <div
               key={item.id}
@@ -400,7 +394,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
           <div className="flex flex-col">
             <h1 className="text-[14px] font-black text-[#1e293b] tracking-widest uppercase">
               {activeView === 'dashboard' ? 'Dashboard' :
-                activeView === 'course-content' ? 'Batches' :
+                activeView === 'course-content' ? 'Featured Batches' :
                   menuItems.find(m => m.id === activeView)?.label ||
                   menuItems.flatMap(m => m.submenu || []).find(s => s.id === activeView)?.label ||
                   'Admin'}
@@ -424,7 +418,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 lg:p-6 bg-[#fcfcfc] min-h-0">
+        <div className="flex-1 overflow-y-auto p-4 lg:p-6 bg-[#fcfcfc] min-h-0 custom-scrollbar">
           <div className="h-full">
             {renderContent()}
           </div>

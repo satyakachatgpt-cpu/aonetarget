@@ -29,7 +29,7 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
         validity: '',
         expiryMode: 'Validity' as 'Validity' | 'End Date' | 'Lifetime Access',
         duration: '180',
-        questions: '0',
+        noOfQuestions: '0',
     });
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [showCategoryOptions, setShowCategoryOptions] = useState(false);
@@ -58,7 +58,7 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
                     validity: editingTest.validity || '',
                     expiryMode: editingTest.expiryMode || 'Validity',
                     duration: editingTest.duration?.toString() || '180',
-                    questions: editingTest.questions?.toString() || '0',
+                    noOfQuestions: editingTest.noOfQuestions?.toString() || editingTest.questions?.toString() || '0',
                 });
                 setImagePreview(editingTest.logo || null);
                 setAdvSettings({
@@ -83,7 +83,7 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
                     validity: '',
                     expiryMode: 'Validity',
                     duration: '180',
-                    questions: '0',
+                    noOfQuestions: '0',
                 });
                 setImagePreview(null);
                 setAdvSettings({
@@ -116,11 +116,11 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
     };
 
     return (
-        <RightSideDrawer isOpen={isOpen} onClose={onClose} width="1100px">
+        <RightSideDrawer isOpen={isOpen} onClose={onClose} width="850px">
             <div className="flex flex-col h-full bg-white font-sans overflow-hidden">
                 {/* Header */}
                 <div className="flex justify-between items-center px-10 py-6 border-b border-gray-100 shrink-0">
-                    <h2 className="text-[20px] font-bold text-[#1e1e1e]">Add Test Series</h2>
+                    <h2 className="text-[20px] font-bold text-[#1e1e1e]">Add Test</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-black transition-colors">
                         <span className="material-symbols-outlined text-[28px]">close</span>
                     </button>
@@ -197,59 +197,90 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
                                     />
                                 </div>
 
-                                {/* Category */}
-                                <div className="space-y-4">
+                                 {/* Time and Questions */}
+                                <div className="grid grid-cols-2 gap-10 pt-4">
                                     <div className="space-y-2">
-                                        <label className="text-[14px] font-bold text-gray-700 ml-1">Category (Exam)<span className="text-red-500">*</span></label>
+                                        <label className="text-[14px] font-bold text-gray-700 ml-1">Time (Minutes)<span className="text-red-500">*</span></label>
+                                        <input
+                                            type="number"
+                                            placeholder="180"
+                                            className="w-full h-12 px-6 bg-white border border-gray-200 rounded-2xl text-[16px] font-bold outline-none focus:border-black transition-all placeholder:text-gray-300 shadow-sm"
+                                            value={formData.duration}
+                                            onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[14px] font-bold text-gray-700 ml-1">No. of Questions<span className="text-red-500">*</span></label>
+                                        <input
+                                            type="number"
+                                            placeholder="100"
+                                            className="w-full h-12 px-6 bg-white border border-gray-200 rounded-2xl text-[16px] font-bold outline-none focus:border-black transition-all placeholder:text-gray-300 shadow-sm"
+                                            value={formData.noOfQuestions}
+                                            onChange={(e) => setFormData({ ...formData, noOfQuestions: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Category */}
+                                <div className="">
+                                    <div className="space-y-2">
+                                        <label className="text-[13px] font-bold text-[#2d3748] ml-1 uppercase tracking-wider opacity-60">Category (Exam)<span className="text-red-500 ml-0.5">*</span></label>
                                         <CustomDropdown
                                             options={courses.map(c => ({ value: c.id, label: c.name || c.title || '' }))}
                                             value={formData.courseId}
                                             onChange={(val: any) => setFormData({ ...formData, courseId: val })}
-                                            placeholder="Search"
+                                            placeholder="Choose Course or Exam"
+                                            searchPlaceholder="Type to filter..."
                                         />
                                     </div>
                                     {!showCategoryOptions ? (
-                                        <div className="flex justify-end pr-1">
+                                        <div className="flex justify-start pl-1 mt-4">
                                             <button
                                                 onClick={() => setShowCategoryOptions(true)}
-                                                className="text-[#4361EE] text-[15px] font-bold flex items-center gap-0.5 hover:underline">
-                                                More Options <span className="material-symbols-outlined text-[22px]">expand_more</span>
+                                                className="text-[#718096] text-[13px] font-bold flex items-center gap-1.5 hover:text-black transition-colors group">
+                                                <span className="w-5 h-5 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-gray-100 pb-0.5 transition-colors">
+                                                    <span className="material-symbols-outlined text-[16px]">add</span>
+                                                </span>
+                                                Show Advanced Metadata
                                             </button>
                                         </div>
                                     ) : (
-                                        <div className="space-y-10 animate-in slide-in-from-top-2 duration-300">
-                                            <div className="grid grid-cols-2 gap-10">
+                                        <div className="space-y-8 animate-in slide-in-from-top-2 duration-300 mt-6 pt-6 border-t border-dashed border-gray-100">
+                                            <div className="grid grid-cols-2 gap-8">
                                                 <div className="space-y-2">
-                                                    <label className="text-[14px] font-bold text-gray-700 ml-1">Sorting Order</label>
+                                                    <label className="text-[13px] font-bold text-[#2d3748] ml-1 uppercase tracking-wider opacity-60">Sorting Order</label>
                                                     <input
                                                         type="text"
                                                         placeholder="0.00"
-                                                        className="w-full h-[60px] px-6 bg-white border border-gray-200 rounded-2xl text-[16px] font-bold outline-none focus:border-gray-300 transition-all placeholder:text-gray-300 shadow-sm"
+                                                        className="w-full h-[54px] px-6 bg-white border border-gray-200 rounded-2xl text-[15px] font-bold outline-none focus:border-gray-300 transition-all placeholder:text-gray-300 shadow-sm"
                                                         value={formData.sortBy}
                                                         onChange={(e) => setFormData({ ...formData, sortBy: e.target.value })}
                                                     />
                                                 </div>
                                                 <div className="space-y-2">
-                                                    <label className="text-[14px] font-bold text-gray-700 ml-1">Status</label>
-                                                    <div className="flex bg-[#f8f8f8] p-1.5 rounded-[24px] h-[60px] border border-gray-100">
+                                                    <label className="text-[13px] font-bold text-[#2d3748] ml-1 uppercase tracking-wider opacity-60">Status</label>
+                                                    <div className="flex bg-[#f8f8f8] p-1 rounded-2xl h-[54px] border border-gray-100">
                                                         <button type="button"
                                                             onClick={() => setFormData({ ...formData, status: 'active' })}
-                                                            className={`flex-1 rounded-[20px] font-bold text-[14px] transition-all ${formData.status === 'active' ? 'bg-white text-black shadow-sm' : 'text-gray-400'}`}>
+                                                            className={`flex-1 rounded-xl font-bold text-[13px] transition-all ${formData.status === 'active' ? 'bg-white text-[#1a1a1a] shadow-sm' : 'text-gray-400'}`}>
                                                             Enabled
                                                         </button>
                                                         <button type="button"
                                                             onClick={() => setFormData({ ...formData, status: 'inactive' })}
-                                                            className={`flex-1 rounded-[20px] font-bold text-[14px] transition-all ${formData.status === 'inactive' ? 'bg-white text-black shadow-sm' : 'text-gray-400'}`}>
+                                                            className={`flex-1 rounded-xl font-bold text-[13px] transition-all ${formData.status === 'inactive' ? 'bg-white text-[#1a1a1a] shadow-sm' : 'text-gray-400'}`}>
                                                             Disabled
                                                         </button>
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="flex justify-end pr-1">
+                                            <div className="flex justify-start pl-1">
                                                 <button
                                                     onClick={() => setShowCategoryOptions(false)}
-                                                    className="text-[#4361EE] text-[15px] font-bold flex items-center gap-0.5 hover:underline">
-                                                    Hide More Options <span className="material-symbols-outlined text-[22px]">expand_less</span>
+                                                    className="text-[#718096] text-[13px] font-bold flex items-center gap-1.5 hover:text-black transition-colors group">
+                                                    <span className="w-5 h-5 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-gray-100 pb-0.5 transition-colors">
+                                                        <span className="material-symbols-outlined text-[16px]">remove</span>
+                                                    </span>
+                                                    Hide Advanced Metadata
                                                 </button>
                                             </div>
                                         </div>
@@ -475,7 +506,7 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
                                     onSubmit({ ...formData, ...advSettings });
                                 }}
                                 className="flex-[2] h-[60px] rounded-[20px] bg-[#1a1c1e] hover:bg-black text-white text-[16px] font-bold uppercase tracking-[0.1em] transition-all active:scale-[0.99] shadow-lg shadow-black/5">
-                                {editingTest ? 'Save Changes' : 'Submit Test Series'}
+                                {editingTest ? 'Save Changes' : 'Submit Test'}
                             </button>
                         </div>
                     </div>

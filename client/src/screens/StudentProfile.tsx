@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import { useAuthStore } from '../store/authStore';
+import { useUIStore } from '../store/uiStore';
 
 interface StudentProfileProps {
   setAuth: (auth: boolean) => void;
@@ -10,6 +11,7 @@ interface StudentProfileProps {
 const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
   const navigate = useNavigate();
   const { student: globalStudent, isAuthenticated, clearAuth, setAuth: updateAuth, unreadNotificationsCount } = useAuthStore();
+  const { setBottomNavHidden } = useUIStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [student, setStudent] = useState<any>(null);
   const [stats, setStats] = useState({
@@ -28,17 +30,20 @@ const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
 
   useEffect(() => {
     if (isEditing) {
+      setBottomNavHidden(true);
       document.body.classList.add('modal-open-nav-hide');
       document.body.style.overflow = 'hidden';
     } else {
+      setBottomNavHidden(false);
       document.body.classList.remove('modal-open-nav-hide');
       document.body.style.overflow = 'unset';
     }
     return () => {
+      setBottomNavHidden(false);
       document.body.classList.remove('modal-open-nav-hide');
       document.body.style.overflow = 'unset';
     };
-  }, [isEditing]);
+  }, [isEditing, setBottomNavHidden]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -110,7 +115,7 @@ const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
   const menuItems = [
     { icon: 'edit', label: 'Edit Profile', action: () => setIsEditing(true) },
     { icon: 'school', label: 'My Courses', path: '/my-courses' },
-    { icon: 'quiz', label: 'My Tests', path: '/mock-tests' },
+    { icon: 'quiz', label: 'My Tests', path: '/my-tests' },
     { icon: 'notifications', label: 'Notifications', path: '/notifications' },
     { icon: 'help', label: 'Help & Support', path: '/help-support' },
     { icon: 'settings', label: 'Settings', path: '/settings' }

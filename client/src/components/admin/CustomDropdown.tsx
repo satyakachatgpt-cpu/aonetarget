@@ -76,19 +76,20 @@ const CustomDropdown: React.FC<CustomDropdownProps> = ({
         <div className={`relative w-full ${isOpen ? 'z-[100]' : 'z-10'}`} ref={wrapperRef}>
             <div
                 onClick={() => !disabled && setIsOpen(!isOpen)}
-                className={`w-full h-11 px-4 border rounded-xl text-[14px] font-medium transition-all shadow-sm ${disabled ? 'bg-gray-50 border-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white border-gray-200 text-gray-700 cursor-pointer hover:border-gray-300 focus:border-gray-400'}`}
+                className={`w-full h-11 px-4 border rounded-xl text-[14px] font-medium transition-all shadow-sm flex items-center justify-between gap-2 outline-none ${
+                    isOpen ? 'border-gray-400 ring-2 ring-gray-100' : ''
+                } ${disabled ? 'bg-gray-50 border-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white border-gray-200 text-gray-700 cursor-pointer hover:border-gray-300'}`}
             >
-
-                <span className="truncate text-left flex-1">
+                <div className="flex-1 truncate text-left">
                     {isMulti
                         ? (Array.isArray(value) && value.length > 0 ? (placeholder === 'Select' ? `${value.length} selected` : placeholder) : placeholder)
                         : (value ? (options.find((o: any) => o.value === value)?.label || placeholder) : placeholder)}
-                </span>
-                <div className="flex items-center gap-2">
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
                     {value && (isMulti ? Array.isArray(value) && value.length > 0 : true) && (
                         <span
                             onClick={(e) => { e.stopPropagation(); handleClear(); }}
-                            className="text-gray-400 hover:text-gray-600 transition-colors material-symbols-outlined text-[18px]"
+                            className="text-gray-300 hover:text-gray-600 transition-colors material-symbols-outlined text-[18px]"
                         >
                             close
                         </span>

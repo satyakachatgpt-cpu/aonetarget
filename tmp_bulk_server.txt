@@ -1,0 +1,33 @@
+﻿
+> app.post('/api/questions/bulk', 
+async (req, res) => {
+    try {
+      const { questions } = 
+req.body;
+      if (!Array.isArray(questions) 
+|| questions.length === 0) return 
+res.status(400).json({ error: 'No 
+questions provided' });
+      const result = await db.collec
+tion('questions').insertMany(questio
+ns);
+      res.status(201).json({ 
+success: true, inserted: 
+result.insertedCount });
+> app.post('/api/questions/bulk-exce
+l', excelUpload.single('file'), 
+async (req, res) => {
+    try {
+      if (!req.file) return 
+res.status(400).json({ error: 'No 
+file uploaded' });
+      const workbook = 
+XLSX.read(req.file.buffer, { type: 
+'buffer' });
+      const jsonData = XLSX.utils.sh
+eet_to_json(workbook.Sheets[workbook
+.SheetNames[0]], { defval: '' });
+      const questions = 
+jsonData.map((row, i) => ({
+
+

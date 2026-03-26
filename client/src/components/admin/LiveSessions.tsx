@@ -7,6 +7,8 @@ import {
     FormLabel,
     FormInput
 } from './DrawerSystem';
+import { subjectsAPI } from '../../services/apiClient';
+import { LiveStreamDrawer } from './FeatureDrawers';
 
 interface LiveSessionReal {
     id: string;
@@ -38,22 +40,60 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
     const tabs = ['Courses', 'Live & Upcoming', 'Forum', 'Content'];
 
     const [showAdvanced, setShowAdvanced] = useState(false);
+    const [courses, setCourses] = useState<any[]>([]);
+    const [subjects, setSubjects] = useState<any[]>([]);
+    const [showLiveStreamDrawer, setShowLiveStreamDrawer] = useState(false);
 
     useEffect(() => { fetchData(); }, []);
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            const [sessionsData, coursesData] = await Promise.all([liveVideosAPI.getAll(), coursesAPI.getAll()]);
+            const [sessionsDataRaw, coursesData, subjectsData] = await Promise.all([
+                liveVideosAPI.getAll(),
+                coursesAPI.getAll(),
+                subjectsAPI.getAll()
+            ]);
+            
+            const sessionsData = Array.isArray(sessionsDataRaw) ? sessionsDataRaw : (sessionsDataRaw?.data || []);
+            const normalizedCourses = Array.isArray(coursesData) ? coursesData : (coursesData?.data || []);
+            const normalizedSubjects = Array.isArray(subjectsData) ? subjectsData : (subjectsData?.data || []);
+            
+            setCourses(normalizedCourses);
+            setSubjects(normalizedSubjects);
+
             const enriched = sessionsData.map((session: any) => {
-                const course = coursesData.find((c: any) => (c.id === session.courseId || c._id === session.courseId));
-                return { ...session, courseName: course?.name || course?.title || 'General' };
+                const course = normalizedCourses.find((c: any) => (c.id === session.courseId || c._id === session.courseId));
+                return { 
+                    ...session, 
+                    id: session.id || session._id || '',
+                    courseName: course?.name || course?.title || 'General' 
+                };
             });
             setSessions(enriched);
         } catch (error) {
-            console.error('Failed to fetch sessions:', error);
+            console.error('Failed to fetch data:', error);
+            setSessions([]);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleEndSession = async (session: LiveSessionReal) => {
+        if (!confirm(`Are you sure you want to end "${session.title}"?`)) return;
+        setActionLoading(session.id);
+        try {
+            await liveVideosAPI.update(session.id, { 
+                ...session, 
+                status: 'ended',
+                endTime: new Date().toISOString()
+            });
+            setSessions(prev => prev.map(s => s.id === session.id ? { ...s, status: 'ended' } : s));
+        } catch (error: any) {
+            console.error('End session error:', error);
+            alert(error.message || 'Failed to end session. Please try again.');
+        } finally {
+            setActionLoading(null);
         }
     };
 
@@ -63,8 +103,9 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
         try {
             await liveVideosAPI.delete(id);
             setSessions(prev => prev.filter(s => s.id !== id));
-        } catch (error) {
-            alert('Failed to delete session. Please try again.');
+        } catch (error: any) {
+            console.error('Delete error:', error);
+            alert(error.message || 'Failed to delete session. Please try again.');
         } finally {
             setActionLoading(null);
         }
@@ -75,7 +116,7 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
         setActionLoading(editingSession.id);
         try {
             await liveVideosAPI.update(editingSession.id, editingSession);
-            setSessions(prev => prev.map(s => s.id === editingSession.id ? editingSession : s));
+            await fetchData(); // Refresh to get updated course names etc
             setEditingSession(null);
         } catch (error) {
             alert('Failed to update session. Please try again.');
@@ -84,12 +125,27 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
         }
     };
 
+    const handleAddLiveStream = async (data: any) => {
+        try {
+            await liveVideosAPI.create({
+                ...data,
+                status: 'upcoming'
+            });
+            setShowLiveStreamDrawer(false);
+            fetchData();
+        } catch (error) {
+            console.error(error);
+            alert('Failed to schedule live stream');
+        }
+    };
+
     const filteredSessions = useMemo(() => {
         return sessions.filter(session => {
-            const matchesSearch =
-                session.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                session.id.includes(searchTerm) ||
-                (session.courseName && session.courseName.toLowerCase().includes(searchTerm.toLowerCase()));
+            const titleMatch = (session?.title || '').toLowerCase().includes(searchTerm.toLowerCase());
+            const idMatch = (session?.id || '').toLowerCase().includes(searchTerm.toLowerCase());
+            const courseMatch = (session?.courseName || '').toLowerCase().includes(searchTerm.toLowerCase());
+            
+            const matchesSearch = titleMatch || idMatch || courseMatch;
             const matchesStatus = statusFilter === 'all' || (statusFilter === 'live' ? session.status === 'live' : session.status !== 'live');
             return matchesSearch && matchesStatus;
         });
@@ -134,7 +190,10 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                                 </div>
                             )}
                         </div>
-                        <button className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center hover:bg-gray-900 transition-all shadow-md active:scale-95">
+                        <button 
+                            onClick={() => setShowLiveStreamDrawer(true)}
+                            className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center hover:bg-gray-900 transition-all shadow-md active:scale-95"
+                        >
                             <span className="material-symbols-outlined text-[20px]">add</span>
                         </button>
                     </div>
@@ -176,7 +235,14 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                                                         className="w-9 h-9 flex items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-all active:scale-90 disabled:opacity-50">
                                                         <span className="material-symbols-outlined text-[18px]">edit</span>
                                                     </button>
-                                                    {/* 🗑️ Delete */}
+                                                     {/* ⏹️ End Stream */}
+                                                     {session.status === 'live' && (
+                                                         <button title="End Live Stream" onClick={() => handleEndSession(session)} disabled={!!actionLoading}
+                                                             className="w-9 h-9 flex items-center justify-center rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-all active:scale-90 disabled:opacity-50">
+                                                             <span className="material-symbols-outlined text-[18px]">stop_circle</span>
+                                                         </button>
+                                                     )}
+                                                     {/* 🗑️ Delete */}
                                                     <button title="Delete" onClick={() => handleDelete(session.id)} disabled={actionLoading === session.id}
                                                         className="w-9 h-9 flex items-center justify-center rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-all active:scale-90 disabled:opacity-50">
                                                         {actionLoading === session.id
@@ -339,6 +405,14 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                     </>
                 )}
             </RightSideDrawer>
+            
+            <LiveStreamDrawer 
+                isOpen={showLiveStreamDrawer}
+                onClose={() => setShowLiveStreamDrawer(false)}
+                onSubmit={handleAddLiveStream}
+                courses={courses}
+                subjects={subjects}
+            />
 
             <style>{`.material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 600, 'GRAD' 0, 'opsz' 24; }`}</style>
         </div>

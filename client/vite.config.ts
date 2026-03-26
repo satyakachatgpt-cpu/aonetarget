@@ -5,6 +5,8 @@ import react from "@vitejs/plugin-react";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
 
+  const backendUrl = 'http://127.0.0.1:5000';
+
   return {
     plugins: [react()],
 
@@ -13,16 +15,30 @@ export default defineConfig(({ mode }) => {
       port: 5173,
       strictPort: false,
       proxy: {
-        '/api': 'http://localhost:5000',
-        '/uploads': 'http://localhost:5000',
+        '/api': {
+          target: backendUrl,
+          changeOrigin: true,
+          configure: (proxy) => {
+            proxy.on('error', (err, req, res) => {
+              console.log('[proxy error]', req.url, err.message);
+            });
+          }
+        },
+        '/uploads': {
+          target: backendUrl,
+          changeOrigin: true,
+        },
         '/attach-assist': 'http://localhost:5000',
-        '/attached_assets': 'http://localhost:5000',
+        '/attached_assets': {
+          target: backendUrl,
+          changeOrigin: true,
+        },
       }
     },
 
     preview: {
       host: "0.0.0.0",
-      port: 5000,
+      port: 4173,  // Changed from 5000 to avoid conflict with backend server
     },
 
     resolve: {
@@ -53,3 +69,4 @@ export default defineConfig(({ mode }) => {
     },
   };
 });
+

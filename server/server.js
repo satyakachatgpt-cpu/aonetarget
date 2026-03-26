@@ -1,6 +1,11 @@
+<<<<<<< HEAD
 import express from 'express';
 import dotenv from 'dotenv';
 dotenv.config();
+=======
+import 'dotenv/config';
+import express from 'express';
+>>>>>>> karan
 import cors from 'cors';
 import { fileURLToPath } from "url";
 import path from 'path';
@@ -19,15 +24,22 @@ import {
   generateSignedUrl, verifySignedUrl
 } from './middleware/auth.js';
 import compression from 'compression';
+<<<<<<< HEAD
 import { globalLimiter, authLimiter, securityHeaders, sanitizeInput } from './middleware/security.js';
 import { sendEmail, templates } from './utils/email.js';
+=======
+import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from 'docx';
+>>>>>>> karan
 
 // Force Google DNS to fix MongoDB SRV resolution issues (ECONNREFUSED)
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 
+<<<<<<< HEAD
 
 // Config moved to top
 
+=======
+>>>>>>> karan
 const app = express();
 console.log('============================================');
 console.log('SERVER IS STARTING (VERSION: EMAIL_FIX_v1)');
@@ -41,8 +53,11 @@ const isProduction = process.env.NODE_ENV === 'production';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+<<<<<<< HEAD
 app.use(securityHeaders);
 
+=======
+>>>>>>> karan
 app.use(cors({
   origin: '*',
   credentials: false,
@@ -56,6 +71,7 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
+<<<<<<< HEAD
 app.use(sanitizeInput);
 app.use(cookieParser());
 app.use('/api/', globalLimiter);
@@ -67,6 +83,12 @@ app.use('/attached_assets', (req, res) => {
   res.redirect(301, `/attach-assist${req.path}`);
 });
 
+=======
+app.use(cookieParser());
+app.use('/attached_assets', express.static(path.join(__dirname, '../attached_assets')));
+
+// Routes
+>>>>>>> karan
 app.get('/api/secure-video/:filename', authMiddleware, async (req, res) => {
   try {
     const { filename } = req.params;
@@ -78,7 +100,7 @@ app.get('/api/secure-video/:filename', authMiddleware, async (req, res) => {
       }
     }
 
-    let student = null;
+    let student = null;chah
     if (req.user) {
       student = await db.collection('students').findOne({
         $or: [
@@ -242,6 +264,33 @@ const connectDB = async () => {
     process.exit(1);
   }
 };
+
+// Watch Progress API
+app.get('/api/watch-progress/:courseId/:videoId', authMiddleware, async (req, res) => {
+  try {
+    const progress = await db.collection('watch_progress').findOne({
+      userId: req.user.studentId,
+      videoId: req.params.videoId
+    });
+    res.json(progress || { watchedTime: 0 });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.post('/api/watch-progress', authMiddleware, async (req, res) => {
+  const { courseId, videoId, watchedTime } = req.body;
+  try {
+    await db.collection('watch_progress').updateOne(
+      { userId: req.user.studentId, videoId },
+      { $set: { courseId, watchedTime, updatedAt: new Date() } },
+      { upsert: true }
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
 
 // Initialize DB on startup
 connectDB();
@@ -431,6 +480,75 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
     res.status(500).json({ error: 'Upload failed' });
   }
 });
+
+// ✅ REAL DOCX Generation Endpoint
+app.post('/api/generate-docx', async (req, res) => {
+  try {
+    const { questions, title = 'Question Paper' } = req.body;
+    if (!questions || !Array.isArray(questions)) {
+      return res.status(400).json({ error: 'Questions array required' });
+    }
+
+    const children = [
+      new Paragraph({
+        text: title.toUpperCase(),
+        heading: HeadingLevel.HEADING_1,
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 600 }
+      })
+    ];
+
+    questions.forEach((q, idx) => {
+      // Question Header
+      children.push(new Paragraph({
+        children: [
+          new TextRun({ text: `Question ${idx + 1}: `, bold: true, size: 28 }),
+          new TextRun({ text: (q.questionEn || q.question || '').replace(/<[^>]*>/g, '').trim(), size: 28 })
+        ],
+        spacing: { before: 400, after: 200 }
+      }));
+
+      // Options
+      if (q.options && Array.isArray(q.options)) {
+        q.options.forEach((opt, optIdx) => {
+          children.push(new Paragraph({
+            children: [
+              new TextRun({ text: `${String.fromCharCode(65 + optIdx)}) `, bold: true, size: 24 }),
+              new TextRun({ text: String(opt).replace(/<[^>]*>/g, '').trim(), size: 24 })
+            ],
+            indent: { left: 400 },
+            spacing: { after: 100 }
+          }));
+        });
+      }
+
+      // Metadata (Answer & Marks)
+      children.push(new Paragraph({
+        children: [
+          new TextRun({ text: "Correct Answer: ", bold: true, size: 22 }),
+          new TextRun({ text: String(q.correctAnswer || '').toUpperCase(), bold: true, color: "008000", size: 22 }),
+          new TextRun({ text: "    |    ", size: 22 }),
+          new TextRun({ text: `Marks: +${q.positiveMarks} / ${q.negativeMarks}`, size: 22 })
+        ],
+        spacing: { before: 200, after: 300 }
+      }));
+    });
+
+    const doc = new Document({
+      sections: [{ children }]
+    });
+
+    const buffer = await Packer.toBuffer(doc);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', 'attachment; filename="output.docx"');
+    res.send(buffer);
+  } catch (err) {
+    console.error('DOCX Generation Error:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 
 // APK Download endpoint - serves the latest APK file
 app.get('/api/download/apk', (req, res) => {
@@ -699,7 +817,7 @@ async function getRelatedCourseIds(course, originalId) {
 }
 
 // Routes for Course Videos
-app.get('/api/courses/:id/videos', async (req, res) => {
+app.get('/api/courses/:id/videos', authMiddleware, async (req, res) => {
   try {
     const course = await findCourse(req.params.id);
     if (!course) return res.json([]);
@@ -800,12 +918,30 @@ app.post('/api/courses/:id/videos', async (req, res) => {
       folderId = String(folderId);
     }
 
+    const videoData = { ...req.body };
+    const isLiveStream = videoData.contentType === 'live_stream';
+
     const video = {
-      ...req.body,
+      ...(isLiveStream ? {
+        title: videoData.title,
+        platform: videoData.platform,
+        instructor: videoData.instructor,
+        meetingLink: videoData.meetingLink || videoData.link || videoData.url,
+        startDateTime: videoData.startDateTime || videoData.publishOn,
+        endDateTime: videoData.endDateTime || videoData.endTime,
+        joinBeforeMinutes: videoData.joinBeforeMinutes,
+        isFree: videoData.isFree,
+        thumbnail: videoData.thumbnail || videoData.image,
+        contentType: 'live_stream',
+        type: 'video',
+        url: videoData.meetingLink || videoData.link || videoData.url,
+        publishOn: videoData.startDateTime || videoData.publishOn
+      } : videoData),
       courseId: String(courseId),
       folderId: folderId,
       createdAt: new Date().toISOString()
     };
+
     const result = await db.collection('videos').insertOne(video);
     res.status(201).json({ _id: result.insertedId, ...video });
   } catch (error) {
@@ -831,25 +967,69 @@ app.put('/api/courses/:id/videos/:videoId', async (req, res) => {
     }
 
     const { _id, ...updateData } = req.body;
+<<<<<<< HEAD
+=======
+    const isLiveStream = updateData.contentType === 'live_stream';
+
+    const finalUpdate = isLiveStream ? {
+      title: updateData.title,
+      platform: updateData.platform,
+      instructor: updateData.instructor,
+      meetingLink: updateData.meetingLink || updateData.link || updateData.url,
+      startDateTime: updateData.startDateTime || updateData.publishOn,
+      endDateTime: updateData.endDateTime || updateData.endTime,
+      joinBeforeMinutes: updateData.joinBeforeMinutes,
+      isFree: updateData.isFree,
+      thumbnail: updateData.thumbnail || updateData.image,
+      contentType: 'live_stream',
+      type: 'video',
+      url: updateData.meetingLink || updateData.link || updateData.url,
+      publishOn: updateData.startDateTime || updateData.publishOn
+    } : updateData;
+>>>>>>> karan
 
     // Sanitize folderId if present in update
-    if (updateData.folderId !== undefined) {
-      if (updateData.folderId === 'null' || updateData.folderId === 'undefined' || !updateData.folderId) {
-        updateData.folderId = null;
+    if (finalUpdate.folderId !== undefined) {
+      if (finalUpdate.folderId === 'null' || finalUpdate.folderId === 'undefined' || !finalUpdate.folderId) {
+        finalUpdate.folderId = null;
       } else {
-        updateData.folderId = String(updateData.folderId);
+        finalUpdate.folderId = String(finalUpdate.folderId);
       }
     }
 
     const result = await db.collection('videos').updateOne(
       query,
-      { $set: { ...updateData, updatedAt: new Date().toISOString() } }
+      { $set: { ...finalUpdate, updatedAt: new Date().toISOString() } }
     );
     if (result.matchedCount === 0) return res.status(404).json({ error: 'Video not found' });
-    res.json({ success: true, message: 'Video updated' });
+    res.json({ success: true, message: isLiveStream ? 'Live stream updated' : 'Video updated' });
   } catch (error) {
     console.error('Video update error:', error);
     res.status(500).json({ error: 'Failed to update video' });
+  }
+});
+
+app.post('/api/live-stream/end/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const update = {
+      status: 'ended',
+      isLive: false,
+      endedAt: new Date().toISOString(),
+      endTime: new Date().toISOString() // Compatibility with getCalculatedLiveStatus
+    };
+    const query = {
+      $or: [
+        { id: id },
+        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
+      ].filter(v => v.id || v._id)
+    };
+    const result = await db.collection('videos').updateOne(query, { $set: update });
+    if (result.matchedCount === 0) return res.status(404).json({ error: 'Live stream not found' });
+    res.json({ success: true, message: 'Live stream ended successfully' });
+  } catch (error) {
+    console.error('End live stream error:', error);
+    res.status(500).json({ error: 'Failed to end live stream' });
   }
 });
 
@@ -1190,8 +1370,64 @@ app.get('/api/courses/:id/tests', async (req, res) => {
     console.log(`GET /api/courses/${req.params.id}/tests - Found ${tests.length} tests (filtered for course and attached series)`);
     res.json(tests);
   } catch (error) {
+<<<<<<< HEAD
     console.error('Error fetching course tests:', error);
     res.status(500).json({ error: 'Failed to fetch course tests' });
+=======
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.get('/api/courses/:id/live-classes', async (req, res) => {
+  try {
+    const idVariants = await getCourseIdVariants(req.params.id);
+    const query = {
+      courseId: { $in: idVariants }
+    };
+    const [c1, c2, c3] = await Promise.all([
+      db.collection('liveVideos').find(query).toArray(),
+      db.collection('liveClasses').find(query).toArray(),
+      db.collection('videos').find({ ...query, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).toArray()
+    ]);
+    const merged = [...c1, ...c2, ...c3].map(item => {
+      const now = new Date();
+      const startTime = new Date(item.publishOn || item.date || item.createdAt);
+      const targetEnd = item.endTime || item.endDateTime;
+      const endTime = targetEnd ? new Date(targetEnd) : new Date(startTime.getTime() + 60 * 60 * 1000); // Default 1 hour
+      const joinBeforeMin = parseInt(item.joinBeforeMinutes) || 10;
+      const joinTime = new Date(startTime.getTime() - joinBeforeMin * 60 * 1000);
+
+      // Dynamic Status Calculation
+      if (item.status === 'inactive' || item.status === 'ended' || item.status === 'completed') {
+        item.status = 'ended';
+      } else if (now < joinTime) {
+        item.status = 'upcoming';
+      } else if (now >= joinTime && now <= endTime) {
+        item.status = 'live';
+      } else {
+        item.status = 'ended';
+      }
+
+      // Ensure date/startTime properties exist for the calendar view if they are missing
+      if (!item.date && item.publishOn) {
+        const d = new Date(item.publishOn);
+        if (!isNaN(d.getTime())) {
+          item.date = d.toISOString().split('T')[0]; // YYYY-MM-DD
+          item.startTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; // HH:MM
+        }
+      }
+      
+      // Map 'url' or 'meetingLink' consistently
+      if (!item.meetingLink) {
+        item.meetingLink = item.url || item.videoUrl || item.link;
+      }
+      
+      return item;
+    }).sort((a,b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
+    res.json(merged);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed' });
+>>>>>>> karan
   }
 });
 
@@ -1367,6 +1603,80 @@ app.get('/api/students/:id', async (req, res) => {
     res.json(student);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch student' });
+  }
+});
+
+app.get('/api/students/:id/live-classes', async (req, res) => {
+  try {
+    let studentQuery = { id: req.params.id };
+    if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+      studentQuery = { $or: [{ id: req.params.id }, { _id: req.params.id }] };
+    }
+    const student = await Student.findOne(studentQuery).lean();
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    const enrolledCourses = student.enrolledCourses || [];
+    if (enrolledCourses.length === 0) return res.json([]);
+
+    // Get all variants for all enrolled courses
+    let allIdVariants = [];
+    for (const courseId of enrolledCourses) {
+      const variants = await getCourseIdVariants(courseId);
+      allIdVariants = [...allIdVariants, ...variants];
+    }
+    
+    // Remote duplicates
+    allIdVariants = [...new Set(allIdVariants)];
+
+    const query = {
+      courseId: { $in: allIdVariants }
+    };
+
+    const [c1, c2, c3] = await Promise.all([
+      db.collection('liveVideos').find(query).toArray(),
+      db.collection('liveClasses').find(query).toArray(),
+      db.collection('videos').find({ ...query, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).toArray()
+    ]);
+
+    const merged = [...c1, ...c2, ...c3].map(item => {
+      const now = new Date();
+      const startTime = new Date(item.publishOn || item.date || item.createdAt);
+      const targetEnd = item.endTime || item.endDateTime;
+      const endTime = targetEnd ? new Date(targetEnd) : new Date(startTime.getTime() + 60 * 60 * 1000); // Default 1 hour
+      const joinBeforeMin = parseInt(item.joinBeforeMinutes) || 10;
+      const joinTime = new Date(startTime.getTime() - joinBeforeMin * 60 * 1000);
+
+      // Dynamic Status Calculation
+      if (item.status === 'inactive' || item.status === 'ended' || item.status === 'completed') {
+        item.status = 'ended';
+      } else if (now < joinTime) {
+        item.status = 'upcoming';
+      } else if (now >= joinTime && now <= endTime) {
+        item.status = 'live';
+      } else {
+        item.status = 'ended';
+      }
+
+      // Ensure date/startTime properties exist
+      if (!item.date && (item.publishOn || item.createdAt)) {
+        const d = new Date(item.publishOn || item.createdAt);
+        if (!isNaN(d.getTime())) {
+          item.date = d.toISOString().split('T')[0];
+          item.startTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        }
+      }
+      
+      if (!item.meetingLink) {
+        item.meetingLink = item.url || item.videoUrl || item.link;
+      }
+      
+      return item;
+    }).sort((a,b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
+
+    res.json(merged);
+  } catch (error) {
+    console.error('Error fetching student live classes:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
@@ -2303,6 +2613,55 @@ app.delete('/api/questions', async (req, res) => {
   }
 });
 
+// Bulk delete questions by IDs
+app.post('/api/questions/bulk-delete', async (req, res) => {
+  try {
+    const { ids, questionIds } = req.body;
+    const finalIds = ids || questionIds;
+
+    if (!Array.isArray(finalIds) || finalIds.length === 0) {
+      return res.status(400).json({ error: 'No question IDs provided' });
+    }
+
+    // Attempt to delete by both 'id' field and MongoDB '_id' for compatibility
+    const filter = {
+      $or: [
+        { id: { $in: finalIds } },
+        { _id: { $in: finalIds.filter(id => id && /^[a-f\d]{24}$/i.test(id)).map(id => new ObjectId(id)) } }
+      ]
+    };
+
+    const result = await db.collection('questions').deleteMany(filter);
+    console.log(`[Bulk Delete] Deleted ${result.deletedCount} questions from the questions collection.`);
+
+    // Important: Also remove these questions from any tests that might have them embedded
+    // We search all tests and pull any question where its id or _id is in the list
+    // We only apply this to documents where 'questions' is actually an array
+    await db.collection('tests').updateMany(
+      { questions: { $type: 'array' } },
+      { 
+        $pull: { 
+          questions: { 
+            $or: [
+              { id: { $in: finalIds } },
+              { _id: { $in: finalIds.filter(id => id && /^[a-f\d]{24}$/i.test(id)).map(id => new ObjectId(id)) } }
+            ] 
+          } 
+        } 
+      }
+    );
+
+    res.json({ 
+      success: true, 
+      message: `Questions deleted successfully`,
+      deletedCount: result.deletedCount 
+    });
+  } catch (error) {
+    console.error('Bulk delete questions error:', error);
+    res.status(500).json({ error: 'Failed to bulk delete questions', details: error.message });
+  }
+});
+
 // Bulk create questions
 app.post('/api/questions/bulk', async (req, res) => {
   try {
@@ -3213,7 +3572,34 @@ app.put('/api/videos/update-all', async (req, res) => {
 app.get('/api/live-videos', async (req, res) => {
   try {
     const liveVideos = await db.collection('liveVideos').find({}).toArray();
-    res.json(liveVideos);
+    const now = new Date();
+    const calculated = liveVideos.map(item => {
+      const startTime = new Date(item.publishOn || item.date || item.createdAt);
+      const targetEnd = item.endTime || item.endDateTime;
+      const endTime = targetEnd ? new Date(targetEnd) : new Date(startTime.getTime() + 60 * 60 * 1000);
+      const joinBeforeMin = parseInt(item.joinBeforeMinutes || 10);
+      const joinTime = new Date(startTime.getTime() - joinBeforeMin * 60 * 1000);
+
+      // Dynamic Status Calculation
+      let status = item.status;
+      if (item.status === 'inactive' || item.status === 'ended' || item.status === 'completed') {
+        status = 'ended';
+      } else if (now < joinTime) {
+        status = 'upcoming';
+      } else if (now >= joinTime && now <= endTime) {
+        status = 'live';
+      } else {
+        status = 'ended';
+      }
+
+      return {
+        ...item,
+        status,
+        isLive: status === 'live'
+      };
+    }).sort((a,b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
+    
+    res.json(calculated);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch live videos' });
   }
@@ -3231,10 +3617,14 @@ app.post('/api/live-videos', async (req, res) => {
 app.put('/api/live-videos/:id', async (req, res) => {
   try {
     const { _id, ...updateData } = req.body;
-    const result = await db.collection('liveVideos').updateOne(
-      { id: req.params.id },
-      { $set: updateData }
-    );
+    const filter = {
+      $or: [
+        { id: req.params.id },
+        { _id: req.params.id },
+        { _id: ObjectId.isValid(req.params.id) ? new ObjectId(req.params.id) : null }
+      ].filter(f => f.id || f._id)
+    };
+    const result = await db.collection('liveVideos').updateOne(filter, { $set: updateData });
     if (result.matchedCount === 0) return res.status(404).json({ error: 'Live video not found' });
     res.json({ success: true, message: 'Live video updated' });
   } catch (error) {
@@ -3244,7 +3634,14 @@ app.put('/api/live-videos/:id', async (req, res) => {
 
 app.delete('/api/live-videos/:id', async (req, res) => {
   try {
-    const result = await db.collection('liveVideos').deleteOne({ id: req.params.id });
+    const filter = {
+      $or: [
+        { id: req.params.id },
+        { _id: req.params.id },
+        { _id: ObjectId.isValid(req.params.id) ? new ObjectId(req.params.id) : null }
+      ].filter(f => f.id || f._id)
+    };
+    const result = await db.collection('liveVideos').deleteOne(filter);
     if (result.deletedCount === 0) return res.status(404).json({ error: 'Live video not found' });
     res.json({ success: true, message: 'Live video deleted' });
   } catch (error) {
@@ -4169,6 +4566,12 @@ const otpLimiter = rateLimit({
   message: { error: 'Too many OTP requests from this IP, please try again after a minute' }
 });
 
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // limit each IP to 10 requests per windowMs
+  message: { error: 'Too many verify requests from this IP, please try again after 15 minutes' }
+});
+
 app.post('/api/otp/send', otpLimiter, async (req, res) => {
   try {
     const { phone } = req.body;
@@ -4327,16 +4730,41 @@ app.post('/api/otp/verify', authLimiter, async (req, res) => {
       return res.status(404).json({ error: 'Account not found. Please register first.' });
     }
 
+<<<<<<< HEAD
     const deviceId = generateDeviceId();
+=======
+    const crypto = await import('crypto');
+    const deviceId = req.body.deviceId || generateDeviceId();
+>>>>>>> karan
     const sessionToken = crypto.randomBytes(32).toString('hex');
 
-    const hadPreviousSession = !!student.sessionToken && !!student.activeDeviceId;
+    // 2-Device Limit Logic
+    if (!student.activeSessions) student.activeSessions = [];
+    
+    // Remove current device if already exists to update it
+    student.activeSessions = student.activeSessions.filter(s => s.deviceId !== deviceId);
+    
+    // Add new session
+    student.activeSessions.push({
+      token: sessionToken,
+      deviceId,
+      lastLoginIP: req.ip || '',
+      createdAt: new Date()
+    });
+    
+    // Keep only last 2 sessions
+    if (student.activeSessions.length > 2) {
+      student.activeSessions = student.activeSessions.slice(-2);
+    }
 
-    student.sessionToken = sessionToken;
-    student.sessionCreatedAt = new Date();
+    student.sessionToken = sessionToken; // Legacy support
     student.activeDeviceId = deviceId;
+<<<<<<< HEAD
     student.lastLoginIP = req.realIP || req.ip || req.connection?.remoteAddress || '';
     student.failedAttempts = 0; // Reset failed attempts on success
+=======
+    student.lastLoginAt = new Date();
+>>>>>>> karan
     await student.save();
 
     // Fallback to standard token approach
@@ -4889,10 +5317,33 @@ app.get('/api/students/:id/courses', async (req, res) => {
       ]
     }).toArray();
 
-    // Ensure all courses have string id for frontend
-    const mappedCourses = courses.map(c => ({
-      ...c,
-      id: c.id || c._id.toString()
+    // Fetch all watch progress for this student
+    const watchProgress = await db.collection('watch_progress').find({ userId: req.params.id }).toArray();
+    
+    // Fetch and map courses with progress
+    const mappedCourses = await Promise.all(courses.map(async (c) => {
+      const courseIdStr = c.id || c._id.toString();
+      const idVariants = await getCourseIdVariants(courseIdStr);
+      
+      // Total videos in this course
+      const totalVideos = await db.collection('videos').countDocuments({ 
+        courseId: { $in: idVariants } 
+      });
+      
+      // Watched videos in this course
+      const watchedCount = watchProgress.filter(wp => 
+        idVariants.includes(wp.courseId) && wp.watchedTime > 0
+      ).length;
+      
+      const progress = totalVideos > 0 ? Math.round((watchedCount / totalVideos) * 100) : 0;
+      
+      return {
+        ...c,
+        id: courseIdStr,
+        progress: progress,
+        totalVideos: totalVideos,
+        watchedCount: watchedCount
+      };
     }));
 
     res.json(mappedCourses);
@@ -5421,9 +5872,61 @@ app.delete('/api/courses/:courseId/live-classes/:id', async (req, res) => {
 app.get('/api/students/:studentId/live-classes', async (req, res) => {
   try {
     const enrollments = await db.collection('enrollments').find({ studentId: req.params.studentId }).toArray();
-    const courseIds = enrollments.map(e => e.courseId);
-    const classes = await db.collection('liveClasses').find({ courseId: { $in: courseIds } }).toArray();
-    res.json(classes);
+    let courseIds = enrollments.map(e => e.courseId);
+    
+    // Expand to idVariants for each courseId to ensure robust matching across collections
+    let expandedIds = [];
+    for (const cId of courseIds) {
+      if (cId) {
+        const variants = await getCourseIdVariants(String(cId));
+        expandedIds.push(...variants);
+      }
+    }
+    const query = { courseId: { $in: [...new Set(expandedIds)] } };
+
+    const [c1, c2, c3] = await Promise.all([
+      db.collection('liveVideos').find(query).toArray(),
+      db.collection('liveClasses').find(query).toArray(),
+      db.collection('videos').find({ ...query, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).toArray()
+    ]);
+
+    const merged = [...c1, ...c2, ...c3].map(item => {
+      const now = new Date();
+      const startTime = new Date(item.publishOn || item.date || item.createdAt);
+      const targetEnd = item.endTime || item.endDateTime;
+      const endTime = targetEnd ? new Date(targetEnd) : new Date(startTime.getTime() + 60 * 60 * 1000); // Default 1 hour
+      const joinBeforeMin = parseInt(item.joinBeforeMinutes) || 10;
+      const joinTime = new Date(startTime.getTime() - joinBeforeMin * 60 * 1000);
+
+      // Dynamic Status Calculation
+      if (item.status === 'inactive' || item.status === 'ended' || item.status === 'completed') {
+        item.status = 'ended';
+      } else if (now < joinTime) {
+        item.status = 'upcoming';
+      } else if (now >= joinTime && now <= endTime) {
+        item.status = 'live';
+      } else {
+        item.status = 'ended';
+      }
+
+      // Ensure date/startTime properties exist for the calendar view if they are missing
+      if (!item.date && item.publishOn) {
+        const d = new Date(item.publishOn);
+        if (!isNaN(d.getTime())) {
+          item.date = d.toISOString().split('T')[0]; // YYYY-MM-DD
+          item.startTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; // HH:MM
+        }
+      }
+      
+      // Map 'url' or 'meetingLink' consistently
+      if (!item.meetingLink) {
+        item.meetingLink = item.url || item.videoUrl || item.link;
+      }
+      
+      return item;
+    }).sort((a,b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
+
+    res.json(merged);
   } catch (error) {
     console.error('Error fetching student live classes:', error);
     res.status(500).json({ error: 'Failed to fetch live classes' });
@@ -6287,6 +6790,37 @@ app.put('/api/chats/:chatId/read', async (req, res) => {
   }
 });
 
+// Live Chat API
+app.get('/api/live-chat/:videoId/messages', async (req, res) => {
+  try {
+    const messages = await db.collection('liveChatMessages')
+      .find({ videoId: req.params.videoId })
+      .sort({ createdAt: 1 })
+      .toArray();
+    res.json(messages);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+app.post('/api/live-chat/:videoId/messages', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+    const { senderId, senderName, message } = req.body;
+    const chatMessage = {
+      videoId,
+      senderId,
+      senderName,
+      message,
+      createdAt: new Date()
+    };
+    await db.collection('liveChatMessages').insertOne(chatMessage);
+    res.status(201).json(chatMessage);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
 async function startServer() {
   const httpServer = http.createServer(app);
 
@@ -6320,17 +6854,44 @@ async function startServer() {
 
   let currentPort = parseInt(PORT, 10);
 
+  const startListen = () => {
+    httpServer.listen(currentPort, '0.0.0.0', () => {
+      console.log(`Server running on http://0.0.0.0:${currentPort}`);
+    });
+  };
+
   httpServer.on('error', (e) => {
     if (e.code === 'EADDRINUSE') {
+<<<<<<< HEAD
       console.error(`\n[CRITICAL ERROR] Port ${currentPort} is already in use.`);
       console.error(`The server is trying to start on 5000, but another process is already there.`);
       console.error(`PLEASE KILL THE PREVIOUS PROCESS OR RESTART YOUR SYSTEM.\n`);
       process.exit(1); // Fail fast so the user knows what's wrong
+=======
+      console.log(`Port ${currentPort} is busy. Killing existing process on port ${currentPort}...`);
+      // Use exec to kill whatever is on the port, then retry
+      import('child_process').then(({ exec }) => {
+        // Windows: use netstat + taskkill
+        exec(`for /f "tokens=5" %a in ('netstat -ano ^| findstr :${currentPort} ^| findstr LISTENING') do taskkill /F /PID %a`, { shell: 'cmd' }, (err) => {
+          if (err) {
+            console.log(`Could not kill process on port ${currentPort}, err: ${err.message}`);
+          } else {
+            console.log(`Killed process on port ${currentPort}. Retrying...`);
+          }
+          setTimeout(() => {
+            httpServer.listen(currentPort, '0.0.0.0', () => {
+              console.log(`Server running on http://0.0.0.0:${currentPort}`);
+            });
+          }, 1000);
+        });
+      });
+>>>>>>> karan
     } else {
       console.error(e);
     }
   });
 
+<<<<<<< HEAD
   httpServer.listen(currentPort, '0.0.0.0', () => {
     console.log(`\n🚀 API Server running on http://localhost:${currentPort}`);
     console.log(`🔗 Proxy configured to handle /api requests from :5173 to :${currentPort}\n`);
@@ -6342,5 +6903,17 @@ async function startServer() {
   });
 }
 
+=======
+  startListen();
+}
+
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[FATAL] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+>>>>>>> karan
 
 startServer();

@@ -24,7 +24,50 @@ const MyCourses: React.FC = () => {
     try {
       const response = await fetch(`/api/students/${studentId}/courses`);
       const data = await response.json();
-      setCourses(Array.isArray(data) ? data : []);
+      const courseList: any[] = Array.isArray(data) ? data : [];
+
+      // For each course, fetch actual video list (for true total) + enrollment progress (for completed count)
+      // This mirrors exactly how CourseDetails.tsx computes progressPercent.
+      const coursesWithProgress = await Promise.all(
+        courseList.map(async (course) => {
+          const courseId = course.id || course._id;
+          try {
+            const [videosRes, progressRes] = await Promise.all([
+              fetch(`/api/courses/${courseId}/videos`),
+              fetch(`/api/students/${studentId}/courses/${courseId}/progress`),
+            ]);
+
+            const videosData = videosRes.ok ? await videosRes.json() : [];
+            const progressData = progressRes.ok ? await progressRes.json() : {};
+
+            const allVideos: any[] = Array.isArray(videosData) ? videosData : [];
+            // Exclude live streams from total count — same filter as CourseDetails
+            const totalVideos = allVideos.filter(
+              (v) => v.contentType !== 'youtube_zoom' && v.contentType !== 'live_stream'
+            ).length;
+
+            const completedVideos: string[] = progressData.completedVideos || [];
+            const completedCount = completedVideos.length;
+
+            // Match CourseDetails.tsx line 343 calculation exactly:
+            // progressPercent = totalVideos > 0 ? Math.round((completedVideos / totalVideos) * 100) : 0
+            const calculatedProgress =
+              totalVideos > 0 ? Math.min(100, Math.round((completedCount / totalVideos) * 100)) : 0;
+
+            console.log(`[MyCourses] "${course.name || course.title}"`);
+            console.log(`  Total videos: ${totalVideos}`);
+            console.log(`  Completed videos: ${completedCount}`);
+            console.log(`  Progress: ${calculatedProgress}%`);
+
+            return { ...course, progress: calculatedProgress, lessons: totalVideos };
+          } catch (err) {
+            console.warn(`[MyCourses] Failed to fetch progress for course ${courseId}:`, err);
+            return { ...course, progress: 0 };
+          }
+        })
+      );
+
+      setCourses(coursesWithProgress);
     } catch (error) {
       console.error('Error fetching courses:', error);
     } finally {
@@ -68,9 +111,14 @@ const MyCourses: React.FC = () => {
                 <p className="text-[10px] text-gray-400">{course.lessons || 0} Lessons | {course.duration || '0'} Hours</p>
                 <div className="mt-2 flex items-center gap-2">
                   <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div className="h-full bg-green-500" style={{ width: `${course.progress || 0}%` }}></div>
+                    <div
+                      className="h-full bg-green-500 transition-all duration-500"
+                      style={{ width: `${Number(course.progress) || 0}%` }}
+                    ></div>
                   </div>
-                  <span className="text-[10px] font-bold text-gray-500">{course.progress || 0}%</span>
+                  <span className="text-[10px] font-bold text-gray-500">
+                    {(Number(course.progress) || 0).toFixed(0)}%
+                  </span>
                 </div>
               </div>
             </div>

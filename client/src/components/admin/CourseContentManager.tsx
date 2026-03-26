@@ -58,6 +58,7 @@ interface Video {
   views?: string;
   datetime?: string;
   platform?: string;
+  contentType?: string;
 }
 
 interface Note {
@@ -133,8 +134,9 @@ interface YoutubeZoomForm {
   image: string;
   isFree: boolean;
   publishOn: string;
+  endTime: string;
+  joinBeforeMinutes: number;
   link: string;
-  streamStatus: string;
   pdf1: string;
   pdf2: string;
   studyMaterial: string;
@@ -149,6 +151,9 @@ interface YoutubeZoomForm {
   quizId: string;
   chatVisibility: string;
   order: string;
+  platform: string;
+  instructor: string;
+  streamStatus: string;
 }
 
 interface WebinarForm {
@@ -334,13 +339,13 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
   useEffect(() => {
     if (folders.length > 0 && folderStack.length > 0) {
       const updatedStack = folderStack.map(stackFolder => {
-        const freshFolder = folders.find(f => 
-          (f._id && normalizeId(f._id) === normalizeId(stackFolder._id)) || 
+        const freshFolder = folders.find(f =>
+          (f._id && normalizeId(f._id) === normalizeId(stackFolder._id)) ||
           (f.id && normalizeId(f.id) === normalizeId(stackFolder.id))
         );
         return freshFolder || stackFolder;
       });
-      
+
       const hasChanged = updatedStack.some((f, i) => f !== folderStack[i]);
       if (hasChanged) {
         setFolderStack(updatedStack);
@@ -396,7 +401,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         body: JSON.stringify({ ...video, status: newStatus })
       });
       setVideos(prev => prev.map(v => ((v as any)._id || v.id) === videoId ? { ...v, status: newStatus } : v));
-      showToast(newStatus === 'active' ? 'Video enabled' : 'Video disabled');
+      showToast(newStatus === 'active' ? (video.contentType === 'youtube_zoom' || video.contentType === 'live_stream' ? 'Live stream enabled' : 'Video enabled') : (video.contentType === 'youtube_zoom' || video.contentType === 'live_stream' ? 'Live stream disabled' : 'Video disabled'));
     } catch { showToast('Failed to update status'); }
   };
 
@@ -411,7 +416,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         body: JSON.stringify({ ...video, isFree: newFree })
       });
       setVideos(prev => prev.map(v => ((v as any)._id || v.id) === videoId ? { ...v, isFree: newFree } : v));
-      showToast(newFree ? 'Video set to Free' : 'Video set to Locked');
+      showToast(newFree ? (video.contentType === 'youtube_zoom' || video.contentType === 'live_stream' ? 'Live stream set to Free' : 'Video set to Free') : (video.contentType === 'youtube_zoom' || video.contentType === 'live_stream' ? 'Live stream set to Locked' : 'Video set to Locked'));
     } catch { showToast('Failed to update'); }
   };
 
@@ -488,6 +493,39 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       order: video.order || 0,
     });
     setShowVideoModal(true);
+  };
+
+  const handleEditYoutubeZoom = (video: any) => {
+    setEditingYoutubeZoom(video);
+    setActiveYoutubeZoomTab('basic');
+    setYoutubeZoomForm({
+      title: video.title || '',
+      description: video.description || '',
+      image: video.image || video.thumbnail || '',
+      isFree: video.isFree || false,
+      publishOn: video.publishOn || video.date || '2026-02-26 10:35',
+      endTime: video.endTime || '2026-02-26 11:35',
+      joinBeforeMinutes: video.joinBeforeMinutes || 10,
+      link: video.link || video.url || video.videoUrl || '',
+      pdf1: video.pdf1 || '',
+      pdf2: video.pdf2 || '',
+      studyMaterial: video.studyMaterial || '',
+      slug: video.slug || '',
+      seoTitle: video.seoTitle || '',
+      seoDescription: video.seoDescription || '',
+      enableChat: video.enableChat ?? true,
+      enableQA: video.enableQA ?? false,
+      notifyStudents: video.notifyStudents ?? true,
+      allowDownload: video.allowDownload ?? false,
+      autoArchive: video.autoArchive ?? true,
+      quizId: video.quizId || '',
+      chatVisibility: video.chatVisibility || 'Everyone',
+      order: video.order || '0.00',
+      platform: video.platform || 'YouTube Live',
+      instructor: video.instructor || '',
+      streamStatus: video.streamStatus || 'scheduled'
+    });
+    setShowYoutubeZoomModal(true);
   };
 
   const handleEditFolder = (folder: any) => {
@@ -848,16 +886,17 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const courseId = normalizeId((selectedCourse as any)._id || selectedCourse.id);
       const folderIdVal = currentFolder?._id || currentFolder?.id || null;
       const folderId = normalizeId(folderIdVal);
+      const videoId = editingYoutubeZoom ? normalizeId(editingYoutubeZoom._id || editingYoutubeZoom.id) : null;
+
       const streamData = {
         ...youtubeZoomForm,
-        title: youtubeZoomForm.title,
-        description: youtubeZoomForm.description || '',
-        thumbnail: youtubeZoomForm.image,
-        courseId: courseId,
-        folderId: folderId,
-        contentType: 'youtube_zoom',
+        courseId,
+        folderId,
+        contentType: 'live_stream',
         type: 'video',
         url: youtubeZoomForm.link,
+        meetingLink: youtubeZoomForm.link,
+        thumbnail: youtubeZoomForm.image,
         status: 'active',
         isFree: youtubeZoomForm.isFree,
         publishOn: youtubeZoomForm.publishOn,
@@ -881,16 +920,17 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       });
 
       if (response.ok) {
-        showToast('YouTube/Zoom live added successfully!', 'success');
+        showToast(videoId ? 'Live stream updated!' : 'Live stream added!', 'success');
         setShowYoutubeZoomModal(false);
+        setEditingYoutubeZoom(null);
         resetYoutubeZoomForm();
         loadCourseContent();
       } else {
         const err = await response.json().catch(() => ({}));
-        showToast(err.error || 'Failed to save YouTube/Zoom live', 'error');
+        showToast(err.error || 'Failed to save live stream', 'error');
       }
     } catch (error) {
-      showToast('Failed to save YouTube/Zoom live', 'error');
+      showToast('Failed to save live stream', 'error');
     }
   };
 
@@ -983,8 +1023,9 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     image: '',
     isFree: false,
     publishOn: '2026-02-26 10:35',
+    endTime: '2026-02-26 11:35',
+    joinBeforeMinutes: 10,
     link: '',
-    streamStatus: 'Live',
     pdf1: '',
     pdf2: '',
     studyMaterial: '',
@@ -998,7 +1039,10 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     autoArchive: true,
     quizId: '',
     chatVisibility: 'Everyone',
-    order: '0.00'
+    order: '0.00',
+    platform: 'YouTube Live',
+    instructor: '',
+    streamStatus: 'scheduled'
   });
 
   const [webinarForm, setWebinarForm] = useState<WebinarForm>({
@@ -1041,6 +1085,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
   const webinarStudyMaterialRef = useRef<HTMLInputElement>(null);
 
   const [editingVideo, setEditingVideo] = useState<Video | null>(null);
+  const [editingYoutubeZoom, setEditingYoutubeZoom] = useState<any | null>(null);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [editingTest, setEditingTest] = useState<Test | null>(null);
   const [editingFolder, setEditingFolder] = useState<any>(null);
@@ -1424,13 +1469,13 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     if (typeof id === 'object') {
       // Handle MongoDB $oid
       if (id.$oid) return String(id.$oid);
-      
+
       // Handle nested _id if the object itself is passed
       if (id._id) return normalizeId(id._id);
-      
+
       // Handle objects with an id property
       if ((id as any).id && typeof (id as any).id === 'string') return (id as any).id;
-      
+
       if (id.toString && typeof id.toString === 'function') {
         const str = id.toString();
         // If toString is just the generic object string, it's not a valid ID
@@ -1488,15 +1533,15 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     const matchesSearch = (v.title || '').toLowerCase().includes(contentSearchQuery.toLowerCase());
     const matchesStatus = contentStatusFilter === 'all' || v.status === contentStatusFilter;
     const vFolderId = normalizeId(v.folderId);
-    
+
     // Check against all possible current folder IDs
-    const matchesFolder = vFolderId === currentFolderId || 
-                         (vFolderId && currentFolder?._id && vFolderId === normalizeId(currentFolder._id)) ||
-                         (vFolderId && currentFolder?.id && vFolderId === normalizeId(currentFolder.id));
-    
+    const matchesFolder = vFolderId === currentFolderId ||
+      (vFolderId && currentFolder?._id && vFolderId === normalizeId(currentFolder._id)) ||
+      (vFolderId && currentFolder?.id && vFolderId === normalizeId(currentFolder.id));
+
     // Always show root items if both are null
     const finalMatchesFolder = (vFolderId === null && currentFolderId === null) ? true : matchesFolder;
-    
+
     return matchesSearch && matchesStatus && finalMatchesFolder;
   });
 
@@ -1504,9 +1549,9 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     const matchesSearch = (n.title || '').toLowerCase().includes(contentSearchQuery.toLowerCase());
     const matchesStatus = contentStatusFilter === 'all' || n.status === contentStatusFilter;
     const nFolderId = normalizeId(n.folderId);
-    const matchesFolder = nFolderId === currentFolderId || 
-                         (nFolderId && currentFolder?._id && nFolderId === normalizeId(currentFolder._id)) ||
-                         (nFolderId && currentFolder?.id && nFolderId === normalizeId(currentFolder.id));
+    const matchesFolder = nFolderId === currentFolderId ||
+      (nFolderId && currentFolder?._id && nFolderId === normalizeId(currentFolder._id)) ||
+      (nFolderId && currentFolder?.id && nFolderId === normalizeId(currentFolder.id));
     return matchesSearch && matchesStatus && matchesFolder;
   });
 
@@ -1515,9 +1560,9 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     const matchesSearch = name.toLowerCase().includes(contentSearchQuery.toLowerCase());
     const matchesStatus = contentStatusFilter === 'all' || t.status === contentStatusFilter;
     const tFolderId = normalizeId(t.folderId);
-    const matchesFolder = tFolderId === currentFolderId || 
-                         (tFolderId && currentFolder?._id && tFolderId === normalizeId(currentFolder._id)) ||
-                         (tFolderId && currentFolder?.id && tFolderId === normalizeId(currentFolder.id));
+    const matchesFolder = tFolderId === currentFolderId ||
+      (tFolderId && currentFolder?._id && tFolderId === normalizeId(currentFolder._id)) ||
+      (tFolderId && currentFolder?.id && tFolderId === normalizeId(currentFolder.id));
     return matchesSearch && matchesStatus && matchesFolder;
   });
 
@@ -1525,9 +1570,9 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     const matchesSearch = (f.title || '').toLowerCase().includes(contentSearchQuery.toLowerCase());
     const matchesStatus = contentStatusFilter === 'all' || f.status === contentStatusFilter;
     const fParentId = normalizeId(f.parentId);
-    const matchesParent = fParentId === currentFolderId || 
-                         (fParentId && currentFolder?._id && fParentId === normalizeId(currentFolder._id)) ||
-                         (fParentId && currentFolder?.id && fParentId === normalizeId(currentFolder.id));
+    const matchesParent = fParentId === currentFolderId ||
+      (fParentId && currentFolder?._id && fParentId === normalizeId(currentFolder._id)) ||
+      (fParentId && currentFolder?.id && fParentId === normalizeId(currentFolder.id));
     return matchesSearch && matchesStatus && matchesParent;
   });
 
@@ -1608,9 +1653,9 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const data = await res.json();
       return data.url;
     } catch (error) {
-       console.error('Folder image upload error:', error);
-       showToast('Failed to upload image', 'error');
-       throw error;
+      console.error('Folder image upload error:', error);
+      showToast('Failed to upload image', 'error');
+      throw error;
     }
   };
 
@@ -1985,8 +2030,9 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       image: '',
       isFree: false,
       publishOn: '2026-02-26 10:35',
+      endTime: '2026-02-26 11:35',
+      joinBeforeMinutes: 10,
       link: '',
-      streamStatus: 'Live',
       pdf1: '',
       pdf2: '',
       studyMaterial: '',
@@ -2000,7 +2046,10 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       autoArchive: true,
       quizId: '',
       chatVisibility: 'Everyone',
-      order: '0.00'
+      order: '0.00',
+      platform: 'YouTube Live',
+      instructor: '',
+      streamStatus: 'scheduled'
     });
   };
 
@@ -2028,7 +2077,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     });
   };
 
-  
+
   const toggleFolder = (folderItem: any) => {
     setFolderStack(prev => [...prev, folderItem]);
   };
@@ -2038,7 +2087,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     const flatVideos = videos.map(v => ({ ...v, type: 'video', order: v.order }));
     const flatNotes = notes.map(n => ({ ...n, type: 'note', order: n.order }));
     const flatTests = tests.map(t => ({ ...t, type: 'test', order: t.order || 0 }));
-    
+
     return [...flatFolders, ...flatVideos, ...flatNotes, ...flatTests]
       .filter(item => {
         const matchesSearch = (item.title || item.name || '').toLowerCase().includes(contentSearchQuery.toLowerCase());
@@ -2055,16 +2104,46 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     const isTest = item.type === 'test';
     const itemId = normalizeId(item._id || item.id);
     const isExpanded = itemId ? expandedFolders.includes(itemId) : false;
-
-    // Check if this folder is the active folder for uploads
     const isActiveUploadFolder = isFolder && currentFolder && normalizeId(currentFolder._id || currentFolder.id) === itemId;
+    const isLiveStream = item.contentType === 'live_stream' || item.contentType === 'youtube_zoom';
+
+    const getCalculatedLiveStatus = (item: any) => {
+      if (!isLiveStream) return null;
+      const now = new Date();
+
+      // Parse dates safely
+      const parseDate = (d: any) => {
+        if (!d) return null;
+        const date = new Date(d);
+        return isNaN(date.getTime()) ? null : date;
+      };
+
+      const startTime = parseDate(item.publishOn || item.date || item.startDateTime);
+      const endTime = parseDate(item.endTime || item.endDateTime);
+
+      if (endTime && now > endTime) return 'ended';
+      if (startTime && now < startTime) return 'upcoming';
+      return 'live';
+    };
+
+    const currentLiveStatus = getCalculatedLiveStatus(item);
+    const isActuallyLive = currentLiveStatus === 'live';
+    const isActuallyEnded = currentLiveStatus === 'ended';
+    const isActuallyUpcoming = currentLiveStatus === 'upcoming';
 
     return (
       <React.Fragment key={itemId + '_' + level}>
         <div
-          onClick={() => isFolder && toggleFolder(item)}
+          onClick={() => {
+            if (isFolder) toggleFolder(item);
+            else if (isLiveStream) {
+              const link = item.meetingLink || item.link || item.url || item.videoUrl;
+              if (link) window.open(link, '_blank');
+              else showToast('Meeting link not available', 'error');
+            }
+          }}
           style={{ marginLeft: `${level * 24}px` }}
-          className={`bg-white border ${isActiveUploadFolder ? 'border-blue-400 shadow-md ring-2 ring-blue-100' : 'border-gray-50'} rounded-[12px] py-4 px-4 flex items-center gap-4 group hover:bg-gray-50/50 transition-all ${isFolder ? 'cursor-pointer' : ''} mb-3`}
+          className={`bg-white border ${isActiveUploadFolder ? 'border-blue-400 shadow-md ring-2 ring-blue-100' : 'border-gray-50'} rounded-[12px] py-4 px-4 flex items-center gap-4 group hover:bg-gray-50/50 transition-all ${(isFolder || isLiveStream) ? 'cursor-pointer' : ''} mb-3`}
         >
           {/* Drag Handle */}
           <div className="text-gray-300 shrink-0 flex items-center gap-1">
@@ -2075,7 +2154,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
           <div className={`w-[100px] h-[64px] rounded-[10px] overflow-hidden relative flex items-center justify-center shrink-0 border border-gray-100 ${isNote ? 'bg-[#fff7ed]' :
             isTest ? 'bg-[#f0fdf4]' :
               isFolder ? 'bg-white' :
-                isVideo && item.platform === 'YouTube/Zoom Live' ? 'bg-[#fdf2ff]' : 'bg-[#eff6ff]'
+                isLiveStream ? 'bg-[#fdf2ff]' : 'bg-[#eff6ff]'
             }`}>
             {item.thumbnail || item.image ? (
               <img src={item.thumbnail || item.image} alt="" className="w-full h-full object-cover" />
@@ -2083,13 +2162,29 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
               <span className={`material-symbols-outlined text-[28px] ${isNote ? 'text-[#f97316]' :
                 isTest ? 'text-[#22c55e]' :
                   isFolder ? 'text-[#3b82f6]' :
-                    isVideo && item.platform === 'YouTube/Zoom Live' ? 'text-[#d946ef]' : 'text-[#3b82f6]'
+                    isLiveStream ? 'text-[#d946ef]' : 'text-[#3b82f6]'
                 }`}>
                 {isNote ? 'description' :
                   isTest ? 'assignment' :
                     isFolder ? (isExpanded ? 'folder_open' : 'folder') :
-                      isVideo && item.platform === 'YouTube/Zoom Live' ? 'live_tv' : 'play_circle'}
+                      isLiveStream ? 'sensors' : 'play_circle'}
               </span>
+            )}
+            {isActuallyLive && (
+              <div className="absolute top-1 left-1 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded flex items-center gap-1">
+                <span className="w-1 h-1 bg-white rounded-full animate-pulse"></span>
+                LIVE
+              </div>
+            )}
+            {isActuallyEnded && (
+              <div className="absolute top-1 left-1 bg-gray-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded flex items-center gap-1">
+                ENDED
+              </div>
+            )}
+            {isActuallyUpcoming && (
+              <div className="absolute top-1 left-1 bg-blue-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded flex items-center gap-1">
+                UPCOMING
+              </div>
             )}
           </div>
 
@@ -2099,6 +2194,15 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
               {item.title || item.name}
             </h4>
             <div className="flex flex-col mt-0.5">
+              {isActuallyLive && (
+                <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider mb-0.5">Event is live</span>
+              )}
+              {isActuallyEnded && (
+                <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-0.5">Event ended</span>
+              )}
+              {isActuallyUpcoming && (
+                <span className="text-[10px] text-blue-500 font-bold uppercase tracking-wider mb-0.5">Event scheduled</span>
+              )}
               <span className="text-[12px] text-gray-500 font-medium">
                 {isFolder ? (() => {
                   const fId = item.id || item._id;
@@ -2111,33 +2215,97 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                   if (tCount > 0) counts.push(`${tCount} Tests`);
                   return counts.length > 0 ? counts.join(', ') : 'Empty Folder';
                 })() :
-                  isVideo ? (item.datetime ? `Duration: ${item.duration || 'N/A'}, Views: ${item.views ?? item.viewCount ?? 0}, Date & Time: ${item.datetime}` : `Duration: ${item.duration || 'N/A'}, Views: ${item.views ?? item.viewCount ?? 0}`) :
+                  isVideo ? (
+                    isLiveStream ?
+                      `Platform: ${item.platform || 'YouTube'}, Instructor: ${item.instructor || 'N/A'}${item.publishOn ? ` | ${item.publishOn}` : ''}` :
+                      (item.datetime ? `Duration: ${item.duration || 'N/A'}, Views: ${item.views ?? item.viewCount ?? 0}, Date & Time: ${item.datetime}` : `Duration: ${item.duration || 'N/A'}, Views: ${item.views ?? item.viewCount ?? 0}`)
+                  ) :
                     `Date & Time: ${item.datetime || '09:31 AM 06th March 2026'}`}
               </span>
             </div>
-            <div className="mt-2.5 px-3 py-0.5 rounded-full text-[10px] font-bold text-gray-500 bg-gray-100 w-fit">
-              {isNote ? 'PDF' : isTest ? 'Test' : isFolder ? 'Folder' : isVideo && item.platform === 'YouTube/Zoom Live' ? 'YouTube/Zoom Live' : isVideo ? 'Video' : 'Content'}
+            <div className="mt-2.5 px-3 py-0.5 rounded-full text-[10px] font-bold text-gray-500 bg-gray-100 w-fit uppercase tracking-wider">
+              {isNote ? 'PDF' : isTest ? 'Test' : isFolder ? 'Folder' : isLiveStream ? 'Live stream' : isVideo ? 'Video' : 'Content'}
             </div>
           </div>
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                showToast('Status updated', 'success');
-              }}
-              className={`w-[36px] h-[20px] rounded-full relative cursor-pointer flex items-center transition-all ${item.status === 'active' ? 'bg-[#1a1c1e]' : 'bg-gray-200'}`}
-            >
-              <div className={`absolute ${item.status === 'active' ? 'right-[2px]' : 'left-[2px]'} w-[16px] h-[16px] bg-white rounded-full shadow-sm`}></div>
-            </button>
+            {isActuallyLive && (
+              <div title="Event is Live" className="w-[34px] h-[34px] flex items-center justify-center rounded-lg border border-red-100 text-red-500 bg-red-50 cursor-pointer hover:bg-red-100 transition-all">
+                <span className="material-symbols-outlined text-[18px] animate-pulse">sensors</span>
+              </div>
+            )}
 
             <button
+              title={item.status === 'active' ? 'Unpublish' : 'Publish'}
               onClick={(e) => {
                 e.stopPropagation();
-                showToast('Access updated', 'success');
+                if (isFolder) {
+                  const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
+                  fetch(`${API_BASE_URL}/courses/${courseId}/folders/${item._id || item.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...item, status: item.status === 'active' ? 'inactive' : 'active' })
+                  }).then(() => { showToast(item.status === 'active' ? 'Folder disabled' : 'Folder enabled'); loadCourseContent(); });
+                }
+                else if (isVideo) handleToggleVideoStatus(item);
+                else if (isNote) handleToggleNoteStatus(item);
+                else if (isTest) handleToggleTestStatus(item);
               }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-900"
+              className="w-[34px] h-[34px] flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:border-gray-900 transition-all bg-white hover:bg-gray-50 group"
+            >
+              <div className={`w-[24px] h-[14px] rounded-full relative flex items-center transition-all ${item.status === 'active' ? 'bg-[#1a1c1e]' : 'bg-gray-200'}`}>
+                <div className={`absolute ${item.status === 'active' ? 'right-[2px]' : 'left-[2px]'} w-[10px] h-[10px] bg-white rounded-full shadow-sm`}></div>
+              </div>
+            </button>
+
+            {isLiveStream && (
+              <button
+                title="End Live Stream"
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (!confirm('Are you sure you want to end this live stream?')) return;
+                  try {
+                    const videoId = item._id || item.id;
+                    const res = await fetch(`${API_BASE_URL}/live-stream/end/${videoId}`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' }
+                    });
+
+                    if (res.ok) {
+                      showToast('Live stream ended successfully', 'success');
+                      loadCourseContent();
+                    } else {
+                      const errData = await res.json();
+                      showToast(errData.error || 'Failed to end live stream', 'error');
+                    }
+                  } catch (err) {
+                    showToast('Failed to end live stream', 'error');
+                  }
+                }}
+                className="w-[34px] h-[34px] flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-500 hover:bg-red-50 transition-all bg-white"
+              >
+                <span className="material-symbols-outlined text-[18px]">stop</span>
+              </button>
+            )}
+
+            <button
+              title={item.isFree ? 'Make Paid' : 'Make Free'}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (isFolder) {
+                  const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
+                  fetch(`${API_BASE_URL}/courses/${courseId}/folders/${item._id || item.id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ...item, isFree: !item.isFree })
+                  }).then(() => { showToast(!item.isFree ? 'Folder set to Free' : 'Folder set to Locked'); loadCourseContent(); });
+                }
+                else if (isVideo) handleToggleVideoFree(item);
+                else if (isNote) handleToggleNoteFree(item);
+                else if (isTest) handleToggleTestFree(item);
+              }}
+              className={`w-[34px] h-[34px] flex items-center justify-center rounded-lg border transition-all ${!item.isFree ? 'border-gray-200 text-gray-400 hover:text-gray-900 hover:border-gray-900 bg-white hover:bg-gray-50' : 'border-gray-200 text-gray-400 hover:text-gray-900 hover:border-gray-900 bg-white hover:bg-gray-50'}`}
             >
               <span className="material-symbols-outlined text-[18px]">
                 {item.isFree ? 'lock_open' : 'lock'}
@@ -2145,35 +2313,44 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
             </button>
 
             <button
+              title="Edit"
               onClick={(e) => {
                 e.stopPropagation();
                 if (isFolder) handleEditFolder(item);
-                else if (isVideo) handleEditVideo(item);
+                else if (isVideo) {
+                  if (isLiveStream) handleEditYoutubeZoom(item);
+                  else handleEditVideo(item);
+                }
                 else if (isNote) handleEditNote(item);
                 else if (isTest) handleEditTest(item);
               }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-900"
+              className="w-[34px] h-[34px] flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:text-[#1a1c1e] hover:border-[#1a1c1e] hover:bg-gray-50 transition-all bg-white"
             >
               <span className="material-symbols-outlined text-[18px]">edit</span>
             </button>
 
             <button
+              title="Delete"
               onClick={(e) => {
                 e.stopPropagation();
                 const id = item._id || item.id;
                 if (isFolder) handleDeleteFolder(id);
-                else if (isVideo) handleDeleteVideo(id);
+                else if (isVideo) {
+                  handleDeleteVideo(id);
+                  if (isLiveStream) {
+                    setTimeout(() => showToast('Live stream deleted successfully', 'success'), 500);
+                  }
+                }
                 else if (isNote) handleDeleteNote(id);
                 else if (isTest) handleDeleteTest(id);
               }}
-              className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-500"
+              className="w-[34px] h-[34px] flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-500 hover:bg-red-50 transition-all bg-white"
             >
-              <span className="material-symbols-outlined text-[18px]">delete</span>
+              <span className="material-symbols-outlined text-[18px]">delete_outline</span>
             </button>
           </div>
         </div>
-        
-
+        {isFolder && isExpanded && renderAccordionTree(itemId, level + 1)}
       </React.Fragment>
     );
   };
@@ -2191,17 +2368,17 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     ];
 
     const filteredItems = items.filter(item => {
-        const matchesSearch = (item.title || item.name || '').toLowerCase().includes(contentSearchQuery.toLowerCase());
-        const matchesStatus = contentStatusFilter === 'all' || item.status === contentStatusFilter;
-        return matchesSearch && matchesStatus;
+      const matchesSearch = (item.title || item.name || '').toLowerCase().includes(contentSearchQuery.toLowerCase());
+      const matchesStatus = contentStatusFilter === 'all' || item.status === contentStatusFilter;
+      return matchesSearch && matchesStatus;
     });
 
     return filteredItems.map(item => renderContentItem(item, level));
   };
 
-  const finalRenderedItems = contentSearchQuery.trim() !== '' 
-     ? getFilteredFlatItems().map(item => renderContentItem(item, 0)) 
-     : renderAccordionTree(currentFolderId, 0);
+  const finalRenderedItems = contentSearchQuery.trim() !== ''
+    ? getFilteredFlatItems().map(item => renderContentItem(item, 0))
+    : renderAccordionTree(currentFolderId, 0);
 
   if (loading) {
     return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div></div>;
@@ -2211,9 +2388,27 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     return (
       <AddCourse
         courseData={typeof isAddingCourse === 'object' ? isAddingCourse : undefined}
-        onClose={() => {
+        onClose={async () => {
+          const editedCourse = typeof isAddingCourse === 'object' ? isAddingCourse : null;
           setIsAddingCourse(false);
-          loadCourses();
+          await loadCourses();
+          // If we were editing a course, re-fetch it to get the latest data (e.g. new thumbnail)
+          if (editedCourse && selectedCourse) {
+            try {
+              const courseId = (editedCourse as any)._id || (editedCourse as any).id;
+              const isPackage = courseId?.toString().startsWith('pkg_');
+              const endpoint = isPackage ? 'packages' : 'courses';
+              const res = await fetch(`/api/${endpoint}/${courseId}`);
+              if (res.ok) {
+                const freshCourse = await res.json();
+                if (freshCourse && !freshCourse.error) {
+                  setSelectedCourse(freshCourse);
+                }
+              }
+            } catch (e) {
+              // silently fail — old data still shows
+            }
+          }
         }}
       />
     );
@@ -2605,7 +2800,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
               <div className="flex-1 min-w-[200px]">
                 <div className="flex items-center gap-3 mb-1">
                   {folderStack.length > 0 && (
-                    <button 
+                    <button
                       onClick={() => setFolderStack(folderStack.slice(0, -1))}
                       className="w-8 h-8 flex items-center justify-center bg-gray-50 hover:bg-gray-100 rounded-full text-gray-500 transition-all active:scale-95"
                     >
@@ -2615,12 +2810,12 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                   <h3 className="text-[20px] font-bold text-[#1a1a1a] tracking-tight">Batch Content</h3>
                 </div>
                 {currentFolder ? (
-                   <p className="text-[12px] font-medium text-blue-600 flex items-center gap-1 uppercase tracking-wider">
-                      <span className="material-symbols-outlined text-[14px]">folder_open</span>
-                      {currentFolder.title || currentFolder.name}
-                   </p>
+                  <p className="text-[12px] font-medium text-blue-600 flex items-center gap-1 uppercase tracking-wider">
+                    <span className="material-symbols-outlined text-[14px]">folder_open</span>
+                    {currentFolder.title || currentFolder.name}
+                  </p>
                 ) : (
-                    <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Adding content to root</p>
+                  <p className="text-[12px] font-medium text-gray-400 uppercase tracking-widest">Adding content to root</p>
                 )}
               </div>
               <div className="flex items-center gap-3">
@@ -2688,7 +2883,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                   { label: 'Folder', icon: 'folder', onClick: () => { setEditingFolder(null); setShowFolderModal(true); } },
                   { label: 'Video', icon: 'play_circle', onClick: () => { resetVideoForm(); setShowVideoModal(true); } },
                   { label: 'PDF', icon: 'description', onClick: () => setShowDocumentDrawer(true) },
-                  { label: 'YouTube/Zoom Live', icon: 'videocam', onClick: () => setShowYoutubeZoomModal(true) },
+                  { label: 'Live stream', icon: 'videocam', onClick: () => setShowYoutubeZoomModal(true) },
                   { label: 'Test', icon: 'assignment', onClick: () => { fetchTestSeriesList(); setShowTestDrawer(true); } },
                   { label: 'Document', icon: 'article', onClick: () => setShowDocumentModal(true) },
                   { label: 'Import Content', icon: 'download', onClick: () => setShowImportModal(true) }
@@ -2714,14 +2909,24 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
             <div className="p-8 flex items-start gap-8">
               {/* Course Thumbnail */}
               <div className="w-[180px] h-[120px] bg-[#f8fafc] rounded-2xl overflow-hidden border border-[#f1f5f9] shrink-0 shadow-sm relative group">
-                {selectedCourse.thumbnail ? (
-                  <img src={selectedCourse.thumbnail} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-indigo-50 to-blue-50">
-                    <span className="material-symbols-outlined text-blue-400 text-[40px]">school</span>
-                    <span className="text-[10px] font-black text-blue-500 mt-2 uppercase tracking-widest">No Image</span>
-                  </div>
-                )}
+                {(selectedCourse.thumbnail || (selectedCourse as any).imageUrl) ? (
+                  <img
+                    src={selectedCourse.thumbnail || (selectedCourse as any).imageUrl}
+                    alt=""
+                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                      (e.currentTarget.nextSibling as HTMLElement)?.style.setProperty('display', 'flex');
+                    }}
+                  />
+                ) : null}
+                <div
+                  className="w-full h-full flex-col items-center justify-center bg-gradient-to-br from-indigo-50 to-blue-50"
+                  style={{ display: (selectedCourse.thumbnail || (selectedCourse as any).imageUrl) ? 'none' : 'flex' }}
+                >
+                  <span className="material-symbols-outlined text-blue-400 text-[40px]">school</span>
+                  <span className="text-[10px] font-black text-blue-500 mt-2 uppercase tracking-widest">No Image</span>
+                </div>
               </div>
 
               {/* Course Details */}
@@ -3091,7 +3296,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         )
       }
 
-      {/* --- ADD YOUTUBE/ZOOM VIDEOS DRAWER --- */}
+      {/* --- ADD LIVE STREAM DRAWER --- */}
       {
         showYoutubeZoomModal && createPortal(
           <div className="fixed inset-0 z-[99999] flex justify-end">
@@ -3102,7 +3307,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
             <div className="relative w-[500px] bg-white h-full shadow-2xl flex flex-col animate-slide-in-right overflow-hidden transition-all duration-300">
               {/* Header */}
               <div className="flex justify-between items-center px-8 py-6 border-b border-gray-100 shrink-0">
-                <h3 className="text-[20px] font-bold text-[#1e1e1e] tracking-tight">Add YouTube/Zoom Videos</h3>
+                <h3 className="text-[20px] font-bold text-[#1e1e1e] tracking-tight">{editingYoutubeZoom ? 'Edit Live stream' : 'Add Live stream'}</h3>
                 <button
                   onClick={() => { setShowYoutubeZoomModal(false); }}
                   className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 text-gray-400 rounded-full transition-all"
@@ -3129,7 +3334,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
               </div>
 
               {/* Content Area - Scrollable */}
-              <div className="flex-1 overflow-y-auto px-8 py-8 space-y-10 pb-40">
+              <div className="flex-1 overflow-y-auto px-8 py-8 space-y-10 pb-10">
                 {activeYoutubeZoomTab === 'basic' && (
                   <div className="space-y-10">
                     <div className="space-y-8">
@@ -3142,6 +3347,66 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                           onChange={(e) => setYoutubeZoomForm({ ...youtubeZoomForm, title: e.target.value })}
                           className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all shadow-sm"
                           placeholder=""
+                        />
+                      </div>
+
+                      {/* Status Toggle */}
+                      <div className="space-y-2">
+                        <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Status <span className="text-red-500">*</span></label>
+                        <div className="flex bg-[#f8f8f8] p-1.5 rounded-[12px] w-full border border-gray-100">
+                          <button
+                            onClick={() => setYoutubeZoomForm({ ...youtubeZoomForm, isFree: true })}
+                            className={`flex-1 py-3 text-[14px] font-bold rounded-[8px] transition-all ${youtubeZoomForm.isFree ? 'bg-white text-gray-900 shadow-sm border border-gray-100' : 'text-gray-400'}`}
+                          >
+                            Free
+                          </button>
+                          <button
+                            onClick={() => setYoutubeZoomForm({ ...youtubeZoomForm, isFree: false })}
+                            className={`flex-1 py-3 text-[14px] font-bold rounded-[8px] transition-all ${!youtubeZoomForm.isFree ? 'bg-white text-gray-900 shadow-sm border border-gray-100' : 'text-gray-400'}`}
+                          >
+                            Paid
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Platform */}
+                      <div className="space-y-2">
+                        <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Platform <span className="text-red-500">*</span></label>
+                        <div className="relative">
+                          <select
+                            value={youtubeZoomForm.platform || 'YouTube Live'}
+                            onChange={(e) => setYoutubeZoomForm({ ...youtubeZoomForm, platform: e.target.value })}
+                            className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all appearance-none shadow-sm"
+                          >
+                            <option value="Google Meet">Google Meet</option>
+                            <option value="Zoom">Zoom</option>
+                            <option value="YouTube Live">YouTube Live</option>
+                          </select>
+                          <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-[24px] pointer-events-none">expand_more</span>
+                        </div>
+                      </div>
+
+                      {/* Instructor */}
+                      <div className="space-y-2">
+                        <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Instructor <span className="text-red-500">*</span></label>
+                        <input
+                          type="text"
+                          value={youtubeZoomForm.instructor}
+                          onChange={(e) => setYoutubeZoomForm({ ...youtubeZoomForm, instructor: e.target.value })}
+                          className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all shadow-sm"
+                          placeholder="e.g. Rahul Sharma"
+                        />
+                      </div>
+
+                      {/* Meeting Link */}
+                      <div className="space-y-2">
+                        <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Meeting Link <span className="text-red-500">*</span></label>
+                        <input
+                          type="text"
+                          value={youtubeZoomForm.link}
+                          onChange={(e) => setYoutubeZoomForm({ ...youtubeZoomForm, link: e.target.value })}
+                          className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all shadow-sm"
+                          placeholder="https://..."
                         />
                       </div>
 
@@ -3170,69 +3435,46 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                         </div>
                       </div>
 
-                      {/* Status Toggle */}
+                      {/* Start Date & Time */}
                       <div className="space-y-2">
-                        <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Status</label>
-                        <div className="flex bg-[#f8f8f8] p-1.5 rounded-[12px] w-full border border-gray-100">
-                          <button
-                            onClick={() => setYoutubeZoomForm({ ...youtubeZoomForm, isFree: true })}
-                            className={`flex-1 py-3 text-[14px] font-bold rounded-[8px] transition-all ${youtubeZoomForm.isFree ? 'bg-white text-gray-900 shadow-sm border border-gray-100' : 'text-gray-400'}`}
-                          >
-                            Free
-                          </button>
-                          <button
-                            onClick={() => setYoutubeZoomForm({ ...youtubeZoomForm, isFree: false })}
-                            className={`flex-1 py-3 text-[14px] font-bold rounded-[8px] transition-all ${!youtubeZoomForm.isFree ? 'bg-white text-gray-900 shadow-sm border border-gray-100' : 'text-gray-400'}`}
-                          >
-                            Paid
-                          </button>
+                        <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Live Session Start Date & Time <span className="text-red-500">*</span></label>
+                        <div className="relative group">
+                          <input
+                            type="datetime-local"
+                            value={(youtubeZoomForm.publishOn || "2026-02-26 10:35").replace(' ', 'T')}
+                            onChange={(e) => setYoutubeZoomForm({ ...youtubeZoomForm, publishOn: e.target.value.replace('T', ' ') })}
+                            className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-bold outline-none focus:border-gray-400 transition-all shadow-sm [color-scheme:light]"
+                          />
                         </div>
                       </div>
 
-                      {/* Publish On */}
+                      {/* End Date & Time */}
                       <div className="space-y-2">
-                        <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Publish On <span className="text-red-500">*</span></label>
+                        <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Live Session End Date & Time <span className="text-red-500">*</span></label>
+                        <div className="relative group">
+                          <input
+                            type="datetime-local"
+                            value={(youtubeZoomForm.endTime || "2026-02-26 11:35").replace(' ', 'T')}
+                            onChange={(e) => setYoutubeZoomForm({ ...youtubeZoomForm, endTime: e.target.value.replace('T', ' ') })}
+                            className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-bold outline-none focus:border-gray-400 transition-all shadow-sm [color-scheme:light]"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Join Before Minutes */}
+                      <div className="space-y-2">
+                        <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Join Before (Minutes) <span className="text-red-500">*</span></label>
                         <div className="relative">
                           <input
-                            type="text"
-                            value={youtubeZoomForm.publishOn || "2026-02-26 10:35"}
-                            onChange={(e) => setYoutubeZoomForm({ ...youtubeZoomForm, publishOn: e.target.value })}
+                            type="number"
+                            value={youtubeZoomForm.joinBeforeMinutes}
+                            onChange={(e) => setYoutubeZoomForm({ ...youtubeZoomForm, joinBeforeMinutes: parseInt(e.target.value) || 0 })}
                             className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all shadow-sm"
+                            placeholder="e.g. 10"
                           />
-                          <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-[20px] pointer-events-none">calendar_today</span>
+                          <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-[20px] pointer-events-none">timer</span>
                         </div>
-                      </div>
-
-                      {/* Link */}
-                      <div className="space-y-2">
-                        <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Zoom/YouTube Link <span className="text-red-500">*</span></label>
-                        <input
-                          type="text"
-                          value={youtubeZoomForm.link}
-                          onChange={(e) => setYoutubeZoomForm({ ...youtubeZoomForm, link: e.target.value })}
-                          className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all shadow-sm"
-                          placeholder=""
-                        />
-                      </div>
-
-                      {/* Stream Details */}
-                      <div className="space-y-5">
-                        <h4 className="text-[14px] font-bold text-[#1e1e1e] tracking-tight">Stream Details</h4>
-                        <div className="space-y-2">
-                          <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Stream Status</label>
-                          <div className="relative">
-                            <select
-                              value={youtubeZoomForm.streamStatus}
-                              onChange={(e) => setYoutubeZoomForm({ ...youtubeZoomForm, streamStatus: e.target.value })}
-                              className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all appearance-none shadow-sm"
-                            >
-                              <option value="Live">Live</option>
-                              <option value="Upcoming">Upcoming</option>
-                              <option value="Recorded">Recorded</option>
-                            </select>
-                            <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-[24px] pointer-events-none">expand_more</span>
-                          </div>
-                        </div>
+                        <p className="text-[11px] text-gray-400 font-medium pl-1">Users can join this many minutes before the start time.</p>
                       </div>
                     </div>
 
@@ -3372,16 +3614,14 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                     </div>
                   </div>
                 )}
-              </div>
-
-              {/* Fixed Bottom Button */}
-              <div className="absolute bottom-0 left-0 right-0 p-0 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] bg-white z-[100]">
-                <button
-                  className="w-full h-[70px] bg-[#1a1c1e] text-white text-[16px] font-bold tracking-tight hover:bg-black transition-all flex items-center justify-center"
-                  onClick={handleYoutubeZoomSubmit}
-                >
-                  Submit
-                </button>
+                <div className="mt-10 mb-6">
+                  <button
+                    className="w-full h-[60px] bg-[#1a1c1e] text-white text-[16px] font-bold tracking-tight rounded-[16px] hover:bg-black transition-all flex items-center justify-center shadow-lg active:scale-[0.98]"
+                    onClick={handleYoutubeZoomSubmit}
+                  >
+                    Submit
+                  </button>
+                </div>
               </div>
             </div>
           </div>,

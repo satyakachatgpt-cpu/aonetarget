@@ -11,7 +11,8 @@ interface LiveClass {
   endTime: string;
   meetingLink: string;
   instructor: string;
-  status: 'scheduled' | 'live' | 'completed' | 'cancelled';
+  status: 'scheduled' | 'live' | 'completed' | 'cancelled' | 'upcoming' | 'ended';
+  publishOn?: string;
 }
 
 interface Props {
@@ -83,11 +84,26 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId }) => {
   };
 
   const getUpcomingClasses = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Get today's date string in YYYY-MM-DD format based on local time
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    
     return liveClasses
-      .filter(c => new Date(c.date) >= today && c.status !== 'cancelled')
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      .filter(c => {
+        // Show if date is today or in the future
+        const isFutureOrToday = c.date >= todayStr;
+        // Don't show cancelled ones
+        const isNotCancelled = c.status !== 'cancelled';
+        // Show if it's live or upcoming/scheduled, or if it ended today
+        const shouldShowStatus = ['live', 'upcoming', 'scheduled', 'ended', 'completed'].includes(c.status);
+        
+        return isFutureOrToday && isNotCancelled && shouldShowStatus;
+      })
+      .sort((a, b) => {
+        // Sort by date first, then by time
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        return (a.startTime || '').localeCompare(b.startTime || '');
+      });
   };
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -140,37 +156,51 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId }) => {
                       <span className="text-[10px] font-medium">{monthNames[new Date(cls.date).getMonth()].slice(0, 3)}</span>
                     </div>
                     <div>
-                      <h4 className="font-bold text-gray-800">{cls.title}</h4>
-                      <p className="text-sm text-gray-500 mt-0.5">
-                        {formatTime(cls.startTime)} - {formatTime(cls.endTime)}
-                        {cls.instructor && ` | ${cls.instructor}`}
+                      <h4 className="font-ex-bold text-[#1a1c1e] text-[16px] tracking-tight">{cls.title}</h4>
+                      <p className="text-[13px] text-gray-500 font-bold mt-1.5 flex items-center gap-2">
+                        <span className="material-symbols-outlined text-[18px]">person</span>
+                        {cls.instructor || 'Instructor Not Assigned'}
+                        {(cls.status === 'upcoming' || cls.status === 'scheduled') && (
+                           <span className="flex items-center gap-1.5 ml-2 text-blue-600">
+                             <span className="material-symbols-outlined text-[18px]">schedule</span>
+                             Starts at {formatTime(cls.startTime)}
+                           </span>
+                        )}
                       </p>
-                      {cls.description && (
-                        <p className="text-xs text-gray-400 mt-1">{cls.description}</p>
-                      )}
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-2">
+                  <div className="flex flex-col items-end gap-3">
                     {cls.status === 'live' && (
-                      <span className="px-3 py-1 bg-red-100 text-red-600 rounded-full text-xs font-bold animate-pulse">
+                      <span className="px-3.5 py-1.5 bg-red-50 text-red-600 rounded-[10px] text-[11px] font-[900] uppercase tracking-widest flex items-center gap-2 border border-red-100 animate-pulse">
+                        <span className="w-2 h-2 rounded-full bg-red-500"></span>
                         LIVE NOW
                       </span>
                     )}
-                    {cls.meetingLink && cls.status !== 'completed' && (
+                    {cls.status === 'ended' && (
+                      <span className="px-3.5 py-1.5 bg-gray-50 text-gray-500 rounded-[10px] text-[11px] font-[900] uppercase tracking-widest flex items-center gap-2 border border-gray-100">
+                        SESSION ENDED
+                      </span>
+                    )}
+
+                    {cls.status === 'live' ? (
                       <a
                         href={cls.meetingLink}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 ${
-                          cls.status === 'live' 
-                            ? 'bg-red-500 text-white' 
-                            : 'bg-blue-500 text-white'
-                        }`}
+                        className="h-11 px-6 bg-[#1a1c1e] text-white rounded-[12px] text-[13px] font-black uppercase tracking-wider flex items-center gap-2.5 shadow-lg shadow-black/10 active:scale-95 transition-all"
                       >
-                        <span className="material-icons-outlined text-base">videocam</span>
-                        Join Class
+                        <span className="material-symbols-outlined text-[20px]">sensors</span>
+                        Join Live
                       </a>
-                    )}
+                    ) : (cls.status === 'upcoming' || cls.status === 'scheduled') ? (
+                      <button
+                        disabled
+                        className="h-11 px-6 bg-gray-100 text-gray-400 rounded-[12px] text-[13px] font-black uppercase tracking-wider flex items-center gap-2.5 cursor-not-allowed"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">lock</span>
+                        Not Started Yet
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>

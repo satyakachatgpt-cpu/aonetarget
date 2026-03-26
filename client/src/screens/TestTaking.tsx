@@ -25,6 +25,16 @@ const TestTaking: React.FC = () => {
   const startTimeRef = useRef<number>(Date.now());
 
   useEffect(() => {
+    // Reset session state when changing tests
+    setQuestions([]);
+    setAnswers({});
+    setFlagged(new Set());
+    setCurrentIndex(0);
+    setSubmitted(false);
+    setResult(null);
+    setLoading(true);
+    setError('');
+
     const storedStudent = localStorage.getItem('studentData');
     if (storedStudent && storedStudent !== 'undefined') {
       try {
@@ -46,7 +56,11 @@ const TestTaking: React.FC = () => {
       const testData = await res.json();
       if (!testData || typeof testData !== 'object') throw new Error('Invalid test data');
       setTest(testData);
-      const q = Array.isArray(testData.questions) ? testData.questions : [];
+      const q = (Array.isArray(testData.questions) ? testData.questions : []).map((qn: any) => ({
+        ...qn,
+        id: qn.id || qn._id || `q_${Math.random()}`,
+        correctAnswer: (qn.correctAnswer || qn.correct_answer || qn.answer || qn['Correct Answer'] || qn.correctOption || 'A').toString().toUpperCase()
+      }));
       setQuestions(q);
       const durationSecs = (testData.duration || 60) * 60;
       setTimeLeft(durationSecs);
@@ -156,7 +170,7 @@ const TestTaking: React.FC = () => {
       const testNegMarking = test?.negativeMarking || 0;
       questions.forEach(q => {
         const marks = q.marks || test?.marksPerQuestion || 4;
-        const negMarks = q.negativeMarks || testNegMarking || 0;
+        const negMarks = q.negativeMarks !== undefined ? q.negativeMarks : (q.negative !== undefined ? q.negative : (testNegMarking || 0));
         totalMarks += marks;
         if (answers[q.id]) {
           if (answers[q.id] === q.correctAnswer) {
@@ -204,7 +218,7 @@ const TestTaking: React.FC = () => {
         <div className="text-center bg-white rounded-xl p-8 shadow-sm max-w-sm w-full">
           <span className="material-symbols-rounded text-5xl text-[#D32F2F]">error</span>
           <p className="text-sm text-gray-600 mt-3">{error}</p>
-          <button onClick={() => navigate('/mock-tests')} className="mt-4 bg-[#1A237E] text-white px-6 py-2 rounded-lg text-sm font-bold">
+          <button onClick={() => navigate('/mock-tests', { replace: true })} className="mt-4 bg-[#1A237E] text-white px-6 py-2 rounded-lg text-sm font-bold">
             Back to Tests
           </button>
         </div>
@@ -220,8 +234,7 @@ const TestTaking: React.FC = () => {
           <div className="flex items-center gap-3">
             <button
               onClick={() => {
-                if (test?.courseId) navigate(`/course/${test.courseId}`);
-                else navigate(-1);
+                navigate('/mock-tests', { replace: true });
               }}
               className="p-2 rounded-full hover:bg-white/20"
             >
@@ -290,7 +303,7 @@ const TestTaking: React.FC = () => {
                   const isCorrect = studentAns === q.correctAnswer;
                   return (
                     <div key={q.id} className={`p-3 rounded-lg border ${studentAns ? (isCorrect ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50') : 'border-gray-200 bg-gray-50'}`}>
-                      <p className="text-xs font-semibold text-gray-700">Q{idx + 1}. {q.question}</p>
+                      <p className="text-xs font-semibold text-gray-700">Q{idx + 1}. {q.question || q.questionEn || q.text}</p>
                       <div className="mt-1 text-[10px]">
                         {studentAns ? (
                           <span className={isCorrect ? 'text-green-600' : 'text-[#D32F2F]'}>
@@ -312,13 +325,12 @@ const TestTaking: React.FC = () => {
 
           <button
             onClick={() => {
-              if (test?.courseId) navigate(`/course/${test.courseId}`);
-              else navigate('/mock-tests');
+              navigate('/mock-tests', { replace: true });
             }}
             className="w-full bg-[#1A237E] text-white py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
           >
             <span className="material-symbols-rounded text-[18px]">arrow_back</span>
-            Back to Course
+            Back to Mock Tests
           </button>
         </div>
       </div>
@@ -335,8 +347,7 @@ const TestTaking: React.FC = () => {
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <button
             onClick={() => {
-              if (test?.courseId) navigate(`/course/${test.courseId}`);
-              else setConfirmSubmit(true);
+              navigate('/mock-tests', { replace: true });
             }}
             className="p-1.5 rounded-full hover:bg-white/20"
           >
@@ -433,7 +444,9 @@ const TestTaking: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-xl p-4 shadow-sm mb-4">
-              <p className="text-sm font-medium text-gray-800 leading-relaxed">{currentQuestion.question}</p>
+              <p className="text-sm font-medium text-gray-800 leading-relaxed">
+                {currentQuestion.question || currentQuestion.questionEn || currentQuestion.text}
+              </p>
               {currentQuestion.questionImage && (
                 <img src={currentQuestion.questionImage} alt="Question" className="mt-3 max-w-full rounded-lg border max-h-60 object-contain" />
               )}
@@ -447,10 +460,10 @@ const TestTaking: React.FC = () => {
 
             <div className="space-y-3">
               {[
-                { key: 'A', value: currentQuestion.optionA, image: currentQuestion.optionAImage },
-                { key: 'B', value: currentQuestion.optionB, image: currentQuestion.optionBImage },
-                { key: 'C', value: currentQuestion.optionC, image: currentQuestion.optionCImage },
-                { key: 'D', value: currentQuestion.optionD, image: currentQuestion.optionDImage },
+                { key: 'A', value: currentQuestion.optionA || currentQuestion.displayOptions?.[0]?.text, image: currentQuestion.optionAImage },
+                { key: 'B', value: currentQuestion.optionB || currentQuestion.displayOptions?.[1]?.text, image: currentQuestion.optionBImage },
+                { key: 'C', value: currentQuestion.optionC || currentQuestion.displayOptions?.[2]?.text, image: currentQuestion.optionCImage },
+                { key: 'D', value: currentQuestion.optionD || currentQuestion.displayOptions?.[3]?.text, image: currentQuestion.optionDImage },
               ].map(opt => {
                 if (!opt.value && !opt.image) return null;
                 const isSelected = answers[currentQuestion.id] === opt.key;
