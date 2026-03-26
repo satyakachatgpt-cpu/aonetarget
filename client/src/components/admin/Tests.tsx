@@ -20,7 +20,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || '5.5.207'}/build/pdf.worker.min.mjs`;
 
-const tabs = ['Tests', 'Results', 'Copy Content', 'Bulk Uploader', 'Topics', 'Reported Questions', 'Question Library'];
+const tabs = ['Tests', 'Results', 'Bulk Uploader', 'Reported Questions'];
 const detailSubTabs = ['Tests', 'Test PDFs', 'Subjective Tests', 'Users'] as const;
 
 type DetailSubTab = typeof detailSubTabs[number];

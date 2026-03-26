@@ -868,7 +868,10 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         allowDownload: youtubeZoomForm.allowDownload,
         chatVisibility: youtubeZoomForm.chatVisibility,
         streamStatus: youtubeZoomForm.streamStatus,
-        quizId: youtubeZoomForm.quizId
+        quizId: youtubeZoomForm.quizId,
+        enableChat: youtubeZoomForm.enableChat,
+        enableQA: youtubeZoomForm.enableQA,
+        notifyStudents: youtubeZoomForm.notifyStudents
       };
 
       const response = await fetch(`${API_BASE_URL}/courses/${courseId}/videos`, {
@@ -2580,7 +2583,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       </div>
 
       <div className="bg-white px-8 flex items-center gap-10 border-b border-gray-100">
-        {['Overview', 'Content', 'Forum', 'Chat', 'Posts'].map((tab) => (
+        {['Overview', 'Content'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveMainTab(tab)}
@@ -2687,9 +2690,6 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                   { label: 'PDF', icon: 'description', onClick: () => setShowDocumentDrawer(true) },
                   { label: 'YouTube/Zoom Live', icon: 'videocam', onClick: () => setShowYoutubeZoomModal(true) },
                   { label: 'Test', icon: 'assignment', onClick: () => { fetchTestSeriesList(); setShowTestDrawer(true); } },
-                  { label: 'Subjective Test', icon: 'description', onClick: () => setShowSubjectiveTestDrawer(true) },
-                  { label: 'Image', icon: 'image', onClick: () => setShowImageDrawer(true) },
-                  { label: 'Link', icon: 'open_in_new', onClick: () => setShowLinkDrawer(true) },
                   { label: 'Document', icon: 'article', onClick: () => setShowDocumentModal(true) },
                   { label: 'Import Content', icon: 'download', onClick: () => setShowImportModal(true) }
                 ].map((item: { label: string; icon: string; onClick: () => void }, idx) => (

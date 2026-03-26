@@ -18,6 +18,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ isLoggedIn = false }) => {
   const tabs = [
     { name: 'Home', icon: 'home', path: '/' },
     { name: 'Courses', icon: 'menu_book', path: '/explore' },
+    { name: 'Free Content', icon: 'play_circle', path: '/free-content' },
     { name: 'My Courses', icon: 'school', path: isLoggedIn ? '/my-courses' : '/student-login' },
   ];
 

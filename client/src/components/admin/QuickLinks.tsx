@@ -206,7 +206,7 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
             <div className="pt-0 px-6 pb-10 space-y-4">
                 {/* Navigation Tabs Container */}
                 <div className="bg-white px-8 py-1 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-10 overflow-x-auto scrollbar-hide">
-                    {(['Links', 'YT History'] as const).map((tab) => (
+                    {(['Links'] as const).map((tab) => (
                         <button
                             key={tab}
                             onClick={() => {

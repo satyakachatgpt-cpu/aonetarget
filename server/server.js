@@ -725,6 +725,66 @@ app.get('/api/courses/:id/videos', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch videos' });
   }
 });
+// Import Content Route (copy or move items between courses)
+app.post('/api/courses/import', async (req, res) => {
+  console.log('[AGENT_ROUTER] POST /api/courses/import', req.body);
+  try {
+    const { sourceCourseId, targetCourseId, itemIds, action } = req.body;
+    if (!sourceCourseId || !targetCourseId || !itemIds || !Array.isArray(itemIds)) {
+      return res.status(400).json({ error: 'Missing required parameters' });
+    }
+
+    const collections = ['folders', 'videos', 'notes', 'tests'];
+    let processedCount = 0;
+
+    for (const itemId of itemIds) {
+      let itemToProcess = null;
+      let targetCollection = null;
+      
+      const isOid = /^[a-fA-F0-9]{24}$/.test(String(itemId));
+      const queryList = [{ id: String(itemId) }];
+      if (isOid) {
+         try {
+           queryList.push({ _id: new ObjectId(itemId) });
+           queryList.push({ _id: String(itemId) });
+         } catch(e) {}
+      }
+
+      for (const collName of collections) {
+         const found = await db.collection(collName).findOne({ $or: queryList });
+         if (found) {
+           itemToProcess = found;
+           targetCollection = collName;
+           break;
+         }
+      }
+
+      if (itemToProcess && targetCollection) {
+        if (action === 'copy') {
+          const newItem = { ...itemToProcess };
+          delete newItem._id;
+          newItem.id = `${targetCollection}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+          newItem.courseId = String(targetCourseId);
+          newItem.folderId = null; // Put in root folder
+          newItem.createdAt = new Date().toISOString();
+          await db.collection(targetCollection).insertOne(newItem);
+        } else if (action === 'move') {
+          let updatedCourseId = String(targetCourseId);
+          await db.collection(targetCollection).updateOne(
+            { _id: itemToProcess._id },
+            { $set: { courseId: updatedCourseId, folderId: null } }
+          );
+        }
+        processedCount++;
+      }
+    }
+
+    res.status(200).json({ success: true, processed: processedCount });
+  } catch (error) {
+    console.error('Import action error:', error);
+    res.status(500).json({ error: 'Failed to process import action' });
+  }
+});
 
 app.post('/api/courses/:id/videos', async (req, res) => {
   console.log(`[AGENT_ROUTER] POST /api/courses/${req.params.id}/videos`, req.body);
