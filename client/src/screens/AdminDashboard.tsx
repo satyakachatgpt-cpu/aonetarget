@@ -19,7 +19,6 @@ import Packages from '../components/admin/Packages';
 import Messages from '../components/admin/Messages';
 import Blog from '../components/admin/Blog';
 import Settings from '../components/admin/Settings';
-import SecurityCenter from '../components/admin/SecurityCenter';
 import Banners from '../components/admin/Banners';
 import Buyers from '../components/admin/shopping/Buyers';
 import Tokens from '../components/admin/shopping/Tokens';
@@ -136,7 +135,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
       icon: 'inventory_2',
       color: 'text-gray-700',
       submenu: [
-        { id: 'packages', label: 'Batches', icon: 'category' },
+        { id: 'packages', label: 'Featured Batches', icon: 'category' },
         { id: 'free-content', label: 'Free Content', icon: 'auto_awesome' },
         { id: 'demo-content', label: 'Demo Content', icon: 'play_lesson' },
         { id: 'quick-links', label: ' Quick Links', icon: 'public' },
@@ -184,7 +183,6 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         { id: 'institute', label: 'Profile', icon: 'person' },
         { id: 'categories', label: 'Categories', icon: 'category' },
         { id: 'settings', label: 'Configurations', icon: 'admin_panel_settings' },
-        { id: 'security-center', label: 'Security Center', icon: 'shield' },
         { id: 'blocked-users', label: 'Blocked Users', icon: 'block' }
       ]
     },
@@ -237,8 +235,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         <Route path="questions" element={<Questions {...props} />} />
         <Route path="question-bank" element={<Questions {...props} view="bank" />} />
         <Route path="passages" element={<Passages {...props} />} />
-        <Route path="tests" element={<Tests {...props} />} />
-        <Route path="tests/:id" element={<Tests {...props} />} />
+        <Route path="tests/*" element={<Tests {...props} />} />
         <Route path="subjective-test" element={<SubjectiveTest {...props} />} />
         <Route path="test-series" element={<TestSeries {...props} />} />
         <Route path="all-reports" element={<AllReports {...props} />} />
@@ -254,7 +251,6 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         <Route path="messages" element={<Messages {...props} />} />
         <Route path="blog" element={<Blog {...props} />} />
         <Route path="settings" element={<Settings {...props} />} />
-        <Route path="security-center" element={<SecurityCenter />} />
         <Route path="banners" element={<Banners {...props} />} />
         <Route path="referrals" element={<Referrals {...props} />} />
         <Route path="courses" element={<Courses {...props} />} />
@@ -395,7 +391,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
           <div className="flex flex-col">
             <h1 className="text-[14px] font-black text-[#1e293b] tracking-widest uppercase">
               {activeView === 'dashboard' ? 'Dashboard' :
-                activeView === 'course-content' ? 'Batches' :
+                activeView === 'course-content' ? 'Featured Batches' :
                   menuItems.find(m => m.id === activeView)?.label ||
                   menuItems.flatMap(m => m.submenu || []).find(s => s.id === activeView)?.label ||
                   'Admin'}

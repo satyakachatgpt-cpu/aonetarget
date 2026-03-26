@@ -19,14 +19,11 @@ import {
   generateSignedUrl, verifySignedUrl
 } from './middleware/auth.js';
 import compression from 'compression';
-import { globalLimiter, authLimiter, videoLimiter, securityHeaders, sanitizeInput } from './middleware/security.js';
+import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from 'docx';
 
 // Force Google DNS to fix MongoDB SRV resolution issues (ECONNRFRUSED)
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 console.log('[DEBUG] DNS Servers forced to Google (8.8.8.8) to fix ECONNREFUSED');
-
-
-console.log('[DEBUG] Environment Variables Loaded. Port:', process.env.PORT, 'KeyId Prefix:', (process.env.RAZORPAY_KEY_ID || '').slice(0, 8));
 
 const app = express();
 app.use(compression());
@@ -38,7 +35,6 @@ const isProduction = process.env.NODE_ENV === 'production';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-
 app.use(cors({
   origin: '*',
   credentials: false,
@@ -49,12 +45,10 @@ app.use(cors({
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(cookieParser());
-app.use(securityHeaders);
-app.use(sanitizeInput);
-app.use('/api/', globalLimiter);
 app.use('/attached_assets', express.static(path.join(__dirname, '../attached_assets')));
 
-app.get('/api/secure-video/:filename', authMiddleware, videoLimiter, async (req, res) => {
+// Routes
+app.get('/api/secure-video/:filename', authMiddleware, async (req, res) => {
   try {
     const { filename } = req.params;
     const { sig, exp } = req.query;
@@ -65,7 +59,7 @@ app.get('/api/secure-video/:filename', authMiddleware, videoLimiter, async (req,
       }
     }
 
-    let student = null;
+    let student = null;chah
     if (req.user) {
       student = await db.collection('students').findOne({
         $or: [
@@ -225,6 +219,33 @@ const connectDB = async () => {
   }
 };
 
+// Watch Progress API
+app.get('/api/watch-progress/:courseId/:videoId', authMiddleware, async (req, res) => {
+  try {
+    const progress = await db.collection('watch_progress').findOne({
+      userId: req.user.studentId,
+      videoId: req.params.videoId
+    });
+    res.json(progress || { watchedTime: 0 });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+app.post('/api/watch-progress', authMiddleware, async (req, res) => {
+  const { courseId, videoId, watchedTime } = req.body;
+  try {
+    await db.collection('watch_progress').updateOne(
+      { userId: req.user.studentId, videoId },
+      { $set: { courseId, watchedTime, updatedAt: new Date() } },
+      { upsert: true }
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
 // Initialize DB on startup
 connectDB();
 
@@ -362,6 +383,75 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
     res.status(500).json({ error: 'Upload failed' });
   }
 });
+
+// ✅ REAL DOCX Generation Endpoint
+app.post('/api/generate-docx', async (req, res) => {
+  try {
+    const { questions, title = 'Question Paper' } = req.body;
+    if (!questions || !Array.isArray(questions)) {
+      return res.status(400).json({ error: 'Questions array required' });
+    }
+
+    const children = [
+      new Paragraph({
+        text: title.toUpperCase(),
+        heading: HeadingLevel.HEADING_1,
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 600 }
+      })
+    ];
+
+    questions.forEach((q, idx) => {
+      // Question Header
+      children.push(new Paragraph({
+        children: [
+          new TextRun({ text: `Question ${idx + 1}: `, bold: true, size: 28 }),
+          new TextRun({ text: (q.questionEn || q.question || '').replace(/<[^>]*>/g, '').trim(), size: 28 })
+        ],
+        spacing: { before: 400, after: 200 }
+      }));
+
+      // Options
+      if (q.options && Array.isArray(q.options)) {
+        q.options.forEach((opt, optIdx) => {
+          children.push(new Paragraph({
+            children: [
+              new TextRun({ text: `${String.fromCharCode(65 + optIdx)}) `, bold: true, size: 24 }),
+              new TextRun({ text: String(opt).replace(/<[^>]*>/g, '').trim(), size: 24 })
+            ],
+            indent: { left: 400 },
+            spacing: { after: 100 }
+          }));
+        });
+      }
+
+      // Metadata (Answer & Marks)
+      children.push(new Paragraph({
+        children: [
+          new TextRun({ text: "Correct Answer: ", bold: true, size: 22 }),
+          new TextRun({ text: String(q.correctAnswer || '').toUpperCase(), bold: true, color: "008000", size: 22 }),
+          new TextRun({ text: "    |    ", size: 22 }),
+          new TextRun({ text: `Marks: +${q.positiveMarks} / ${q.negativeMarks}`, size: 22 })
+        ],
+        spacing: { before: 200, after: 300 }
+      }));
+    });
+
+    const doc = new Document({
+      sections: [{ children }]
+    });
+
+    const buffer = await Packer.toBuffer(doc);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', 'attachment; filename="output.docx"');
+    res.send(buffer);
+  } catch (err) {
+    console.error('DOCX Generation Error:', err);
+    res.status(500).json({ error: 'Internal Server Error' });
+  }
+});
+
 
 // APK Download endpoint - serves the latest APK file
 app.get('/api/download/apk', (req, res) => {
@@ -622,7 +712,7 @@ async function findCourse(id) {
 }
 
 // Routes for Course Videos
-app.get('/api/courses/:id/videos', async (req, res) => {
+app.get('/api/courses/:id/videos', authMiddleware, async (req, res) => {
   try {
     const idVariants = await getCourseIdVariants(req.params.id);
     
@@ -746,6 +836,30 @@ app.put('/api/courses/:id/videos/:videoId', async (req, res) => {
   } catch (error) {
     console.error('Video update error:', error);
     res.status(500).json({ error: 'Failed to update video' });
+  }
+});
+
+app.post('/api/live-stream/end/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const update = {
+      status: 'ended',
+      isLive: false,
+      endedAt: new Date().toISOString(),
+      endTime: new Date().toISOString() // Compatibility with getCalculatedLiveStatus
+    };
+    const query = {
+      $or: [
+        { id: id },
+        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
+      ].filter(v => v.id || v._id)
+    };
+    const result = await db.collection('videos').updateOne(query, { $set: update });
+    if (result.matchedCount === 0) return res.status(404).json({ error: 'Live stream not found' });
+    res.json({ success: true, message: 'Live stream ended successfully' });
+  } catch (error) {
+    console.error('End live stream error:', error);
+    res.status(500).json({ error: 'Failed to end live stream' });
   }
 });
 
@@ -1311,6 +1425,80 @@ app.get('/api/students/:id', async (req, res) => {
     res.json(student);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch student' });
+  }
+});
+
+app.get('/api/students/:id/live-classes', async (req, res) => {
+  try {
+    let studentQuery = { id: req.params.id };
+    if (mongoose.Types.ObjectId.isValid(req.params.id)) {
+      studentQuery = { $or: [{ id: req.params.id }, { _id: req.params.id }] };
+    }
+    const student = await Student.findOne(studentQuery).lean();
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    const enrolledCourses = student.enrolledCourses || [];
+    if (enrolledCourses.length === 0) return res.json([]);
+
+    // Get all variants for all enrolled courses
+    let allIdVariants = [];
+    for (const courseId of enrolledCourses) {
+      const variants = await getCourseIdVariants(courseId);
+      allIdVariants = [...allIdVariants, ...variants];
+    }
+    
+    // Remote duplicates
+    allIdVariants = [...new Set(allIdVariants)];
+
+    const query = {
+      courseId: { $in: allIdVariants }
+    };
+
+    const [c1, c2, c3] = await Promise.all([
+      db.collection('liveVideos').find(query).toArray(),
+      db.collection('liveClasses').find(query).toArray(),
+      db.collection('videos').find({ ...query, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).toArray()
+    ]);
+
+    const merged = [...c1, ...c2, ...c3].map(item => {
+      const now = new Date();
+      const startTime = new Date(item.publishOn || item.date || item.createdAt);
+      const targetEnd = item.endTime || item.endDateTime;
+      const endTime = targetEnd ? new Date(targetEnd) : new Date(startTime.getTime() + 60 * 60 * 1000); // Default 1 hour
+      const joinBeforeMin = parseInt(item.joinBeforeMinutes) || 10;
+      const joinTime = new Date(startTime.getTime() - joinBeforeMin * 60 * 1000);
+
+      // Dynamic Status Calculation
+      if (item.status === 'inactive' || item.status === 'ended' || item.status === 'completed') {
+        item.status = 'ended';
+      } else if (now < joinTime) {
+        item.status = 'upcoming';
+      } else if (now >= joinTime && now <= endTime) {
+        item.status = 'live';
+      } else {
+        item.status = 'ended';
+      }
+
+      // Ensure date/startTime properties exist
+      if (!item.date && (item.publishOn || item.createdAt)) {
+        const d = new Date(item.publishOn || item.createdAt);
+        if (!isNaN(d.getTime())) {
+          item.date = d.toISOString().split('T')[0];
+          item.startTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        }
+      }
+      
+      if (!item.meetingLink) {
+        item.meetingLink = item.url || item.videoUrl || item.link;
+      }
+      
+      return item;
+    }).sort((a,b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
+
+    res.json(merged);
+  } catch (error) {
+    console.error('Error fetching student live classes:', error);
+    res.status(500).json({ error: 'Internal Server Error' });
   }
 });
 
@@ -2148,6 +2336,55 @@ app.delete('/api/questions', async (req, res) => {
     res.json({ success: true, message: `Deleted ${result.deletedCount} questions` });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete all questions' });
+  }
+});
+
+// Bulk delete questions by IDs
+app.post('/api/questions/bulk-delete', async (req, res) => {
+  try {
+    const { ids, questionIds } = req.body;
+    const finalIds = ids || questionIds;
+
+    if (!Array.isArray(finalIds) || finalIds.length === 0) {
+      return res.status(400).json({ error: 'No question IDs provided' });
+    }
+
+    // Attempt to delete by both 'id' field and MongoDB '_id' for compatibility
+    const filter = {
+      $or: [
+        { id: { $in: finalIds } },
+        { _id: { $in: finalIds.filter(id => id && /^[a-f\d]{24}$/i.test(id)).map(id => new ObjectId(id)) } }
+      ]
+    };
+
+    const result = await db.collection('questions').deleteMany(filter);
+    console.log(`[Bulk Delete] Deleted ${result.deletedCount} questions from the questions collection.`);
+
+    // Important: Also remove these questions from any tests that might have them embedded
+    // We search all tests and pull any question where its id or _id is in the list
+    // We only apply this to documents where 'questions' is actually an array
+    await db.collection('tests').updateMany(
+      { questions: { $type: 'array' } },
+      { 
+        $pull: { 
+          questions: { 
+            $or: [
+              { id: { $in: finalIds } },
+              { _id: { $in: finalIds.filter(id => id && /^[a-f\d]{24}$/i.test(id)).map(id => new ObjectId(id)) } }
+            ] 
+          } 
+        } 
+      }
+    );
+
+    res.json({ 
+      success: true, 
+      message: `Questions deleted successfully`,
+      deletedCount: result.deletedCount 
+    });
+  } catch (error) {
+    console.error('Bulk delete questions error:', error);
+    res.status(500).json({ error: 'Failed to bulk delete questions', details: error.message });
   }
 });
 
@@ -3877,6 +4114,12 @@ const otpLimiter = rateLimit({
   message: { error: 'Too many OTP requests from this IP, please try again after a minute' }
 });
 
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10, // limit each IP to 10 requests per windowMs
+  message: { error: 'Too many verify requests from this IP, please try again after 15 minutes' }
+});
+
 app.post('/api/otp/send', otpLimiter, async (req, res) => {
   try {
     const { phone } = req.body;
@@ -4023,16 +4266,31 @@ app.post('/api/otp/verify', authLimiter, async (req, res) => {
     }
 
     const crypto = await import('crypto');
-    const deviceId = generateDeviceId();
+    const deviceId = req.body.deviceId || generateDeviceId();
     const sessionToken = crypto.randomBytes(32).toString('hex');
 
-    const hadPreviousSession = !!student.sessionToken && !!student.activeDeviceId;
+    // 2-Device Limit Logic
+    if (!student.activeSessions) student.activeSessions = [];
+    
+    // Remove current device if already exists to update it
+    student.activeSessions = student.activeSessions.filter(s => s.deviceId !== deviceId);
+    
+    // Add new session
+    student.activeSessions.push({
+      token: sessionToken,
+      deviceId,
+      lastLoginIP: req.ip || '',
+      createdAt: new Date()
+    });
+    
+    // Keep only last 2 sessions
+    if (student.activeSessions.length > 2) {
+      student.activeSessions = student.activeSessions.slice(-2);
+    }
 
-    student.sessionToken = sessionToken;
-    student.sessionCreatedAt = new Date();
+    student.sessionToken = sessionToken; // Legacy support
     student.activeDeviceId = deviceId;
     student.lastLoginAt = new Date();
-    student.lastLoginIP = req.ip || req.connection?.remoteAddress || '';
     await student.save();
 
     const tokens = generateTokens(student.toObject());
@@ -4486,10 +4744,33 @@ app.get('/api/students/:id/courses', async (req, res) => {
       ]
     }).toArray();
 
-    // Ensure all courses have string id for frontend
-    const mappedCourses = courses.map(c => ({
-      ...c,
-      id: c.id || c._id.toString()
+    // Fetch all watch progress for this student
+    const watchProgress = await db.collection('watch_progress').find({ userId: req.params.id }).toArray();
+    
+    // Fetch and map courses with progress
+    const mappedCourses = await Promise.all(courses.map(async (c) => {
+      const courseIdStr = c.id || c._id.toString();
+      const idVariants = await getCourseIdVariants(courseIdStr);
+      
+      // Total videos in this course
+      const totalVideos = await db.collection('videos').countDocuments({ 
+        courseId: { $in: idVariants } 
+      });
+      
+      // Watched videos in this course
+      const watchedCount = watchProgress.filter(wp => 
+        idVariants.includes(wp.courseId) && wp.watchedTime > 0
+      ).length;
+      
+      const progress = totalVideos > 0 ? Math.round((watchedCount / totalVideos) * 100) : 0;
+      
+      return {
+        ...c,
+        id: courseIdStr,
+        progress: progress,
+        totalVideos: totalVideos,
+        watchedCount: watchedCount
+      };
     }));
 
     res.json(mappedCourses);
@@ -5926,6 +6207,37 @@ app.put('/api/chats/:chatId/read', async (req, res) => {
   }
 });
 
+// Live Chat API
+app.get('/api/live-chat/:videoId/messages', async (req, res) => {
+  try {
+    const messages = await db.collection('liveChatMessages')
+      .find({ videoId: req.params.videoId })
+      .sort({ createdAt: 1 })
+      .toArray();
+    res.json(messages);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch messages' });
+  }
+});
+
+app.post('/api/live-chat/:videoId/messages', async (req, res) => {
+  try {
+    const { videoId } = req.params;
+    const { senderId, senderName, message } = req.body;
+    const chatMessage = {
+      videoId,
+      senderId,
+      senderName,
+      message,
+      createdAt: new Date()
+    };
+    await db.collection('liveChatMessages').insertOne(chatMessage);
+    res.status(201).json(chatMessage);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to send message' });
+  }
+});
+
 async function startServer() {
   const httpServer = http.createServer(app);
 
@@ -5985,5 +6297,13 @@ async function startServer() {
 
   startListen();
 }
+
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[FATAL] Unhandled Rejection at:', promise, 'reason:', reason);
+});
 
 startServer();

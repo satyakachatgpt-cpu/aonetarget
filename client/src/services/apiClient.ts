@@ -577,7 +577,7 @@ export const testsAPI = {
   },
   publish: async (id: string) => {
     const response = await fetch(`${API_BASE_URL}/tests/${id}/publish`, {
-      method: 'POST',
+      method: 'PATCH',
       headers: { 'Content-Type': 'application/json' }
     });
     if (!response.ok) {
@@ -586,6 +586,28 @@ export const testsAPI = {
     }
     invalidateCache('tests');
     return response.json();
+  },
+  duplicate: async (id: string) => {
+    const response = await fetch(`${API_BASE_URL}/tests/${id}/duplicate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!response.ok) throw new Error('Failed to duplicate test');
+    invalidateCache('tests');
+    return response.json();
+  },
+  reevaluate: async (id: string) => {
+    const response = await fetch(`${API_BASE_URL}/tests/${id}/reevaluate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    if (!response.ok) throw new Error('Failed to recompute results');
+    return response.json();
+  },
+  export: async (id: string, solution = true) => {
+    const response = await fetch(`${API_BASE_URL}/tests/${id}/export?solution=${solution}`);
+    if (!response.ok) throw new Error('Failed to export PDF');
+    return response.blob();
   }
 };
 

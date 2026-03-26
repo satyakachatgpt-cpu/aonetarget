@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import LiveClassesCalendar from '../components/student/LiveClassesCalendar';
-import SecureVideoPlayer from '../components/SecureVideoPlayer';
+import VideoPlayer from '../components/VideoPlayer';
 import { useAuthStore } from '../store/authStore';
+import { useUIStore } from '../store/uiStore';
 import { getYouTubeThumbnail, getGradientPlaceholder } from '../lib/utils';
 import { CATEGORY_GRADIENTS } from '../constants';
 
@@ -87,9 +88,68 @@ const CourseDetails: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'videos' | 'notes' | 'tests' | 'live'>('videos');
   const [isEnrolled, setIsEnrolled] = useState(false);
-  const [enrolling, setEnrolling] = useState(false);
-  const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
   const [showVideoPlayer, setShowVideoPlayer] = useState(false);
+  const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
+  const [liveMessages, setLiveMessages] = useState<any[]>([]);
+  const [newLiveMessage, setNewLiveMessage] = useState('');
+  const [isLandscape, setIsLandscape] = useState(window.innerWidth > window.innerHeight);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const pollRef = useRef<any>(null);
+
+  useEffect(() => {
+    const handleResize = () => setIsLandscape(window.innerWidth > window.innerHeight);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  const fetchLiveMessages = async (vId: string) => {
+    try {
+      const res = await fetch(`/api/live-chat/${vId}/messages`);
+      if (res.ok) {
+        const data = await res.json();
+        setLiveMessages(data);
+      }
+    } catch (e) { }
+  };
+
+  useEffect(() => {
+    if (showVideoPlayer && selectedVideo && selectedVideo.contentType === 'live_stream') {
+      fetchLiveMessages(selectedVideo.id || selectedVideo._id);
+      pollRef.current = setInterval(() => {
+        fetchLiveMessages(selectedVideo.id || selectedVideo._id);
+      }, 5000);
+    } else {
+      if (pollRef.current) clearInterval(pollRef.current);
+      setLiveMessages([]);
+    }
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [showVideoPlayer, selectedVideo]);
+
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [liveMessages]);
+
+  const handleSendLiveMessage = async () => {
+    if (!newLiveMessage.trim() || !selectedVideo) return;
+    try {
+      const res = await fetch(`/api/live-chat/${selectedVideo.id||selectedVideo._id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          senderId: student.id || student._id,
+          senderName: student.name,
+          message: newLiveMessage.trim()
+        })
+      });
+      if (res.ok) {
+        setNewLiveMessage('');
+        fetchLiveMessages(selectedVideo.id || selectedVideo._id);
+      }
+    } catch (e) { }
+  };
+  const [enrolling, setEnrolling] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [shareSuccess, setShareSuccess] = useState(false);
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
@@ -103,6 +163,13 @@ const CourseDetails: React.FC = () => {
     { key: 'live' as const, label: 'Live stream', icon: 'sensors' },
   ];
 
+  const setBottomNavHidden = useUIStore(s => s.setBottomNavHidden);
+
+  useEffect(() => {
+    setBottomNavHidden(showVideoPlayer);
+    return () => setBottomNavHidden(false);
+  }, [showVideoPlayer, setBottomNavHidden]);
+
 
   const handleImageError = useCallback((id: string) => {
     setFailedImages(prev => new Set(prev).add(id));
@@ -112,11 +179,13 @@ const CourseDetails: React.FC = () => {
 
 
   const handleVideoClick = (video: Video) => {
-    console.log('Video clicked:', video.title, 'Playable:', isEnrolled || video.isFree, 'URL:', video.youtubeUrl || video.videoUrl);
+    const videoUrl = video.youtubeUrl || video.videoUrl || video.url || video.meetingLink;
     const canPlay = isEnrolled || video.isFree;
-    if (canPlay && (video.youtubeUrl || video.videoUrl)) {
-      setSelectedVideo(video);
-      setShowVideoPlayer(true);
+    
+    if (canPlay && videoUrl) {
+      navigate(`/watch/${id}/${video.id || video._id}`);
+    } else if (!canPlay) {
+      alert('Please enroll in this course to watch this video.');
     }
   };
 
@@ -538,13 +607,17 @@ const CourseDetails: React.FC = () => {
             )}
 
             <div className="space-y-4">
-              {folders.filter(f => String(f.parentId || '') === String(currentFolderId || '')).map((folder) => (
+              {folders.filter(f => {
+                const parentId = String(f.parentId || '');
+                const targetId = String(currentFolderId || '');
+                return parentId === targetId || (parentId === 'null' && targetId === '');
+              }).map((folder) => (
                 <div
-                  key={folder.id}
+                  key={folder._id || folder.id}
                   onClick={() => {
-                    const currentFolder = folders.find(f => f.id === currentFolderId);
+                    const currentFolder = folders.find(f => (f._id === currentFolderId || f.id === currentFolderId));
                     setNavigationHistory([...navigationHistory, ...(currentFolder ? [currentFolder] : [])]);
-                    setCurrentFolderId(folder.id);
+                    setCurrentFolderId(folder._id || folder.id);
                   }}
                   className="bg-white p-4 cursor-pointer active:scale-[0.98] transition-all flex items-center justify-between group rounded-[1.8rem] border-[1.5px] border-gray-50 shadow-sm hover:shadow-md hover:border-primary-100"
                 >
@@ -568,8 +641,12 @@ const CourseDetails: React.FC = () => {
             {videos.filter(v => 
               (v.contentType !== 'youtube_zoom' && v.contentType !== 'live_stream') &&
               ((!currentFolderId && (!v.folderId || v.folderId === 'null' || v.folderId === 'undefined')) || 
-               (currentFolderId && String(v.folderId) === String(currentFolderId)))
-            ).length === 0 && folders.filter(f => String(f.parentId || '') === String(currentFolderId || '')).length === 0 ? (
+               (currentFolderId && (String(v.folderId) === String(currentFolderId))))
+            ).length === 0 && folders.filter(f => {
+              const parentId = String(f.parentId || '');
+              const targetId = String(currentFolderId || '');
+              return parentId === targetId || (parentId === 'null' && targetId === '');
+            }).length === 0 ? (
               <div className="card-premium p-10 text-center animate-fade-in-up">
                 <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
                   <span className="material-symbols-rounded text-3xl text-gray-300">video_library</span>
@@ -580,14 +657,14 @@ const CourseDetails: React.FC = () => {
               videos.filter(v => 
                 (v.contentType !== 'youtube_zoom' && v.contentType !== 'live_stream') &&
                 ((!currentFolderId && (!v.folderId || v.folderId === 'null' || v.folderId === 'undefined')) || 
-                 (currentFolderId && String(v.folderId) === String(currentFolderId)))
+                 (currentFolderId && (String(v.folderId) === String(currentFolderId))))
               ).map((video, index) => {
                 const isCompleted = progress.completedVideos.includes(video.id);
                 const canPlay = isEnrolled || video.isFree || (index === 0 && !currentFolderId);
                 const isLocked = !canPlay;
                 return (
                   <div
-                    key={video.id}
+                    key={video._id || video.id}
                     onClick={() => !isLocked && handleVideoClick(video)}
                     className={`card-premium overflow-hidden cursor-pointer active:scale-[0.97] transition-all duration-200 animate-fade-in-up ${isLocked ? 'opacity-70' : ''}`}
                     style={{ animationDelay: `${index * 60}ms` }}
@@ -596,11 +673,11 @@ const CourseDetails: React.FC = () => {
                       <div className="relative w-28 h-20 rounded-2xl overflow-hidden flex-shrink-0">
                         {!failedImages.has(video.id) ? (
                           <img
-                            src={video.thumbnail || getYouTubeThumbnail(video.youtubeUrl || video.videoUrl || '') || `https://picsum.photos/400/225?sig=${video.id}`}
+                            src={video.thumbnail || getYouTubeThumbnail(video.youtubeUrl || video.videoUrl || video.url || '') || `https://picsum.photos/400/225?sig=${video._id || video.id}`}
                             alt={video.title}
                             className="w-full h-full object-cover"
                             loading="lazy"
-                            onError={() => handleImageError(video.id)}
+                            onError={() => handleImageError(video._id || video.id)}
                           />
                         ) : (
                           <div className={`w-full h-full bg-gradient-to-br ${getGradientPlaceholder(video.title, CATEGORY_GRADIENTS).gradient} flex items-center justify-center`}>
@@ -844,33 +921,111 @@ const CourseDetails: React.FC = () => {
       </main>
 
       {showVideoPlayer && selectedVideo && (
-        <div className="fixed inset-0 bg-black z-50 flex flex-col animate-fade-in sm:p-4">
-          <div className="flex items-center justify-between p-3 text-white bg-black/40 backdrop-blur-md z-10 border-b border-white/5">
-            <button onClick={closeVideoPlayer} className="flex items-center gap-1.5 active:scale-[0.97] transition-all duration-200">
-              <span className="material-symbols-rounded text-xl">arrow_back</span>
-              <span className="font-bold text-xs uppercase tracking-wider">Back</span>
-            </button>
-            <h3 className="text-[10px] font-black truncate max-w-[140px] opacity-60 uppercase tracking-widest">{selectedVideo.title}</h3>
-            <button
-              onClick={() => { markVideoComplete(selectedVideo.id); closeVideoPlayer(); }}
-              className="px-4 py-1.5 bg-green-600 text-white text-[10px] font-black rounded-lg active:scale-[0.97] transition-all duration-200 shadow-lg border border-green-500/50"
+        <div className="fixed inset-0 bg-black z-50 flex flex-col animate-fade-in overflow-hidden">
+          {/* Enhanced Mobile Controls Overlay */}
+          <div className="absolute top-0 left-0 right-0 p-4 md:p-6 flex items-center justify-between z-30 pointer-events-none">
+            <button 
+              onClick={closeVideoPlayer} 
+              className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white/20 backdrop-blur-xl flex items-center justify-center text-white active:scale-90 transition-all pointer-events-auto shadow-lg"
             >
-              FINISH
+              <span className="material-symbols-rounded text-2xl">arrow_back</span>
             </button>
-          </div>
-          <div className="flex-1 flex items-center justify-center overflow-hidden bg-black relative">
-            <div className="w-full h-full max-w-none aspect-video bg-black relative flex items-center justify-center">
-              <SecureVideoPlayer
-                src={selectedVideo.youtubeUrl || selectedVideo.videoUrl || ''}
-                title={selectedVideo.title}
-                poster={selectedVideo.thumbnail || getYouTubeThumbnail(selectedVideo.youtubeUrl || selectedVideo.videoUrl || '') || undefined}
-                className="w-full h-full object-contain"
-              />
+            <div className="flex items-center gap-3 pointer-events-auto">
+              {selectedVideo.contentType === 'live_stream' && (
+                <div className="flex items-center gap-1.5 bg-red-600 px-3 py-1 rounded-full shadow-lg shadow-red-600/20">
+                  <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+                  <span className="text-[10px] font-black text-white uppercase tracking-wider">Live</span>
+                </div>
+              )}
+              <button
+                onClick={() => { markVideoComplete(selectedVideo.id); closeVideoPlayer(); }}
+                className="px-6 py-2 bg-emerald-500 text-white text-[11px] font-black rounded-full active:scale-95 transition-all shadow-xl shadow-emerald-500/20 uppercase tracking-widest"
+              >
+                Finish
+              </button>
             </div>
           </div>
-          <div className="p-4 py-6 bg-gradient-to-t from-black via-black/90 to-transparent text-white hidden sm:block">
-            <h4 className="font-bold text-lg">{selectedVideo.title}</h4>
-            <p className="text-gray-400 text-sm">{selectedVideo.duration || '00:00'} min • Class Recording</p>
+
+          <div className={`flex-1 flex ${isLandscape && selectedVideo.contentType === 'live_stream' ? 'flex-row' : 'flex-col'} h-full overflow-hidden`}>
+            <div className={`flex-1 flex items-center justify-center bg-black relative h-full rounded-2xl overflow-hidden shadow-2xl`}>
+              <VideoPlayer
+                src={selectedVideo.youtubeUrl || selectedVideo.videoUrl || selectedVideo.url || selectedVideo.meetingLink || ''}
+                title={selectedVideo.title}
+                className="w-full h-full"
+              />
+            </div>
+
+            {/* Content/Interaction Area */}
+            {selectedVideo.contentType === 'live_stream' ? (
+              <div className={`flex flex-col bg-white ${isLandscape ? 'w-[30%] sm:w-[320px] md:w-[380px] border-l border-white/10 h-full' : 'h-[40vh] rounded-t-[2.5rem] mt-[-2rem] z-10'}`}>
+                <div className="p-5 border-b border-gray-100 flex items-center justify-between shrink-0">
+                  <div>
+                    <h3 className="text-sm font-black text-gray-900 truncate max-w-[200px] uppercase tracking-tight">{selectedVideo.title}</h3>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full" />
+                      <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Active Chat</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-gray-50/30 scroll-smooth">
+                  {liveMessages.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full text-center text-gray-300 gap-3 opacity-60">
+                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center">
+                        <span className="material-symbols-rounded text-2xl">chat_bubble</span>
+                      </div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.2em]">Start the conversation</p>
+                    </div>
+                  ) : (
+                    liveMessages.map((msg, i) => (
+                      <div key={i} className="flex flex-col gap-1 items-start group">
+                        <span className="text-[8px] font-black text-primary-600 uppercase tracking-widest ml-1 opacity-70 group-hover:opacity-100 transition-opacity">
+                          {msg.senderName}
+                        </span>
+                        <div className="bg-white px-4 py-2.5 rounded-2xl rounded-tl-none shadow-sm border border-gray-100 max-w-[90%]">
+                          <p className="text-xs text-gray-700 font-medium leading-relaxed">{msg.message}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                  <div ref={chatEndRef} />
+                </div>
+
+                <div className="p-4 bg-white border-t border-gray-100 shrink-0">
+                  <div className="flex items-center gap-2 bg-gray-100 p-1.5 px-3 rounded-2xl shadow-inner">
+                    <input
+                      type="text"
+                      value={newLiveMessage}
+                      onChange={(e) => setNewLiveMessage(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSendLiveMessage()}
+                      placeholder="Type a message..."
+                      className="flex-1 bg-transparent border-none text-xs focus:ring-0 py-2.5 font-bold text-gray-800 placeholder:text-gray-400"
+                    />
+                    <button
+                      onClick={handleSendLiveMessage}
+                      disabled={!newLiveMessage.trim()}
+                      className="w-10 h-10 bg-primary-600 text-white rounded-xl flex items-center justify-center shadow-lg active:scale-95 disabled:opacity-50 transition-all shadow-primary-600/20"
+                    >
+                      <span className="material-symbols-rounded text-lg">send</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Info for recorded videos (Overlay style) */
+              <div className="absolute bottom-0 left-0 right-0 p-6 pt-12 bg-gradient-to-t from-black via-black/80 to-transparent text-white pointer-events-none z-20">
+                <div className="max-w-xl pointer-events-auto">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-[9px] font-black bg-white/20 px-2 py-0.5 rounded uppercase tracking-[0.2em] backdrop-blur-md">Recorded</span>
+                    <span className="text-[10px] text-white/60 font-medium tracking-wide">
+                      {selectedVideo.duration || '0:00'} min • Class Recording
+                    </span>
+                  </div>
+                  <h4 className="font-extrabold text-xl md:text-2xl tracking-tight leading-tight">{selectedVideo.title}</h4>
+                  <p className="text-white/60 text-xs mt-2 line-clamp-2 max-w-md font-medium">Enjoy this chapter from your active batch. Mark as complete once finished.</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -37,6 +37,8 @@ const DemoContent = lazy(() => import('./screens/DemoContent'));
 const FreeContent = lazy(() => import('./screens/FreeContent'));
 const NewsArticle = lazy(() => import('./screens/NewsArticle'));
 const Batches = lazy(() => import('./screens/Batches'));
+const WatchPage = lazy(() => import('./screens/WatchPage'));
+const MyTests = lazy(() => import('./screens/MyTests'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[60vh] w-full animate-in fade-in duration-300">
@@ -125,6 +127,7 @@ const App: React.FC = () => {
             <Route path="/student-login" element={isStudentLoggedIn ? <Navigate to="/" replace /> : <div className="font-outfit"><StudentLogin setAuth={setIsStudentLoggedIn} /></div>} />
 
             <Route path="/news/:id" element={<NewsArticle />} />
+            <Route path="/watch/:batchId/:videoId" element={<WatchPage />} />
 
             <Route path="*" element={
               <MainLayout isLoggedIn={isStudentLoggedIn}>
@@ -156,6 +159,9 @@ const App: React.FC = () => {
                     } />
                     <Route path="/mock-tests" element={
                       isStudentLoggedIn ? <MockTests /> : <Navigate to="/student-login" />
+                    } />
+                    <Route path="/my-tests" element={
+                      isStudentLoggedIn ? <MyTests /> : <Navigate to="/student-login" />
                     } />
                     <Route path="/test/:testId" element={
                       isStudentLoggedIn ? <TestTaking /> : <Navigate to="/student-login" />

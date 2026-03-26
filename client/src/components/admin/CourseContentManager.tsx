@@ -2254,25 +2254,23 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                 title="End Live Stream"
                 onClick={async (e) => {
                   e.stopPropagation();
-                  if (!confirm('Are you sure you want to end this live stream ?')) return;
+                  if (!confirm('Are you sure you want to end this live stream?')) return;
                   try {
-                    const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
                     const videoId = item._id || item.id;
-                    const endpoint = `${API_BASE_URL}/courses/${courseId}/videos/${videoId}`;
-                    
-                    // Also update the local state optimistically for immediate feedback
-                    setVideos(prev => prev.map(v => (v._id === videoId || v.id === videoId) ? { ...v, endTime: new Date().toISOString() } : v));
-
-                    await fetch(endpoint, {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ ...item, endTime: new Date().toISOString(), status: 'inactive' })
+                    const res = await fetch(`${API_BASE_URL}/live-stream/end/${videoId}`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' }
                     });
-                    showToast('Live stream ended successfully', 'success');
-                    loadCourseContent();
+
+                    if (res.ok) {
+                      showToast('Live stream ended successfully', 'success');
+                      loadCourseContent();
+                    } else {
+                      const errData = await res.json();
+                      showToast(errData.error || 'Failed to end live stream', 'error');
+                    }
                   } catch (err) {
-                    showToast('Failed to end live stream');
-                    loadCourseContent(); // Sync back
+                    showToast('Failed to end live stream', 'error');
                   }
                 }}
                 className="w-[34px] h-[34px] flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-500 hover:bg-red-50 transition-all bg-white"

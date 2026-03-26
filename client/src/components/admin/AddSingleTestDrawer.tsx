@@ -10,6 +10,7 @@ interface AddSingleTestDrawerProps {
     testSeriesOptions: { value: string; label: string }[];
     subjects: { value: string; label: string }[];
     defaultTestSeries?: string[];
+    showToast?: (m: string, type?: 'success' | 'error') => void;
 }
 
 const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
@@ -19,7 +20,8 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
     editingTest,
     testSeriesOptions,
     subjects,
-    defaultTestSeries
+    defaultTestSeries,
+    showToast
 }) => {
     const [activeTab, setActiveTab] = useState<'Basic' | 'Advanced'>('Basic');
 
@@ -754,7 +756,15 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
 
                         <div className="mt-auto shrink-0 bg-[#1a202c] py-6 flex items-center justify-center -mx-6 -mb-6 mt-10">
                             <button
-                                onClick={() => onSubmit({ ...formData, sections })}
+                                onClick={() => {
+                                    if (!formData.title) return showToast?.('Test Title is mandatory!', 'error');
+                                    if (formData.testSeries.length === 0) return showToast?.('Select at least one Test Series!', 'error');
+                                    if (!formData.noOfQuestions) return showToast?.('No. of Questions is mandatory!', 'error');
+                                    if (!formData.totalMarks) return showToast?.('Total Marks is mandatory!', 'error');
+                                    if (!formData.totalDuration) return showToast?.('Total Duration is mandatory!', 'error');
+                                    
+                                    onSubmit({ ...formData, sections });
+                                }}
                                 className="text-white text-[16px] font-bold hover:opacity-90 transition-all outline-none uppercase tracking-[2px]">
                                 Submit
                             </button>

@@ -251,9 +251,18 @@ const StudentDashboard: React.FC = () => {
                       </div>
                       <div className="flex-1 text-left min-w-0">
                         <p className="text-xs font-bold text-gray-800 truncate">{c.name || c.title}</p>
-                        <p className="text-[10px] text-gray-400">{c.type === 'live' ? 'Live' : 'Recorded'} Course</p>
+                        <div className="flex items-center justify-between mt-1">
+                          <p className="text-[9px] text-gray-400 uppercase font-black tracking-widest">{c.type === 'live' ? 'Live' : 'Recorded'} Course</p>
+                          <span className="text-[9px] font-black text-blue-600">{c.progress || 0}%</span>
+                        </div>
+                        <div className="mt-1.5 h-1 bg-blue-50 dark:bg-gray-700 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-blue-600 rounded-full transition-all duration-700 ease-out" 
+                            style={{ width: `${c.progress || 0}%` }}
+                          ></div>
+                        </div>
                       </div>
-                      <span className="material-symbols-rounded text-[#303F9F] text-lg">play_circle</span>
+                      <span className="material-symbols-rounded text-blue-600/30 text-lg ml-1">play_circle</span>
                     </button>
                   ))}
                 </div>
@@ -286,9 +295,21 @@ const StudentDashboard: React.FC = () => {
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-gray-800 truncate">{r.testName || 'Test'}</p>
                           <p className="text-[10px] text-gray-500">{r.courseName || 'General'}</p>
-                          <p className="text-[9px] text-gray-400 mt-0.5">
-                            {r.correctAnswers}/{r.totalQuestions} correct | {formatTime(r.timeTaken)}
-                          </p>
+                          <div className="flex items-center gap-3 mt-1.5 line-clamp-1">
+                            <p className="text-[9px] text-gray-400">
+                              {r.correctAnswers}/{r.totalQuestions} correct | {formatTime(r.timeTaken)}
+                            </p>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`/test/${r.testId}`);
+                              }}
+                              className="flex items-center gap-1 px-2 py-0.5 bg-blue-600/10 text-blue-600 rounded-lg text-[9px] font-black uppercase hover:bg-blue-600 hover:text-white transition-all active:scale-95"
+                            >
+                              <span className="material-symbols-rounded text-[10px]">replay</span>
+                              Try Again
+                            </button>
+                          </div>
                         </div>
                         <span className="text-[9px] text-gray-400 shrink-0">
                           {r.submittedAt ? new Date(r.submittedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '-'}

@@ -138,8 +138,8 @@ const MockTests: React.FC = () => {
         <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
         <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2"></div>
         <div className="relative flex items-center gap-4">
-          <button onClick={() => setSidebarOpen(true)} className="p-2.5 rounded-2xl glass-dark transition-all duration-200 active:scale-[0.97]">
-            <span className="material-symbols-rounded text-[22px]">menu</span>
+          <button onClick={() => navigate(-1)} className="p-2.5 rounded-2xl glass-dark transition-all duration-200 active:scale-[0.97]">
+            <span className="material-symbols-rounded text-[22px]">arrow_back</span>
           </button>
           <div className="flex-1">
             <h1 className="text-xl font-bold tracking-tight">Mock Tests</h1>
@@ -188,100 +188,6 @@ const MockTests: React.FC = () => {
           </div>
         ) : (
           <div className="space-y-6">
-            {testSeries.length > 0 && selectedCourse === 'all' && (
-              <section className="animate-fade-in-up">
-                <div className="flex items-center gap-2.5 mb-4">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-800 to-primary-600 flex items-center justify-center shadow-button">
-                    <span className="material-symbols-rounded text-white text-lg">library_books</span>
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-gray-800">Test Series</h3>
-                    <p className="text-[10px] text-gray-400">{testSeries.length} series available</p>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  {testSeries.map((series, idx) => {
-                    const seriesTests = getSeriesTests(series);
-                    const sid = series.id || series._id;
-                    const isExpanded = expandedSeries.includes(sid);
-                    return (
-                      <div key={sid} className="card-premium overflow-hidden animate-fade-in-up" style={{ animationDelay: `${idx * 0.08}s` }}>
-                        <button
-                          onClick={() => toggleSeries(sid)}
-                          className="w-full flex items-center justify-between p-4 transition-all duration-200 active:scale-[0.97]"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-primary-800 to-primary-500 flex items-center justify-center shadow-sm">
-                              <span className="material-symbols-rounded text-white text-xl">assignment</span>
-                            </div>
-                            <div className="text-left">
-                              <h4 className="font-bold text-sm text-gray-800">{series.seriesName || series.name}</h4>
-                              <div className="flex items-center gap-2 mt-1">
-                                <span className="text-[10px] text-gray-400 font-medium">{series.courseName || series.course || 'General'}</span>
-                                <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                                <span className="text-[10px] text-primary-600 font-semibold">{series.totalTests || seriesTests.length} Tests</span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className={`w-8 h-8 rounded-xl bg-surface-200 flex items-center justify-center transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`}>
-                            <span className="material-symbols-rounded text-gray-500 text-lg">expand_more</span>
-                          </div>
-                        </button>
-
-                        {isExpanded && (
-                          <div className="border-t border-surface-200 px-4 pb-4 animate-fade-in">
-                            {seriesTests.length > 0 ? (
-                              seriesTests.map((test, tIdx) => {
-                                const status = getTestStatus(test);
-                                const badge = getStatusBadge(status);
-                                return (
-                                  <div key={test.id} className="flex items-center justify-between py-3.5 border-b border-surface-100 last:border-0 animate-fade-in-up" style={{ animationDelay: `${tIdx * 0.05}s` }}>
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-center gap-2 mb-1">
-                                        <h5 className="font-semibold text-xs text-gray-800 truncate">{test.title || test.name}</h5>
-                                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold flex items-center gap-0.5 shrink-0 ${badge.bg} ${badge.text}`}>
-                                          <span className="material-symbols-rounded text-[10px]">{badge.icon}</span>
-                                          {badge.label}
-                                        </span>
-                                      </div>
-                                      <div className="flex gap-3 mt-1.5 text-[10px] text-gray-400">
-                                        <span className="flex items-center gap-1">
-                                          <span className="material-symbols-rounded text-[13px]">timer</span>
-                                          {test.duration || 60} mins
-                                        </span>
-                                        <span className="flex items-center gap-1">
-                                          <span className="material-symbols-rounded text-[13px]">help</span>
-                                          {test.questions?.length || test.totalQuestions || test.numberOfQuestions || 0} Qs
-                                        </span>
-                                      </div>
-                                    </div>
-                                    <button
-                                      onClick={() => status !== 'upcoming' && navigate(`/test/${test.id}`)}
-                                      disabled={status === 'upcoming'}
-                                      className={`px-4 py-2 rounded-xl text-[11px] font-bold transition-all duration-200 active:scale-[0.97] ${status === 'upcoming'
-                                          ? 'bg-surface-200 text-gray-400 cursor-not-allowed'
-                                          : 'btn-primary'
-                                        }`}
-                                    >
-                                      {status === 'completed' ? 'Review' : status === 'upcoming' ? 'Upcoming' : 'Start'}
-                                    </button>
-                                  </div>
-                                );
-                              })
-                            ) : (
-                              <div className="py-6 text-center">
-                                <span className="material-symbols-rounded text-3xl text-gray-200">inbox</span>
-                                <p className="text-[11px] text-gray-400 mt-2">No tests in this series yet</p>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
 
             {filteredCourseGroups.length > 0 ? (
               filteredCourseGroups.map((group, gIdx) => (
@@ -318,36 +224,26 @@ const MockTests: React.FC = () => {
                           <h4 className="font-bold text-[15px] text-gray-900 leading-snug">{test.title || test.name}</h4>
 
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3">
-                            <span className="flex items-center gap-1 text-[11px] text-gray-400 font-medium">
+                            <span className="flex items-center gap-1 text-[11px] text-gray-400 font-medium whitespace-nowrap">
                               <span className="material-symbols-rounded text-[15px] text-primary-400">help</span>
-                              {test.questions?.length || test.totalQuestions || test.numberOfQuestions || test.questions || 0} Questions
+                              {test.questions?.length || test.totalQuestions || test.numberOfQuestions || 0} Questions
                             </span>
-                            <span className="flex items-center gap-1 text-[11px] text-gray-400 font-medium">
+                            <span className="flex items-center gap-1 text-[11px] text-gray-400 font-medium whitespace-nowrap">
                               <span className="material-symbols-rounded text-[15px] text-primary-400">timer</span>
                               {test.duration || 60} mins
                             </span>
-                            <span className="flex items-center gap-1 text-[11px] text-gray-400 font-medium">
+                            <span className="flex items-center gap-1 text-[11px] text-gray-400 font-medium whitespace-nowrap">
                               <span className="material-symbols-rounded text-[15px] text-primary-400">stars</span>
-                              {test.totalMarks || test.marks || 0} Marks
+                              {parseInt(test.totalMarks) || parseInt(test.marks) || 0} Marks
                             </span>
+                            {test.subject && (
+                              <span className="flex items-center gap-1 text-[11px] text-primary-600 font-bold whitespace-nowrap uppercase tracking-tighter">
+                                <span className="material-symbols-rounded text-[15px]">topic</span>
+                                {test.subject}
+                              </span>
+                            )}
                           </div>
 
-                          {(test.openDate || test.closeDate) && (
-                            <div className="flex flex-wrap gap-3 mt-2.5 text-[11px] text-gray-400">
-                              {test.openDate && (
-                                <span className="flex items-center gap-1">
-                                  <span className="material-symbols-rounded text-[14px] text-green-400">event</span>
-                                  Opens: {formatDate(test.openDate)}
-                                </span>
-                              )}
-                              {test.closeDate && (
-                                <span className="flex items-center gap-1">
-                                  <span className="material-symbols-rounded text-[14px] text-red-400">event_busy</span>
-                                  Closes: {formatDate(test.closeDate)}
-                                </span>
-                              )}
-                            </div>
-                          )}
 
                           <button
                             onClick={() => status !== 'upcoming' && navigate(`/test/${test.id}`)}

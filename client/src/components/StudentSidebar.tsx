@@ -44,7 +44,7 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ isOpen, onClose, studen
     { icon: 'dashboard', label: 'Dashboard', path: '/student-dashboard' },
     { icon: 'play_circle', label: 'My Courses', path: '/my-courses' },
     { icon: 'videocam', label: 'Live Classes', path: '/live-classes' },
-    { icon: 'school', label: 'Batches', path: '/explore' },
+    { icon: 'school', label: 'Batches', path: '/batches' },
     { icon: 'quiz', label: 'Mock Tests', path: '/mock-tests' },
     { icon: 'menu_book', label: 'E-Book Notes', path: '/ebook-notes' },
     { icon: 'notifications', label: 'Notifications', path: '/notifications' },

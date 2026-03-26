@@ -1,5 +1,5 @@
-import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useUIStore } from '../store/uiStore';
 
 interface BottomNavProps {
   isLoggedIn?: boolean;
@@ -9,9 +9,10 @@ const BottomNav: React.FC<BottomNavProps> = ({ isLoggedIn = false }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const currentPath = location.pathname;
+  const isGlobalHidden = useUIStore(s => s.isBottomNavHidden);
 
   const hideOnPaths = ['/news/', '/test/', '/checkout/', '/video-player', '/test-series/', '/live-session/'];
-  const shouldHide = hideOnPaths.some(path => currentPath.startsWith(path));
+  const shouldHide = isGlobalHidden || hideOnPaths.some(path => currentPath.startsWith(path));
 
   if (shouldHide) return null;
 

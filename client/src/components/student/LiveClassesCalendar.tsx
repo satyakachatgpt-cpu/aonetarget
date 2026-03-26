@@ -12,6 +12,7 @@ interface LiveClass {
   meetingLink: string;
   instructor: string;
   status: 'scheduled' | 'live' | 'completed' | 'cancelled' | 'upcoming' | 'ended';
+  publishOn?: string;
 }
 
 interface Props {
@@ -83,11 +84,26 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId }) => {
   };
 
   const getUpcomingClasses = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Get today's date string in YYYY-MM-DD format based on local time
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    
     return liveClasses
-      .filter(c => new Date(c.date) >= today && c.status !== 'cancelled')
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+      .filter(c => {
+        // Show if date is today or in the future
+        const isFutureOrToday = c.date >= todayStr;
+        // Don't show cancelled ones
+        const isNotCancelled = c.status !== 'cancelled';
+        // Show if it's live or upcoming/scheduled, or if it ended today
+        const shouldShowStatus = ['live', 'upcoming', 'scheduled', 'ended', 'completed'].includes(c.status);
+        
+        return isFutureOrToday && isNotCancelled && shouldShowStatus;
+      })
+      .sort((a, b) => {
+        // Sort by date first, then by time
+        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        return (a.startTime || '').localeCompare(b.startTime || '');
+      });
   };
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -144,7 +160,7 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId }) => {
                       <p className="text-[13px] text-gray-500 font-bold mt-1.5 flex items-center gap-2">
                         <span className="material-symbols-outlined text-[18px]">person</span>
                         {cls.instructor || 'Instructor Not Assigned'}
-                        {cls.status === 'upcoming' && (
+                        {(cls.status === 'upcoming' || cls.status === 'scheduled') && (
                            <span className="flex items-center gap-1.5 ml-2 text-blue-600">
                              <span className="material-symbols-outlined text-[18px]">schedule</span>
                              Starts at {formatTime(cls.startTime)}
@@ -176,7 +192,7 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId }) => {
                         <span className="material-symbols-outlined text-[20px]">sensors</span>
                         Join Live
                       </a>
-                    ) : cls.status === 'upcoming' ? (
+                    ) : (cls.status === 'upcoming' || cls.status === 'scheduled') ? (
                       <button
                         disabled
                         className="h-11 px-6 bg-gray-100 text-gray-400 rounded-[12px] text-[13px] font-black uppercase tracking-wider flex items-center gap-2.5 cursor-not-allowed"

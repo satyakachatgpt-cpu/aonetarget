@@ -17,6 +17,7 @@ interface Student {
   notes?: string;
   isBanned?: boolean;
   suspiciousActivityCount?: number;
+  blockedAt?: string;
 }
 
 interface Props {
@@ -240,7 +241,7 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
   const handleUnblock = async (student: Student) => {
     try {
       setLoading(true);
-      await studentsAPI.update(student.id, { ...student, status: 'active' });
+      await studentsAPI.update(student.id, { ...student, status: 'active', blockedAt: undefined });
       showToast(`${student.name} has been unblocked successfully`, 'success');
       loadStudents();
     } catch (err) {
@@ -501,9 +502,20 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                     </td>
                     <td className="px-6 py-5">
                       <div className="text-[13px] font-medium text-gray-500">
-                        {new Date(s.registrationDate).toLocaleDateString('en-GB').replace(/\//g, '-')}{' '}
-                        <span className="text-gray-400 font-normal">at</span>{' '}
-                        {new Date(s.registrationDate).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true }).toUpperCase()}
+                        {(() => {
+                          const dateStr = (viewMode === 'blocked' && (s as any).blockedAt) ? (s as any).blockedAt : s.registrationDate;
+                          const dateObj = new Date(dateStr);
+                          if (!dateStr || isNaN(dateObj.getTime())) {
+                            return <span className="text-gray-300 italic">No date set</span>;
+                          }
+                          return (
+                            <>
+                              {dateObj.toLocaleDateString('en-GB').replace(/\//g, '-')}{' '}
+                              <span className="text-gray-400 font-normal">at</span>{' '}
+                              {dateObj.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true }).toUpperCase()}
+                            </>
+                          );
+                        })()}
                       </div>
                     </td>
                     <td className="px-6 py-5">
@@ -858,7 +870,11 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                 if (!selectedUserToBlock) return;
                 try {
                   setLoading(true);
-                  await studentsAPI.update(selectedUserToBlock.id, { ...selectedUserToBlock, status: 'inactive' });
+                  await studentsAPI.update(selectedUserToBlock.id, { 
+                    ...selectedUserToBlock, 
+                    status: 'inactive',
+                    blockedAt: new Date().toISOString()
+                  });
                   showToast(`${selectedUserToBlock.name} has been blocked successfully`, 'success');
                   setBlockSearchQuery('');
                   setSelectedUserToBlock(null);
