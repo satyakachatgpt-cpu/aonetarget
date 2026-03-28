@@ -42,7 +42,6 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ isOpen, onClose, studen
   const menuItems = [
     { icon: 'home', label: 'Home', path: '/' },
     { icon: 'dashboard', label: 'Dashboard', path: '/student-dashboard' },
-    { icon: 'play_circle', label: 'My Courses', path: '/my-courses' },
     { icon: 'videocam', label: 'Live Classes', path: '/live-classes' },
     { icon: 'school', label: 'Batches', path: '/batches' },
     { icon: 'quiz', label: 'Mock Tests', path: '/mock-tests' },
@@ -51,7 +50,6 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ isOpen, onClose, studen
     { icon: 'history', label: 'Watch History', path: '/watch-history' },
     { icon: 'redeem', label: 'Refer & Earn', path: '/refer-earn' },
     { icon: 'download', label: 'Downloads', path: '/downloads' },
-    { icon: 'auto_awesome', label: 'Free Content', path: '/free-content' },
   ];
 
   const handleNavigation = (path: string) => {

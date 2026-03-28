@@ -2856,18 +2856,19 @@ app.get('/api/tests/:id', async (req, res) => {
     }
 
     // Also search questions by both string and number id, and ObjectId
-    const testId = test.id || test._id?.toString();
+    const testIdStr = test.id ? String(test.id) : test._id?.toString();
     const questionFilter = {
       $or: [
         { testId: id },
-        { testId: testId },
+        { testId: testIdStr },
         { testId: String(id) },
-        { testId: String(testId) }
+        { testId: "test_" + id },
+        { testId: "test_" + testIdStr }
       ]
     };
 
     if (!isNaN(id)) questionFilter.$or.push({ testId: Number(id) });
-    if (testId && !isNaN(testId)) questionFilter.$or.push({ testId: Number(testId) });
+    if (testIdStr && !isNaN(testIdStr)) questionFilter.$or.push({ testId: Number(testIdStr) });
     if (global.ObjectId && ObjectId.isValid(id)) questionFilter.$or.push({ testId: new ObjectId(id) });
     if (test._id && global.ObjectId && ObjectId.isValid(test._id.toString())) {
       questionFilter.$or.push({ testId: new ObjectId(test._id.toString()) });

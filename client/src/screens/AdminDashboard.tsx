@@ -1,5 +1,6 @@
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { useNavigate, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { AdminUIContext } from '../context/AdminUIContext';
 
 const Dashboard = lazy(() => import('../components/admin/Dashboard'));
 const MiscSection = lazy(() => import('../components/admin/MiscSection'));
@@ -103,6 +104,8 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
   };
 
   const [isSidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarHidden, setSidebarHidden] = useState(false);
+
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
   const [selectedCourseForContent, setSelectedCourseForContent] = useState<any>(() => {
@@ -283,143 +286,149 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
       )}
 
       {/* Sidebar */}
-      <aside
-        onMouseEnter={() => setSidebarOpen(true)}
-        onMouseLeave={() => {
-          setSidebarOpen(false);
-          setExpandedMenu(null); // Reset submenus when sidebar closes
-        }}
-        className="bg-white border-r border-gray-100 flex flex-col z-50 shrink-0 relative will-change-[width,transform] transition-[width] duration-300 ease-[cubic-bezier(0.2,0,0,1)]"
-        style={{
-          width: isSidebarOpen ? '280px' : '80px',
-          transform: 'translateZ(0)',
-          backfaceVisibility: 'hidden'
-        }}
-      >
-        {/* Logo Section */}
-        <div className={`p-6 flex items-center bg-white shrink-0 transition-all duration-300 ${isSidebarOpen ? 'gap-3 px-8' : 'justify-center px-4'}`}>
-          <div className="w-11 h-11 bg-[#1A237E] rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100 transition-all duration-500 hover:scale-105 active:scale-95 cursor-pointer">
-            <span className="text-white font-black italic text-xl tracking-tighter">A1</span>
+      {!sidebarHidden && (
+        <aside
+          onMouseEnter={() => setSidebarOpen(true)}
+          onMouseLeave={() => {
+            setSidebarOpen(false);
+            setExpandedMenu(null); // Reset submenus when sidebar closes
+          }}
+          className="bg-white border-r border-gray-100 flex flex-col z-50 shrink-0 relative will-change-[width,transform] transition-[width] duration-300 ease-[cubic-bezier(0.2,0,0,1)]"
+          style={{
+            width: isSidebarOpen ? '280px' : '80px',
+            transform: 'translateZ(0)',
+            backfaceVisibility: 'hidden'
+          }}
+        >
+          {/* Logo Section */}
+          <div className={`p-6 flex items-center bg-white shrink-0 transition-all duration-300 ${isSidebarOpen ? 'gap-3 px-8' : 'justify-center px-4'}`}>
+            <div className="w-11 h-11 bg-[#1A237E] rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100 transition-all duration-500 hover:scale-105 active:scale-95 cursor-pointer">
+              <span className="text-white font-black italic text-xl tracking-tighter">A1</span>
+            </div>
+            <div className={`flex items-center gap-2 whitespace-nowrap transition-all duration-500 origin-left ${isSidebarOpen ? 'opacity-100 translate-x-0 w-auto' : 'opacity-0 -translate-x-4 w-0 overflow-hidden'}`}>
+              <span className="font-black text-xl tracking-tighter text-[#1A237E]">AONE</span>
+              <span className="text-xl font-medium text-[#1A237E]/80 tracking-tight">ADMIN</span>
+            </div>
           </div>
-          <div className={`flex items-center gap-2 whitespace-nowrap transition-all duration-500 origin-left ${isSidebarOpen ? 'opacity-100 translate-x-0 w-auto' : 'opacity-0 -translate-x-4 w-0 overflow-hidden'}`}>
-            <span className="font-black text-xl tracking-tighter text-[#1A237E]">AONE</span>
-            <span className="text-xl font-medium text-[#1A237E]/80 tracking-tight">ADMIN</span>
-          </div>
-        </div>
 
-        {/* Search Section */}
-        <div className={`px-5 mb-4 transition-all duration-500 ease-in-out ${isSidebarOpen ? 'opacity-100 max-h-20 translate-y-0' : 'opacity-0 max-h-0 -translate-y-4 overflow-hidden'}`}>
-          <div className="relative flex items-center bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 transition-all group focus-within:ring-1 focus-within:ring-gray-200 focus-within:bg-white shadow-sm">
-            <span className="material-symbols-outlined text-gray-400 text-[18px] mr-2">search</span>
-            <input
-              type="text"
-              placeholder="Search shortcuts..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="bg-transparent text-[14px] font-medium outline-none border-none p-0 w-full placeholder:text-gray-400 focus:ring-0 shadow-none"
-            />
+          {/* Search Section */}
+          <div className={`px-5 mb-4 transition-all duration-500 ease-in-out ${isSidebarOpen ? 'opacity-100 max-h-20 translate-y-0' : 'opacity-0 max-h-0 -translate-y-4 overflow-hidden'}`}>
+            <div className="relative flex items-center bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 transition-all group focus-within:ring-1 focus-within:ring-gray-200 focus-within:bg-white shadow-sm">
+              <span className="material-symbols-outlined text-gray-400 text-[18px] mr-2">search</span>
+              <input
+                type="text"
+                placeholder="Search shortcuts..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-transparent text-[14px] font-medium outline-none border-none p-0 w-full placeholder:text-gray-400 focus:ring-0 shadow-none"
+              />
+            </div>
           </div>
-        </div>
 
-        {/* Navigation Content */}
-        <nav className="flex-1 overflow-y-auto custom-scrollbar py-2 px-3 space-y-0.5">
-          {filteredMenuItems.map((item) => (
-            <div
-              key={item.id}
-              className="mb-0.5"
-            >
-              <button
-                onClick={() => {
-                  if (item.submenu) {
-                    setExpandedMenu(expandedMenu === item.id ? null : item.id);
-                    // Special case for Test Portal: clicking it navigates to Tests
-                    if (item.id === 'test-portal') {
-                      setActiveView('tests');
-                    }
-                  } else {
-                    setActiveView(item.id as AdminView);
-                  }
-                }}
-                className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 group relative active:scale-95 ${expandedMenu === item.id || (activeView === item.id && !item.submenu) || (item.id === 'test-portal' && activeView === 'tests') ? 'text-gray-950 bg-gray-50/50 shadow-sm' : 'text-gray-400 hover:bg-gray-50/80 hover:text-gray-900'
-                  }`}
+          {/* Navigation Content */}
+          <nav className="flex-1 overflow-y-auto custom-scrollbar py-2 px-3 space-y-0.5">
+            {filteredMenuItems.map((item) => (
+              <div
+                key={item.id}
+                className="mb-0.5"
               >
-                <div className={`flex items-center justify-center transition-all duration-500 ${isSidebarOpen ? '' : 'w-full'} ${expandedMenu === item.id || activeView === item.id ? 'text-gray-950 scale-110' : 'group-hover:text-gray-700'}`}>
-                  <span className="material-symbols-outlined text-[20px] font-light">{item.icon}</span>
-                </div>
-                <div className={`flex items-center flex-1 transition-all duration-500 origin-left ${isSidebarOpen ? 'opacity-100 translate-x-0 w-auto' : 'opacity-0 -translate-x-4 w-0 overflow-hidden'}`}>
-                  <span className={`text-[14px] tracking-tight truncate transition-all duration-500 ${expandedMenu === item.id || (activeView === item.id && !item.submenu) ? 'font-semibold text-gray-900' : 'font-medium group-hover:translate-x-1'
-                    }`}>{item.label}</span>
-                  {item.submenu && (
-                    <span className={`material-symbols-outlined text-gray-300 text-[18px] ml-auto transition-all duration-500 ${expandedMenu === item.id ? 'rotate-180 text-gray-800' : 'rotate-0 group-hover:text-gray-500'}`}>
-                      expand_more
-                    </span>
-                  )}
-                </div>
-              </button>
+                <button
+                  onClick={() => {
+                    if (item.submenu) {
+                      setExpandedMenu(expandedMenu === item.id ? null : item.id);
+                      // Special case for Test Portal: clicking it navigates to Tests
+                      if (item.id === 'test-portal') {
+                        setActiveView('tests');
+                      }
+                    } else {
+                      setActiveView(item.id as AdminView);
+                    }
+                  }}
+                  className={`w-full flex items-center gap-3.5 px-4 py-3 rounded-xl transition-all duration-300 group relative active:scale-95 ${expandedMenu === item.id || (activeView === item.id && !item.submenu) || (item.id === 'test-portal' && activeView === 'tests') ? 'text-gray-950 bg-gray-50/50 shadow-sm' : 'text-gray-400 hover:bg-gray-50/80 hover:text-gray-900'
+                    }`}
+                >
+                  <div className={`flex items-center justify-center transition-all duration-500 ${isSidebarOpen ? '' : 'w-full'} ${expandedMenu === item.id || activeView === item.id ? 'text-gray-950 scale-110' : 'group-hover:text-gray-700'}`}>
+                    <span className="material-symbols-outlined text-[20px] font-light">{item.icon}</span>
+                  </div>
+                  <div className={`flex items-center flex-1 transition-all duration-500 origin-left ${isSidebarOpen ? 'opacity-100 translate-x-0 w-auto' : 'opacity-0 -translate-x-4 w-0 overflow-hidden'}`}>
+                    <span className={`text-[14px] tracking-tight truncate transition-all duration-500 ${expandedMenu === item.id || (activeView === item.id && !item.submenu) ? 'font-semibold text-gray-900' : 'font-medium group-hover:translate-x-1'
+                      }`}>{item.label}</span>
+                    {item.submenu && (
+                      <span className={`material-symbols-outlined text-gray-300 text-[18px] ml-auto transition-all duration-500 ${expandedMenu === item.id ? 'rotate-180 text-gray-800' : 'rotate-0 group-hover:text-gray-500'}`}>
+                        expand_more
+                      </span>
+                    )}
+                  </div>
+                </button>
 
-              <div className={`overflow-hidden transition-all duration-500 ease-in-out ${item.submenu && expandedMenu === item.id && isSidebarOpen ? 'max-h-96 opacity-100 mt-1 mb-2' : 'max-h-0 opacity-0'}`}>
-                <div className="ml-6 border-l border-gray-100 flex flex-col pl-2 space-y-0.5">
-                  {item.submenu?.map((subitem) => (
-                    <button
-                      key={subitem.id}
-                      onClick={() => setActiveView(subitem.id)}
-                      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-[13px] transition-all duration-300 text-left hover:translate-x-1 ${activeView === subitem.id
-                        ? 'text-gray-950 font-bold bg-gray-50/30'
-                        : 'text-gray-400 hover:text-gray-900 hover:bg-gray-50/50'
-                        }`}
-                    >
-                      <span className="truncate">{subitem.label}</span>
-                    </button>
-                  ))}
+                <div className={`overflow-hidden transition-all duration-500 ease-in-out ${item.submenu && expandedMenu === item.id && isSidebarOpen ? 'max-h-96 opacity-100 mt-1 mb-2' : 'max-h-0 opacity-0'}`}>
+                  <div className="ml-6 border-l border-gray-100 flex flex-col pl-2 space-y-0.5">
+                    {item.submenu?.map((subitem) => (
+                      <button
+                        key={subitem.id}
+                        onClick={() => setActiveView(subitem.id)}
+                        className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-[13px] transition-all duration-300 text-left hover:translate-x-1 ${activeView === subitem.id
+                          ? 'text-gray-950 font-bold bg-gray-50/30'
+                          : 'text-gray-400 hover:text-gray-900 hover:bg-gray-50/50'
+                          }`}
+                      >
+                        <span className="truncate">{subitem.label}</span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </nav>
+            ))}
+          </nav>
 
-        <div className="p-4 border-t border-gray-100 shrink-0">
-          <button onClick={handleLogout} className="w-full flex items-center gap-4 px-4 py-3 text-gray-400 hover:text-gray-950 hover:bg-gray-50/50 rounded-2xl transition-all duration-300 group overflow-hidden">
-            <div className={`flex items-center justify-center transition-all duration-300 ${isSidebarOpen ? '' : 'w-full'}`}>
-              <span className="material-symbols-outlined text-[20px] font-light">logout</span>
-            </div>
-            <span className={`text-[14px] font-bold transition-all duration-500 origin-left whitespace-nowrap ${isSidebarOpen ? 'opacity-100 translate-x-0 w-auto' : 'opacity-0 -translate-x-4 w-0'}`}>Sign Out</span>
-          </button>
-        </div>
-      </aside>
+          <div className="p-4 border-t border-gray-100 shrink-0">
+            <button onClick={handleLogout} className="w-full flex items-center gap-4 px-4 py-3 text-gray-400 hover:text-gray-950 hover:bg-gray-50/50 rounded-2xl transition-all duration-300 group overflow-hidden">
+              <div className={`flex items-center justify-center transition-all duration-300 ${isSidebarOpen ? '' : 'w-full'}`}>
+                <span className="material-symbols-outlined text-[20px] font-light">logout</span>
+              </div>
+              <span className={`text-[14px] font-bold transition-all duration-500 origin-left whitespace-nowrap ${isSidebarOpen ? 'opacity-100 translate-x-0 w-auto' : 'opacity-0 -translate-x-4 w-0'}`}>Sign Out</span>
+            </button>
+          </div>
+        </aside>
+      )}
 
       {/* Main Container */}
       <main className="flex-1 flex flex-col overflow-hidden bg-white">
-        <header className="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-8 shrink-0 z-40">
-          <div className="flex flex-col">
-            <h1 className="text-[14px] font-black text-[#1e293b] tracking-widest uppercase">
-              {activeView === 'dashboard' ? 'Dashboard' :
-                activeView === 'course-content' ? 'Featured Batches' :
-                  menuItems.find(m => m.id === activeView)?.label ||
-                  menuItems.flatMap(m => m.submenu || []).find(s => s.id === activeView)?.label ||
-                  'Admin'}
-            </h1>
-          </div>
-
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-4 cursor-pointer group px-2 py-1.5 rounded-2xl transition-all">
-              <div className="flex flex-col items-end">
-                <span className="text-[13px] font-black text-[#1e293b] leading-none mb-1">Er. Deepak Sir</span>
-                <span className="text-[10px] font-black text-green-500 uppercase tracking-widest leading-none">Master Admin</span>
-              </div>
-              <div className="relative">
-                <div className="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center overflow-hidden border border-gray-100 shadow-sm group-hover:border-gray-200 transition-all">
-                  <span className="material-symbols-outlined text-gray-400 text-[22px]">person</span>
-                </div>
-                <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full shadow-sm"></div>
-              </div>
-              <span className="material-symbols-outlined text-gray-400 text-[18px] transition-transform group-hover:translate-y-0.5">expand_more</span>
+        {!sidebarHidden && (
+          <header className="h-14 bg-white border-b border-gray-100 flex items-center justify-between px-8 shrink-0 z-40">
+            <div className="flex flex-col">
+              <h1 className="text-[14px] font-black text-[#1e293b] tracking-widest uppercase">
+                {activeView === 'dashboard' ? 'Dashboard' :
+                  activeView === 'course-content' ? 'Featured Batches' :
+                    menuItems.find(m => m.id === activeView)?.label ||
+                    menuItems.flatMap(m => m.submenu || []).find(s => s.id === activeView)?.label ||
+                    'Admin'}
+              </h1>
             </div>
-          </div>
-        </header>
 
-        <div className="flex-1 overflow-y-auto p-4 lg:p-6 bg-[#fcfcfc] min-h-0 custom-scrollbar">
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-4 cursor-pointer group px-2 py-1.5 rounded-2xl transition-all">
+                <div className="flex flex-col items-end">
+                  <span className="text-[13px] font-black text-[#1e293b] leading-none mb-1">Er. Deepak Sir</span>
+                  <span className="text-[10px] font-black text-green-500 uppercase tracking-widest leading-none">Master Admin</span>
+                </div>
+                <div className="relative">
+                  <div className="w-10 h-10 bg-gray-50 rounded-full flex items-center justify-center overflow-hidden border border-gray-100 shadow-sm group-hover:border-gray-200 transition-all">
+                    <span className="material-symbols-outlined text-gray-400 text-[22px]">person</span>
+                  </div>
+                  <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full shadow-sm"></div>
+                </div>
+                <span className="material-symbols-outlined text-gray-400 text-[18px] transition-transform group-hover:translate-y-0.5">expand_more</span>
+              </div>
+            </div>
+          </header>
+        )}
+
+        <div className={`flex-1 overflow-y-auto ${sidebarHidden ? 'p-0' : 'p-4 lg:p-6'} bg-[#fcfcfc] min-h-0 custom-scrollbar`}>
           <div className="h-full">
-            {renderContent()}
+            <AdminUIContext.Provider value={{ sidebarHidden, setSidebarHidden }}>
+              {renderContent()}
+            </AdminUIContext.Provider>
           </div>
         </div>
       </main>

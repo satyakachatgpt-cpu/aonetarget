@@ -112,8 +112,14 @@ const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
     }
   };
 
-  const menuItems = [
-    { icon: 'edit', label: 'Edit Profile', action: () => setIsEditing(true) },
+  interface MenuItem {
+    icon: string;
+    label: string;
+    path?: string;
+    action?: () => void;
+  }
+
+  const menuItems: MenuItem[] = [
     { icon: 'school', label: 'My Courses', path: '/my-courses' },
     { icon: 'quiz', label: 'My Tests', path: '/my-tests' },
     { icon: 'notifications', label: 'Notifications', path: '/notifications' },

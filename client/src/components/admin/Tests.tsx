@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { AdminUIContext } from "../../context/AdminUIContext";
 import {
   testsAPI,
   coursesAPI,
@@ -283,7 +284,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const { "*": routeId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-
   const [tests, setTests] = useState<Test[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1043,10 +1043,21 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       ) {
         setActiveActionMenuId(null);
       }
+
+      if (
+        activeMenu !== null &&
+        !target.closest(".action-menu-container")
+      ) {
+        setActiveMenu(null);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showFloatingAddMenu, showFloatingMoreMenu, activeActionMenuId]);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [showFloatingAddMenu, showFloatingMoreMenu, activeActionMenuId, activeMenu]);
 
   const loadResults = async () => {
     // Mock results matching screenshot + more entries
@@ -2064,8 +2075,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           </p>
                         </div>
                       </td>
-                      <td className="px-4 py-8 align-top text-center border-b border-gray-50/50 action-menu-container" onMouseDown={(e) => e.stopPropagation()}>
-                        <div className="relative inline-block">
+                      <td className="px-4 py-8 align-top text-center border-b border-gray-50/50">
+                        <div className="relative inline-block action-menu-container" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                           <button
                             onClick={() =>
                               setActiveActionMenuId(
@@ -2182,7 +2193,22 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 </p>
               </div>
             </div>
-            <button className="flex items-center gap-2 px-6 py-2 bg-black text-white rounded-xl text-[13px] font-bold shadow-md">
+            <button
+              onClick={async () => {
+                const testId = viewingQuestionEditor?.id || viewingQuestionEditor?._id;
+                if (!testId) return;
+                try {
+                  // showToast is available in the component
+                  showToast("Publishing changes...");
+                  await testsAPI.publish(testId);
+                  showToast("Test published successfully!");
+                  // Refresh data if needed, but since we are in editor, maybe just the toast is enough
+                } catch (error: any) {
+                  showToast(error.message || "Failed to publish test", "error");
+                }
+              }}
+              className="flex items-center gap-2 px-6 py-2 bg-black text-white rounded-xl text-[13px] font-bold shadow-md hover:bg-gray-800 transition-all active:scale-95"
+            >
               <span className="material-symbols-outlined text-[18px]">
                 history
               </span>
@@ -2661,7 +2687,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                             />
                           </button>
 
-                          <div className="relative action-menu-container" onMouseDown={(e) => e.stopPropagation()}>
+                          <div className="relative action-menu-container" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                             <button
                               onClick={() =>
                                 setActiveActionMenuId(
@@ -3281,8 +3307,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-8 align-top text-right pr-6 border-b border-gray-50/50 action-menu-container" onMouseDown={(e) => e.stopPropagation()}>
-                        <div className="relative inline-block">
+                      <td className="px-6 py-8 align-top text-right pr-6 border-b border-gray-50/50">
+                        <div className="relative inline-block action-menu-container" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -5276,7 +5302,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           </div>
                         </td>
                         <td className="px-6 py-5 text-center">
-                          <div className="relative inline-block">
+                          <div className="relative inline-block action-menu-container">
                             <button
                               onClick={() =>
                                 setActiveMenu(
