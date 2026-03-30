@@ -4820,21 +4820,23 @@ app.post('/api/notifications/send', async (req, res) => {
       return res.status(400).json({ error: 'Batch ID is required' });
     }
 
-    let query = { enrolledBatch: batchId };
+    const course = await findCourse(batchId);
+    let idVariants = [batchId];
     
-    // Support both string and ObjectId comparison
-    try {
-      const { ObjectId } = (await import('mongodb'));
-      query = {
-        $or: [
-          { enrolledBatch: batchId },
-          { enrolledBatch: new ObjectId(batchId) }
-        ]
-      };
-    } catch (e) {
-      // Fallback if ObjectId is not available for some reason
-      console.warn('ObjectId not available for query');
+    if (course) {
+      idVariants = await getRelatedCourseIds(course, batchId);
     }
+    
+    const objectIdVariants = idVariants
+      .filter(id => /^[a-fA-F0-9]{24}$/.test(id))
+      .map(id => new ObjectId(id));
+
+    const query = {
+      $or: [
+        { enrolledCourses: { $in: idVariants } },
+        { enrolledCourses: { $in: objectIdVariants } }
+      ]
+    };
 
     const students = await db.collection('students').find(query).toArray();
 
@@ -4842,14 +4844,18 @@ app.post('/api/notifications/send', async (req, res) => {
       return res.status(404).json({ message: 'No students found for this batch' });
     }
 
-    const notifications = students.map(student => ({
-      userId: student.id || student._id,
-      message,
-      batchId,
-      createdAt: new Date(),
-      isRead: false,
-      sent: false
-    }));
+    const notifications = students.map(student => {
+      const uId = String(student.id || student._id);
+      return {
+        userId: uId,
+        targetStudentId: uId,
+        message,
+        batchId,
+        createdAt: new Date(),
+        isRead: false,
+        sent: false
+      };
+    });
 
     const result = await db.collection('notifications').insertMany(notifications);
     res.status(201).json({ 
@@ -4865,12 +4871,17 @@ app.post('/api/notifications/send', async (req, res) => {
 
 app.put('/api/notifications/:id', async (req, res) => {
   try {
-    const { id } = req.params;
+    const id = (req.params.id || '').trim();
     const updateData = { ...req.body };
     delete updateData._id; // Don't update the _id field
+    
+    let queryId = id;
+    if (/^[a-fA-F0-9]{24}$/.test(id)) {
+        queryId = new ObjectId(id);
+    }
 
     const result = await db.collection('notifications').updateOne(
-      { _id: new ObjectId(id) },
+      { _id: queryId },
       { $set: updateData }
     );
 
@@ -4893,12 +4904,19 @@ app.put('/api/notifications/bulk-update', async (req, res) => {
       return res.status(400).json({ error: 'Updates must be an array' });
     }
 
-    const bulkOps = updates.map(update => ({
-      updateOne: {
-        filter: { _id: new ObjectId(update._id) },
-        update: { $set: { ...update, _id: undefined } }
+    const bulkOps = updates.map(update => {
+      const id = String(update._id || '').trim();
+      let queryId = id;
+      if (/^[a-fA-F0-9]{24}$/.test(id)) {
+        queryId = new ObjectId(id);
       }
-    }));
+      return {
+        updateOne: {
+          filter: { _id: queryId },
+          update: { $set: { ...update, _id: undefined } }
+        }
+      };
+    });
 
     const result = await db.collection('notifications').bulkWrite(bulkOps);
     res.json({
