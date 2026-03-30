@@ -1,6 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useContext } from 'react';
 import { couponsAPI, coursesAPI, categoriesAPI, testSeriesAPI, pdfsAPI, packagesAPI } from '../../services/apiClient';
 import RichTextEditor from '../shared/RichTextEditor';
+import { AdminUIContext } from '../../context/AdminUIContext';
 
 interface Props {
     onClose: () => void;
@@ -10,6 +11,18 @@ interface Props {
 const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
     const isEditMode = !!courseData && !courseData.isDuplicate;
     const [activeStep, setActiveStep] = useState(1);
+    const { setSidebarHidden } = useContext(AdminUIContext);
+
+    useEffect(() => {
+        // Hide sidebar on mount
+        setSidebarHidden(true);
+
+        // Show sidebar on unmount
+        return () => {
+            setSidebarHidden(false);
+        };
+    }, [setSidebarHidden]);
+
     const [validityTab, setValidityTab] = useState<'set' | 'end' | 'lifetime'>('set');
     const [isFeatured, setIsFeatured] = useState(!!courseData?.isFeatured);
     const [showCategories, setShowCategories] = useState(false);

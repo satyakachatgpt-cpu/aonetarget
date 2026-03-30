@@ -241,8 +241,8 @@ const FreeContent: React.FC = () => {
 
                 <div className="relative flex items-center justify-between gap-4 mb-6 px-1">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => setSidebarOpen(true)} className="w-10 h-10 rounded-2xl bg-white/10 hover:bg-white/20 transition-all flex items-center justify-center border border-white/10 active:scale-95">
-                            <span className="material-symbols-rounded text-xl">menu</span>
+                        <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-2xl bg-white/10 hover:bg-white/20 transition-all flex items-center justify-center border border-white/10 active:scale-95">
+                            <span className="material-symbols-rounded text-xl">arrow_back</span>
                         </button>
                         <div>
                             <h1 className="text-xl font-black tracking-tight leading-none mb-1 text-white">Free Library</h1>

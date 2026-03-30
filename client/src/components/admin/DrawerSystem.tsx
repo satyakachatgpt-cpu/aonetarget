@@ -19,6 +19,7 @@ export const RightSideDrawer: React.FC<RightSideDrawerProps> = ({
     children,
     width = '440px'
 }) => {
+
     // Lock scroll when drawer is open
     useEffect(() => {
         if (isOpen) {
