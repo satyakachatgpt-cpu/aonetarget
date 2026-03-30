@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { coursesAPI } from '../services/apiClient';
+import { getImageUrl } from '../lib/utils';
 
 interface Course {
   _id?: string;
@@ -233,7 +234,7 @@ const SubCategoryDetail: React.FC = () => {
                       <div className="relative">
                         <div className={`w-full h-36 bg-gradient-to-br ${getGradient()} flex items-center justify-center`}>
                           {(course.imageUrl || course.thumbnail) ? (
-                            <img src={course.imageUrl || course.thumbnail} alt="" className="w-full h-full object-cover" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                            <img src={getImageUrl(course.imageUrl || course.thumbnail)} alt="" className="w-full h-full object-cover" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                           ) : (
                             <span className="text-white text-4xl font-bold opacity-30">{courseName.charAt(0).toUpperCase()}</span>
                           )}
@@ -269,7 +270,7 @@ const SubCategoryDetail: React.FC = () => {
                         )}
 
                         <p className="text-[11px] text-gray-400 mt-1.5 line-clamp-2">
-                          {course.description ? course.description.replace(/<[^>]+>/g, '').substring(0, 100) : 'Complete preparation course'}
+                          {course.description ? course.description.replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ').substring(0, 100) : 'Complete preparation course'}
                         </p>
 
                         <div className="flex flex-wrap gap-2 mt-3">

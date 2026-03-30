@@ -56,6 +56,8 @@ const Questions: React.FC<Props> = ({ showToast }) => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [filterCorrectAnswer, setFilterCorrectAnswer] = useState('');
   const [filterMarks, setFilterMarks] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const filterDropdownRef = React.useRef<HTMLDivElement>(null);
 
   const [showBulkUpload, setShowBulkUpload] = useState(false);
@@ -370,6 +372,22 @@ const Questions: React.FC<Props> = ({ showToast }) => {
     return matchesSearch && matchesAnswer && matchesMarks;
   });
 
+  const totalItems = filteredQuestions.length;
+  const totalPages = Math.ceil(totalItems / pageSize);
+
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+
+  const paginatedQuestions = filteredQuestions.slice(startIndex, endIndex);
+
+  const showingStart = totalItems === 0 ? 0 : startIndex + 1;
+  const showingEnd = endIndex;
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterCorrectAnswer, filterMarks]);
+
   if (loading) {
     return (
       <div className="p-8 text-center">
@@ -631,7 +649,7 @@ const Questions: React.FC<Props> = ({ showToast }) => {
             </div>
           </div>
 
-          {filteredQuestions.length === 0 ? (
+          {paginatedQuestions.length === 0 ? (
             <div className="bg-white rounded-2xl shadow-sm border p-12 text-center">
               <span className="material-icons-outlined text-6xl text-gray-200 mb-3 block">help_outline</span>
               <p className="text-gray-400 font-bold">No questions yet</p>
@@ -639,11 +657,11 @@ const Questions: React.FC<Props> = ({ showToast }) => {
             </div>
           ) : (
             <div className="space-y-3">
-              {filteredQuestions.map((q, idx) => (
+              {paginatedQuestions.map((q, idx) => (
                 <div key={q.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 hover:shadow-md transition-all">
                   <div className="flex items-start gap-4">
                     <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
-                      <span className="text-sm font-black text-[#303F9F]">{idx + 1}</span>
+                      <span className="text-sm font-black text-[#303F9F]">{startIndex + idx + 1}</span>
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-semibold text-gray-800 leading-relaxed">{q.question}</p>
@@ -690,6 +708,50 @@ const Questions: React.FC<Props> = ({ showToast }) => {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Pagination Footer */}
+          {totalItems > 0 && (
+            <div className="flex justify-between items-center mt-6 px-6 py-4 border border-gray-100 bg-white rounded-2xl shadow-sm">
+              <div className="flex items-center gap-3">
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="border rounded-lg px-2 py-1 text-sm outline-none focus:border-black transition-all shadow-sm"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span className="text-sm text-gray-600 font-medium">
+                  Showing {showingStart} to {showingEnd} of {totalItems} entries
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(prev => prev - 1)}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 text-gray-500 hover:text-black font-bold text-sm disabled:opacity-50 transition-colors"
+                >
+                  Previous
+                </button>
+                <button className="px-4 py-1 bg-black text-white rounded-lg font-bold text-sm shadow-md">
+                  {currentPage}
+                </button>
+                <button
+                  onClick={() => setCurrentPage(prev => prev + 1)}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  className="px-3 py-1 text-gray-500 hover:text-black font-bold text-sm disabled:opacity-50 transition-colors"
+                >
+                  Next
+                </button>
+              </div>
             </div>
           )}
         </div>

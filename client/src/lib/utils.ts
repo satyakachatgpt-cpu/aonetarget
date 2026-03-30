@@ -5,8 +5,14 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const getImageUrl = (url: string) => {
-  if (!url) return '';
+export const getImageUrl = (url: string | undefined | null) => {
+  if (!url || typeof url !== 'string') return '';
+  
+  // Map absolute URLs from old server to local uploads
+  if (url.startsWith('https://aonetarget.in/uploads/') || url.startsWith('http://aonetarget.in/uploads/')) {
+    return `/uploads/${url.split('/').pop()}`;
+  }
+
   if (url.startsWith('http') || url.startsWith('/') || url.startsWith('data:')) return url;
   // Many older items might have just the filename
   return `/uploads/${url}`;

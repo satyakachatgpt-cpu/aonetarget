@@ -156,7 +156,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const PAGE_SIZE = 10;
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     loadData();
@@ -271,10 +271,16 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
     return matchesSearch && matchesStatus;
   });
 
-  const totalPages = Math.ceil(filteredPackages.length / PAGE_SIZE);
-  const paginatedItems = filteredPackages.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const startItem = (currentPage - 1) * PAGE_SIZE + 1;
-  const endItem = Math.min(currentPage * PAGE_SIZE, filteredPackages.length);
+  const totalItems = filteredPackages.length;
+  const totalPages = Math.ceil(totalItems / pageSize);
+
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+
+  const paginatedItems = filteredPackages.slice(startIndex, endIndex);
+
+  const showingStart = totalItems === 0 ? 0 : startIndex + 1;
+  const showingEnd = endIndex;
 
   // Reset page when search/filter changes
   useEffect(() => {
@@ -324,6 +330,32 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
     } catch (error) {
       console.error(error);
       showToast('Failed to schedule live stream', 'error');
+    }
+  };
+
+  const handleSendBatchNotification = async (batchId: string) => {
+    const message = prompt("Enter Notification Message:");
+    if (!message) return;
+
+    try {
+      const response = await fetch('/api/notifications/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}` // Assuming admin token is stored here
+        },
+        body: JSON.stringify({ batchId, message })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        showToast(data.message || 'Notification sent successfully!', 'success');
+      } else {
+        showToast(data.error || 'Failed to send notification', 'error');
+      }
+    } catch (error) {
+      console.error('Error sending notification:', error);
+      showToast('Error sending notification', 'error');
     }
   };
 
@@ -622,7 +654,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                   ) : (
                     paginatedItems.map((pkg, idx) => (
                       <tr key={pkg.id} onClick={() => onCourseSelect(pkg)} className="hover:bg-gray-50/50 transition-colors group cursor-pointer">
-                        <td className="pl-8 pr-4 py-6 text-[13px] font-black text-gray-300">{filteredPackages.length - ((currentPage - 1) * PAGE_SIZE + idx)}</td>
+                        <td className="pl-8 pr-4 py-6 text-[13px] font-black text-gray-300">{startIndex + idx + 1}</td>
                         <td className="px-6 py-6">
                           <div className="flex items-center gap-4">
                             <div className="w-12 h-12 bg-gray-50 rounded-xl flex-shrink-0 flex items-center justify-center border border-gray-100 group-hover:bg-white transition-colors">
@@ -641,7 +673,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                         <td className="px-6 py-6 overflow-hidden">
                           <div className="flex flex-col max-w-xs">
                             <span className="text-[11px] font-medium text-gray-500 line-clamp-2 leading-relaxed">
-                              {pkg.description?.replace(/<[^>]*>/g, '') || 'No additional details provided for this batch product.'}
+                              {pkg.description?.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ') || 'No additional details provided for this batch product.'}
                             </span>
                           </div>
                         </td>
@@ -684,6 +716,14 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                                   </button>
 
                                   <button
+                                    onClick={() => { handleSendBatchNotification(pkg.id || pkg._id); setOpenActionMenuId(null); }}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 text-blue-600 transition-colors text-left group"
+                                  >
+                                    <span className="material-symbols-outlined text-[20px] text-blue-500">notifications_active</span>
+                                    <span className="text-[14px] font-medium">Notify Students</span>
+                                  </button>
+
+                                  <button
                                     onClick={() => { onCourseSelect(pkg, 'Content'); setOpenActionMenuId(null); }}
                                     className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors text-left group"
                                   >
@@ -718,6 +758,14 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                                   >
                                     <span className="material-symbols-outlined text-[20px] text-blue-500/60">content_copy</span>
                                     <span className="text-[14px] font-medium">Duplicate</span>
+                                  </button>
+
+                                  <button
+                                    onClick={() => { handleSendBatchNotification(pkg.id || pkg._id); setOpenActionMenuId(null); }}
+                                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 text-blue-600 transition-all text-left group"
+                                  >
+                                    <span className="material-symbols-outlined text-[20px] text-blue-500">notifications_active</span>
+                                    <span className="text-[14px] font-medium">Notify Students</span>
                                   </button>
 
                                   <button
@@ -870,45 +918,43 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
           )}
 
           {/* Pagination Footer */}
-          <div className="px-8 py-5 border-t border-gray-50 bg-white flex items-center justify-between">
-            <div className="text-[13px] font-bold text-gray-400 tracking-tight">
-              Showing <span className="text-gray-900">{filteredPackages.length === 0 ? 0 : startItem}-{endItem}</span> of <span className="text-gray-900">{filteredPackages.length}</span>
+          <div className="flex justify-between items-center mt-4 px-6 py-4 border-t border-gray-100">
+            <div className="flex items-center gap-3">
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="border rounded-lg px-2 py-1 text-sm outline-none focus:border-black transition-all shadow-sm"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span className="text-sm text-gray-600 font-medium">
+                Showing {showingStart} to {showingEnd} of {totalItems} entries
+              </span>
             </div>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               <button
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                onClick={() => setCurrentPage(prev => prev - 1)}
                 disabled={currentPage === 1}
-                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${currentPage === 1 ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-900'}`}
+                className="px-3 py-1 text-gray-500 hover:text-black font-bold text-sm disabled:opacity-50 transition-colors"
               >
-                <span className="material-symbols-outlined text-[20px]">chevron_left</span>
+                Previous
               </button>
-
-              <div className="flex items-center gap-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
-                  .map((p, i, arr) => (
-                    <React.Fragment key={p}>
-                      {i > 0 && arr[i - 1] !== p - 1 && (
-                        <span className="text-gray-300 px-1">...</span>
-                      )}
-                      <button
-                        onClick={() => setCurrentPage(p)}
-                        className={`w-9 h-9 rounded-xl text-[13px] font-black transition-all ${currentPage === p ? 'bg-[#1a237e] text-white shadow-lg shadow-blue-900/20' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-900'}`}
-                      >
-                        {p}
-                      </button>
-                    </React.Fragment>
-                  ))
-                }
-              </div>
-
+              <button className="px-4 py-1 bg-black text-white rounded-lg font-bold text-sm shadow-md">
+                {currentPage}
+              </button>
               <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                onClick={() => setCurrentPage(prev => prev + 1)}
                 disabled={currentPage === totalPages || totalPages === 0}
-                className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all ${currentPage === totalPages || totalPages === 0 ? 'text-gray-200 cursor-not-allowed' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-900'}`}
+                className="px-3 py-1 text-gray-500 hover:text-black font-bold text-sm disabled:opacity-50 transition-colors"
               >
-                <span className="material-symbols-outlined text-[20px]">chevron_right</span>
+                Next
               </button>
             </div>
           </div>

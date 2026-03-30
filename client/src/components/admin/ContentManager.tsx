@@ -206,9 +206,9 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
         try {
             await liveVideosAPI.create({
                 ...data,
-                isFree: mode === 'free',
-                isDemo: mode === 'demo',
-                status: mode === 'free' ? 'Free' : (data.status || 'Paid'),
+                isFree: mode === 'free' || data.status === 'Free' || data.isFree,
+                isDemo: mode === 'demo' || data.isDemo,
+                status: 'upcoming', // Standardized for Live Sessions tab
                 courseId: data.courseId || (courseFilter !== 'all' ? courseFilter : ''),
                 subjectId: data.subjectId || ''
             });

@@ -98,16 +98,7 @@ const App: React.FC = () => {
     checkAuth();
   }, [checkAuth]);
 
-  const [showSplash, setShowSplash] = useState(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      if (params.get('showSplash') === '1') return true;
-      // Always show splash on fresh load
-      return true;
-    } catch (e) {
-      return true;
-    }
-  });
+  const [showSplash, setShowSplash] = useState(false);
 
   const handleSplashComplete = useCallback(() => {
     setShowSplash(false);

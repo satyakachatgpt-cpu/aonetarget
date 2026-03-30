@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { bannersAPI } from '../../services/apiClient';
+import { getImageUrl } from '../../lib/utils';
 
 interface Banner {
   id: string;
@@ -184,11 +185,11 @@ const Banners: React.FC<Props> = ({ showToast }) => {
                   <td className="px-6 py-4 text-[13px] font-medium text-gray-500">{index + 1}</td>
                   <td className="px-6 py-4">
                     <div
-                      onClick={() => banner.imageUrl && setPreviewImage(banner.imageUrl)}
+                      onClick={() => banner.imageUrl && setPreviewImage(getImageUrl(banner.imageUrl))}
                       className="w-16 aspect-video bg-gray-100 rounded-md overflow-hidden border border-gray-100 cursor-pointer hover:ring-2 hover:ring-blue-400/50 transition-all active:scale-95 group"
                     >
                       {banner.imageUrl ? (
-                        <img src={banner.imageUrl} alt={banner.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                        <img src={getImageUrl(banner.imageUrl)} alt={banner.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <span className="material-symbols-outlined text-gray-300 text-sm">image</span>
@@ -380,9 +381,9 @@ const Banners: React.FC<Props> = ({ showToast }) => {
                       >
                          {isUploading ? (
                            <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
-                         ) : formData.imageUrl && (formData.imageUrl.startsWith('data:') || formData.imageUrl.startsWith('/uploads/')) ? (
+                         ) : formData.imageUrl && (formData.imageUrl.startsWith('data:') || formData.imageUrl.startsWith('/uploads/') || formData.imageUrl.startsWith('https://aonetarget.in/uploads/')) ? (
                            <>
-                             <img src={formData.imageUrl} className="absolute inset-0 w-full h-full object-cover opacity-20" alt="Preview" />
+                             <img src={getImageUrl(formData.imageUrl)} className="absolute inset-0 w-full h-full object-cover opacity-20" alt="Preview" />
                              <span className="relative text-[12px] font-black text-[#1D2B64] uppercase tracking-widest">Image Selected</span>
                              <span className="relative text-[9px] font-bold text-[#1D2B64]/60 uppercase mt-1">Click to Replace</span>
                            </>
@@ -502,7 +503,7 @@ const Banners: React.FC<Props> = ({ showToast }) => {
             </button>
 
             <img
-              src={previewImage}
+              src={getImageUrl(previewImage)}
               className="w-full h-full object-contain rounded-xl shadow-2xl border border-white/10"
               alt="Preview"
             />

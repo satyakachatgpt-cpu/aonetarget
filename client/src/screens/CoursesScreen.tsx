@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { coursesAPI } from '../services/apiClient';
+import { getImageUrl } from '../lib/utils';
 
 const CoursesScreen: React.FC = () => {
   const navigate = useNavigate();
@@ -116,7 +117,7 @@ const CoursesScreen: React.FC = () => {
                     >
                       <div className="w-20 h-20 bg-gradient-to-br from-brandBlue to-[#1A237E] rounded-xl shrink-0 flex items-center justify-center overflow-hidden">
                         {course.thumbnail ? (
-                          <img src={course.thumbnail} alt={course.name} className="w-full h-full object-cover" />
+                          <img src={getImageUrl(course.thumbnail)} alt={course.name} className="w-full h-full object-cover" />
                         ) : (
                           <span className="material-symbols-rounded text-white text-3xl">play_circle</span>
                         )}
@@ -152,7 +153,7 @@ const CoursesScreen: React.FC = () => {
               >
                 <div className="h-32 bg-gradient-to-br from-brandBlue to-[#1A237E] relative">
                   {course.thumbnail && (
-                    <img src={course.thumbnail} alt={course.name} className="w-full h-full object-cover opacity-50" />
+                    <img src={getImageUrl(course.thumbnail)} alt={course.name} className="w-full h-full object-cover opacity-50" />
                   )}
                   <div className="absolute inset-0 p-4 flex flex-col justify-end">
                     <span className="bg-white/20 text-white text-[10px] font-bold px-2 py-1 rounded w-fit uppercase">

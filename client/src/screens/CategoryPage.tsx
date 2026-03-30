@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { categoriesAPI, subcategoriesAPI, coursesAPI } from '../services/apiClient';
+import { getImageUrl } from '../lib/utils';
 
 interface Category {
   _id?: string;
@@ -233,7 +234,7 @@ const NeetIitJeePage: React.FC<{ courses: Course[]; loading: boolean }> = ({ cou
                   >
                     <div className={`w-16 h-16 bg-gradient-to-br ${ct?.color || 'from-[#303F9F] to-[#1A237E]'} rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden`}>
                       {(course.imageUrl || course.thumbnail) ? (
-                        <img src={course.imageUrl || course.thumbnail} alt="" className="w-full h-full object-cover" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                        <img src={getImageUrl(course.imageUrl || course.thumbnail)} alt="" className="w-full h-full object-cover" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                       ) : (
                         <span className="material-symbols-rounded text-white text-2xl opacity-70">{ct?.icon || 'school'}</span>
                       )}
@@ -692,14 +693,14 @@ const CategoryPage: React.FC = () => {
                 >
                   <div className={`w-16 h-16 bg-gradient-to-br ${category.gradient} rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden`}>
                     {(course.imageUrl || course.thumbnail) ? (
-                      <img src={course.imageUrl || course.thumbnail} alt="" className="w-full h-full object-cover" loading="lazy" onError={(e: any) => { e.currentTarget.style.display = 'none'; const parent = e.currentTarget.parentElement; if (parent) { const span = document.createElement('span'); span.className = 'text-white text-xl font-bold opacity-60'; span.textContent = (course.name || course.title || '?').charAt(0).toUpperCase(); parent.appendChild(span); } }} />
+                      <img src={getImageUrl(course.imageUrl || course.thumbnail)} alt="" className="w-full h-full object-cover" loading="lazy" onError={(e: any) => { e.currentTarget.style.display = 'none'; const parent = e.currentTarget.parentElement; if (parent) { const span = document.createElement('span'); span.className = 'text-white text-xl font-bold opacity-60'; span.textContent = (course.name || course.title || '?').charAt(0).toUpperCase(); parent.appendChild(span); } }} />
                     ) : (
                       <span className="text-white text-xl font-bold opacity-60">{(course.name || course.title || '?').charAt(0).toUpperCase()}</span>
                     )}
                   </div>
                   <div className="flex-1">
                     <h4 className="text-sm font-bold text-gray-800">{course.name || course.title}</h4>
-                    <p className="text-[10px] text-gray-400 mt-1 line-clamp-1">{(course.description || 'Complete preparation course').replace(/<[^>]*>?/gm, '')}</p>
+                    <p className="text-[10px] text-gray-400 mt-1 line-clamp-1">{(course.description || 'Complete preparation course').replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ')}</p>
                     <div className="flex items-center gap-3 mt-2 text-[10px] text-gray-500">
                       <span className="flex items-center gap-1">
                         <span className="material-icons-outlined text-xs">{(course.contentType === 'mock_test' || course.categoryId === 'mock-test') ? 'quiz' : 'play_circle'}</span>

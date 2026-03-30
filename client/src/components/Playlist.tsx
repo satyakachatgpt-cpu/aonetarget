@@ -16,45 +16,71 @@ interface PlaylistProps {
 
 const Playlist: React.FC<PlaylistProps> = ({ videos, activeVideoId, onSelect }) => {
   return (
-    <div className="flex-1 overflow-y-auto bg-black/95 p-4 sm:p-6 pb-20 font-outfit">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-white/60 text-[10px] font-black uppercase tracking-[0.2em]">Playlist</h3>
-        <span className="text-white/40 text-[9px] font-bold uppercase">{videos.length} Lectures</span>
+    <div className="flex-1 overflow-y-auto bg-black/40 p-5 pb-24 font-outfit scroll-smooth hide-scrollbar">
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex flex-col">
+           <h3 className="text-white font-black text-xs uppercase tracking-[0.2em] mb-1">Course Curriculum</h3>
+           <p className="text-white/30 text-[9px] font-bold uppercase tracking-widest leading-none">{videos.length} Professional Lectures</p>
+        </div>
+        <div className="px-3 py-1 bg-white/5 border border-white/10 rounded-full">
+           <span className="text-white/40 text-[9px] font-black uppercase tracking-widest italic">Locked Stream</span>
+        </div>
       </div>
       
-      <div className="space-y-3">
-        {videos.map((v) => {
+      <div className="space-y-4">
+        {videos.map((v, idx) => {
           const vId = v.id || v._id || '';
-          const isActive = vId === activeVideoId;
+          const isActive = String(vId).toLowerCase() === String(activeVideoId).toLowerCase();
           
           return (
             <button
               key={vId}
               onClick={() => onSelect(vId)}
-              className={`w-full flex items-center gap-4 p-3 rounded-2xl transition-all active:scale-[0.98] ${
+              className={`w-full group/item flex items-center gap-5 p-4 rounded-[1.5rem] transition-all duration-300 active:scale-[0.97] border relative overflow-hidden ${
                 isActive 
-                  ? 'bg-primary-600/20 border border-primary-600/30' 
-                  : 'bg-white/5 border border-transparent hover:bg-white/10'
+                  ? 'bg-white/10 border-white/20 shadow-[0_20px_40px_rgba(0,0,0,0.5)]' 
+                  : 'bg-white/[0.02] border-white/[0.03] hover:bg-white/[0.07] hover:border-white/10'
               }`}
             >
-              <div className="relative w-24 aspect-video rounded-xl overflow-hidden shrink-0 bg-white/5 shadow-lg shadow-black/20">
-                {v.thumbnail && (
-                  <img src={v.thumbnail} alt="" className="w-full h-full object-cover opacity-80" />
+              {/* VIBRANT GLOW BEHIND ACTIVE ITEM */}
+              {isActive && (
+                <div className="absolute top-0 left-0 w-1 h-full bg-red-600 shadow-[0_0_15px_rgba(220,38,38,0.8)]" />
+              )}
+
+              <div className="relative w-28 aspect-video rounded-2xl overflow-hidden shrink-0 bg-black/40 shadow-2xl transition-transform group-hover/item:scale-105 duration-500">
+                {v.thumbnail ? (
+                  <img src={v.thumbnail} alt="" className={`w-full h-full object-cover transition-opacity duration-700 ${isActive ? 'opacity-40' : 'opacity-60 group-hover/item:opacity-80'}`} />
+                ) : (
+                  <div className="w-full h-full bg-white/5 flex items-center justify-center">
+                    <span className="material-symbols-rounded text-white/10 text-xl font-light tracking-tighter italic">AO</span>
+                  </div>
                 )}
-                {isActive && (
-                  <div className="absolute inset-0 bg-primary-600/40 flex items-center justify-center backdrop-blur-[2px]">
-                    <span className="material-symbols-rounded text-white animate-pulse">play_arrow</span>
+                
+                {isActive ? (
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center shadow-[0_0_20px_white]">
+                      <span className="material-symbols-rounded text-black text-sm font-black translate-x-0.5">play_arrow</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/80 backdrop-blur-md rounded-md border border-white/10">
+                    <span className="text-[8px] text-white/60 font-black tracking-widest">{v.duration || '00:00'}</span>
                   </div>
                 )}
               </div>
               
               <div className="flex-1 text-left min-w-0">
-                <p className={`text-xs font-bold truncate ${isActive ? 'text-primary-400' : 'text-white'}`}>
+                <div className="flex items-center gap-2 mb-1.5 opacity-40">
+                   <span className="text-[9px] font-black text-white/60 uppercase tracking-widest italic leading-none">Lecture {idx + 1}</span>
+                </div>
+                <p className={`text-[13px] font-black leading-tight tracking-tight mb-2 ${isActive ? 'text-white' : 'text-white/60 group-hover/item:text-white/80'}`}>
                   {v.title}
                 </p>
-                <div className="flex items-center gap-1.5 mt-1 opacity-40">
-                  <span className="material-symbols-rounded text-xs text-white">schedule</span>
-                  <span className="text-[10px] text-white font-bold">{v.duration || '--:--'}</span>
+                <div className="flex items-center gap-3">
+                   <div className="flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded-full">
+                      <span className="material-symbols-rounded text-[12px] text-white/40">lock</span>
+                      <span className="text-[9px] text-white/40 font-black tracking-widest uppercase">HD Locked</span>
+                   </div>
                 </div>
               </div>
             </button>

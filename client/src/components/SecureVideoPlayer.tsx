@@ -129,7 +129,7 @@ const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
 
     const videoId_ = getYouTubeId(src);
     const embedUrl = videoId_ 
-      ? `https://www.youtube.com/embed/${videoId_}?autoplay=1&modestbranding=1&rel=0&showinfo=0&mute=0`
+      ? `https://www.youtube.com/embed/${videoId_}?autoplay=1&controls=0&modestbranding=1&rel=0&showinfo=0&mute=0&iv_load_policy=3&disablekb=1`
       : src;
 
     // Save history entry for YouTube when component mounts (can't track time in iframe)

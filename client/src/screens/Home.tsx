@@ -480,7 +480,7 @@ const Home: React.FC = () => {
                 <div key={banner._id || banner.id || index} className="w-full flex-shrink-0 h-full bg-gradient-to-br from-primary-800 to-primary-600 flex items-center justify-center">
                   {banner.imageUrl ? (
                     <img
-                      src={banner.imageUrl}
+                      src={getImageUrl(banner.imageUrl)}
                       alt={banner.title || `Banner ${index + 1}`}
                       className="w-full h-full object-cover"
                       loading={index === 0 ? 'eager' : 'lazy'}
@@ -543,7 +543,7 @@ const Home: React.FC = () => {
                   className={`relative p-3.5 rounded-3xl h-40 flex flex-col justify-between text-white bg-gradient-to-br ${cat.gradient || CATEGORY_GRADIENTS[i % CATEGORY_GRADIENTS.length]} overflow-hidden cursor-pointer active:scale-[0.97] transition-all duration-200 shadow-elevated hover:shadow-card-hover hover:-translate-y-0.5 group`}
                 >
                   {cat.imageUrl && (
-                    <img src={cat.imageUrl} alt={cat.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                    <img src={getImageUrl(cat.imageUrl)} alt={cat.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
                   )}
                   {cat.imageUrl && <div className="absolute inset-0 bg-black/40"></div>}
                   <div className="relative z-10 flex justify-between items-start">
@@ -746,7 +746,7 @@ const Home: React.FC = () => {
                     {hasImage ? (
                       <div className="w-full h-full relative">
                         <img 
-                          src={course.imageUrl || course.thumbnail} 
+                          src={getImageUrl(course.imageUrl || course.thumbnail)} 
                           alt={course.title} 
                           loading="lazy" 
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 

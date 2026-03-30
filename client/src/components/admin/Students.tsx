@@ -18,6 +18,33 @@ interface Student {
   isBanned?: boolean;
   suspiciousActivityCount?: number;
   blockedAt?: string;
+
+  admission?: {
+    fatherName: string;
+    motherName: string;
+    gender: string;
+    alternatePhone: string;
+    fullAddress: string;
+    batchTiming: string;
+    admissionDate: string;
+  };
+  fees?: {
+    totalFees: number;
+    paidAmount: number;
+    remainingAmount: number;
+  };
+  academic?: {
+    previousClass: string;
+    schoolName: string;
+    marksPercentage: string;
+    passingYear: string;
+  };
+  documents?: {
+    aadharCard: string;
+    marksheet: string;
+    photo: string;
+    profilePhoto: string;
+  };
 }
 
 interface Props {
@@ -36,7 +63,7 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [pageSize, setPageSize] = useState(10);
 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -59,8 +86,30 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     registrationType: 'regular',
     status: 'active' as 'active' | 'inactive',
     paymentStatus: 'pending' as 'paid' | 'pending' | 'failed',
-    notes: ''
+    notes: '',
+    // New Fields
+    fatherName: '',
+    motherName: '',
+    gender: 'Male',
+    alternatePhone: '',
+    fullAddress: '',
+    previousClass: '',
+    schoolName: '',
+    marksPercentage: '',
+    passingYear: '',
+    batchTiming: '',
+    admissionDate: new Date().toISOString().split('T')[0],
+    totalFees: 0,
+    paidAmount: 0,
+    remainingAmount: 0,
+    aadharCard: '',
+    marksheet: '',
+    photo: '',
+    profilePhoto: ''
   });
+
+  const [uploadingField, setUploadingField] = useState<string | null>(null);
+  const [courses, setCourses] = useState<{ value: string, label: string }[]>([]);
 
   const [blockSearchQuery, setBlockSearchQuery] = useState('');
   const [selectedUserToBlock, setSelectedUserToBlock] = useState<Student | null>(null);
@@ -82,14 +131,30 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     setFilteredStudents(sorted);
   };
 
-  // Load students on mount
+  // Load data on mount
   useEffect(() => {
     loadStudents();
+    loadCourses();
 
     const handleClickOutside = () => setActiveMenuId(null);
     window.addEventListener('click', handleClickOutside);
     return () => window.removeEventListener('click', handleClickOutside);
   }, []);
+
+  const loadCourses = async () => {
+    try {
+      const { coursesAPI } = await import('../../services/apiClient');
+      const data = await coursesAPI.getAll();
+      const list = Array.isArray(data) ? data : (data.courses || []);
+      const formatted = list.map((c: any) => ({
+        value: c.name || c.title,
+        label: c.name || c.title
+      }));
+      setCourses(formatted);
+    } catch (err) {
+      console.error('Failed to fetch courses');
+    }
+  };
 
   // Filter students based on search and status
   useEffect(() => {
@@ -121,10 +186,16 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
   }, [students, searchQuery, statusFilter, registrationFilter, paymentFilter]);
 
   // Calculate pagination
-  const totalPages = Math.ceil(filteredStudents.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
+  const totalItems = filteredStudents.length;
+  const totalPages = Math.ceil(totalItems / pageSize);
+
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+
   const paginatedStudents = filteredStudents.slice(startIndex, endIndex);
+
+  const showingStart = totalItems === 0 ? 0 : startIndex + 1;
+  const showingEnd = endIndex;
 
   const loadStudents = async () => {
     try {
@@ -141,14 +212,6 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     } finally {
       setLoading(false);
     }
-  };
-
-  const generateStudentId = () => {
-    const maxId = Math.max(0, ...students.map(s => {
-      const num = parseInt((s.id || '').replace('ST-', ''));
-      return isNaN(num) ? 0 : num;
-    }));
-    return `ST-${String(maxId + 1).padStart(4, '0')}`;
   };
 
   const validateForm = () => {
@@ -168,8 +231,16 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       showToast('Phone number must be exactly 10 digits', 'error');
       return false;
     }
+    if (formData.alternatePhone && !phoneRegex.test(formData.alternatePhone)) {
+      showToast('Alternate phone number must be exactly 10 digits', 'error');
+      return false;
+    }
     if (!formData.course) {
       showToast('Please select a course', 'error');
+      return false;
+    }
+    if (isNaN(Number(formData.totalFees)) || isNaN(Number(formData.paidAmount))) {
+      showToast('Fees must be numeric values', 'error');
       return false;
     }
     return true;
@@ -180,19 +251,17 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     if (!validateForm()) return;
 
     try {
-      const newStudent: Student = {
-        id: generateStudentId(),
-        ...formData
-      };
-
-      await studentsAPI.create(newStudent);
-      setStudents([...students, newStudent]);
+      setLoading(true);
+      const res = await studentsAPI.create(formData as any);
+      setStudents([...students, res]);
       resetForm();
       setShowAddModal(false);
-      showToast(`Student ${newStudent.name} added successfully`, 'success');
-    } catch (error) {
+      showToast(`Student ${formData.name} added successfully`, 'success');
+    } catch (error: any) {
       console.error('Add student error:', error);
-      showToast('Failed to add student to database. Please try again.', 'error');
+      showToast(error.response?.data?.error || 'Failed to add student', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -201,20 +270,18 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     if (!selectedStudent || !validateForm()) return;
 
     try {
-      const updatedStudent: Student = {
-        ...selectedStudent,
-        ...formData
-      };
-
-      await studentsAPI.update(selectedStudent.id, updatedStudent);
-      setStudents(students.map(s => s.id === selectedStudent.id ? updatedStudent : s));
+      setLoading(true);
+      await studentsAPI.update(selectedStudent.id, formData as any);
+      loadStudents(); // Reload to get structured data correctly
       resetForm();
       setShowEditModal(false);
       setSelectedStudent(null);
       showToast('Student updated successfully', 'success');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Update student error:', error);
-      showToast('Failed to update student. Please try again.', 'error');
+      showToast(error.response?.data?.error || 'Failed to update student', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -285,7 +352,26 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       registrationType: student.registrationType,
       status: student.status,
       paymentStatus: student.paymentStatus,
-      notes: student.notes || ''
+      notes: student.notes || '',
+      // New Fields
+      fatherName: student.admission?.fatherName || '',
+      motherName: student.admission?.motherName || '',
+      gender: student.admission?.gender || 'Male',
+      alternatePhone: student.admission?.alternatePhone || '',
+      fullAddress: student.admission?.fullAddress || '',
+      previousClass: student.academic?.previousClass || '',
+      schoolName: student.academic?.schoolName || '',
+      marksPercentage: student.academic?.marksPercentage || '',
+      passingYear: student.academic?.passingYear || '',
+      batchTiming: student.admission?.batchTiming || '',
+      admissionDate: student.admission?.admissionDate ? new Date(student.admission.admissionDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+      totalFees: student.fees?.totalFees || 0,
+      paidAmount: student.fees?.paidAmount || 0,
+      remainingAmount: student.fees?.remainingAmount || 0,
+      aadharCard: student.documents?.aadharCard || '',
+      marksheet: student.documents?.marksheet || '',
+      photo: student.documents?.photo || '',
+      profilePhoto: student.documents?.profilePhoto || ''
     });
     setShowEditModal(true);
   };
@@ -313,7 +399,25 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       registrationType: 'regular',
       status: 'active',
       paymentStatus: 'pending',
-      notes: ''
+      notes: '',
+      fatherName: '',
+      motherName: '',
+      gender: 'Male',
+      alternatePhone: '',
+      fullAddress: '',
+      previousClass: '',
+      schoolName: '',
+      marksPercentage: '',
+      passingYear: '',
+      batchTiming: '',
+      admissionDate: new Date().toISOString().split('T')[0],
+      totalFees: 0,
+      paidAmount: 0,
+      remainingAmount: 0,
+      aadharCard: '',
+      marksheet: '',
+      photo: '',
+      profilePhoto: ''
     });
     setSelectedStudent(null);
   };
@@ -371,6 +475,30 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     }
   };
 
+  const handleFileUpload = async (file: File, field: string) => {
+    try {
+      setUploadingField(field);
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', file);
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: uploadFormData
+      });
+
+      if (!res.ok) throw new Error('Upload failed');
+      const data = await res.json();
+      
+      setFormData(prev => ({ ...prev, [field]: data.url }));
+      showToast(`${field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} uploaded`, 'success');
+    } catch (error) {
+      console.error('Upload error:', error);
+      showToast('Failed to upload file', 'error');
+    } finally {
+      setUploadingField(null);
+    }
+  };
+
   const saveNotes = async () => {
     if (!selectedStudent) return;
 
@@ -391,7 +519,7 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-8">
         <div>
           <h2 className="text-[22px] font-medium text-[#2d2d2d]">
-            {viewMode === 'blocked' ? 'Blocked Users' : 'Student Directory'}
+            {viewMode === 'blocked' ? 'Blocked Users' : 'Admission System'}
           </h2>
         </div>
         <div className="flex items-center gap-3">
@@ -495,10 +623,10 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                   </td>
                 </tr>
               ) : (
-                paginatedStudents.map(s => (
+                paginatedStudents.map((s, idx) => (
                   <tr key={s.id} className="hover:bg-gray-50/30 transition-colors group border-b border-gray-100 last:border-none">
                     <td className="px-6 py-5 text-[12px] font-medium text-gray-400">
-                      {(currentPage - 1) * itemsPerPage + paginatedStudents.indexOf(s) + 1}
+                      {startIndex + idx + 1}
                     </td>
                     <td className="px-6 py-5">
                       <div className="text-[13px] font-medium text-gray-500">
@@ -616,50 +744,47 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
         </div>
 
       {/* Pagination Controls - Matching Screenshot */}
-      {filteredStudents.length > 0 && (
-        <div className="px-6 py-5 border-t border-gray-100 flex items-center justify-between">
-          <div>
-            <p className="text-[13px] font-bold text-gray-500">
-              Showing {startIndex + 1}-{Math.min(endIndex, filteredStudents.length)} of {filteredStudents.length}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-              disabled={currentPage === 1}
-              className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 disabled:opacity-30"
-            >
-              <span className="material-symbols-outlined text-[20px]">chevron_left</span>
-            </button>
-            <div className="flex items-center gap-1">
-              {Array.from({ length: totalPages }, (_, i) => i + 1)
-                .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
-                .map((pageNum, idx, array) => (
-                  <React.Fragment key={pageNum}>
-                    {idx > 0 && array[idx - 1] !== pageNum - 1 && (
-                      <span className="px-2 text-gray-300">...</span>
-                    )}
-                    <button
-                      onClick={() => setCurrentPage(pageNum)}
-                      className={`w-8 h-8 flex items-center justify-center text-[12px] font-black rounded-lg transition-all ${currentPage === pageNum ? 'bg-[#1a237e] text-white shadow-md' : 'text-gray-400 hover:bg-gray-50'
-                        }`}
-                    >
-                      {pageNum}
-                    </button>
-                  </React.Fragment>
-                ))}
-            </div>
-            <button
-              onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-              disabled={currentPage === totalPages}
-              className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 disabled:opacity-30"
-            >
-              <span className="material-symbols-outlined text-[20px]">chevron_right</span>
-            </button>
-          </div>
+      {/* Pagination Footer */}
+      <div className="flex justify-between items-center mt-4 px-6 py-4 border-t border-gray-100 bg-white rounded-b-2xl">
+        <div className="flex items-center gap-3">
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              setPageSize(Number(e.target.value));
+              setCurrentPage(1);
+            }}
+            className="border rounded-lg px-2 py-1 text-sm outline-none focus:border-black transition-all shadow-sm"
+          >
+            <option value={10}>10</option>
+            <option value={25}>25</option>
+            <option value={50}>50</option>
+            <option value={100}>100</option>
+          </select>
+          <span className="text-sm text-gray-600 font-medium">
+            Showing {showingStart} to {showingEnd} of {totalItems} entries
+          </span>
         </div>
-      )}
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCurrentPage(prev => prev - 1)}
+            disabled={currentPage === 1}
+            className="px-3 py-1 text-gray-500 hover:text-black font-bold text-sm disabled:opacity-50 transition-colors"
+          >
+            Previous
+          </button>
+          <button className="px-4 py-1 bg-black text-white rounded-lg font-bold text-sm shadow-md">
+            {currentPage}
+          </button>
+          <button
+            onClick={() => setCurrentPage(prev => prev + 1)}
+            disabled={currentPage === totalPages || totalPages === 0}
+            className="px-3 py-1 text-gray-500 hover:text-black font-bold text-sm disabled:opacity-50 transition-colors"
+          >
+            Next
+          </button>
+        </div>
+        </div>
       </div>
 
       {/* Add/Edit Student Drawer */}
@@ -669,97 +794,48 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
         width="480px"
       >
         <DrawerHeader
-          title={viewMode === 'blocked' && !showEditModal ? "Block a User" : (showEditModal ? "Edit Student Details" : "Add New Student")}
+          title={showEditModal ? "Edit Student Admission" : "New Student Admission"}
           onClose={() => { setShowAddModal(false); setShowEditModal(false); resetForm(); }}
         />
-        <DrawerBody className={viewMode === 'blocked' && !showEditModal ? "overflow-hidden" : ""}>
-          {viewMode === 'blocked' && !showEditModal ? (
-            <div className="flex flex-col h-full relative">
-              <div className="flex-1 space-y-8">
-                {/* Background Glow Effect from screenshot */}
-                <div className="absolute top-[-80px] right-[-80px] w-[320px] h-[320px] bg-blue-500/[0.08] blur-[100px] rounded-full -z-10" />
-
-                <div className="space-y-6">
-                  <div className="space-y-3">
-                    <label className="text-[11px] font-black text-gray-500 uppercase tracking-widest pl-1">Search for User *</label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        placeholder="Search by user name, email or Phone"
-                        value={blockSearchQuery}
-                        onChange={(e) => {
-                          setBlockSearchQuery(e.target.value);
-                          setSelectedUserToBlock(null);
-                        }}
-                        className={`w-full h-[52px] px-5 bg-white border ${selectedUserToBlock ? 'border-blue-500 ring-2 ring-blue-50' : 'border-gray-200'} rounded-2xl text-[14px] font-medium outline-none focus:border-blue-400 transition-all placeholder:text-gray-300 shadow-sm`}
-                      />
-                      {selectedUserToBlock && (
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 bg-blue-500 text-white rounded-full p-0.5">
-                          <span className="material-symbols-outlined text-[16px]">check</span>
-                        </div>
-                      )}
-                    </div>
+        <DrawerBody className="bg-[#fafafa]">
+          <div className="space-y-8 pb-10">
+            {/* Section: Personal Details */}
+            <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-6">
+              <h4 className="text-[14px] font-black text-[#1a237e] uppercase tracking-widest border-b border-gray-50 pb-4">A. Personal Details</h4>
+              
+              <div className="flex justify-center mb-6">
+                <div className="relative group">
+                  <div className="w-24 h-24 rounded-2xl bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden transition-all group-hover:border-blue-400">
+                    {formData.profilePhoto ? (
+                      <img src={formData.profilePhoto} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="material-symbols-outlined text-gray-300 text-[40px]">person</span>
+                    )}
+                    {uploadingField === 'profilePhoto' && (
+                      <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                      </div>
+                    )}
                   </div>
-
-                  {/* Search Results Area */}
-                  {blockSearchQuery.length > 1 && !selectedUserToBlock && (
-                    <div className="bg-white border border-gray-100 rounded-[24px] shadow-[0_10px_30px_rgba(0,0,0,0.04)] overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
-                      <div className="max-h-[300px] overflow-y-auto divide-y divide-gray-50">
-                        {students
-                          .filter(s => s.status === 'active') // Only block active users
-                          .filter(s =>
-                            s.name.toLowerCase().includes(blockSearchQuery.toLowerCase()) ||
-                            s.id.toLowerCase().includes(blockSearchQuery.toLowerCase()) ||
-                            s.email.toLowerCase().includes(blockSearchQuery.toLowerCase()) ||
-                            s.phone.includes(blockSearchQuery)
-                          ).slice(0, 5).map(s => (
-                            <button
-                              key={s.id}
-                              onClick={() => setSelectedUserToBlock(s)}
-                              className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors text-left"
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center font-black text-[#1a237e] text-[15px]">
-                                  {s.name.charAt(0)}
-                                </div>
-                                <div>
-                                  <p className="text-[13px] font-bold text-gray-800">{s.name}</p>
-                                  <p className="text-[11px] font-medium text-gray-400">{s.id} • {s.phone}</p>
-                                </div>
-                              </div>
-                              <span className="material-symbols-outlined text-[18px] text-gray-300">add_circle</span>
-                            </button>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {selectedUserToBlock && (
-                    <div className="p-6 bg-[#1a237e]/5 rounded-[28px] border border-[#1a237e]/10 animate-in zoom-in-95 duration-200">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center font-black text-[#1a237e] shadow-sm border border-[#1a237e]/5">
-                          {selectedUserToBlock.name.charAt(0)}
-                        </div>
-                        <div>
-                          <p className="text-[10px] font-black text-[#1a237e] uppercase tracking-widest opacity-60">Ready to Block</p>
-                          <p className="text-[15px] font-bold text-gray-800">{selectedUserToBlock.name}</p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                  <button 
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.onchange = (e: any) => {
+                        const file = e.target.files[0];
+                        if (file) handleFileUpload(file, 'profilePhoto');
+                      };
+                      input.click();
+                    }}
+                    className="absolute -bottom-2 -right-2 w-8 h-8 bg-[#111] text-white rounded-xl flex items-center justify-center shadow-lg hover:bg-blue-600 transition-all"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">upload</span>
+                  </button>
                 </div>
               </div>
-            </div>
-          ) : (
-            <div className="space-y-6">
-              <div className="space-y-5">
-                {showEditModal && selectedStudent && (
-                  <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 mb-6">
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Student ID</p>
-                    <p className="text-[14px] font-bold text-gray-900">{selectedStudent.id}</p>
-                  </div>
-                )}
 
+              <div className="space-y-4">
                 <div className="space-y-2">
                   <FormLabel label="Full Name" required />
                   <FormInput
@@ -769,6 +845,54 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                   />
                 </div>
 
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <FormLabel label="Father Name" required />
+                    <FormInput
+                      placeholder="Enter father's name"
+                      value={formData.fatherName}
+                      onChange={(e) => setFormData({ ...formData, fatherName: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <FormLabel label="Mother Name" required />
+                    <FormInput
+                      placeholder="Enter mother's name"
+                      value={formData.motherName}
+                      onChange={(e) => setFormData({ ...formData, motherName: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <FormLabel label="Date of Birth" required />
+                    <FormInput
+                      type="date"
+                      value={formData.dob}
+                      onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <FormLabel label="Gender" required />
+                    <FormSelect
+                      value={formData.gender}
+                      onChange={(val) => setFormData({ ...formData, gender: val })}
+                      options={[
+                        { value: 'Male', label: 'Male' },
+                        { value: 'Female', label: 'Female' },
+                        { value: 'Other', label: 'Other' }
+                      ]}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Section: Contact Details */}
+            <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-6">
+              <h4 className="text-[14px] font-black text-[#1a237e] uppercase tracking-widest border-b border-gray-50 pb-4">B. Contact Details</h4>
+              <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <FormLabel label="Email Address" required />
@@ -792,15 +916,16 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <FormLabel label="Date of Birth" />
+                    <FormLabel label="Alternate Phone" />
                     <FormInput
-                      type="date"
-                      value={formData.dob}
-                      onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
+                      type="tel"
+                      placeholder="10-digit alternate mobile"
+                      value={formData.alternatePhone}
+                      onChange={(e) => setFormData({ ...formData, alternatePhone: e.target.value })}
                     />
                   </div>
                   <div className="space-y-2">
-                    <FormLabel label="City" />
+                    <FormLabel label="City" required />
                     <FormInput
                       placeholder="Enter city"
                       value={formData.city}
@@ -810,12 +935,95 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                 </div>
 
                 <div className="space-y-2">
-                  <FormLabel label="Enrolled Course" required />
-                  <FormInput
-                    placeholder="e.g. Class 12th Commerce"
-                    value={formData.course}
-                    onChange={(e) => setFormData({ ...formData, course: e.target.value })}
+                  <FormLabel label="Full Address" required />
+                  <textarea
+                    placeholder="Enter full residential address"
+                    value={formData.fullAddress}
+                    onChange={(e) => setFormData({ ...formData, fullAddress: e.target.value })}
+                    className="w-full min-h-[100px] p-4 border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-blue-400 transition-all bg-white placeholder:text-gray-300 resize-none"
                   />
+                </div>
+              </div>
+            </div>
+
+            {/* Section: Academic Details */}
+            <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-6">
+              <h4 className="text-[14px] font-black text-[#1a237e] uppercase tracking-widest border-b border-gray-50 pb-4">C. Academic Details</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <FormLabel label="Previous Class" />
+                  <FormInput
+                    placeholder="e.g. 10th / 12th / Grad"
+                    value={formData.previousClass}
+                    onChange={(e) => setFormData({ ...formData, previousClass: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FormLabel label="School / College Name" />
+                  <FormInput
+                    placeholder="Enter school name"
+                    value={formData.schoolName}
+                    onChange={(e) => setFormData({ ...formData, schoolName: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FormLabel label="Marks / Percentage" />
+                  <FormInput
+                    placeholder="e.g. 85%"
+                    value={formData.marksPercentage}
+                    onChange={(e) => setFormData({ ...formData, marksPercentage: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FormLabel label="Passing Year" />
+                  <FormInput
+                    placeholder="e.g. 2023"
+                    value={formData.passingYear}
+                    onChange={(e) => setFormData({ ...formData, passingYear: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Section: Admission Details */}
+            <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-6">
+              <h4 className="text-[14px] font-black text-[#1a237e] uppercase tracking-widest border-b border-gray-50 pb-4">D. Admission Details</h4>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <FormLabel label="Course" required />
+                  <FormSelect
+                    value={formData.course}
+                    onChange={(val) => setFormData({ ...formData, course: val })}
+                    options={[
+                      { value: '', label: 'Select Course' },
+                      ...courses
+                    ]}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <FormLabel label="Batch" required />
+                    <FormSelect
+                      value={formData.batchTiming}
+                      onChange={(val) => setFormData({ ...formData, batchTiming: val })}
+                      options={[
+                        { value: '', label: 'Select Batch' },
+                        { value: 'Morning', label: 'Morning' },
+                        { value: 'Afternoon', label: 'Afternoon' },
+                        { value: 'Evening', label: 'Evening' },
+                        { value: 'Weekend', label: 'Weekend' }
+                      ]}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <FormLabel label="Admission Date" />
+                    <FormInput
+                      type="date"
+                      value={formData.admissionDate}
+                      onChange={(e) => setFormData({ ...formData, admissionDate: e.target.value })}
+                    />
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -844,24 +1052,124 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                   </div>
                 </div>
               </div>
-              <div className="flex gap-3 pt-8 pb-4">
-                <button
-                  type="button"
-                  onClick={() => { setShowAddModal(false); setShowEditModal(false); resetForm(); }}
-                  className="flex-1 h-[56px] bg-gray-50 text-gray-700 rounded-xl font-bold text-[14px] hover:bg-gray-100 transition-all active:scale-[0.98]"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={showEditModal ? handleEditStudent : handleAddStudent}
-                  className="flex-[2] h-[56px] bg-[#1a237e] text-white rounded-xl font-bold text-[14px] hover:bg-navy/90 transition-all shadow-lg shadow-navy/20 active:scale-[0.98]"
-                >
-                  {showEditModal ? "Save Update" : "Create Student Account"}
-                </button>
+            </div>
+
+            {/* Section: Fees Details */}
+            <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-6">
+              <div className="flex justify-between items-center border-b border-gray-50 pb-4">
+                <h4 className="text-[14px] font-black text-[#1a237e] uppercase tracking-widest">E. Fees Details</h4>
+                <div className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[11px] font-black uppercase">Auto Calculating</div>
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <FormLabel label="Total Fees (₹)" required />
+                  <FormInput
+                    type="number"
+                    placeholder="0"
+                    value={formData.totalFees}
+                    onChange={(e) => {
+                      const total = parseFloat(e.target.value) || 0;
+                      setFormData(prev => ({ 
+                        ...prev, 
+                        totalFees: total,
+                        remainingAmount: total - prev.paidAmount
+                      }));
+                    }}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FormLabel label="Paid Amount (₹)" required />
+                  <FormInput
+                    type="number"
+                    placeholder="0"
+                    value={formData.paidAmount}
+                    onChange={(e) => {
+                      const paid = parseFloat(e.target.value) || 0;
+                      setFormData(prev => ({ 
+                        ...prev, 
+                        paidAmount: paid,
+                        remainingAmount: prev.totalFees - paid
+                      }));
+                    }}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <FormLabel label="Remaining (₹)" />
+                  <div className={`h-[48px] px-4 border rounded-xl flex items-center text-[14px] font-bold ${formData.remainingAmount > 0 ? 'bg-red-50 border-red-100 text-red-600' : 'bg-green-50 border-green-100 text-green-600'}`}>
+                    ₹ {formData.remainingAmount}
+                  </div>
+                </div>
               </div>
             </div>
-          )}
+
+            {/* Section: Documents */}
+            <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-6">
+              <h4 className="text-[14px] font-black text-[#1a237e] uppercase tracking-widest border-b border-gray-50 pb-4">F. Documents Upload</h4>
+              <div className="grid grid-cols-1 gap-4">
+                {[
+                  { id: 'aadharCard', label: 'Aadhar Card (Front/Back)', icon: 'badge' },
+                  { id: 'marksheet', label: 'Marksheet (10th/12th)', icon: 'description' },
+                  { id: 'photo', label: 'Admission Photo', icon: 'image' }
+                ].map(doc => (
+                  <div key={doc.id} className="flex gap-4 p-4 bg-gray-50/50 border border-gray-100 rounded-2xl group transition-all hover:bg-white hover:shadow-md">
+                    <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center border border-gray-100 group-hover:bg-blue-50 group-hover:border-blue-100 transition-all">
+                      <span className="material-symbols-outlined text-gray-400 group-hover:text-blue-500">{doc.icon}</span>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[13px] font-bold text-gray-700">{doc.label}</p>
+                      {formData[doc.id as keyof typeof formData] ? (
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[11px] font-bold text-green-600 uppercase tracking-wider flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[14px]">check_circle</span> Uploaded
+                          </span>
+                          <a href={formData[doc.id as keyof typeof formData] as string} target="_blank" className="text-[11px] font-black text-blue-500 uppercase hover:underline">View</a>
+                        </div>
+                      ) : (
+                        <p className="text-[11px] font-medium text-gray-400 mt-1 uppercase">Max Size: 5MB • JPG, PNG, PDF</p>
+                      )}
+                    </div>
+                    <div className="flex items-center">
+                      <button 
+                        onClick={() => {
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*,application/pdf';
+                          input.onchange = (e: any) => {
+                            const file = e.target.files[0];
+                            if (file) handleFileUpload(file, doc.id);
+                          };
+                          input.click();
+                        }}
+                        disabled={uploadingField === doc.id}
+                        className={`px-4 py-2 rounded-xl text-[12px] font-black tracking-wider uppercase transition-all ${formData[doc.id as keyof typeof formData] ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-[#111] text-white hover:bg-blue-600 shadow-sm'}`}
+                      >
+                        {uploadingField === doc.id ? 'Uploading...' : formData[doc.id as keyof typeof formData] ? 'Change' : 'Upload'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            
+            {/* Actions */}
+            <div className="flex gap-3 pt-6">
+              <button
+                type="button"
+                onClick={() => { setShowAddModal(false); setShowEditModal(false); resetForm(); }}
+                className="flex-1 h-[64px] bg-white border border-gray-200 text-gray-700 rounded-[20px] font-bold text-[14px] hover:bg-gray-50 transition-all active:scale-[0.98]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={showEditModal ? handleEditStudent : handleAddStudent}
+                disabled={loading || !!uploadingField}
+                className="flex-[2] h-[64px] bg-[#1a237e] text-white rounded-[20px] font-bold text-[14px] hover:bg-[#151b60] transition-all shadow-xl shadow-navy/20 active:scale-[0.98] flex items-center justify-center gap-2"
+              >
+                {loading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : (showEditModal ? "Save Admission Update" : "Complete Admission Process")}
+              </button>
+            </div>
+          </div>
         </DrawerBody>
         {viewMode === 'blocked' && !showEditModal && (
           <div className="shrink-0 bg-[#111] z-[100] mt-auto">
@@ -897,80 +1205,155 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
 
 
       {/* View Student Drawer */}
-      <RightSideDrawer isOpen={showViewModal} onClose={() => setShowViewModal(false)} width="480px">
-        <DrawerHeader title="Student Profile" onClose={() => setShowViewModal(false)} />
-        <DrawerBody>
+      <RightSideDrawer isOpen={showViewModal} onClose={() => setShowViewModal(false)} width="500px">
+        <DrawerHeader title="Student Profile Details" onClose={() => setShowViewModal(false)} />
+        <DrawerBody className="bg-gray-50/30">
           {selectedStudent && (
-            <div className="space-y-8">
-              <div className="flex items-center gap-4 p-6 bg-navy/5 rounded-[32px] border border-navy/5">
-                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center font-black text-navy text-2xl shadow-sm border border-navy/10">
-                  {selectedStudent.name.charAt(0).toUpperCase()}
+            <div className="space-y-6 pb-10">
+              {/* Header Profile Info */}
+              <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm flex items-center gap-5">
+                <div className="w-20 h-20 rounded-2xl bg-[#1a237e]/5 border border-[#1a237e]/10 overflow-hidden flex items-center justify-center">
+                  {selectedStudent.documents?.profilePhoto ? (
+                    <img src={selectedStudent.documents.profilePhoto} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="material-symbols-outlined text-[#1a237e] text-[40px]">person</span>
+                  )}
                 </div>
                 <div>
-                  <h4 className="text-[18px] font-black text-navy uppercase tracking-tight">{selectedStudent.name}</h4>
-                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">{selectedStudent.id}</p>
+                  <h3 className="text-[18px] font-black text-gray-900 leading-tight">{selectedStudent.name}</h3>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-black uppercase tracking-wider">{selectedStudent.id}</span>
+                    <span className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase border ${selectedStudent.status === 'active' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${selectedStudent.status === 'active' ? 'bg-green-500' : 'bg-red-500'}`} />
+                      {selectedStudent.status}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-y-8 gap-x-4 px-2">
-                <div>
-                  <FormLabel label="Email Address" />
-                  <p className="text-[14px] font-bold text-gray-700 ml-1">{selectedStudent.email}</p>
+              {/* Grid Layout for details */}
+              <div className="grid grid-cols-1 gap-4">
+                {/* Personal & Contact Section */}
+                <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-5">
+                  <div className="flex items-center gap-2 text-[#1a237e]">
+                    <span className="material-symbols-outlined text-[20px]">contact_page</span>
+                    <h4 className="text-[12px] font-black uppercase tracking-widest">Personal & Contact</h4>
+                  </div>
+                  <div className="grid grid-cols-2 gap-y-4 gap-x-6">
+                    <div>
+                      <FormLabel label="Father's Name" />
+                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.admission?.fatherName || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <FormLabel label="Mother's Name" />
+                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.admission?.motherName || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <FormLabel label="Date of Birth" />
+                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.dob ? new Date(selectedStudent.dob).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}</p>
+                    </div>
+                    <div>
+                      <FormLabel label="Gender" />
+                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.admission?.gender || 'N/A'}</p>
+                    </div>
+                    <div className="col-span-2 border-t border-gray-50 pt-4">
+                      <FormLabel label="Email" />
+                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.email}</p>
+                    </div>
+                    <div>
+                      <FormLabel label="Primary Phone" />
+                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.phone}</p>
+                    </div>
+                    <div>
+                      <FormLabel label="Alt Phone" />
+                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.admission?.alternatePhone || 'N/A'}</p>
+                    </div>
+                    <div className="col-span-2">
+                      <FormLabel label="Address" />
+                      <p className="text-[13px] font-bold text-gray-700 leading-relaxed">{selectedStudent.admission?.fullAddress || 'N/A'}</p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <FormLabel label="Phone Number" />
-                  <p className="text-[14px] font-bold text-gray-700 ml-1">{selectedStudent.phone}</p>
+
+                {/* Academic & Admission Section */}
+                <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-5">
+                  <div className="flex items-center gap-2 text-[#3f51b5]">
+                    <span className="material-symbols-outlined text-[20px]">school</span>
+                    <h4 className="text-[12px] font-black uppercase tracking-widest">Academic & Admission</h4>
+                  </div>
+                  <div className="grid grid-cols-2 gap-y-4 gap-x-6">
+                    <div>
+                      <FormLabel label="Prev Class" />
+                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.academic?.previousClass || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <FormLabel label="Percentage" />
+                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.academic?.marksPercentage || 'N/A'}</p>
+                    </div>
+                    <div className="col-span-2">
+                        <FormLabel label="Course" />
+                        <p className="text-[14px] font-black text-[#1a237e]">{selectedStudent.course}</p>
+                    </div>
+                    <div>
+                      <FormLabel label="Batch" />
+                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.admission?.batchTiming || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <FormLabel label="Admission Date" />
+                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.admission?.admissionDate ? new Date(selectedStudent.admission.admissionDate).toLocaleDateString('en-IN') : 'N/A'}</p>
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <FormLabel label="Date of Birth" />
-                  <p className="text-[14px] font-bold text-gray-700 ml-1">{new Date(selectedStudent.dob).toLocaleDateString('en-IN')}</p>
-                </div>
-                <div>
-                  <FormLabel label="Current Course" />
-                  <p className="text-[14px] font-bold text-gray-700 ml-1">{selectedStudent.course}</p>
-                </div>
-                <div>
-                  <FormLabel label="Registration Date" />
-                  <p className="text-[14px] font-bold text-gray-700 ml-1">{new Date(selectedStudent.registrationDate).toLocaleDateString('en-IN')}</p>
-                </div>
-                <div>
-                  <FormLabel label="Admission Type" />
-                  <p className="text-[14px] font-bold text-gray-700 ml-1 uppercase">{selectedStudent.registrationType}</p>
-                </div>
-                <div>
-                  <FormLabel label="Account Status" />
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[10px] font-black uppercase ${selectedStudent.status === 'active' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${selectedStudent.status === 'active' ? 'bg-green-500' : 'bg-red-500'}`} />
-                    {selectedStudent.status}
-                  </span>
-                </div>
-                <div>
-                  <FormLabel label="Payment Status" />
-                  <span className={`inline-flex px-3 py-1 rounded-lg text-[10px] font-black uppercase ${selectedStudent.paymentStatus === 'paid' ? 'bg-green-100 text-green-600' : selectedStudent.paymentStatus === 'pending' ? 'bg-yellow-100 text-yellow-600' : 'bg-red-100 text-red-600'}`}>
-                    {selectedStudent.paymentStatus}
-                  </span>
+
+                {/* Fees & Documents Section */}
+                <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-5">
+                  <div className="flex items-center gap-2 text-green-600">
+                    <span className="material-symbols-outlined text-[20px]">currency_rupee</span>
+                    <h4 className="text-[12px] font-black uppercase tracking-widest">Fees & Verification</h4>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-4 bg-gray-50 p-4 rounded-2xl">
+                    <div className="text-center">
+                        <p className="text-[9px] font-black text-gray-400 uppercase">Total</p>
+                        <p className="text-[14px] font-black text-gray-900">₹{selectedStudent.fees?.totalFees || 0}</p>
+                    </div>
+                    <div className="text-center border-x border-gray-200">
+                        <p className="text-[9px] font-black text-gray-400 uppercase">Paid</p>
+                        <p className="text-[14px] font-black text-green-600">₹{selectedStudent.fees?.paidAmount || 0}</p>
+                    </div>
+                    <div className="text-center">
+                        <p className="text-[9px] font-black text-gray-400 uppercase">Due</p>
+                        <p className="text-[14px] font-black text-red-600">₹{selectedStudent.fees?.remainingAmount || 0}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3 pt-2">
+                    <FormLabel label="Verification Documents" />
+                    <div className="grid grid-cols-2 gap-3">
+                        {['aadharCard', 'marksheet', 'photo'].map(doc => (
+                            selectedStudent.documents?.[doc as keyof typeof selectedStudent.documents] ? (
+                                <a 
+                                    key={doc}
+                                    href={selectedStudent.documents?.[doc as keyof typeof selectedStudent.documents] as string}
+                                    target="_blank"
+                                    className="flex items-center gap-2 p-3 bg-white border border-gray-100 rounded-xl hover:border-blue-400 transition-all group"
+                                >
+                                    <span className="material-symbols-outlined text-[18px] text-gray-400 group-hover:text-blue-500">description</span>
+                                    <span className="text-[11px] font-bold text-gray-600 uppercase truncate">{doc.replace(/([A-Z])/g, ' $1')}</span>
+                                </a>
+                            ) : null
+                        ))}
+                    </div>
+                  </div>
                 </div>
               </div>
-
-              {selectedStudent.notes && (
-                <div className="p-5 bg-amber-50/50 rounded-2xl border border-amber-100/50">
-                  <FormLabel label="Internal Notes" />
-                  <p className="text-[13px] font-medium text-amber-900 leading-relaxed italic">"{selectedStudent.notes}"</p>
-                </div>
-              )}
 
               <div className="flex gap-3 pt-6 pb-4">
                 <button
                   onClick={() => setShowViewModal(false)}
-                  className="flex-1 h-[56px] bg-gray-50 text-gray-700 rounded-xl font-bold text-[14px] hover:bg-gray-100 transition-all"
+                  className="flex-1 h-[56px] bg-gray-900 text-white rounded-xl font-bold text-[14px] hover:bg-black transition-all shadow-lg active:scale-95"
                 >
-                  Close
-                </button>
-                <button
-                  onClick={() => { handleEditClick(selectedStudent!); setShowViewModal(false); }}
-                  className="flex-1 h-[56px] bg-navy text-white rounded-xl font-bold text-[14px] hover:bg-navy/90 transition-all shadow-lg shadow-navy/20"
-                >
-                  Edit Profile
+                  Close Profile
                 </button>
               </div>
             </div>
