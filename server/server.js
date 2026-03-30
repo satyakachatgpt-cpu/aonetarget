@@ -22,12 +22,7 @@ import { globalLimiter, authLimiter, securityHeaders, sanitizeInput } from './mi
 import { sendEmail, templates } from './utils/email.js';
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from 'docx';
 
-// Security Middlewares defined inline since security.js is missing
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: 1000,
-  message: { error: 'Too many requests from this IP, please try again after 15 minutes' }
-});
+
 
 // Config moved to top
 const app = express();
@@ -85,7 +80,8 @@ app.get('/api/secure-video/:filename', authMiddleware, async (req, res) => {
       }
     }
 
-    let student = null; chah
+    let student = null;
+
     if (req.user) {
       student = await db.collection('students').findOne({
         $or: [
@@ -855,7 +851,7 @@ async function getRelatedCourseIds(course, originalId) {
 }
 
 // Alias for getRelatedCourseIds used in some parts of the code
-const getCourseIdVariants = getRelatedCourseIds;
+
 
 // Routes for Course Videos
 app.get('/api/courses/:id/videos', async (req, res) => {
@@ -3944,10 +3940,7 @@ app.get('/api/live-videos', async (req, res) => {
     }).sort((a,b) => new Date(a.publishOn || a.date || a.createdAt) - new Date(b.publishOn || b.date || b.createdAt));
     
     res.json(calculated);
-    
-    }).sort((a, b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
 
-    res.json(calculated);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch live videos' });
   }
