@@ -2587,21 +2587,43 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             <div className="space-y-6">
               {/* Test Cards List */}
               <div className="grid grid-cols-1 gap-4">
-                {(detailTests.length > 0 ? detailTests : mockDetailTests)
-                  .filter((t) => {
-                    if (!t) return false;
-                    const name = (t.name || t.title || "").toLowerCase();
-                    const matchesSearch = name.includes(
-                      detailSearchQuery.toLowerCase(),
+                {(() => {
+                  const filtered = (detailTests.length > 0 ? detailTests : mockDetailTests)
+                    .filter((t) => {
+                      if (!t) return false;
+                      const name = (t.name || t.title || "").toLowerCase();
+                      const matchesSearch = name.includes(
+                        detailSearchQuery.toLowerCase(),
+                      );
+                      const matchesStatus =
+                        detailFilters.status === "all" ||
+                        (detailFilters.status === "published"
+                          ? t.published !== false
+                          : t.published === false);
+                      return matchesSearch && matchesStatus;
+                    });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="bg-white rounded-[2rem] p-20 border border-dashed border-gray-200 flex flex-col items-center justify-center text-center space-y-4">
+                        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-300">
+                          <span className="material-symbols-outlined text-[32px]">assignment_late</span>
+                        </div>
+                        <div className="space-y-1">
+                          <h3 className="text-[16px] font-bold text-gray-800">No tests found</h3>
+                          <p className="text-[13px] text-gray-400 font-medium max-w-[280px]">We couldn't find any tests for this series. Try adjusting your search or add a new test.</p>
+                        </div>
+                        <button 
+                          onClick={() => setShowAddSingleTestDrawer(true)}
+                          className="px-6 py-2 bg-black text-white rounded-xl text-[13px] font-bold shadow-sm hover:scale-105 transition-all mt-2"
+                        >
+                          Add Your First Test
+                        </button>
+                      </div>
                     );
-                    const matchesStatus =
-                      detailFilters.status === "all" ||
-                      (detailFilters.status === "published"
-                        ? t.published !== false
-                        : t.published === false);
-                    return matchesSearch && matchesStatus;
-                  })
-                  .map((test, index) => (
+                  }
+
+                  return filtered.map((test, index) => (
                     <div
                       key={String(test?.id || (test as any)._id || index)}
                       className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm hover:shadow-md transition-all flex items-center justify-between group"
@@ -2613,41 +2635,40 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                             className="w-[18px] h-[18px] rounded border-gray-200 accent-black cursor-pointer"
                           />
                         </div>
-                        <div className="space-y-1.5">
-                          <h3
-                            className="text-[15px] font-black text-gray-800 group-hover:text-blue-600 transition-colors cursor-pointer"
-                            onClick={() => {
-                              setViewingQuestionEditor(test);
-                              setEditingTest(test);
-                            }}
-                          >
-                            {test.name || (test as any).title}
-                          </h3>
-                          <div className="flex items-center gap-6 text-[12px] font-bold text-gray-400">
-                            <span className="flex items-center gap-1.5">
-                              <span className="material-symbols-outlined text-[16px] text-blue-500">
-                                assignment
-                              </span>{" "}
-                              {test.marks || 0} Marks
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                              <span className="material-symbols-outlined text-[16px] text-orange-500">
-                                timer
-                              </span>{" "}
-                              {test.time || 0} Minutes
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                              <span className="material-symbols-outlined text-[16px] text-green-500">
-                                check_circle
-                              </span>{" "}
+                        <div className="space-y-1.5 flex-1">
+                          <div className="flex items-center gap-3">
+                            <h3
+                              className="text-[16px] font-black text-gray-800 group-hover:text-blue-600 transition-colors cursor-pointer"
+                              onClick={() => {
+                                setViewingQuestionEditor(test);
+                                setEditingTest(test);
+                              }}
+                            >
+                              {test.name || (test as any).title}
+                            </h3>
+                            <span className="px-3 py-1 bg-green-50 text-green-700 rounded-full text-[11px] font-black border border-green-100 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[14px]">checklist</span>
                               {Array.isArray((test as any).questions)
                                 ? (test as any).questions.length
                                 : Number((test as any).questions) || 0}
                               /
                               {Number((test as any).noOfQuestions) ||
                                 Number((test as any).questions) ||
-                                0}{" "}
-                              Questions Added
+                                0} Qs
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-6 text-[12px] font-bold text-gray-400">
+                            <span className="flex items-center gap-1.5">
+                              <span className="material-symbols-outlined text-[16px] text-blue-500">
+                                assignment
+                              </span>{" "}
+                              {test.marks || test.totalMarks || 0} Marks
+                            </span>
+                            <span className="flex items-center gap-1.5">
+                              <span className="material-symbols-outlined text-[16px] text-orange-500">
+                                timer
+                              </span>{" "}
+                              {test.time || test.duration || 0} Minutes
                             </span>
                           </div>
                         </div>
@@ -2899,8 +2920,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                         </div>
                       </div>
                     </div>
-                  ))}
-              </div>
+                  ));
+                })()}              </div>
             </div>
           )}
 

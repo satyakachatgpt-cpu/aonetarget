@@ -210,7 +210,6 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
   const [showCourseMoreOptions, setShowCourseMoreOptions] = useState(false);
   const [imageUploadLoading, setImageUploadLoading] = useState(false);
   const [videoMode, setVideoMode] = useState<'upload' | 'link'>('link');
-  const [previewVideo, setPreviewVideo] = useState<any>(null);
 
   useEffect(() => {
     categoriesAPI.getAll()
@@ -2217,7 +2216,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
               }
               else showToast('Meeting link not available', 'error');
             } else if (isVideo) {
-              setPreviewVideo(item);
+              if (courseId) window.open(`/#/watch/${courseId}/${itemId}`, '_blank');
             } else if (isNote) {
               const url = item.fileUrl || item.url || item.link;
               if (url) {
@@ -4448,64 +4447,6 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         testSeriesOptions={testSeriesList.map(s => ({ value: s.id, label: s.title || s.seriesName }))}
       />
 
-      {/* --- VIDEO PREVIEW MODAL --- */}
-      {previewVideo && (
-        <div className="fixed inset-0 z-[100000] flex items-center justify-center p-4 md:p-10">
-          <div 
-            className="absolute inset-0 bg-black/90 backdrop-blur-md animate-fade-in"
-            onClick={() => setPreviewVideo(null)}
-          />
-          <div className="relative w-full max-w-5xl aspect-video bg-black rounded-[2rem] overflow-hidden shadow-2xl border border-white/10 animate-zoom-in group">
-            <button 
-              onClick={() => setPreviewVideo(null)}
-              className="absolute top-6 right-6 z-50 w-12 h-12 bg-white/10 hover:bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white transition-all border border-white/20 group-hover:scale-110"
-            >
-              <span className="material-symbols-outlined text-[24px]">close</span>
-            </button>
-
-            <div className="w-full h-full relative">
-              {(() => {
-                const videoUrl = previewVideo.videoUrl || previewVideo.url;
-                const isYoutube = videoUrl?.includes('youtube.com') || videoUrl?.includes('youtu.be') || previewVideo.youtubeUrl;
-                
-                if (isYoutube) {
-                  const extractId = (url: string) => {
-                    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-                    const match = url.match(regExp);
-                    return (match && match[2].length === 11) ? match[2] : null;
-                  };
-                  const id = extractId(previewVideo.youtubeUrl || videoUrl);
-                  return (
-                    <iframe 
-                      className="w-full h-full"
-                      src={`https://www.youtube.com/embed/${id}?autoplay=1&rel=0&modestbranding=1`}
-                      title="YouTube Preview"
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen
-                    />
-                  );
-                }
-
-                // Native MP4 Playback
-                return (
-                  <video 
-                    src={videoUrl?.startsWith('http') ? videoUrl : `/uploads/${videoUrl}`}
-                    className="w-full h-full"
-                    controls
-                    autoPlay
-                    playsInline
-                  />
-                );
-              })()}
-            </div>
-
-            <div className="absolute bottom-0 left-0 right-0 p-8 pt-20 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
-              <h3 className="text-xl font-bold text-white mb-2">{previewVideo.title}</h3>
-              <p className="text-white/60 text-sm font-medium">Video Preview Mode • High Definition</p>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
