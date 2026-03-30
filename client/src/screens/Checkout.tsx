@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { getImageUrl } from '../lib/utils';
 
 declare global {
   interface Window {
@@ -275,7 +276,7 @@ const Checkout: React.FC = () => {
           <div className="flex gap-4">
             <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 bg-gradient-to-br from-[#303F9F] to-[#1A237E] flex items-center justify-center">
               {(course.imageUrl || course.thumbnail) ? (
-                <img src={course.imageUrl || course.thumbnail} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                <img src={getImageUrl(course.imageUrl || course.thumbnail)} alt="" className="w-full h-full object-cover" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
               ) : (
                 <span className="text-white text-2xl font-bold opacity-60">{courseName.charAt(0).toUpperCase()}</span>
               )}

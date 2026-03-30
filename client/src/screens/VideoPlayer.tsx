@@ -62,14 +62,27 @@ const VideoPlayer: React.FC = () => {
 
       {/* Video Hub */}
       <div className={`relative flex-1 flex items-center justify-center bg-black ${isLandscape ? 'h-full w-full' : ''}`}>
-        {isLandscape && (
-          <button 
-            onClick={() => navigate(-1)} 
-            className="absolute top-6 left-6 z-30 w-12 h-12 rounded-full bg-black/60 backdrop-blur-2xl flex items-center justify-center text-white border border-white/10 active:scale-90 transition-all shadow-2xl"
-          >
-            <span className="material-symbols-rounded text-2xl">arrow_back</span>
-          </button>
-        )}
+      {/* ABSOLUTE GLOBAL EXIT (X) PROTOCOL - TAB-CLOSE & UNBLOCKABLE */}
+      <div 
+        onPointerDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          console.log('HARD SCREEN TAB-CLOSE TRIGGERED');
+          window.close();
+          navigate(-1);
+          setTimeout(() => {
+            if (window.location.href.includes('video-player')) {
+              window.location.hash = '/#/my-courses';
+            }
+          }, 50);
+        }}
+        className="fixed top-0 left-0 w-24 h-24 z-[9999999] cursor-pointer group flex items-start justify-start p-8 active:scale-90 transition-all"
+        style={{ touchAction: 'none' }}
+      >
+        <div className="w-10 h-10 bg-white/10 hover:bg-red-600/80 backdrop-blur-3xl border border-white/20 rounded-full text-white flex items-center justify-center shadow-2xl transition-all duration-200">
+          <span className="material-symbols-rounded text-2xl font-bold">close</span>
+        </div>
+      </div>
         
         <div className={`w-full ${isLandscape ? 'h-full' : 'aspect-video shadow-[0_0_100px_rgba(0,0,0,0.5)]'}`}>
           <SecureVideoPlayer

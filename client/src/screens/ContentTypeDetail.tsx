@@ -272,7 +272,7 @@ const ContentTypeDetail: React.FC = () => {
                     <h4 className="text-base font-bold text-gray-800 leading-tight line-clamp-2">{courseName}</h4>
 
                     {course.description && (
-                      <p className="text-xs text-gray-500 mt-1.5 line-clamp-2">{course.description.replace(/<[^>]*>?/gm, '')}</p>
+                      <p className="text-xs text-gray-500 mt-1.5 line-clamp-2">{course.description.replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ')}</p>
                     )}
 
                     <div className="flex items-center gap-2 mt-2 flex-wrap">

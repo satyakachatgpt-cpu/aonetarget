@@ -339,7 +339,7 @@ const Courses: React.FC<Props> = ({ showToast }) => {
 
                 <div className="max-w-2xl">
                   <p className="text-[14px] font-medium text-gray-500 line-clamp-2 leading-relaxed">
-                    {item.description ? item.description.replace(/<[^>]*>/g, '') : 'Access full course content, videos, and materials.'}
+                    {item.description ? item.description.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ') : 'Access full course content, videos, and materials.'}
                   </p>
                   <button className="text-[14px] font-black text-blue-600 mt-2 hover:underline">Show more</button>
                 </div>

@@ -13,16 +13,19 @@ interface LiveClass {
   instructor: string;
   status: 'scheduled' | 'live' | 'completed' | 'cancelled' | 'upcoming' | 'ended';
   publishOn?: string;
+  batchId?: string;
 }
 
 interface Props {
   studentId: string;
   courseId?: string;
+  batchId?: string;
+  onJoinLive?: (cls: any) => void;
 }
 
 const API_BASE_URL = '/api';
 
-const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId }) => {
+const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, onJoinLive }) => {
   const [liveClasses, setLiveClasses] = useState<LiveClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -36,13 +39,19 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId }) => {
     try {
       let url = '';
       if (courseId) {
-        url = `${API_BASE_URL}/courses/${courseId}/live-classes`;
+        url = `${API_BASE_URL}/courses/${courseId}/live-classes${batchId ? `?batchId=${batchId}` : ''}`;
       } else {
-        url = `${API_BASE_URL}/students/${studentId}/live-classes`;
+        url = `${API_BASE_URL}/students/${studentId}/live-classes${batchId ? `?batchId=${batchId}` : ''}`;
       }
       const response = await fetch(url);
       const data = await response.json();
-      setLiveClasses(Array.isArray(data) ? data : []);
+      
+      // Client-side filtering as a fallback if API doesn't filter by batch
+      let classes = Array.isArray(data) ? data : [];
+      if (batchId) {
+        classes = classes.filter(c => !c.batchId || c.batchId === batchId);
+      }
+      setLiveClasses(classes);
     } catch (error) {
       console.error('Error loading live classes:', error);
     } finally {
@@ -183,15 +192,13 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId }) => {
                     )}
 
                     {cls.status === 'live' ? (
-                      <a
-                        href={cls.meetingLink}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => onJoinLive && onJoinLive(cls)}
                         className="h-11 px-6 bg-[#1a1c1e] text-white rounded-[12px] text-[13px] font-black uppercase tracking-wider flex items-center gap-2.5 shadow-lg shadow-black/10 active:scale-95 transition-all"
                       >
                         <span className="material-symbols-outlined text-[20px]">sensors</span>
                         Join Live
-                      </a>
+                      </button>
                     ) : (cls.status === 'upcoming' || cls.status === 'scheduled') ? (
                       <button
                         disabled

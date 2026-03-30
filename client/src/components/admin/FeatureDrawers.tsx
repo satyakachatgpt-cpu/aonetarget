@@ -1164,6 +1164,7 @@ export const LiveStreamDrawer: React.FC<{
         streamSource: 'YouTube',
         streamId: '',
         scheduledTime: new Date().toISOString().slice(0, 16).replace('T', ' '),
+        endTime: new Date(Date.now() + 3600000).toISOString().slice(0, 16).replace('T', ' '),
         isFree: false,
         courseId: '',
         subjectId: ''
@@ -1177,6 +1178,7 @@ export const LiveStreamDrawer: React.FC<{
                 streamSource: 'YouTube',
                 streamId: '',
                 scheduledTime: new Date().toISOString().slice(0, 16).replace('T', ' '),
+                endTime: new Date(Date.now() + 3600000).toISOString().slice(0, 16).replace('T', ' '),
                 isFree: false,
                 courseId: '',
                 subjectId: ''
@@ -1201,6 +1203,25 @@ export const LiveStreamDrawer: React.FC<{
 
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
+                                <FormLabel label="Scheduled For" required />
+                                <FormInput
+                                    value={formData.scheduledTime}
+                                    onChange={(e) => setFormData({ ...formData, scheduledTime: e.target.value })}
+                                    placeholder="YYYY-MM-DD HH:MM"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <FormLabel label="End Time" required />
+                                <FormInput
+                                    value={formData.endTime}
+                                    onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                                    placeholder="YYYY-MM-DD HH:MM"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
                                 <FormLabel label="Stream Source" />
                                 <FormSelect
                                     value={formData.streamSource}
@@ -1210,14 +1231,6 @@ export const LiveStreamDrawer: React.FC<{
                                         { value: 'Standard', label: 'Standard HLS' },
                                         { value: 'Zoom', label: 'Zoom Meeting' }
                                     ]}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <FormLabel label="Scheduled For" required />
-                                <FormInput
-                                    value={formData.scheduledTime}
-                                    onChange={(e) => setFormData({ ...formData, scheduledTime: e.target.value })}
-                                    placeholder="YYYY-MM-DD HH:MM"
                                 />
                             </div>
                         </div>

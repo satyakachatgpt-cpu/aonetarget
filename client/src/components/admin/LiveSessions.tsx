@@ -64,10 +64,24 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
 
             const enriched = sessionsData.map((session: any) => {
                 const course = normalizedCourses.find((c: any) => (c.id === session.courseId || c._id === session.courseId));
+                
+                // Robust date-time parsing for unified sync
+                let sDate = session.scheduledDate;
+                let sTime = session.scheduledTime;
+                
+                // Handle cases where scheduledTime is a full YYYY-MM-DD HH:MM string from LiveStreamDrawer
+                if (!sDate && sTime && typeof sTime === 'string' && sTime.includes(' ')) {
+                    const parts = sTime.split(' ');
+                    sDate = parts[0];
+                    sTime = parts[1];
+                }
+
                 return { 
                     ...session, 
                     id: session.id || session._id || '',
-                    courseName: course?.name || course?.title || 'General' 
+                    courseName: course?.name || course?.title || 'General',
+                    scheduledDate: sDate || 'TBD',
+                    scheduledTime: sTime || 'TBD'
                 };
             });
             setSessions(enriched);
@@ -92,6 +106,22 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
         } catch (error: any) {
             console.error('End session error:', error);
             alert(error.message || 'Failed to end session. Please try again.');
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleGoLive = async (session: LiveSessionReal) => {
+        setActionLoading(session.id);
+        try {
+            await liveVideosAPI.update(session.id, { 
+                ...session, 
+                status: 'live' 
+            });
+            setSessions(prev => prev.map(s => s.id === session.id ? { ...s, status: 'live' } : s));
+        } catch (error: any) {
+            console.error('Go Live error:', error);
+            alert(error.message || 'Failed to go live. Please try again.');
         } finally {
             setActionLoading(null);
         }
@@ -224,7 +254,9 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                                             <td className="px-6 py-5 text-[14px] font-medium text-[#6b7280]">{session.courseName}</td>
                                             <td className="px-6 py-5 text-[14px] font-medium text-[#6b7280]">{session.scheduledDate} at {session.scheduledTime}</td>
                                             <td className="px-6 py-5">
-                                                <button className={`px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm ${session.status === 'live' ? 'bg-red-100 text-red-600 border border-red-200 animate-pulse' : 'bg-[#dcfce7] hover:bg-[#bbf7d0] text-[#166534]'}`}>
+                                                <button 
+                                                    onClick={() => session.status !== 'live' && handleGoLive(session)}
+                                                    className={`px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm ${session.status === 'live' ? 'bg-red-100 text-red-600 border border-red-200 animate-pulse' : 'bg-[#dcfce7] hover:bg-[#bbf7d0] text-[#166534]'}`}>
                                                     {session.status === 'live' ? 'Live Now' : 'Go Live'}
                                                 </button>
                                             </td>

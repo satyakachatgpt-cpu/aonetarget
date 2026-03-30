@@ -88,6 +88,8 @@ const Categories: React.FC<Props> = ({ showToast }) => {
   const [editingCat, setEditingCat] = useState<Category | null>(null);
   const [editingSub, setEditingSub] = useState<SubCategory | null>(null);
   const [editingSubj, setEditingSubj] = useState<Subject | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const [subjForm, setSubjForm] = useState<Partial<Subject>>({
     id: '', name: '', course: '', icon: 'school', status: 'active',
@@ -131,6 +133,11 @@ const Categories: React.FC<Props> = ({ showToast }) => {
       setLoading(false);
     }
   };
+
+  // Reset page when switching tabs or searching
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, searchQuery, selectedCategory]);
 
   const handleSaveCategory = async (data: Partial<Category>) => {
     try {
@@ -271,6 +278,22 @@ const Categories: React.FC<Props> = ({ showToast }) => {
     (s.course || '').toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  // Pagination Logic for active tab
+  const getActiveItems = () => {
+    if (activeTab === 'categories') return filteredCategories;
+    if (activeTab === 'subcategories') return filteredSubs;
+    return filteredSubjects;
+  };
+
+  const totalItems = getActiveItems().length;
+  const totalPages = Math.ceil(totalItems / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+  const paginatedItems = getActiveItems().slice(startIndex, endIndex);
+
+  const showingStart = totalItems === 0 ? 0 : startIndex + 1;
+  const showingEnd = endIndex;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -341,7 +364,7 @@ const Categories: React.FC<Props> = ({ showToast }) => {
         <div className="space-y-4">
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {filteredCategories.map(cat => (
+            {(paginatedItems as Category[]).map(cat => (
               <div key={cat._id || cat.id} className="bg-white rounded-2xl shadow-sm border overflow-hidden">
                 <div className={`bg-gradient-to-r ${cat.gradient} p-5 text-white relative overflow-hidden`}>
                   {cat.imageUrl && (
@@ -384,6 +407,8 @@ const Categories: React.FC<Props> = ({ showToast }) => {
               </div>
             ))}
           </div>
+
+          {/* Categories Pagination Footers (Will add one global one at the end of the file instead) */}
         </div>
       )}
 
@@ -423,7 +448,7 @@ const Categories: React.FC<Props> = ({ showToast }) => {
                 </tr>
               </thead>
               <tbody>
-                {filteredSubs.map(sub => {
+                {(paginatedItems as SubCategory[]).map(sub => {
                   const parentCat = categories.find(c => c.id === sub.categoryId);
                   return (
                     <tr key={sub._id || sub.id} className="border-b hover:bg-gray-50 transition-all">
@@ -461,7 +486,7 @@ const Categories: React.FC<Props> = ({ showToast }) => {
                     </tr>
                   );
                 })}
-                {filteredSubs.length === 0 && (
+                {paginatedItems.length === 0 && (
                   <tr><td colSpan={7} className="p-8 text-center text-gray-400 text-sm">No subcategories found</td></tr>
                 )}
               </tbody>
@@ -485,9 +510,9 @@ const Categories: React.FC<Props> = ({ showToast }) => {
                 </tr>
               </thead>
               <tbody>
-                {filteredSubjects.map((subj, idx) => (
+                {(paginatedItems as Subject[]).map((subj, idx) => (
                   <tr key={subj._id || subj.id} className="border-b hover:bg-gray-50 transition-all group">
-                    <td className="p-4 text-sm font-bold text-gray-400">{idx + 1}</td>
+                    <td className="p-4 text-sm font-bold text-gray-400">{startIndex + idx + 1}</td>
                     <td className="p-4">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-indigo-50 text-indigo-600 rounded-lg flex items-center justify-center">
@@ -517,12 +542,56 @@ const Categories: React.FC<Props> = ({ showToast }) => {
                     </td>
                   </tr>
                 ))}
-                {filteredSubjects.length === 0 && (
+                {paginatedItems.length === 0 && (
                   <tr><td colSpan={6} className="p-12 text-center text-gray-400 font-bold uppercase tracking-wider">No subjects found</td></tr>
                 )}
               </tbody>
             </table>
           </div>
+
+          {/* Common Pagination Footer for all tabs */}
+          {totalItems > 0 && (
+            <div className="flex justify-between items-center mt-6 px-6 py-4 border border-gray-100 bg-white rounded-2xl shadow-sm">
+              <div className="flex items-center gap-3">
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="border rounded-lg px-2 py-1 text-sm outline-none focus:border-black transition-all shadow-sm h-9 bg-white"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span className="text-[13px] text-gray-500 font-medium">
+                  Showing {showingStart} to {showingEnd} of {totalItems} entries
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(prev => prev - 1)}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 text-gray-500 hover:text-black font-bold text-sm disabled:opacity-50 transition-colors"
+                >
+                  Previous
+                </button>
+                <button className="px-4 py-1 bg-black text-white rounded-lg font-bold text-sm shadow-md">
+                  {currentPage}
+                </button>
+                <button
+                  onClick={() => setCurrentPage(prev => prev + 1)}
+                  disabled={currentPage === totalPages || totalPages === 0}
+                  className="px-3 py-1 text-gray-500 hover:text-black font-bold text-sm disabled:opacity-50 transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

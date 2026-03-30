@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { videosAPI, coursesAPI } from '../../services/apiClient';
+import { getImageUrl } from '../../lib/utils';
 
 interface Course {
   id: string;
@@ -43,6 +44,7 @@ const Videos: React.FC<Props> = ({ showToast }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [previewVideo, setPreviewVideo] = useState<Video | null>(null);
 
   const [formData, setFormData] = useState({
     title: '',
@@ -446,7 +448,10 @@ const Videos: React.FC<Props> = ({ showToast }) => {
                     alt={video.title}
                     className="w-full h-full object-cover opacity-75 group-hover:scale-110 transition-transform duration-500"
                   />
-                  <div className="absolute inset-0 bg-black/40 group-hover:bg-black/50 transition-colors flex items-center justify-center">
+                  <div 
+                    className="absolute inset-0 bg-black/40 group-hover:bg-black/50 transition-colors flex items-center justify-center cursor-pointer"
+                    onClick={() => setPreviewVideo(video)}
+                  >
                     <div className="w-16 h-16 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center border-2 border-white/40 group-hover:scale-110 transition-transform">
                       <span className="material-icons-outlined text-white text-3xl">play_arrow</span>
                     </div>
@@ -940,6 +945,42 @@ const Videos: React.FC<Props> = ({ showToast }) => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {/* Video Preview Modal */}
+      {previewVideo && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm animate-in fade-in duration-300">
+           <div className="relative w-full max-w-5xl aspect-video bg-black rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+              <button 
+                onClick={() => setPreviewVideo(null)} 
+                className="absolute top-4 right-4 z-50 w-10 h-10 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white backdrop-blur-md transition-all border border-white/20"
+              >
+                 <span className="material-symbols-rounded">close</span>
+              </button>
+              
+              <div className="w-full h-full flex items-center justify-center">
+                {previewVideo.videoUrl?.includes('youtube') || (previewVideo.videoUrl?.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/|user\/\S+|shorts\/))([^?&#\s]+)/)) ? (
+                  <iframe 
+                    src={`https://www.youtube.com/embed/${previewVideo.videoUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|v\/|user\/\S+|shorts\/))([^?&#\s]+)/)?.[1]}?autoplay=1`}
+                    className="w-full h-full border-0"
+                    allow="autoplay; encrypted-media"
+                    allowFullScreen
+                  />
+                ) : (
+                  <video 
+                    src={getImageUrl(previewVideo.videoUrl)} 
+                    controls 
+                    autoPlay 
+                    className="w-full h-full object-contain"
+                  />
+                )}
+              </div>
+              
+              <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black to-transparent pointer-events-none">
+                 <h3 className="text-white font-black text-xl mb-1">{previewVideo.title}</h3>
+                 <p className="text-white/60 text-sm font-bold uppercase tracking-widest">{previewVideo.subject} • {previewVideo.course}</p>
+              </div>
+           </div>
         </div>
       )}
     </div>

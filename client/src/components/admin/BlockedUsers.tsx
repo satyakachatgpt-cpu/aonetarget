@@ -21,7 +21,7 @@ const BlockedUsers: React.FC<Props> = ({ showToast }) => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [pageSize, setPageSize] = useState(10);
   
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchUserQuery, setSearchUserQuery] = useState('');
@@ -113,8 +113,16 @@ const BlockedUsers: React.FC<Props> = ({ showToast }) => {
     user.phone.includes(searchQuery)
   );
 
-  const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
-  const currentUsers = filteredUsers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const totalItems = filteredUsers.length;
+  const totalPages = Math.ceil(totalItems / pageSize);
+
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalItems);
+
+  const paginatedUsers = filteredUsers.slice(startIndex, endIndex);
+
+  const showingStart = totalItems === 0 ? 0 : startIndex + 1;
+  const showingEnd = endIndex;
 
   return (
     <div className="space-y-6 animate-fade-in pb-10">
@@ -186,7 +194,7 @@ const BlockedUsers: React.FC<Props> = ({ showToast }) => {
                     <td className="px-6 py-5 text-right"><div className="h-8 bg-gray-100 rounded-lg w-24 ml-auto"></div></td>
                   </tr>
                 ))
-              ) : currentUsers.length === 0 ? (
+              ) : paginatedUsers.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center text-gray-300">
@@ -196,11 +204,11 @@ const BlockedUsers: React.FC<Props> = ({ showToast }) => {
                   </td>
                 </tr>
               ) : (
-                currentUsers.map((user, index) => {
-                  const isLastFew = index > 2 && index >= currentUsers.length - 2;
+                paginatedUsers.map((user, index) => {
+                  const isLastFew = index > 2 && index >= paginatedUsers.length - 2;
                   return (
                     <tr key={user.id} className="hover:bg-gray-50/30 transition-colors group">
-                      <td className="px-6 py-5 text-[13px] font-medium text-gray-600">{(currentPage - 1) * itemsPerPage + index + 1}</td>
+                      <td className="px-6 py-5 text-[13px] font-medium text-gray-600">{startIndex + index + 1}</td>
                       <td className="px-6 py-5">
                         <div className="text-[13px] font-medium text-gray-600">
                           {user.registrationDate || '21-02-2026'} <span className="text-gray-400 ml-1">at 03:13 PM</span>
@@ -255,62 +263,44 @@ const BlockedUsers: React.FC<Props> = ({ showToast }) => {
         </div>
 
         {/* Pagination Section */}
-        {filteredUsers.length > 0 && (
+        {totalItems > 0 && (
           <div className="px-6 py-4 border-t border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="flex items-center gap-2">
                 <select
-                  value={itemsPerPage}
+                  value={pageSize}
                   onChange={(e) => {
-                    setItemsPerPage(parseInt(e.target.value));
+                    setPageSize(parseInt(e.target.value));
                     setCurrentPage(1);
                   }}
                   className="px-2 py-1 bg-white border border-gray-200 rounded-md text-[13px] font-medium outline-none h-8 shadow-sm"
                 >
-                  <option value="5">5</option>
                   <option value="10">10</option>
                   <option value="25">25</option>
                   <option value="50">50</option>
+                  <option value="100">100</option>
                 </select>
-                <span className="material-symbols-outlined text-gray-400 text-[16px] -ml-7 pointer-events-none">expand_more</span>
               </div>
               <p className="text-[13px] font-medium text-gray-500">
-                Showing {(currentPage - 1) * itemsPerPage + 1} to {Math.min(currentPage * itemsPerPage, filteredUsers.length)} of {filteredUsers.length} entries
+                Showing {showingStart} to {showingEnd} of {totalItems} entries
               </p>
             </div>
 
-            <div className="flex bg-gray-50 p-1 rounded-lg">
+            <div className="flex items-center gap-2">
               <button 
                 disabled={currentPage === 1}
                 onClick={() => setCurrentPage(p => p - 1)}
-                className="px-3 py-1.5 text-[12px] font-bold text-gray-600 hover:bg-white hover:shadow-sm rounded-md transition-all disabled:opacity-50"
+                className="px-3 py-1 text-gray-500 hover:text-black font-bold text-sm disabled:opacity-50 transition-colors"
               >
                 Previous
               </button>
-              <div className="flex items-center px-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
-                  .map((pageNum, idx, array) => (
-                    <React.Fragment key={pageNum}>
-                      {idx > 0 && array[idx - 1] !== pageNum - 1 && (
-                        <span className="px-2 text-gray-400">...</span>
-                      )}
-                      <button
-                        onClick={() => setCurrentPage(pageNum)}
-                        className={`w-8 h-8 text-[12px] font-bold rounded-md transition-all ${currentPage === pageNum 
-                          ? 'bg-black text-white shadow-md' 
-                          : 'text-gray-600 hover:bg-white hover:shadow-sm'
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    </React.Fragment>
-                  ))}
-              </div>
+              <button className="px-4 py-1 bg-black text-white rounded-lg font-bold text-sm shadow-md">
+                {currentPage}
+              </button>
               <button 
                 disabled={currentPage === totalPages || totalPages === 0}
                 onClick={() => setCurrentPage(p => p + 1)}
-                className="px-3 py-1.5 text-[12px] font-bold text-gray-600 hover:bg-white hover:shadow-sm rounded-md transition-all disabled:opacity-50"
+                className="px-3 py-1 text-gray-500 hover:text-black font-bold text-sm disabled:opacity-50 transition-colors"
               >
                 Next
               </button>
