@@ -34,7 +34,7 @@ const SettingsComponent: React.FC<Props> = ({ showToast }) => {
     isActive: true,
     duration: 3000
   });
-  const [activeTab, setActiveTab] = useState<'global' | 'splash'>('global');
+  const [activeTab, setActiveTab] = useState<'global' | 'splash'>('splash');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingSplash, setSavingSplash] = useState(false);
@@ -111,140 +111,10 @@ const SettingsComponent: React.FC<Props> = ({ showToast }) => {
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">System & Visual Controls</p>
         </div>
 
-        {/* Action Tabs - Right Aligned Style */}
-        <div className="flex items-center gap-2 bg-white/50 p-1.5 rounded-[1.2rem] border border-slate-100 shadow-sm">
-          <button
-            onClick={() => setActiveTab('global')}
-            className={`px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2 ${activeTab === 'global'
-              ? 'bg-slate-900 text-white shadow-lg'
-              : 'text-slate-400 hover:text-slate-700 hover:bg-white'
-              }`}
-          >
-            <span className="material-icons-outlined text-base">public</span>
-            Global
-          </button>
-          <button
-            onClick={() => setActiveTab('splash')}
-            className={`px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-wider transition-all flex items-center gap-2 ${activeTab === 'splash'
-              ? 'bg-slate-900 text-white shadow-lg'
-              : 'text-slate-400 hover:text-slate-700 hover:bg-white'
-              }`}
-          >
-            <span className="material-icons-outlined text-base">image</span>
-            Splash
-          </button>
-        </div>
+        {/* Action Tabs Removed as per request */}
       </div>
 
       <div className="max-w-6xl mx-auto">
-        {activeTab === 'global' && (
-          <div className="bg-white rounded-[2rem] shadow-[0_8px_40px_rgba(0,0,0,0.03)] border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-700">
-            <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
-              <div>
-                <h3 className="text-lg font-black text-slate-900 tracking-tight">Core System Settings</h3>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Payment gateway & gateway metadata</p>
-              </div>
-              <div className="w-12 h-12 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-slate-800">
-                <span className="material-icons-outlined">terminal</span>
-              </div>
-            </div>
-
-            <div className="p-8 space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Payment Gateway Provider</label>
-                  <div className="relative">
-                    <select
-                      value={settings.paymentGateway}
-                      onChange={(e) => setSettings({ ...settings, paymentGateway: e.target.value })}
-                      className="w-full h-14 bg-slate-50/50 border border-slate-100 rounded-[1.2rem] px-5 font-bold text-sm outline-none focus:ring-4 focus:ring-slate-50 focus:border-slate-200 transition-all appearance-none cursor-pointer"
-                    >
-                      <option value="razorpay">Razorpay (India)</option>
-                      <option value="stripe">Stripe (Global)</option>
-                      <option value="paytm">Paytm</option>
-                    </select>
-                    <span className="material-icons-outlined absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">expand_more</span>
-                  </div>
-                </div>
-
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Current Instance Status</label>
-                  <div className={`h-14 rounded-[1.2rem] flex items-center px-5 font-black text-[11px] uppercase tracking-wider border shadow-sm ${settings.systemStatus === 'online' ? 'bg-green-50 border-green-100 text-green-600' : 'bg-red-50 border-red-100 text-red-600'
-                    }`}>
-                    <div className={`w-2 h-2 rounded-full mr-3 ${settings.systemStatus === 'online' ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`}></div>
-                    {settings.systemStatus} MODE
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Public Key ID (Razorpay)</label>
-                <input
-                  type="text"
-                  value={settings.razorpayKeyId || ''}
-                  onChange={(e) => setSettings({ ...settings, razorpayKeyId: e.target.value })}
-                  placeholder="rzp_live_xxxxxxxxxxxxx"
-                  className="w-full h-14 bg-slate-50/50 border border-slate-100 rounded-[1.2rem] px-5 font-bold text-sm outline-none focus:ring-4 focus:ring-slate-50 focus:border-slate-200 transition-all placeholder:text-slate-200 focus:bg-white"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Support Email Address</label>
-                  <input
-                    type="email"
-                    value={settings.contactEmail || ''}
-                    onChange={(e) => setSettings({ ...settings, contactEmail: e.target.value })}
-                    placeholder="support@institute.com"
-                    className="w-full h-14 bg-slate-50/50 border border-slate-100 rounded-[1.2rem] px-5 font-bold text-sm outline-none focus:ring-4 focus:ring-slate-50 focus:border-slate-200 transition-all placeholder:text-slate-200 focus:bg-white"
-                  />
-                </div>
-                <div className="space-y-3">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Helpdesk Phone</label>
-                  <input
-                    type="text"
-                    value={settings.supportPhone || ''}
-                    onChange={(e) => setSettings({ ...settings, supportPhone: e.target.value })}
-                    placeholder="+91 XXXXX XXXXX"
-                    className="w-full h-14 bg-slate-50/50 border border-slate-100 rounded-[1.2rem] px-5 font-bold text-sm outline-none focus:ring-4 focus:ring-slate-50 focus:border-slate-200 transition-all placeholder:text-slate-200 focus:bg-white"
-                  />
-                </div>
-              </div>
-
-              <div className="p-6 bg-slate-900 rounded-[1.5rem] flex items-center justify-between shadow-xl shadow-slate-200">
-                <div>
-                  <p className="text-sm font-black text-white uppercase tracking-tight">System Maintenance</p>
-                  <p className="text-[10px] text-slate-400 mt-1 font-medium italic">While enabled, authorized users cannot access the portal</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer scale-110">
-                  <input
-                    type="checkbox"
-                    checked={settings.maintenanceMode}
-                    onChange={(e) => setSettings({ ...settings, maintenanceMode: e.target.checked })}
-                    className="sr-only peer"
-                  />
-                  <div className="w-12 h-6.5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-slate-900 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5.5 after:w-5.5 after:transition-all peer-checked:bg-white shadow-inner"></div>
-                </label>
-              </div>
-
-              <div className="pt-4">
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="w-full md:w-auto px-12 py-4 bg-slate-900 text-white rounded-[1.2rem] font-black text-[10px] uppercase tracking-[0.2em] hover:bg-slate-800 transition-all shadow-xl active:scale-95 flex items-center justify-center gap-3 disabled:opacity-50"
-                >
-                  {saving ? (
-                    <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-                  ) : (
-                    <span className="material-icons-outlined text-base">verified</span>
-                  )}
-                  {saving ? 'Synchronizing...' : 'Save Configuration'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         {activeTab === 'splash' && (
           <div className="bg-white rounded-[2rem] shadow-[0_8px_40px_rgba(0,0,0,0.03)] border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-700">
             <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
@@ -252,9 +122,7 @@ const SettingsComponent: React.FC<Props> = ({ showToast }) => {
                 <h3 className="text-lg font-black text-slate-900 tracking-tight">Visual Onboarding</h3>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Splash screen dynamics & branding</p>
               </div>
-              <div className="w-12 h-12 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center text-slate-800">
-                <span className="material-icons-outlined">palette</span>
-              </div>
+
             </div>
 
             <div className="p-8 space-y-8">

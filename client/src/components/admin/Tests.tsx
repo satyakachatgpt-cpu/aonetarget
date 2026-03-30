@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useContext } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { AdminUIContext } from "../../context/AdminUIContext";
 import {
   testsAPI,
   coursesAPI,
@@ -283,7 +284,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const { "*": routeId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-
   const [tests, setTests] = useState<Test[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1043,10 +1043,21 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       ) {
         setActiveActionMenuId(null);
       }
+
+      if (
+        activeMenu !== null &&
+        !target.closest(".action-menu-container")
+      ) {
+        setActiveMenu(null);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showFloatingAddMenu, showFloatingMoreMenu, activeActionMenuId]);
+    document.addEventListener("touchstart", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("touchstart", handleClickOutside);
+    };
+  }, [showFloatingAddMenu, showFloatingMoreMenu, activeActionMenuId, activeMenu]);
 
   const loadResults = async () => {
     // Mock results matching screenshot + more entries
@@ -2064,8 +2075,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           </p>
                         </div>
                       </td>
-                      <td className="px-4 py-8 align-top text-center border-b border-gray-50/50 action-menu-container">
-                        <div className="relative inline-block">
+                      <td className="px-4 py-8 align-top text-center border-b border-gray-50/50">
+                        <div className="relative inline-block action-menu-container" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                           <button
                             onClick={() =>
                               setActiveActionMenuId(
@@ -2073,15 +2084,15 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                               )
                             }
                             className={`flex items-center justify-center gap-1.5 px-3 py-1.5 border rounded-lg text-[13px] font-bold transition-all shadow-sm group ${activeActionMenuId === rq.id
-                                ? "bg-blue-50 border-blue-200 text-blue-700"
-                                : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                              ? "bg-blue-50 border-blue-200 text-blue-700"
+                              : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
                               }`}
                           >
                             Actions
                             <span
                               className={`material-symbols-outlined text-[18px] transition-transform duration-200 ${activeActionMenuId === rq.id
-                                  ? "rotate-180 text-blue-500"
-                                  : "text-gray-400 group-hover:text-gray-600 font-normal"
+                                ? "rotate-180 text-blue-500"
+                                : "text-gray-400 group-hover:text-gray-600 font-normal"
                                 }`}
                             >
                               expand_more
@@ -2091,12 +2102,12 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           {activeActionMenuId === rq.id && (
                             <div
                               className={`absolute right-0 w-[140px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${filteredReported.length > 3
-                                  ? idx >= filteredReported.length - 2
-                                    ? "bottom-full mb-1"
-                                    : "top-full mt-1"
-                                  : idx >= filteredReported.length - 1
-                                    ? "bottom-full mb-1"
-                                    : "top-full mt-1"
+                                ? idx >= filteredReported.length - 2
+                                  ? "bottom-full mb-1"
+                                  : "top-full mt-1"
+                                : idx >= filteredReported.length - 1
+                                  ? "bottom-full mb-1"
+                                  : "top-full mt-1"
                                 }`}
                             >
                               <button className="w-full px-4 py-1.5 flex items-center gap-3 text-left hover:bg-blue-50/50 transition-colors group">
@@ -2182,7 +2193,22 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 </p>
               </div>
             </div>
-            <button className="flex items-center gap-2 px-6 py-2 bg-black text-white rounded-xl text-[13px] font-bold shadow-md">
+            <button
+              onClick={async () => {
+                const testId = viewingQuestionEditor?.id || viewingQuestionEditor?._id;
+                if (!testId) return;
+                try {
+                  // showToast is available in the component
+                  showToast("Publishing changes...");
+                  await testsAPI.publish(testId);
+                  showToast("Test published successfully!");
+                  // Refresh data if needed, but since we are in editor, maybe just the toast is enough
+                } catch (error: any) {
+                  showToast(error.message || "Failed to publish test", "error");
+                }
+              }}
+              className="flex items-center gap-2 px-6 py-2 bg-black text-white rounded-xl text-[13px] font-bold shadow-md hover:bg-gray-800 transition-all active:scale-95"
+            >
               <span className="material-symbols-outlined text-[18px]">
                 history
               </span>
@@ -2543,8 +2569,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
               key={tab}
               onClick={() => setViewingTestSeriesTab(tab as DetailSubTab)}
               className={`py-4 text-[11.5px] font-bold tracking-[0.12em] uppercase transition-all relative whitespace-nowrap ${viewingTestSeriesTab === tab
-                  ? "text-black"
-                  : "text-gray-400 hover:text-gray-800"
+                ? "text-black"
+                : "text-gray-400 hover:text-gray-800"
                 }`}
             >
               {tab}
@@ -2661,7 +2687,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                             />
                           </button>
 
-                          <div className="relative">
+                          <div className="relative action-menu-container" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                             <button
                               onClick={() =>
                                 setActiveActionMenuId(
@@ -3281,8 +3307,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-8 align-top text-right pr-6 border-b border-gray-50/50 action-menu-container">
-                        <div className="relative inline-block">
+                      <td className="px-6 py-8 align-top text-right pr-6 border-b border-gray-50/50">
+                        <div className="relative inline-block action-menu-container" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -3298,17 +3324,17 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                               }
                             }}
                             className={`flex items-center justify-between gap-2 px-4 py-2 border rounded-lg text-[13px] font-bold transition-all shadow-sm w-[110px] ${activeActionMenuId ===
-                                (q.id || (q as any)._id) + 20000
-                                ? "bg-blue-50 border-blue-200 text-blue-700"
-                                : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
+                              (q.id || (q as any)._id) + 20000
+                              ? "bg-blue-50 border-blue-200 text-blue-700"
+                              : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
                               }`}
                           >
                             Actions
                             <span
                               className={`material-symbols-outlined text-[18px] transition-transform duration-200 ${activeActionMenuId ===
-                                  (q.id || (q as any)._id) + 20000
-                                  ? "rotate-180 text-blue-500"
-                                  : "text-gray-400 group-hover:text-gray-600"
+                                (q.id || (q as any)._id) + 20000
+                                ? "rotate-180 text-blue-500"
+                                : "text-gray-400 group-hover:text-gray-600"
                                 }`}
                             >
                               expand_more
@@ -3319,12 +3345,12 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                             (q.id || (q as any)._id) + 20000 && (
                               <div
                                 className={`absolute right-0 w-[140px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${filteredMaster.length > 3
-                                    ? idx >= filteredMaster.length - 2
-                                      ? "bottom-full mb-1"
-                                      : "top-full mt-1"
-                                    : idx >= filteredMaster.length - 1
-                                      ? "bottom-full mb-1"
-                                      : "top-full mt-1"
+                                  ? idx >= filteredMaster.length - 2
+                                    ? "bottom-full mb-1"
+                                    : "top-full mt-1"
+                                  : idx >= filteredMaster.length - 1
+                                    ? "bottom-full mb-1"
+                                    : "top-full mt-1"
                                   }`}
                               >
                                 <button
@@ -3665,8 +3691,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                     setBulkUploadData({ ...bulkUploadData, format: fmt.key })
                   }
                   className={`relative cursor-pointer rounded-lg border-2 transition-all duration-200 overflow-hidden select-none flex-shrink-0 ${bulkUploadData.format === fmt.key
-                      ? "border-black"
-                      : "border-gray-200 hover:border-gray-300"
+                    ? "border-black"
+                    : "border-gray-200 hover:border-gray-300"
                     }`}
                   style={{ width: "135px" }}
                 >
@@ -5276,7 +5302,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           </div>
                         </td>
                         <td className="px-6 py-5 text-center">
-                          <div className="relative inline-block">
+                          <div className="relative inline-block action-menu-container">
                             <button
                               onClick={() =>
                                 setActiveMenu(

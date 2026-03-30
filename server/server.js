@@ -18,6 +18,7 @@ import {
   generateSignedUrl, verifySignedUrl
 } from './middleware/auth.js';
 import compression from 'compression';
+import { globalLimiter, authLimiter, securityHeaders, sanitizeInput } from './middleware/security.js';
 import { sendEmail, templates } from './utils/email.js';
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from 'docx';
 
@@ -28,28 +29,7 @@ const globalLimiter = rateLimit({
   message: { error: 'Too many requests from this IP, please try again after 15 minutes' }
 });
 
-const securityHeaders = (req, res, next) => {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('X-XSS-Protection', '1; mode=block');
-  next();
-};
-
-const sanitizeInput = (req, res, next) => {
-  // Simple sanitization logic
-  if (req.body) {
-    Object.keys(req.body).forEach(key => {
-      if (typeof req.body[key] === 'string') {
-        req.body[key] = req.body[key].replace(/<script.*?>.*?<\/script>/gi, '');
-      }
-    });
-  }
-  next();
-};
-
-// Force Google DNS to fix MongoDB SRV resolution issues (ECONNREFUSED)
-dns.setServers(['8.8.8.8', '8.8.4.4']);
-
+// Config moved to top
 const app = express();
 console.log('============================================');
 console.log('SERVER IS STARTING (VERSION: EMAIL_FIX_v1)');
@@ -84,9 +64,16 @@ app.use('/api/', globalLimiter);
 const rootPath = path.resolve(__dirname, '..');
 app.use('/attach-assist', express.static(path.join(__dirname, '../client/public/attach-assist')));
 // Redirect old path to new path for database compatibility
-app.use('/attached_assets', (req, res) => {
+app.use('/attached_assets', (req, res, next) => {
+  // Try to serve statically from old path first if it exists, otherwise redirect
+  const oldPath = path.join(__dirname, '../attached_assets', req.path);
+  if (fs.existsSync(oldPath) && !fs.lstatSync(oldPath).isDirectory()) {
+    return express.static(path.join(__dirname, '../attached_assets'))(req, res, next);
+  }
   res.redirect(301, `/attach-assist${req.path}`);
 });
+
+// Routes
 app.get('/api/secure-video/:filename', authMiddleware, async (req, res) => {
   try {
     const { filename } = req.params;
@@ -98,7 +85,7 @@ app.get('/api/secure-video/:filename', authMiddleware, async (req, res) => {
       }
     }
 
-    let student = null;
+    let student = null; chah
     if (req.user) {
       student = await db.collection('students').findOne({
         $or: [
@@ -824,6 +811,12 @@ function calculateStreamStatus(item) {
 }
 
 // Function to find all related IDs by name and/or slug/id for content linking
+async function getCourseIdVariants(courseId) {
+  if (!courseId) return [];
+  const course = await findCourse(courseId);
+  return getRelatedCourseIds(course, String(courseId));
+}
+
 async function getRelatedCourseIds(course, originalId) {
   if (!course) return [originalId].filter(Boolean);
 
@@ -906,23 +899,23 @@ app.post('/api/courses/import', async (req, res) => {
     for (const itemId of itemIds) {
       let itemToProcess = null;
       let targetCollection = null;
-      
+
       const isOid = /^[a-fA-F0-9]{24}$/.test(String(itemId));
       const queryList = [{ id: String(itemId) }];
       if (isOid) {
-         try {
-           queryList.push({ _id: new ObjectId(itemId) });
-           queryList.push({ _id: String(itemId) });
-         } catch(e) {}
+        try {
+          queryList.push({ _id: new ObjectId(itemId) });
+          queryList.push({ _id: String(itemId) });
+        } catch (e) { }
       }
 
       for (const collName of collections) {
-         const found = await db.collection(collName).findOne({ $or: queryList });
-         if (found) {
-           itemToProcess = found;
-           targetCollection = collName;
-           break;
-         }
+        const found = await db.collection(collName).findOne({ $or: queryList });
+        if (found) {
+          itemToProcess = found;
+          targetCollection = collName;
+          break;
+        }
       }
 
       if (itemToProcess && targetCollection) {
@@ -1483,11 +1476,12 @@ app.get('/api/courses/:id/live-classes', optionalAuth, async (req, res) => {
           item.startTimeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
         }
       }
-      
+
+      // Map 'url' or 'meetingLink' consistently
       if (!item.meetingLink) {
         item.meetingLink = item.url || item.videoUrl || item.link;
       }
-      
+
       return item;
     })
     .filter(item => {
@@ -1701,7 +1695,7 @@ app.get('/api/students/:id/live-classes', async (req, res) => {
       const variants = await getCourseIdVariants(courseId);
       allIdVariants = [...allIdVariants, ...variants];
     }
-    
+
     // Remote duplicates
     allIdVariants = [...new Set(allIdVariants)];
 
@@ -1742,13 +1736,13 @@ app.get('/api/students/:id/live-classes', async (req, res) => {
           item.startTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
         }
       }
-      
+
       if (!item.meetingLink) {
         item.meetingLink = item.url || item.videoUrl || item.link;
       }
-      
+
       return item;
-    }).sort((a,b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
+    }).sort((a, b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
 
     res.json(merged);
   } catch (error) {
@@ -2823,22 +2817,22 @@ app.post('/api/questions/bulk-delete', async (req, res) => {
     // We only apply this to documents where 'questions' is actually an array
     await db.collection('tests').updateMany(
       { questions: { $type: 'array' } },
-      { 
-        $pull: { 
-          questions: { 
+      {
+        $pull: {
+          questions: {
             $or: [
               { id: { $in: finalIds } },
               { _id: { $in: finalIds.filter(id => id && /^[a-f\d]{24}$/i.test(id)).map(id => new ObjectId(id)) } }
-            ] 
-          } 
-        } 
+            ]
+          }
+        }
       }
     );
 
-    res.json({ 
-      success: true, 
+    res.json({
+      success: true,
       message: `Questions deleted successfully`,
-      deletedCount: result.deletedCount 
+      deletedCount: result.deletedCount
     });
   } catch (error) {
     console.error('Bulk delete questions error:', error);
@@ -3060,18 +3054,19 @@ app.get('/api/tests/:id', async (req, res) => {
     }
 
     // Also search questions by both string and number id, and ObjectId
-    const testId = test.id || test._id?.toString();
+    const testIdStr = test.id ? String(test.id) : test._id?.toString();
     const questionFilter = {
       $or: [
         { testId: id },
-        { testId: testId },
+        { testId: testIdStr },
         { testId: String(id) },
-        { testId: String(testId) }
+        { testId: "test_" + id },
+        { testId: "test_" + testIdStr }
       ]
     };
 
     if (!isNaN(id)) questionFilter.$or.push({ testId: Number(id) });
-    if (testId && !isNaN(testId)) questionFilter.$or.push({ testId: Number(testId) });
+    if (testIdStr && !isNaN(testIdStr)) questionFilter.$or.push({ testId: Number(testIdStr) });
     if (global.ObjectId && ObjectId.isValid(id)) questionFilter.$or.push({ testId: new ObjectId(id) });
     if (test._id && global.ObjectId && ObjectId.isValid(test._id.toString())) {
       questionFilter.$or.push({ testId: new ObjectId(test._id.toString()) });
@@ -3087,7 +3082,7 @@ app.get('/api/tests/:id', async (req, res) => {
   }
 });
 
-app.post('/api/tests/:id/publish', async (req, res) => {
+app.patch('/api/tests/:id/publish', async (req, res) => {
   const id = req.params.id;
   const logToFile = (msg) => {
     try {
@@ -3254,7 +3249,99 @@ app.post('/api/tests', async (req, res) => {
   }
 });
 
-// NOTE: PUT and DELETE /api/tests/:id are handled by the routes defined earlier in the file
+app.put('/api/tests/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const orConditions = [
+      { id: id },
+      { id: !isNaN(id) ? Number(id) : null },
+      { _id: id }
+    ].filter(v => v.id !== null && v.id !== undefined || v._id !== null && v._id !== undefined);
+    if (mongoose.Types.ObjectId.isValid(id)) orConditions.push({ _id: new mongoose.Types.ObjectId(id) });
+
+    const { _id, ...updateData } = req.body;
+    const result = await db.collection('tests').updateOne(
+      { $or: orConditions },
+      { $set: { ...updateData, updatedAt: new Date().toISOString() } }
+    );
+    if (result.matchedCount === 0) return res.status(404).json({ error: 'Test not found' });
+    res.json({ success: true, message: 'Test updated' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update test' });
+  }
+});
+
+app.delete('/api/tests/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const orConditions = [
+      { id: id },
+      { id: !isNaN(id) ? Number(id) : null },
+      { _id: id }
+    ].filter(v => v.id !== null && v.id !== undefined || v._id !== null && v._id !== undefined);
+    if (mongoose.Types.ObjectId.isValid(id)) orConditions.push({ _id: new mongoose.Types.ObjectId(id) });
+
+    const result = await db.collection('tests').deleteOne({ $or: orConditions });
+    if (result.deletedCount === 0) return res.status(404).json({ error: 'Test not found' });
+    res.json({ success: true, message: 'Test deleted' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to delete test' });
+  }
+});
+
+app.post('/api/tests/:id/duplicate', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const orConditions = [
+      { id: id },
+      { id: !isNaN(id) ? Number(id) : null },
+      { _id: id }
+    ].filter(v => v.id !== null && v.id !== undefined || v._id !== null && v._id !== undefined);
+    if (mongoose.Types.ObjectId.isValid(id)) orConditions.push({ _id: new mongoose.Types.ObjectId(id) });
+
+    const test = await db.collection('tests').findOne({ $or: orConditions });
+    if (!test) return res.status(404).json({ error: 'Test not found' });
+
+    const { _id, id: oldId, ...duplicateData } = test;
+    duplicateData.name = `${test.name || test.title || 'Test'} Copy`;
+    duplicateData.id = `test_${Date.now()}`;
+    duplicateData.createdAt = new Date();
+    duplicateData.updatedAt = new Date();
+    duplicateData.status = 'draft';
+
+    const result = await db.collection('tests').insertOne(duplicateData);
+
+    // Duplicate questions as well
+    const testIdForQuestions = test.id || test._id.toString();
+    const questionFilter = { $or: [{ testId: id }, { testId: testIdForQuestions }] };
+    if (!isNaN(id)) questionFilter.$or.push({ testId: Number(id) });
+    const questions = await db.collection('questions').find(questionFilter).toArray();
+
+    if (questions.length > 0) {
+      const newQuestions = questions.map(({ _id, ...q }) => ({
+        ...q,
+        testId: duplicateData.id,
+        createdAt: new Date()
+      }));
+      await db.collection('questions').insertMany(newQuestions);
+    }
+
+    res.status(201).json({ _id: result.insertedId, ...duplicateData });
+  } catch (error) {
+    console.error('Duplicate error:', error);
+    res.status(500).json({ error: 'Failed to duplicate test' });
+  }
+});
+
+app.post('/api/tests/:id/reevaluate', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const results = await db.collection('testResults').find({ testId: id }).toArray();
+    res.json({ success: true, message: `Re-evaluated ${results.length} attempts` });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to re-evaluate test' });
+  }
+});
 
 // DELETE ALL tests
 app.delete('/api/tests', async (req, res) => {
@@ -3293,6 +3380,70 @@ app.put('/api/tests/update-all', async (req, res) => {
 });
 
 // Bulk upload questions for a test from Excel (CSV/XLSX)
+app.get('/api/tests/:id/export', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { solution } = req.query;
+    const orConditions = [
+      { id: id },
+      { id: !isNaN(id) ? Number(id) : null },
+      { _id: id }
+    ].filter(v => v.id !== null && v.id !== undefined || v._id !== null && v._id !== undefined);
+    if (mongoose.Types.ObjectId.isValid(id)) orConditions.push({ _id: new mongoose.Types.ObjectId(id) });
+
+    const test = await db.collection('tests').findOne({ $or: orConditions });
+    if (!test) return res.status(404).json({ error: 'Test not found' });
+
+    const testIdForQuestions = test.id || test._id.toString();
+    const questionFilter = { $or: [{ testId: id }, { testId: testIdForQuestions }] };
+    if (!isNaN(id)) questionFilter.$or.push({ testId: Number(id) });
+    const questions = await db.collection('questions').find(questionFilter).toArray();
+
+    // Since docx is already used in server.js, we'll generate a basic docx for now
+    // The client's downloadFile helper handles the blob.
+    const doc = new Document({
+      sections: [{
+        properties: {},
+        children: [
+          new Paragraph({
+            text: test.name || test.title || 'Test',
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER,
+          }),
+          ...questions.flatMap((q, i) => [
+            new Paragraph({
+              children: [
+                new TextRun({ text: `Q${i + 1}. ${q.question}`, bold: true }),
+              ],
+              spacing: { before: 200 },
+            }),
+            new Paragraph({ text: `A) ${q.optionA}` }),
+            new Paragraph({ text: `B) ${q.optionB}` }),
+            new Paragraph({ text: `C) ${q.optionC}` }),
+            new Paragraph({ text: `D) ${q.optionD}` }),
+            ...(solution === 'true' ? [
+              new Paragraph({
+                children: [
+                  new TextRun({ text: `Correct Answer: ${q.correctAnswer}`, color: '008000', bold: true }),
+                ],
+              }),
+              new Paragraph({ text: `Explanation: ${q.explanation || 'None'}` }),
+            ] : []),
+          ]),
+        ],
+      }],
+    });
+
+    const buffer = await Packer.toBuffer(doc);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename=${(test.name || 'test').replace(/\s+/g, '_')}.docx`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('Export error:', error);
+    res.status(500).json({ error: 'Failed to export test' });
+  }
+});
+
 app.post('/api/tests/:testId/bulk-excel', excelUpload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -3794,6 +3945,8 @@ app.get('/api/live-videos', async (req, res) => {
     
     res.json(calculated);
     
+    }).sort((a, b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
+
     res.json(calculated);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch live videos' });
@@ -4813,12 +4966,6 @@ const otpLimiter = rateLimit({
   message: { error: 'Too many OTP requests from this IP, please try again after a minute' }
 });
 
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // limit each IP to 10 requests per windowMs
-  message: { error: 'Too many verify requests from this IP, please try again after 15 minutes' }
-});
-
 app.post('/api/otp/send', otpLimiter, async (req, res) => {
   try {
     const { phone } = req.body;
@@ -4986,10 +5133,10 @@ app.post('/api/otp/verify', authLimiter, async (req, res) => {
 
     // 2-Device Limit Logic
     if (!student.activeSessions) student.activeSessions = [];
-    
+
     // Remove current device if already exists to update it
     student.activeSessions = student.activeSessions.filter(s => s.deviceId !== deviceId);
-    
+
     // Add new session
     student.activeSessions.push({
       token: sessionToken,
@@ -4997,7 +5144,7 @@ app.post('/api/otp/verify', authLimiter, async (req, res) => {
       lastLoginIP: req.ip || '',
       createdAt: new Date()
     });
-    
+
     // Keep only last 2 sessions
     if (student.activeSessions.length > 2) {
       student.activeSessions = student.activeSessions.slice(-2);
@@ -5158,7 +5305,7 @@ app.post('/api/heartbeat', async (req, res) => {
 
     // Fetch the latest notification timestamp relevant to the student
     const enrolledCourses = student.enrolledCourses || [];
-    
+
     const latestNotif = await db.collection('notifications').findOne(
       {
         $and: [
@@ -5182,7 +5329,7 @@ app.post('/api/heartbeat', async (req, res) => {
       },
       { sort: { createdAt: -1 } }
     );
-    
+
     const latestNotificationTime = latestNotif ? new Date(latestNotif.createdAt || latestNotif.updatedAt).getTime() : null;
 
     return res.json({ valid: true, latestNotificationTime });
@@ -5511,15 +5658,15 @@ app.get('/api/students/:id', async (req, res) => {
 app.put('/api/students/:id', async (req, res) => {
   try {
     const { _id, id: bodyId, ...updateData } = req.body;
-    
+
     // Normalize email if provided
     if (updateData.email) {
       updateData.email = updateData.email.toLowerCase().trim();
-      
+
       // Check for email conflicts (excluding self)
-      const existing = await db.collection('students').findOne({ 
-        email: updateData.email, 
-        id: { $ne: req.params.id } 
+      const existing = await db.collection('students').findOne({
+        email: updateData.email,
+        id: { $ne: req.params.id }
       });
       if (existing) {
         return res.status(400).json({ error: 'This email address is already registered to another student.' });
@@ -5565,24 +5712,24 @@ app.get('/api/students/:id/courses', async (req, res) => {
 
     // Fetch all watch progress for this student
     const watchProgress = await db.collection('watch_progress').find({ userId: req.params.id }).toArray();
-    
+
     // Fetch and map courses with progress
     const mappedCourses = await Promise.all(courses.map(async (c) => {
       const courseIdStr = c.id || c._id.toString();
       const idVariants = await getCourseIdVariants(courseIdStr);
-      
+
       // Total videos in this course
-      const totalVideos = await db.collection('videos').countDocuments({ 
-        courseId: { $in: idVariants } 
+      const totalVideos = await db.collection('videos').countDocuments({
+        courseId: { $in: idVariants }
       });
-      
+
       // Watched videos in this course
-      const watchedCount = watchProgress.filter(wp => 
+      const watchedCount = watchProgress.filter(wp =>
         idVariants.includes(wp.courseId) && wp.watchedTime > 0
       ).length;
-      
+
       const progress = totalVideos > 0 ? Math.round((watchedCount / totalVideos) * 100) : 0;
-      
+
       return {
         ...c,
         id: courseIdStr,
@@ -6097,7 +6244,7 @@ app.get('/api/students/:studentId/live-classes', async (req, res) => {
   try {
     const enrollments = await db.collection('enrollments').find({ studentId: req.params.studentId }).toArray();
     let courseIds = enrollments.map(e => e.courseId);
-    
+
     // Expand to idVariants for each courseId to ensure robust matching across collections
     let expandedIds = [];
     for (const cId of courseIds) {
@@ -6141,14 +6288,14 @@ app.get('/api/students/:studentId/live-classes', async (req, res) => {
           item.startTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; // HH:MM
         }
       }
-      
+
       // Map 'url' or 'meetingLink' consistently
       if (!item.meetingLink) {
         item.meetingLink = item.url || item.videoUrl || item.link;
       }
-      
+
       return item;
-    }).sort((a,b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
+    }).sort((a, b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
 
     res.json(merged);
   } catch (error) {

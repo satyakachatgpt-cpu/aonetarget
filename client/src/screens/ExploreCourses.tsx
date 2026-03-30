@@ -71,10 +71,10 @@ const ExploreCourses: React.FC = () => {
             {!isSearchOpen ? (
               <>
                 <button
-                  onClick={() => setSidebarOpen(true)}
+                  onClick={() => navigate(-1)}
                   className="w-10 h-10 rounded-full glass-dark flex items-center justify-center active:scale-[0.97] transition-all duration-200"
                 >
-                  <span className="material-symbols-rounded text-xl">menu</span>
+                  <span className="material-symbols-rounded text-xl">arrow_back</span>
                 </button>
                 <div className="flex-1 animate-fade-in">
                   <h1 className="text-xl font-extrabold tracking-tight">Explore Courses</h1>
