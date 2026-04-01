@@ -743,49 +743,55 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
         )}
         </div>
 
-      {/* Pagination Controls - Matching Screenshot */}
-      {/* Pagination Footer */}
-      <div className="flex justify-between items-center mt-4 px-6 py-4 border-t border-gray-100 bg-white rounded-b-2xl">
-        <div className="flex items-center gap-3">
-          <select
-            value={pageSize}
-            onChange={(e) => {
-              setPageSize(Number(e.target.value));
-              setCurrentPage(1);
-            }}
-            className="border rounded-lg px-2 py-1 text-sm outline-none focus:border-black transition-all shadow-sm"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-          <span className="text-sm text-gray-600 font-medium">
-            Showing {showingStart} to {showingEnd} of {totalItems} entries
-          </span>
-        </div>
+      {/* Standardized Pagination Footer */}
+      {!loading && filteredStudents.length > 0 && (
+        <div className="p-6 border-t border-gray-50 flex items-center justify-between bg-white rounded-b-2xl">
+          <div className="flex items-center gap-3">
+            <div className="relative flex items-center group">
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+              <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400 flex items-center justify-center h-full top-0 group-focus-within:text-black">expand_more</span>
+            </div>
+            <span className="text-[13px] font-medium text-gray-400 italic">
+              Showing {showingStart} to {showingEnd} of {totalItems} entries
+            </span>
+          </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setCurrentPage(prev => prev - 1)}
-            disabled={currentPage === 1}
-            className="px-3 py-1 text-gray-500 hover:text-black font-bold text-sm disabled:opacity-50 transition-colors"
-          >
-            Previous
-          </button>
-          <button className="px-4 py-1 bg-black text-white rounded-lg font-bold text-sm shadow-md">
-            {currentPage}
-          </button>
-          <button
-            onClick={() => setCurrentPage(prev => prev + 1)}
-            disabled={currentPage === totalPages || totalPages === 0}
-            className="px-3 py-1 text-gray-500 hover:text-black font-bold text-sm disabled:opacity-50 transition-colors"
-          >
-            Next
-          </button>
+          <div className="flex items-center p-1.5 bg-white border border-gray-200 rounded-2xl shadow-sm">
+            <button
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+            <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
+              {currentPage}
+            </button>
+            <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+            <button
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages || totalPages === 0}
+              className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
         </div>
-        </div>
-      </div>
+      )}
+    </div>
 
       {/* Add/Edit Student Drawer */}
       <RightSideDrawer

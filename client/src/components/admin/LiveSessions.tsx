@@ -28,6 +28,7 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
     const [activeTab, setActiveTab] = useState('Live & Upcoming');
     const [searchTerm, setSearchTerm] = useState('');
     const [entriesPerPage, setEntriesPerPage] = useState(10);
+    const [currentPage, setCurrentPage] = useState(1);
     const [showEntriesDropdown, setShowEntriesDropdown] = useState(false);
     const [sessions, setSessions] = useState<LiveSessionReal[]>([]);
     const [loading, setLoading] = useState(true);
@@ -181,6 +182,16 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
         });
     }, [searchTerm, sessions, statusFilter]);
 
+    const totalPages = Math.ceil(filteredSessions.length / entriesPerPage);
+    const startIndex = (currentPage - 1) * entriesPerPage;
+    const endIndex = Math.min(startIndex + entriesPerPage, filteredSessions.length);
+    const paginatedSessions = filteredSessions.slice(startIndex, endIndex);
+
+    // Reset page when search or filters change
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, statusFilter, entriesPerPage]);
+
     return (
         <div className={`${showHeader ? 'min-h-screen' : ''} bg-[#fafafa]`}>
             {showHeader && (
@@ -247,7 +258,7 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredSessions.length > 0 ? filteredSessions.map((session, idx) => (
+                                    {paginatedSessions.length > 0 ? paginatedSessions.map((session, idx) => (
                                         <tr key={session.id || idx} className="border-b border-[#f9fafb] last:border-0 hover:bg-[#fafafa] transition-colors">
                                             <td className="px-6 py-5 text-[14px] font-medium text-[#6b7280]">{session.id.slice(-6).toUpperCase()}</td>
                                             <td className="px-6 py-5 text-[14px] font-bold text-[#111827]">{session.title}</td>
@@ -295,32 +306,56 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                                 </tbody>
                             </table>
 
-                            {/* Footer */}
-                            <div className="px-7 py-7 flex items-center justify-between bg-white border-t border-[#f9fafb]">
-                                <div className="flex items-center gap-4">
-                                    <div className="relative">
-                                        <button onClick={() => setShowEntriesDropdown(!showEntriesDropdown)}
-                                            className="flex items-center gap-2 px-3.5 py-1.5 border border-[#e5e7eb] rounded-xl text-[12.5px] font-bold text-[#4b5563] hover:bg-gray-50 bg-white shadow-sm transition-all">
-                                            {entriesPerPage}
-                                            <span className={`material-symbols-outlined text-[18px] text-[#9ca3af] transition-transform ${showEntriesDropdown ? 'rotate-180' : ''}`}>expand_more</span>
-                                        </button>
-                                        {showEntriesDropdown && (
-                                            <div className="absolute bottom-full left-0 mb-2 w-20 bg-white border border-[#e5e7eb] rounded-xl shadow-xl z-[60] overflow-hidden">
-                                                {[10, 25, 50, 100].map(val => (
-                                                    <button key={val} onClick={() => { setEntriesPerPage(val); setShowEntriesDropdown(false); }}
-                                                        className="w-full px-4 py-2 text-[12px] font-bold text-gray-600 hover:bg-gray-50 transition-colors text-left border-b border-gray-50 last:border-0">{val}</button>
-                                                ))}
-                                            </div>
-                                        )}
+                            {/* Standardized Pagination Footer */}
+                            {!loading && filteredSessions.length > 0 && (
+                                <div className="p-7 border-t border-gray-50 flex items-center justify-between bg-white rounded-b-2xl shadow-sm">
+                                    <div className="flex items-center gap-3">
+                                        <div className="relative flex items-center group">
+                                            <select
+                                                value={entriesPerPage}
+                                                onChange={(e) => {
+                                                    setEntriesPerPage(Number(e.target.value));
+                                                    setCurrentPage(1);
+                                                }}
+                                                className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
+                                            >
+                                                <option value={10}>10</option>
+                                                <option value={20}>20</option>
+                                                <option value={50}>50</option>
+                                                <option value={100}>100</option>
+                                            </select>
+                                            <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400 flex items-center justify-center h-full top-0 group-focus-within:text-black">
+                                                expand_more
+                                            </span>
+                                        </div>
+                                        <span className="text-[13px] font-medium text-gray-400 italic">
+                                            Showing {startIndex + 1} to {endIndex} of {filteredSessions.length} entries
+                                        </span>
                                     </div>
-                                    <span className="text-[13px] font-bold text-[#9ca3af]">Showing 1 to {filteredSessions.length} of {filteredSessions.length} entries</span>
+
+                                    <div className="flex items-center p-1.5 bg-white border border-gray-200 rounded-2xl shadow-sm">
+                                        <button
+                                            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                                            disabled={currentPage === 1}
+                                            className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
+                                        >
+                                            Previous
+                                        </button>
+                                        <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+                                        <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
+                                            {currentPage}
+                                        </button>
+                                        <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+                                        <button
+                                            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                                            disabled={currentPage === totalPages || totalPages === 0}
+                                            className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
+                                        >
+                                            Next
+                                        </button>
+                                    </div>
                                 </div>
-                                <div className="flex items-center gap-1">
-                                    <button className="px-4 py-2 text-[13px] font-bold text-[#9ca3af] hover:text-[#4b5563] transition-colors">Previous</button>
-                                    <button className="w-9 h-11 bg-black text-white rounded-lg text-[13.5px] font-black flex items-center justify-center mx-1 shadow-md">1</button>
-                                    <button className="px-4 py-2 text-[13px] font-bold text-[#9ca3af] hover:text-[#4b5563] transition-colors">Next</button>
-                                </div>
-                            </div>
+                            )}
                         </>
                     )}
                 </div>

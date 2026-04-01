@@ -34,6 +34,8 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
   const [activeTab, setActiveTab] = useState<'all' | 'settings'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     loadData();
@@ -124,6 +126,17 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
     const matchesStatus = statusFilter === 'all' || (entry.status || 'pending') === statusFilter;
     return matchesSearch && matchesStatus;
   }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  const totalEntries = allReferredEntries.length;
+  const totalPages = Math.ceil(totalEntries / pageSize);
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, totalEntries);
+  const paginatedEntries = allReferredEntries.slice(startIndex, endIndex);
+  const showingStart = totalEntries === 0 ? 0 : startIndex + 1;
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, pageSize]);
 
   if (loading) {
     return (
@@ -301,7 +314,7 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {allReferredEntries.length === 0 ? (
+                {paginatedEntries.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="text-center py-20">
                       <div className="flex flex-col items-center">
@@ -311,8 +324,8 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
                     </td>
                   </tr>
                 ) : (
-                  allReferredEntries.map((entry, idx) => {
-                    const isLastFew = allReferredEntries.length > 3 ? idx >= allReferredEntries.length - 2 : idx >= allReferredEntries.length - 1;
+                  paginatedEntries.map((entry, idx) => {
+                    const isLastFew = paginatedEntries.length > 3 ? idx >= paginatedEntries.length - 2 : idx >= paginatedEntries.length - 1;
                     return (
                       <tr key={idx} className="hover:bg-gray-50/30 transition-colors group">
                         <td className="px-6 py-5">

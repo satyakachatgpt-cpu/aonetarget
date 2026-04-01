@@ -43,8 +43,10 @@ const ChatSupport = lazy(() => import('../components/admin/ChatSupport'));
 const LiveSessions = lazy(() => import('../components/admin/LiveSessions'));
 const ContentManager = lazy(() => import('../components/admin/ContentManager'));
 const ViewFormatPage = lazy(() => import('../components/admin/ViewFormatPage'));
+const SalesReport = lazy(() => import('../components/admin/reports/SalesReport'));
+const NoPurchaseReport = lazy(() => import('../components/admin/reports/NoPurchaseReport'));
 
-export type AdminView = 'dashboard' | 'students' | 'buyers' | 'tokens' | 'coupons' | 'store' | 'institute' | 'questions' | 'question-bank' | 'passages' | 'tests' | 'subjective-test' | 'test-series' | 'all-reports' | 'videos' | 'video-series' | 'live-videos' | 'live-sessions' | 'pdfs' | 'packages' | 'messages' | 'blog' | 'settings' | 'banners' | 'courses' | 'course-content' | 'live-class-scheduler' | 'subcourses' | 'subjects' | 'topics' | 'instructions' | 'exam-documents' | 'global-news' | 'quick-links' | 'push-notifications' | 'categories' | 'misc' | 'referrals' | 'chat-support' | 'free-content' | 'blocked-users' | 'security-center';
+export type AdminView = 'dashboard' | 'students' | 'buyers' | 'tokens' | 'coupons' | 'store' | 'institute' | 'questions' | 'question-bank' | 'passages' | 'tests' | 'subjective-test' | 'test-series' | 'all-reports' | 'videos' | 'video-series' | 'live-videos' | 'live-sessions' | 'pdfs' | 'packages' | 'messages' | 'blog' | 'settings' | 'banners' | 'courses' | 'course-content' | 'live-class-scheduler' | 'subcourses' | 'subjects' | 'topics' | 'instructions' | 'exam-documents' | 'global-news' | 'quick-links' | 'push-notifications' | 'categories' | 'misc' | 'referrals' | 'chat-support' | 'free-content' | 'blocked-users' | 'security-center' | 'sales-report' | 'no-purchase-report';
 
 interface Props {
   setAuth: (val: boolean) => void;
@@ -179,6 +181,16 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
       ]
     },
     {
+      id: 'reports',
+      label: 'Reports',
+      icon: 'bar_chart',
+      color: 'text-gray-700',
+      submenu: [
+        { id: 'sales-report', label: 'Sales Report', icon: 'payments' },
+        { id: 'no-purchase-report', label: 'Registered (No Purchase)', icon: 'person_off' }
+      ]
+    },
+    {
       id: 'settings',
       label: 'Settings',
       icon: 'settings',
@@ -269,6 +281,8 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         <Route path="global-news" element={<GlobalNews {...props} />} />
         <Route path="quick-links" element={<QuickLinks {...props} />} />
         <Route path="push-notifications" element={<PushNotifications {...props} />} />
+        <Route path="sales-report" element={<SalesReport {...props} />} />
+        <Route path="no-purchase-report" element={<NoPurchaseReport {...props} />} />
         <Route path="view-format/:formatId" element={<ViewFormatPage />} />
       </Routes>
     );

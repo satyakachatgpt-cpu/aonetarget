@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { notificationsAPI, coursesAPI } from '../../../services/apiClient';
 import { RightSideDrawer, DrawerHeader, DrawerBody, DrawerFooter } from '../DrawerSystem';
 
-interface Notification { id: string; title: string; message: string; type: string; status: 'sent' | 'pending'; createdDate: string; targetCourseId?: string; }
+interface Notification { id?: string; _id?: string; title: string; message: string; type: string; status: 'sent' | 'pending'; createdDate?: string; createdAt?: string; targetCourseId?: string; }
 
 interface Props { showToast: (m: string, type?: 'success' | 'error') => void; }
 
@@ -65,16 +65,16 @@ const PushNotifications: React.FC<Props> = ({ showToast }) => {
     if (!formData.title || !formData.message) { showToast('Please fill required fields', 'error'); return; }
     try {
       const data = {
-        id: editingItem?.id || `notif_${Date.now()}`,
+        id: editingItem?._id || editingItem?.id || `notif_${Date.now()}`,
         title: formData.title,
         message: formData.message,
         type: formData.type,
         status: formData.status,
         targetCourseId: formData.targetCourseId,
-        createdDate: editingItem?.createdDate || new Date().toISOString()
+        createdDate: editingItem?.createdDate || editingItem?.createdAt || new Date().toISOString()
       };
       if (editingItem) {
-        await notificationsAPI.update(editingItem.id, data);
+        await notificationsAPI.update(editingItem._id || editingItem.id || '', data);
         showToast('Updated!');
       } else {
         await notificationsAPI.create(data);
@@ -210,11 +210,14 @@ const PushNotifications: React.FC<Props> = ({ showToast }) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {paginatedItems.map((item, idx) => (
-                    <tr key={item.id} className="hover:bg-gray-50/30 transition-colors">
+                  {paginatedItems.map((item, idx) => {
+                    const itemId = item._id || item.id || `temp_${idx}`;
+                    const itemDate = item.createdDate || item.createdAt || new Date().toISOString();
+                    return (
+                    <tr key={itemId} className="hover:bg-gray-50/30 transition-colors">
                       <td className="px-6 py-5 text-[13px] font-medium text-gray-600">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
                       <td className="px-6 py-5 text-[13px] font-medium text-gray-600">
-                        {new Date(item.createdDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')} at {new Date(item.createdDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(itemDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')} at {new Date(itemDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
                       </td>
                       <td className="px-6 py-5 min-w-[240px]">
                         <div>
@@ -230,61 +233,82 @@ const PushNotifications: React.FC<Props> = ({ showToast }) => {
                           <button 
                             onClick={(e) => {
                               e.stopPropagation();
-                              setActiveMenuId(activeMenuId === item.id ? null : item.id);
+                              setActiveMenuId(activeMenuId === itemId ? null : itemId);
                             }}
-                            className={`flex items-center gap-1 px-4 py-1.5 border rounded-lg text-[11px] font-bold transition-all ${activeMenuId === item.id ? 'bg-navy text-white border-navy' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                            className={`flex items-center gap-1 px-4 py-1.5 border rounded-lg text-[11px] font-bold transition-all ${activeMenuId === itemId ? 'bg-navy text-white border-navy' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
                           >
                             Actions
-                            <span className={`material-symbols-outlined text-[16px] transition-transform duration-200 ${activeMenuId === item.id ? 'rotate-180' : ''}`}>expand_more</span>
+                            <span className={`material-symbols-outlined text-[16px] transition-transform duration-200 ${activeMenuId === itemId ? 'rotate-180' : ''}`}>expand_more</span>
                           </button>
 
-                          <div className={`absolute right-0 ${idx >= paginatedItems.length - 2 ? 'bottom-full mb-1 origin-bottom-right' : 'top-full mt-1 origin-top-right'} w-32 bg-white border border-gray-100 rounded-lg shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[100] py-1 transition-all duration-200 ${activeMenuId === item.id ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'}`}>
-                            <button onClick={() => { setEditingItem(item); setFormData({ title: item.title, message: item.message, type: item.type, status: item.status, targetCourseId: item.targetCourseId || 'all' }); setShowModal(true); }} className="w-full px-4 py-2.5 text-left text-[12px] font-bold text-gray-600 hover:bg-gray-50 flex items-center gap-2">
+                          <div className={`absolute right-0 ${idx >= paginatedItems.length - 2 && paginatedItems.length > 2 ? 'bottom-full mb-1 origin-bottom-right' : 'top-full mt-1 origin-top-right'} w-32 bg-white border border-gray-100 rounded-lg shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[100] py-1 transition-all duration-200 ${activeMenuId === itemId ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'}`}>
+                            <button onClick={() => { setEditingItem(item); setFormData({ title: item.title, message: item.message, type: item.type, status: item.status, targetCourseId: item.targetCourseId || 'all' }); setShowModal(true); setActiveMenuId(null); }} className="w-full px-4 py-2.5 text-left text-[12px] font-bold text-gray-600 hover:bg-gray-50 flex items-center gap-2">
                               <span className="material-icons-outlined text-sm">edit</span> Edit
                             </button>
-                            <button onClick={() => handleDelete(item.id)} className="w-full px-4 py-2.5 text-left text-[12px] font-bold text-red-500 hover:bg-red-50 flex items-center gap-2">
+                            <button onClick={() => { handleDelete(itemId); setActiveMenuId(null); }} className="w-full px-4 py-2.5 text-left text-[12px] font-bold text-red-500 hover:bg-red-50 flex items-center gap-2">
                               <span className="material-icons-outlined text-sm">delete</span> Delete
                             </button>
                           </div>
                         </div>
                       </td>
                     </tr>
-                  ))}
+                  )})}
                 </tbody>
               </table>
             </div>
 
-            <div className="flex items-center justify-between bg-white px-6 py-4 border-t border-gray-100">
-              <p className="text-[12px] font-bold text-gray-500">
-                Showing {(currentPage - 1) * itemsPerPage + 1}-{Math.min(currentPage * itemsPerPage, filteredItems.length)} of {filteredItems.length}
-              </p>
+            {/* Standardized Pagination Footer */}
+            {!loading && filteredItems.length > 0 && (
+              <div className="p-6 border-t border-gray-50 flex items-center justify-between bg-white rounded-b-2xl">
+                <div className="flex items-center gap-3">
+                  <div className="relative flex items-center group">
+                    <select
+                      value={itemsPerPage}
+                      onChange={(e) => {
+                        setItemsPerPage(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                    <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400 flex items-center justify-center h-full top-0 group-focus-within:text-black">
+                      expand_more
+                    </span>
+                  </div>
+                  <span className="text-[13px] font-medium text-gray-400 italic">
+                    Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
+                    {Math.min(currentPage * itemsPerPage, filteredItems.length)} of{" "}
+                    {filteredItems.length} entries
+                  </span>
+                </div>
 
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 rounded-lg disabled:opacity-30 transition-all border border-gray-100"
-                >
-                  <span className="material-symbols-outlined text-lg">chevron_left</span>
-                </button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                <div className="flex items-center p-1.5 bg-white border border-gray-200 rounded-2xl shadow-sm">
                   <button
-                    key={page}
-                    onClick={() => setCurrentPage(page)}
-                    className={`w-8 h-8 flex items-center justify-center rounded-lg text-[12px] font-bold transition-all ${page === currentPage ? 'bg-navy text-white shadow-md shadow-navy/20' : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-100'}`}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
                   >
-                    {page}
+                    Previous
                   </button>
-                ))}
-                <button
-                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="w-8 h-8 flex items-center justify-center hover:bg-gray-50 rounded-lg disabled:opacity-30 transition-all border border-gray-100"
-                >
-                  <span className="material-symbols-outlined text-lg">chevron_right</span>
-                </button>
+                  <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+                  <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
+                    {currentPage}
+                  </button>
+                  <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages || totalPages === 0}
+                    className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
       </div>

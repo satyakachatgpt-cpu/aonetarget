@@ -26,6 +26,8 @@ const MiscSection: React.FC<Props> = ({ showToast }) => {
   const [activeModal, setActiveModal] = useState<ModalType>(null);
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [counts, setCounts] = useState({ courses: 0, subcourses: 0, subjects: 0, topics: 0, instructions: 0, examdocs: 0, news: 0, notifications: 0 });
   
   const [students, setStudents] = useState<Student[]>([]);
@@ -116,6 +118,7 @@ const MiscSection: React.FC<Props> = ({ showToast }) => {
     setActiveModal(type);
     setLoading(true);
     resetForms();
+    setCurrentPage(1);
     try {
       const api = getAPI(type);
       if (api) {
@@ -650,59 +653,118 @@ const MiscSection: React.FC<Props> = ({ showToast }) => {
       );
     }
 
+    const totalItems = items.length;
+    const totalPages = Math.ceil(totalItems / pageSize);
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, totalItems);
+    const paginatedItems = items.slice(startIndex, endIndex);
+
     return (
-      <div className="space-y-3">
-        {items.map(item => (
-          <div 
-            key={item.id || item._id} 
-            className="flex justify-between items-start p-4 bg-white rounded-xl border border-gray-100 group hover:shadow-md hover:border-indigo-100 transition-all"
-          >
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <p className="text-sm font-black text-gray-800">{item.title || item.name}</p>
-                {item.isActive === false && (
-                  <span className="text-[10px] bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full font-bold">Inactive</span>
+      <div className="space-y-4">
+        <div className="space-y-3">
+          {paginatedItems.map(item => (
+            <div 
+              key={item.id || item._id} 
+              className="flex justify-between items-start p-4 bg-white rounded-xl border border-gray-100 group hover:shadow-md hover:border-indigo-100 transition-all"
+            >
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <p className="text-sm font-black text-gray-800">{item.title || item.name}</p>
+                  {item.isActive === false && (
+                    <span className="text-[10px] bg-gray-200 text-gray-500 px-2 py-0.5 rounded-full font-bold">Inactive</span>
+                  )}
+                  {item.showAsModal && (
+                    <span className="text-[10px] bg-teal-100 text-teal-600 px-2 py-0.5 rounded-full font-bold">Popup</span>
+                  )}
+                  {item.priority === 'high' && (
+                    <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">Urgent</span>
+                  )}
+                  {item.category && (
+                    <span className="text-[10px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-bold capitalize">{item.category}</span>
+                  )}
+                  {item.status === 'sent' && (
+                    <span className="text-[10px] bg-green-100 text-green-600 px-2 py-0.5 rounded-full font-bold">Sent</span>
+                  )}
+                </div>
+                {(item.description || item.message || item.content) && (
+                  <p className="text-xs text-gray-500 mt-1 line-clamp-2">{item.description || item.message || item.content}</p>
                 )}
-                {item.showAsModal && (
-                  <span className="text-[10px] bg-teal-100 text-teal-600 px-2 py-0.5 rounded-full font-bold">Popup</span>
+                {item.fileUrl && (
+                  <a href={item.fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-600 hover:underline mt-1 flex items-center gap-1">
+                    <span className="material-icons-outlined text-xs">link</span>
+                    View Document
+                  </a>
                 )}
-                {item.priority === 'high' && (
-                  <span className="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">Urgent</span>
+                {item.targetStudents && (
+                  <p className="text-xs text-gray-400 mt-1">Sent to {item.targetStudents.length} students</p>
                 )}
-                {item.category && (
-                  <span className="text-[10px] bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full font-bold capitalize">{item.category}</span>
-                )}
-                {item.status === 'sent' && (
-                  <span className="text-[10px] bg-green-100 text-green-600 px-2 py-0.5 rounded-full font-bold">Sent</span>
+                {item.downloads !== undefined && (
+                  <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                    <span className="material-icons-outlined text-xs">download</span>
+                    {item.downloads} downloads
+                  </p>
                 )}
               </div>
-              {(item.description || item.message || item.content) && (
-                <p className="text-xs text-gray-500 mt-1 line-clamp-2">{item.description || item.message || item.content}</p>
-              )}
-              {item.fileUrl && (
-                <a href={item.fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-indigo-600 hover:underline mt-1 flex items-center gap-1">
-                  <span className="material-icons-outlined text-xs">link</span>
-                  View Document
-                </a>
-              )}
-              {item.targetStudents && (
-                <p className="text-xs text-gray-400 mt-1">Sent to {item.targetStudents.length} students</p>
-              )}
-              {item.downloads !== undefined && (
-                <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
-                  <span className="material-icons-outlined text-xs">download</span>
-                  {item.downloads} downloads
-                </p>
-              )}
+              <button
+                onClick={() => handleDelete(item.id || item._id)}
+                className="p-2 text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <span className="material-icons-outlined text-lg">delete</span>
+              </button>
             </div>
-            <button
-              onClick={() => handleDelete(item.id || item._id)}
-              className="p-2 text-red-500 hover:bg-red-50 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              <span className="material-icons-outlined text-lg">delete</span>
-            </button>
+          ))}
+        </div>
+
+        {/* Standardized Pagination Footer */}
+        {totalItems > 0 && (
+          <div className="p-5 border-t border-gray-100 flex items-center justify-between bg-white rounded-2xl shadow-sm mt-4">
+            <div className="flex items-center gap-3">
+              <div className="relative flex items-center group">
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+                <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400 flex items-center justify-center h-full top-0 group-focus-within:text-black">
+                  expand_more
+                </span>
+              </div>
+              <span className="text-[13px] font-medium text-gray-400 italic">
+                Showing {totalItems === 0 ? 0 : startIndex + 1} to {endIndex} of {totalItems} entries
+              </span>
+            </div>
+
+            <div className="flex items-center p-1.5 bg-white border border-gray-200 rounded-2xl shadow-sm">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+              <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
+                {currentPage}
+              </button>
+              <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
           </div>
-        ))}
+        )}
       </div>
     );
   };

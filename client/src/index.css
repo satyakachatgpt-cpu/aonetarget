@@ -182,3 +182,16 @@ select {
 .modal-open-nav-hide {
   overflow: hidden !important;
 }
+
+/* Hide native calendar icon for a cleaner integrated look in Admin Reports */
+.clean-date-input::-webkit-calendar-picker-indicator {
+    display: none !important;
+    -webkit-appearance: none !important;
+}
+
+.clean-date-input {
+    border: none !important;
+    outline: none !important;
+    padding: 0 !important;
+    background: transparent !important;
+}

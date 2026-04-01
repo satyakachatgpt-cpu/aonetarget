@@ -798,6 +798,9 @@ export const liveVideosAPI = {
   getAll: async () => {
     return cachedFetch(`${API_BASE_URL}/live-videos`);
   },
+  getByStudentId: async (studentId: string) => {
+    return cachedFetch(`${API_BASE_URL}/students/${studentId}/live-classes`, 15000);
+  },
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/live-videos`, {
       method: 'POST',

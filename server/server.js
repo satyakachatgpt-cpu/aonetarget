@@ -12,6 +12,7 @@ import crypto from 'crypto';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import dns from 'dns';
+dns.setServers(['8.8.8.8', '8.8.4.4']);
 import {
   generateTokens, verifyAccessToken, verifyRefreshToken,
   authMiddleware, optionalAuth, generateDeviceId,
@@ -210,6 +211,7 @@ import Folder from './models/Folder.js';
 import Category from './models/Category.js';
 import Video from './models/Video.js';
 import Post from './models/Post.js';
+import reportsRouter from './routes/admin/reports.routes.js';
 
 let db;
 
@@ -2495,6 +2497,9 @@ app.get('/api/admin/verify', async (req, res) => {
     res.status(500).json({ error: 'Verification failed' });
   }
 });
+
+// Reports Router
+app.use('/api/admin/reports', reportsRouter);
 
 // Get Dashboard Stats for Admin
 app.get('/api/admin/dashboard-stats', async (req, res) => {
@@ -5887,6 +5892,72 @@ app.get('/api/students/:id/courses', async (req, res) => {
   } catch (error) {
     console.error('Error fetching student courses:', error);
     res.status(500).json({ error: 'Failed to fetch courses' });
+  }
+});
+
+// Get student-specific live classes (only courses they are enrolled in)
+app.get('/api/students/:id/live-classes', async (req, res) => {
+  try {
+    const student = await db.collection('students').findOne({ id: req.params.id });
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    const enrolledCourseIds = (student.enrolledCourses || []).map(id => id.toString());
+    
+    // Get all live videos
+    const liveVideos = await db.collection('liveVideos').find({}).toArray();
+    // Get all videos with live content types
+    const courseLiveStreams = await db.collection('videos').find({ 
+      contentType: { $in: ['live_stream', 'youtube_zoom'] } 
+    }).toArray();
+
+    const allSessions = [...liveVideos, ...courseLiveStreams];
+    const now = new Date();
+
+    const filtered = allSessions.filter(item => {
+      // If courseId is present, check if student is enrolled
+      if (item.courseId) {
+        return enrolledCourseIds.includes(item.courseId.toString());
+      }
+      // If no courseId, assume it's global (or you can choose to hide it)
+      // For now, let's show global ones too, or stick strictly to enrolled if that's preferred.
+      // Based on the user request, "only show live classes for batches/courses that the student has actually enrolled in"
+      return false; 
+    });
+
+    const calculated = filtered.map(item => {
+      const startTimeStr = item.publishOn || item.date || item.createdAt;
+      const startTime = startTimeStr ? new Date(startTimeStr) : new Date();
+      const targetEnd = item.endTime || item.endDateTime;
+      const endTime = targetEnd ? new Date(targetEnd) : new Date(startTime.getTime() + 60 * 60 * 1000);
+      const joinBeforeMin = parseInt(item.joinBeforeMinutes || 10);
+      const joinTime = new Date(startTime.getTime() - joinBeforeMin * 60 * 1000);
+
+      let status = item.status || 'upcoming';
+      if (item.status === 'inactive' || item.status === 'ended' || item.status === 'completed') {
+        status = 'ended';
+      } else if (now < joinTime) {
+        status = 'upcoming';
+      } else if (now >= joinTime && now <= endTime) {
+        status = 'live';
+      } else {
+        status = 'ended';
+      }
+
+      return {
+        ...item,
+        _id: item._id,
+        id: (item.id || item._id)?.toString(),
+        status,
+        isLive: status === 'live'
+      };
+    }).sort((a,b) => new Date(a.publishOn || a.date || a.createdAt) - new Date(b.publishOn || b.date || b.createdAt));
+    
+    res.json(calculated);
+  } catch (error) {
+    console.error('Error fetching student live classes:', error);
+    res.status(500).json({ error: 'Failed to fetch live classes' });
   }
 });
 
