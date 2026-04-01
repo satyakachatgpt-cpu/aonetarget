@@ -362,13 +362,14 @@ const CourseDetails: React.FC = () => {
 
   const currentFolder = navigationHistory.length > 0 ? navigationHistory[navigationHistory.length - 1] : null;
 
-  const filteredVideos = videos.filter(v => normalizeId(v.folderId) === normalizeId(currentFolderId) && v.contentType !== 'live_stream');
+  const recordedVideos = videos.filter(v => v.contentType === 'video' || v.contentType === 'recorded' || !v.contentType);
+  const liveStreams = videos.filter(v => v.contentType === 'live_stream');
+  const filteredVideos = recordedVideos.filter(v => normalizeId(v.folderId) === normalizeId(currentFolderId));
   const filteredNotes = notes.filter(n => normalizeId((n as any).folderId) === normalizeId(currentFolderId));
   const filteredTests = tests.filter(t => normalizeId((t as any).folderId) === normalizeId(currentFolderId));
   const filteredFolders = folders.filter(f => normalizeId(f.parentId) === normalizeId(currentFolderId));
-  const liveStreams = videos.filter(v => v.contentType === 'live_stream');
 
-  const totalVideos = videos.length;
+  const totalVideos = recordedVideos.length;
   const completedVideos = progress.completedVideos.length;
   const progressPercent = totalVideos > 0 ? Math.round((completedVideos / totalVideos) * 100) : 0;
   const isPaidCourse = course?.price && course.price > 0;
@@ -591,10 +592,10 @@ const CourseDetails: React.FC = () => {
               What's Included
             </h3>
             <div className="grid grid-cols-2 gap-3">
-              {videos.length > 0 && (
+              {recordedVideos.length > 0 && (
                 <div className="flex items-center gap-2.5 bg-primary-50 rounded-2xl px-3 py-3">
                   <span className="material-symbols-rounded text-primary-600 text-xl">play_circle</span>
-                  <span className="text-xs font-bold text-gray-700">{videos.length} Videos</span>
+                  <span className="text-xs font-bold text-gray-700">{recordedVideos.length} Videos</span>
                 </div>
               )}
               {notes.length > 0 && (
@@ -611,7 +612,7 @@ const CourseDetails: React.FC = () => {
               )}
               <div className="flex items-center gap-2.5 bg-accent-50 rounded-2xl px-3 py-3">
                 <span className="material-symbols-rounded text-accent-500 text-xl">sensors</span>
-                <span className="text-xs font-bold text-gray-700">Live Classes</span>
+                <span className="text-xs font-bold text-gray-700">Live Classes ({liveStreams.length})</span>
               </div>
             </div>
           </div>
@@ -656,8 +657,8 @@ const CourseDetails: React.FC = () => {
               ))}
             </div>
 
-            {filteredVideos.length === 0 && 
-             filteredFolders.length === 0 ? (
+            {filteredVideos.length === 0 &&
+              filteredFolders.length === 0 ? (
               <div className="card-premium p-10 text-center animate-fade-in-up">
                 <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
                   <span className="material-symbols-rounded text-3xl text-gray-300">video_library</span>
@@ -748,7 +749,7 @@ const CourseDetails: React.FC = () => {
         )}
 
         {activeTab === 'notes' && (
-          <>
+          <div className="space-y-4">
             {!isEnrolled ? (
               <div className="card-premium p-10 text-center animate-fade-in-up">
                 <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -761,7 +762,7 @@ const CourseDetails: React.FC = () => {
                   <button onClick={handleEnroll} disabled={enrolling} className="mt-4 btn-primary px-6 py-2.5 text-sm disabled:opacity-50">{enrolling ? 'Enrolling...' : 'Enroll Free'}</button>
                 )}
               </div>
-            ) : filteredNotes.length === 0 && filteredFolders.length === 0 ? (
+            ) : notes.length === 0 ? (
               <div className="card-premium p-10 text-center animate-fade-in-up">
                 <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
                   <span className="material-symbols-rounded text-3xl text-gray-300">description</span>
@@ -769,38 +770,51 @@ const CourseDetails: React.FC = () => {
                 <p className="text-gray-400 font-medium text-sm">No notes available here</p>
               </div>
             ) : (
-              filteredNotes.map((note, i) => (
-                <div
-                  key={note.id}
-                  className="card-premium p-4 flex items-center gap-4 animate-fade-in-up"
-                  style={{ animationDelay: `${(filteredFolders.length + i) * 60}ms` }}
-                >
-                  <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-amber-50 rounded-2xl flex items-center justify-center flex-shrink-0">
-                    <span className="material-symbols-rounded text-orange-500 text-xl">description</span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-sm text-gray-800 line-clamp-1">{note.title}</h4>
-                    <p className="text-[11px] text-gray-400 font-medium mt-0.5 flex items-center gap-1">
-                      <span className="material-symbols-rounded text-[10px]">picture_as_pdf</span>
-                      PDF • {note.fileSize || '2.5 MB'}
-                    </p>
-                  </div>
-                  <a
-                    href={note.fileUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-10 h-10 bg-primary-50 rounded-xl flex items-center justify-center text-primary-600 active:scale-[0.97] transition-all duration-200 hover:bg-primary-100"
+              <div className="space-y-3">
+                {/* Notes List - Flat List as requested */}
+                {notes.map((note: any, i: number) => (
+                  <div
+                    key={note.id || note._id}
+                    className="card-premium p-4 flex items-center gap-4 animate-fade-in-up"
+                    style={{ animationDelay: `${i * 60}ms` }}
                   >
-                    <span className="material-symbols-rounded text-xl">download</span>
-                  </a>
-                </div>
-              ))
+                    <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-amber-50 rounded-2xl flex items-center justify-center flex-shrink-0">
+                      <span className="material-symbols-rounded text-orange-500 text-xl">description</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-sm text-gray-800 line-clamp-1">{note.title}</h4>
+                      <p className="text-[11px] text-gray-400 font-medium mt-0.5 flex items-center gap-1">
+                        <span className="material-symbols-rounded text-[10px]">picture_as_pdf</span>
+                        PDF • {note.fileSize || '2.5 MB'}
+                      </p>
+                    </div>
+                    <a
+                      href={note.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-10 h-10 bg-primary-50 rounded-xl flex items-center justify-center text-primary-600 active:scale-[0.97] transition-all duration-200 hover:bg-primary-100"
+                    >
+                      <span className="material-symbols-rounded text-xl">download</span>
+                    </a>
+                  </div>
+                ))}
+              </div>
             )}
-          </>
+          </div>
         )}
 
         {activeTab === 'tests' && (
-          <>
+          <div className="space-y-4">
+            {currentFolderId && (
+              <button
+                onClick={navigateUp}
+                className="flex items-center gap-1.5 text-primary-600 font-black text-[10px] mb-4 px-3 py-2 bg-primary-50 w-fit rounded-xl hover:bg-primary-100 transition-all uppercase tracking-widest border border-primary-100/50 active:scale-95"
+              >
+                <span className="material-symbols-rounded text-base">chevron_left</span>
+                Back to {navigationHistory.length > 0 ? navigationHistory[navigationHistory.length - 1].title : 'All Content'}
+              </button>
+            )}
+
             {filteredTests.length === 0 && filteredFolders.length === 0 ? (
               <div className="card-premium p-10 text-center animate-fade-in-up">
                 <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -872,7 +886,7 @@ const CourseDetails: React.FC = () => {
                 );
               })
             )}
-          </>
+          </div>
         )}
 
         {activeTab === 'live' && (
@@ -900,7 +914,7 @@ const CourseDetails: React.FC = () => {
                     </h3>
                     <div className="space-y-4">
                       {liveStreams.map((live, idx) => (
-                        <div 
+                        <div
                           key={live.id || live._id}
                           onClick={() => handleVideoClick(live)}
                           className="card-premium overflow-hidden cursor-pointer group hover:border-accent-100 transition-all active:scale-[0.98] animate-fade-in-up"
@@ -908,30 +922,30 @@ const CourseDetails: React.FC = () => {
                         >
                           <div className="flex gap-4 p-4">
                             <div className="relative w-32 h-20 rounded-2xl overflow-hidden flex-shrink-0 shadow-lg">
-                              <img 
-                                src={getYouTubeThumbnail(live.youtubeUrl || '') || `https://picsum.photos/400/225?sig=${live.id}`} 
+                              <img
+                                src={getYouTubeThumbnail(live.youtubeUrl || '') || `https://picsum.photos/400/225?sig=${live.id}`}
                                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                               />
                               <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                 <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-2xl">
-                                    <span className="material-symbols-rounded text-accent-500">play_arrow</span>
-                                 </div>
+                                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-2xl">
+                                  <span className="material-symbols-rounded text-accent-500">play_arrow</span>
+                                </div>
                               </div>
                               <div className="absolute top-2 left-2 px-2 py-0.5 bg-red-600 text-white text-[8px] font-black rounded-full shadow-sm animate-pulse tracking-widest uppercase">LIVE</div>
                             </div>
                             <div className="flex-1 min-w-0 py-1">
                               <div className="flex items-center gap-2 mb-1.5">
-                                 <div className="w-1.5 h-1.5 bg-accent-500 rounded-full" />
-                                 <span className="text-[10px] font-black text-accent-500 tracking-widest uppercase opacity-70">Interactive Session</span>
+                                <div className="w-1.5 h-1.5 bg-accent-500 rounded-full" />
+                                <span className="text-[10px] font-black text-accent-500 tracking-widest uppercase opacity-70">Interactive Session</span>
                               </div>
                               <h4 className="font-black text-gray-900 text-sm leading-tight line-clamp-2">{live.title}</h4>
                               <p className="text-[10px] text-gray-400 font-bold mt-2 uppercase tracking-widest flex items-center gap-2">
-                                 <span className="material-symbols-rounded text-sm">person</span>
-                                 {live.instructor || 'Lead Instructor'}
+                                <span className="material-symbols-rounded text-sm">person</span>
+                                {live.instructor || 'Lead Instructor'}
                               </p>
                             </div>
                             <div className="self-center">
-                               <span className="material-symbols-rounded text-gray-300 group-hover:text-accent-500 transition-all">chevron_right</span>
+                              <span className="material-symbols-rounded text-gray-300 group-hover:text-accent-500 transition-all">chevron_right</span>
                             </div>
                           </div>
                         </div>
@@ -939,16 +953,16 @@ const CourseDetails: React.FC = () => {
                     </div>
                   </div>
                 )}
-                
+
                 <div className="card-premium p-4 mt-4">
                   <h3 className="font-black text-gray-800 text-xs uppercase tracking-[0.2em] flex items-center gap-2 mb-6 px-1 border-b border-surface-100 pb-4">
                     <span className="material-symbols-rounded text-sm text-primary-500">calendar_month</span>
                     Live Classes Calendar
                   </h3>
-                  <LiveClassesCalendar 
-                    studentId={studentId} 
-                    courseId={id} 
-                    batchId={student?.enrolledBatch || student?.batchId} 
+                  <LiveClassesCalendar
+                    studentId={studentId}
+                    courseId={id}
+                    batchId={student?.enrolledBatch || student?.batchId}
                     onJoinLive={handleVideoClick}
                   />
                 </div>
@@ -1001,10 +1015,10 @@ const CourseDetails: React.FC = () => {
           duration={selectedVideo.duration}
           isLive={selectedVideo.contentType === 'live_stream'}
           onClose={closeVideoPlayer}
-          onMarkComplete={() => { 
+          onMarkComplete={() => {
             const vId = selectedVideo.id || selectedVideo._id;
-            if (vId) markVideoComplete(vId as string); 
-            closeVideoPlayer(); 
+            if (vId) markVideoComplete(vId as string);
+            closeVideoPlayer();
           }}
           chatMessages={liveMessages}
           onSendMessage={(msg) => {

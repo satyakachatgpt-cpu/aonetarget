@@ -81,7 +81,7 @@ const MainLayout: React.FC<{ isLoggedIn: boolean; children: React.ReactNode }> =
     <div className="max-w-md mx-auto h-screen bg-white shadow-xl relative overflow-hidden flex flex-col">
       <div id="sidebar-root" />
       <div ref={scrollRef} className="flex-1 overflow-y-auto hide-scrollbar relative smooth-scroll">
-        <div className={`${shouldHide ? '' : 'pb-32'} font-outfit`}>
+        <div className={`${shouldHide ? '' : 'pb-16'} font-outfit`}>
           {children}
         </div>
       </div>

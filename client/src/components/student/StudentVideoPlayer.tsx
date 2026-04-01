@@ -48,7 +48,6 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const [currentQuality, setCurrentQuality] = useState('auto');
   const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [showChat, setShowChat] = useState(false);
-  const [activeChatTab, setActiveChatTab] = useState<'queries' | 'source'>('queries');
   
   const playerRef = useRef<any>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -326,87 +325,61 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
 
         {isLive && (
            <div className={`absolute top-0 bottom-0 right-0 w-full sm:w-[350px] bg-[#0A0A0A]/95 backdrop-blur-3xl border-l border-white/5 z-[60] transition-all duration-500 ease-in-out shadow-[20px_0_50px_rgba(0,0,0,0.5)] flex flex-col ${showChat ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'}`}>
-              <div className="px-6 pt-8 pb-4 border-b border-white/5">
-                 <div className="flex items-center justify-between mb-6">
+              <div className="px-6 pt-8 pb-6 border-b border-white/5">
+                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                        <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse" />
                        <span className="text-xs font-black text-white tracking-widest uppercase">Live Interaction</span>
                     </div>
                     <button onClick={() => setShowChat(false)} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-white/40 hover:text-white transition-all"><span className="material-symbols-rounded text-xl">close</span></button>
                  </div>
-
-                 <div className="flex bg-white/5 rounded-xl p-1 border border-white/5">
-                    <button 
-                       onClick={() => setActiveChatTab('queries')}
-                       className={`flex-1 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${activeChatTab === 'queries' ? 'bg-white text-black shadow-lg' : 'text-white/40'}`}
-                    >
-                       Class Queries
-                    </button>
-                    {youtubeId && (
-                       <button 
-                          onClick={() => setActiveChatTab('source')}
-                          className={`flex-1 py-2.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all ${activeChatTab === 'source' ? 'bg-white text-black shadow-lg' : 'text-white/40'}`}
-                       >
-                          Stream Chat
-                       </button>
-                    )}
-                 </div>
               </div>
 
               <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
-                 {activeChatTab === 'source' && youtubeId ? (
-                    <iframe 
-                       src={`https://www.youtube.com/live_chat?v=${youtubeId}&embed_domain=${window.location.hostname}`}
-                       className="w-full h-full border-0"
-                    />
-                 ) : (
-                    <>
-                       <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 custom-scrollbar">
-                          {chatMessages.length === 0 ? (
-                             <div className="h-full flex flex-col items-center justify-center opacity-30 gap-4 mt-[-20px]">
-                                <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center text-white/40"><span className="material-symbols-rounded text-3xl">chat_bubble</span></div>
-                                <div className="text-center">
-                                   <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/80">Teacher Hub</p>
-                                   <p className="text-[9px] font-bold text-white/30 uppercase mt-1 tracking-widest">Ask a question to the instructor</p>
-                                </div>
-                             </div>
-                          ) : (
-                             chatMessages.map((msg, i) => (
-                                <div key={i} className={`flex flex-col gap-2 ${msg.role === 'admin' ? 'animate-in zoom-in-95' : 'animate-in slide-in-from-bottom-2'}`}>
-                                   <div className="flex items-center gap-2 px-1">
-                                      <span className={`text-[9px] font-black uppercase tracking-widest ${msg.role === 'admin' ? 'text-blue-500' : 'text-white/50'}`}>
-                                         {msg.role === 'admin' ? 'Instructor' : (msg.senderName || 'Student')}
-                                      </span>
-                                      <span className="text-[8px] text-white/20 font-bold ml-auto">{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                                   </div>
-                                   <div className={`p-3.5 rounded-2xl border transition-all ${msg.role === 'admin' ? 'bg-blue-500/10 border-blue-500/20 rounded-tl-none ring-1 ring-blue-500/10' : 'bg-white/5 border-white/5 rounded-tl-none'}`}>
-                                      <p className="text-xs text-white/90 font-medium leading-relaxed tracking-wide">{msg.content}</p>
-                                   </div>
-                                </div>
-                             ))
-                          )}
+                 <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6 custom-scrollbar">
+                    {chatMessages.length === 0 ? (
+                       <div className="h-full flex flex-col items-center justify-center opacity-30 gap-4 mt-[-20px]">
+                          <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center text-white/40"><span className="material-symbols-rounded text-3xl">chat_bubble</span></div>
+                          <div className="text-center">
+                             <p className="text-[10px] font-black uppercase tracking-[0.3em] text-white/80">Stream Chat</p>
+                             <p className="text-[9px] font-bold text-white/30 uppercase mt-1 tracking-widest">Connect with other students</p>
+                          </div>
                        </div>
+                    ) : (
+                       chatMessages.map((msg, i) => (
+                          <div key={i} className={`flex flex-col gap-2 ${msg.role === 'admin' ? 'animate-in zoom-in-95' : 'animate-in slide-in-from-bottom-2'}`}>
+                             <div className="flex items-center gap-2 px-1">
+                                <span className={`text-[9px] font-black uppercase tracking-widest ${msg.role === 'admin' ? 'text-blue-500' : 'text-white/50'}`}>
+                                   {msg.role === 'admin' ? 'Instructor' : (msg.senderName || 'Student')}
+                                </span>
+                                <span className="text-[8px] text-white/20 font-bold ml-auto">{new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                             </div>
+                             <div className={`p-3.5 rounded-2xl border transition-all ${msg.role === 'admin' ? 'bg-blue-500/10 border-blue-500/20 rounded-tl-none ring-1 ring-blue-500/10' : 'bg-white/5 border-white/5 rounded-tl-none'}`}>
+                                <p className="text-xs text-white/90 font-medium leading-relaxed tracking-wide">{msg.content}</p>
+                             </div>
+                          </div>
+                       ))
+                    )}
+                 </div>
 
-                       <div className="p-6 bg-black/40 border-t border-white/5">
-                          <form 
-                             onSubmit={(e) => {
-                                e.preventDefault();
-                                const input = e.currentTarget.querySelector('input');
-                                if (input && input.value.trim() && onSendMessage) {
-                                   onSendMessage(input.value.trim());
-                                   input.value = '';
-                                }
-                             }}
-                             className="flex items-center gap-3"
-                          >
-                             <div className="relative flex-1">
-                                <input type="text" placeholder="Type a question..." className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-3.5 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-all shadow-inner" />
-                             </div>
-                             <button type="submit" className="w-11 h-11 bg-white text-black rounded-2xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl"><span className="material-symbols-rounded text-xl font-bold">send</span></button>
-                          </form>
+                 <div className="p-6 bg-black/40 border-t border-white/5">
+                    <form 
+                       onSubmit={(e) => {
+                          e.preventDefault();
+                          const input = e.currentTarget.querySelector('input');
+                          if (input && input.value.trim() && onSendMessage) {
+                             onSendMessage(input.value.trim());
+                             input.value = '';
+                          }
+                       }}
+                       className="flex items-center gap-3"
+                    >
+                       <div className="relative flex-1">
+                          <input type="text" placeholder="Type a message..." className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-3.5 text-xs text-white placeholder:text-white/20 focus:outline-none focus:border-white/30 transition-all shadow-inner" />
                        </div>
-                    </>
-                 )}
+                       <button type="submit" className="w-11 h-11 bg-white text-black rounded-2xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-xl"><span className="material-symbols-rounded text-xl font-bold">send</span></button>
+                    </form>
+                 </div>
               </div>
            </div>
         )}

@@ -22,6 +22,13 @@ import { globalLimiter, authLimiter, securityHeaders, sanitizeInput } from './mi
 import { sendEmail, templates } from './utils/email.js';
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from 'docx';
 
+// Helper to normalize IDs for comparison (handling ObjectId and strings)
+const normalizeId = (id) => {
+  if (!id) return '';
+  if (typeof id === 'object' && id.toString) return id.toString().trim();
+  return String(id).trim();
+};
+
 
 
 // Config moved to top
@@ -837,7 +844,9 @@ async function getRelatedCourseIds(course, originalId) {
             { title: { $in: names } },
             { name: { $regex: new RegExp("^" + escapedNames[0] + "$", "i") } }, // Case-insensitive exact name match
             { title: { $regex: new RegExp("^" + escapedNames[0] + "$", "i") } } // Case-insensitive exact title match
-          ]
+          ],
+          status: { $nin: ['inactive', 'deleted'] },
+          isPublished: { $ne: false }
         }).project({ _id: 1, id: 1 }).toArray();
 
         matchedItems.forEach(item => {
@@ -861,21 +870,96 @@ app.get('/api/courses/:id/videos', async (req, res) => {
     if (!course) return res.json([]);
 
     const idVariants = await getRelatedCourseIds(course, req.params.id);
-    let videos = await db.collection('videos').find({ courseId: { $in: idVariants } }).sort({ order: 1 }).toArray();
+    const primaryId = req.params.id;
 
-    if (videos.length === 0) {
+    // Fetch from all relevant batches
+    let allRawVideos = await db.collection('videos').find({ 
+      courseId: { $in: idVariants },
+      status: { $nin: ['inactive', 'deleted'] }
+    }).sort({ order: 1 }).toArray();
+
+    if (allRawVideos.length === 0) {
       const courseNames = [course.name, course.title].filter(Boolean);
       if (courseNames.length > 0) {
-        videos = await db.collection('videos').find({
+        allRawVideos = await db.collection('videos').find({
           $or: [
             { course: { $in: courseNames } },
             { courseId: { $in: idVariants } }
-          ]
+          ],
+          status: { $nin: ['inactive', 'deleted'] }
         }).sort({ order: 1 }).toArray();
       }
     }
 
-    res.json(videos);
+    // Aggressive Deduplication Strategy
+    // 1. Prioritize videos from the primary batch
+    const uniqueVideos = [];
+    const seenTitles = new Set();
+    const seenUrls = new Set();
+    const seenIds = new Set();
+
+    const normalizeUrl = (url) => {
+      if (!url) return '';
+      try {
+        let u = url.trim().toLowerCase();
+        if (u.includes('youtube.com/watch?v=')) {
+          const id = u.split('v=')[1]?.split('&')[0];
+          if (id) return `yt:${id}`;
+        }
+        if (u.includes('youtu.be/')) {
+          const id = u.split('youtu.be/')[1]?.split('?')[0];
+          if (id) return `yt:${id}`;
+        }
+        if (u.includes('youtube.com/embed/')) {
+          const id = u.split('embed/')[1]?.split('?')[0];
+          if (id) return `yt:${id}`;
+        }
+        return u.replace(/\/$/, '');
+      } catch (e) { return url.toLowerCase(); }
+    };
+
+    const normalizeTitle = (title) => {
+      if (!title) return '';
+      return title.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+    };
+
+    // First pass: Add videos from the current specific batch
+    allRawVideos.forEach(v => {
+      if (normalizeId(v.courseId) === normalizeId(primaryId)) {
+        const title = normalizeTitle(v.title);
+        const url = normalizeUrl(v.youtubeUrl || v.videoUrl || v.url);
+        const id = v.id || v._id?.toString();
+        
+        if (title) seenTitles.add(title);
+        if (url) seenUrls.add(url);
+        if (id) seenIds.add(id);
+        
+        uniqueVideos.push(v);
+      }
+    });
+
+    // Second pass: Add videos from other related batches ONLY if they are unique
+    allRawVideos.forEach(v => {
+      if (normalizeId(v.courseId) !== normalizeId(primaryId)) {
+        const title = normalizeTitle(v.title);
+        const url = normalizeUrl(v.youtubeUrl || v.videoUrl || v.url);
+        const id = v.id || v._id?.toString();
+        
+        const isDuplicate = 
+          (id && seenIds.has(id)) ||
+          (title && seenTitles.has(title)) ||
+          (url && seenUrls.has(url));
+
+        if (!isDuplicate) {
+          if (title) seenTitles.add(title);
+          if (url) seenUrls.add(url);
+          if (id) seenIds.add(id);
+          uniqueVideos.push(v);
+        }
+      }
+    });
+
+    res.json(uniqueVideos);
   } catch (error) {
     console.error('Fetch videos error:', error);
     res.status(500).json({ error: 'Failed to fetch videos' });
@@ -1294,18 +1378,67 @@ app.get('/api/courses/:id/notes', async (req, res) => {
     if (!course) return res.json([]);
 
     const idVariants = await getRelatedCourseIds(course, req.params.id);
+    const primaryId = req.params.id;
     const query = {
-      courseId: { $in: idVariants }
+      courseId: { $in: idVariants },
+      status: { $nin: ['inactive', 'deleted'] }
     };
+    
     // Check both pdfs and notes collections for backward compatibility
     const pdfs = await db.collection('pdfs').find(query).sort({ order: 1 }).toArray();
     const notes = await db.collection('notes').find(query).sort({ order: 1 }).toArray();
-    // Merge both, deduplicating by id
-    const allNotes = [...pdfs];
-    notes.forEach(n => {
-      if (!allNotes.find(p => (p.id && n.id && p.id === n.id) || p._id.toString() === n._id.toString())) allNotes.push(n);
+    
+    // Merge all raw notes
+    const allRawNotes = [...pdfs, ...notes];
+
+    // Aggressive Deduplication Strategy
+    const uniqueNotes = [];
+    const seenTitles = new Set();
+    const seenUrls = new Set();
+    const seenIds = new Set();
+
+    const normalizeUrl = (url) => {
+      if (!url) return '';
+      return url.trim().toLowerCase().replace(/\/$/, '');
+    };
+
+    // First pass: Add notes from the current specific batch
+    allRawNotes.forEach(n => {
+      if (normalizeId(n.courseId) === normalizeId(primaryId)) {
+        const title = (n.title || '').trim().toLowerCase();
+        const url = normalizeUrl(n.fileUrl || n.url);
+        const id = n.id || n._id?.toString();
+        
+        if (title) seenTitles.add(title);
+        if (url) seenUrls.add(url);
+        if (id) seenIds.add(id);
+        
+        uniqueNotes.push(n);
+      }
     });
-    res.json(allNotes);
+
+    // Second pass: Add notes from other related batches ONLY if they are unique
+    allRawNotes.forEach(n => {
+      if (normalizeId(n.courseId) !== normalizeId(primaryId)) {
+        const title = (n.title || '').trim().toLowerCase();
+        const url = normalizeUrl(n.fileUrl || n.url);
+        const id = n.id || n._id?.toString();
+        
+        const isDuplicate = 
+          (id && seenIds.has(id)) ||
+          (title && seenTitles.has(title)) ||
+          (url && seenUrls.has(url));
+
+        if (!isDuplicate) {
+          if (title) seenTitles.add(title);
+          if (url) seenUrls.add(url);
+          if (id) seenIds.add(id);
+          uniqueNotes.push(n);
+        }
+      }
+    });
+
+    res.json(uniqueNotes);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch notes' });
   }

@@ -2288,20 +2288,20 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 if (!testId) return;
                 try {
                   // showToast is available in the component
-              showToast("Publish changes...");
-              await testsAPI.publish(testId);
-              showToast("Test published successfully!");
-            } catch (error: any) {
-              showToast(error.message || "Failed to publish test", "error");
-            }
-          }}
-          className="flex items-center gap-2 px-6 py-2.5 bg-[#4361EE] text-white rounded-xl text-[13px] font-bold shadow-[0_4px_14px_0_rgba(67,97,238,0.39)] hover:bg-[#3451DE] transition-all active:scale-95"
-        >
-          <span className="material-symbols-outlined text-[19px]">
-            sync
-          </span>
-          Publish Changes
-        </button>
+                  showToast("Publish changes...");
+                  await testsAPI.publish(testId);
+                  showToast("Test published successfully!");
+                } catch (error: any) {
+                  showToast(error.message || "Failed to publish test", "error");
+                }
+              }}
+              className="flex items-center gap-2 px-6 py-2.5 bg-[#4361EE] text-white rounded-xl text-[13px] font-bold shadow-[0_4px_14px_0_rgba(67,97,238,0.39)] hover:bg-[#3451DE] transition-all active:scale-95"
+            >
+              <span className="material-symbols-outlined text-[19px]">
+                sync
+              </span>
+              Publish Changes
+            </button>
           </div>
 
           <div className="max-w-[1400px] mx-auto p-6 space-y-6">
@@ -2678,21 +2678,43 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             <div className="space-y-6">
               {/* Test Cards List */}
               <div className="grid grid-cols-1 gap-4">
-                {(detailTests.length > 0 ? detailTests : mockDetailTests)
-                  .filter((t) => {
-                    if (!t) return false;
-                    const name = (t.name || t.title || "").toLowerCase();
-                    const matchesSearch = name.includes(
-                      detailSearchQuery.toLowerCase(),
+                {(() => {
+                  const filtered = (detailTests.length > 0 ? detailTests : mockDetailTests)
+                    .filter((t) => {
+                      if (!t) return false;
+                      const name = (t.name || t.title || "").toLowerCase();
+                      const matchesSearch = name.includes(
+                        detailSearchQuery.toLowerCase(),
+                      );
+                      const matchesStatus =
+                        detailFilters.status === "all" ||
+                        (detailFilters.status === "published"
+                          ? t.published !== false
+                          : t.published === false);
+                      return matchesSearch && matchesStatus;
+                    });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="bg-white rounded-[2rem] p-20 border border-dashed border-gray-200 flex flex-col items-center justify-center text-center space-y-4">
+                        <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-300">
+                          <span className="material-symbols-outlined text-[32px]">assignment_late</span>
+                        </div>
+                        <div className="space-y-1">
+                          <h3 className="text-[16px] font-bold text-gray-800">No tests found</h3>
+                          <p className="text-[13px] text-gray-400 font-medium max-w-[280px]">We couldn't find any tests for this series. Try adjusting your search or add a new test.</p>
+                        </div>
+                        <button
+                          onClick={() => setShowAddSingleTestDrawer(true)}
+                          className="px-6 py-2 bg-black text-white rounded-xl text-[13px] font-bold shadow-sm hover:scale-105 transition-all mt-2"
+                        >
+                          Add Your First Test
+                        </button>
+                      </div>
                     );
-                    const matchesStatus =
-                      detailFilters.status === "all" ||
-                      (detailFilters.status === "published"
-                        ? t.published !== false
-                        : t.published === false);
-                    return matchesSearch && matchesStatus;
-                  })
-                  .map((test, index) => (
+                  }
+
+                  return filtered.map((test, index) => (
                     <div
                       key={String(test?.id || (test as any)._id || index)}
                       className="bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all"
@@ -2715,17 +2737,17 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           <div className="flex items-center gap-4 mt-1 text-[12px] text-gray-500 font-medium">
                             <span><span className="font-bold text-gray-700">{test.marks || 0}</span> Marks</span>
                             <span><span className="font-bold text-gray-700">{test.time || 0}</span> Minutes</span>
-                             <span className={(Array.isArray((test as any).questions) ? (test as any).questions.length : Number((test as any).questions) || 0) >= (Number((test as any).noOfQuestions) || Number((test as any).questions) || 0) ? "text-green-600 font-bold" : ""}>
-                               {Array.isArray((test as any).questions)
-                                 ? (test as any).questions.length
-                                 : Number((test as any).questions) || 0}
-                               /
-                               {Number((test as any).noOfQuestions) ||
-                                 Number((test as any).questions) ||
-                                 0}{" "}
-                               Questions Added
-                             </span>
-                           </div>
+                            <span className={(Array.isArray((test as any).questions) ? (test as any).questions.length : Number((test as any).questions) || 0) >= (Number((test as any).noOfQuestions) || Number((test as any).questions) || 0) ? "text-green-600 font-bold" : ""}>
+                              {Array.isArray((test as any).questions)
+                                ? (test as any).questions.length
+                                : Number((test as any).questions) || 0}
+                              /
+                              {Number((test as any).noOfQuestions) ||
+                                Number((test as any).questions) ||
+                                0}{" "}
+                              Questions Added
+                            </span>
+                          </div>
                         </div>
 
                         <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
@@ -2964,8 +2986,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                         </div>
                       </div>
                     </div>
-                  ))}
-              </div>
+                  ));
+                })()}              </div>
             </div>
           )}
 
