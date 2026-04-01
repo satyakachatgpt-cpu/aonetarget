@@ -58,9 +58,9 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
         title: '',
         status: 'Free',
         testSeries: [] as string[],
-        noOfQuestions: '',
+        noOfQuestions: '0',
         totalMarks: '',
-        totalDuration: '',
+        totalDuration: '180',
         subject: '',
         sortingOrder: '0.00',
         enableSectionSelector: false,
@@ -273,18 +273,6 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                                         />
                                     </div>
 
-                                    {/* No. of Questions */}
-                                    <div className="space-y-2 col-span-1">
-                                        <label className="text-[13px] font-bold text-[#2d3748]">No. of Questions<span className="text-red-500 ml-0.5">*</span></label>
-                                        <input
-                                            type="text"
-                                            value={formData.noOfQuestions}
-                                            onChange={(e) => handleInputChange('noOfQuestions', e.target.value)}
-                                            placeholder="Enter no. of questions"
-                                            className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-400 transition-all placeholder:text-gray-300 shadow-sm"
-                                        />
-                                    </div>
-
                                     {/* Total Marks */}
                                     <div className="space-y-2 col-span-1">
                                         <label className="text-[13px] font-bold text-[#2d3748]">Total Marks<span className="text-red-500 ml-0.5">*</span></label>
@@ -297,17 +285,6 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                                         />
                                     </div>
 
-                                    {/* Total Duration */}
-                                    <div className="space-y-2 col-span-1">
-                                        <label className="text-[13px] font-bold text-[#2d3748]">Total Duration (in minutes)<span className="text-red-500 ml-0.5">*</span></label>
-                                        <input
-                                            type="text"
-                                            value={formData.totalDuration}
-                                            onChange={(e) => handleInputChange('totalDuration', e.target.value)}
-                                            placeholder="Enter duration in minutes"
-                                            className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-400 transition-all placeholder:text-gray-300 shadow-sm"
-                                        />
-                                    </div>
 
                                     {/* Subject */}
                                     <div className="space-y-2 col-span-1">
@@ -759,9 +736,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                                 onClick={() => {
                                     if (!formData.title) return showToast?.('Test Title is mandatory!', 'error');
                                     if (formData.testSeries.length === 0) return showToast?.('Select at least one Test Series!', 'error');
-                                    if (!formData.noOfQuestions) return showToast?.('No. of Questions is mandatory!', 'error');
                                     if (!formData.totalMarks) return showToast?.('Total Marks is mandatory!', 'error');
-                                    if (!formData.totalDuration) return showToast?.('Total Duration is mandatory!', 'error');
                                     
                                     onSubmit({ ...formData, sections });
                                 }}

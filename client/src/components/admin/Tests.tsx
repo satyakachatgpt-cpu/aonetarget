@@ -2315,11 +2315,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                   {viewingQuestionEditor.time || 0} Minutes
                 </span>
                 <span className="text-[13px] font-bold text-gray-600">
-                  {editorQuestions.length} /{" "}
-                  {viewingQuestionEditor?.noOfQuestions ||
-                    viewingQuestionEditor?.questions ||
-                    editorQuestions.length}{" "}
-                  Questions Added
+                  {viewingQuestionEditor.time || 0} Minutes
                 </span>
               </div>
               <p className="text-[12px] font-medium text-gray-400">
@@ -2737,16 +2733,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           <div className="flex items-center gap-4 mt-1 text-[12px] text-gray-500 font-medium">
                             <span><span className="font-bold text-gray-700">{test.marks || 0}</span> Marks</span>
                             <span><span className="font-bold text-gray-700">{test.time || 0}</span> Minutes</span>
-                            <span className={(Array.isArray((test as any).questions) ? (test as any).questions.length : Number((test as any).questions) || 0) >= (Number((test as any).noOfQuestions) || Number((test as any).questions) || 0) ? "text-green-600 font-bold" : ""}>
-                              {Array.isArray((test as any).questions)
-                                ? (test as any).questions.length
-                                : Number((test as any).questions) || 0}
-                              /
-                              {Number((test as any).noOfQuestions) ||
-                                Number((test as any).questions) ||
-                                0}{" "}
-                              Questions Added
-                            </span>
                           </div>
                         </div>
 
@@ -5352,14 +5338,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                         </span>
                       </div>
                     </th>
-                    <th className="px-6 py-3.5 text-[12px] font-bold tracking-tight">
-                      <div className="flex items-center gap-1.5 cursor-pointer group uppercase">
-                        Questions{" "}
-                        <span className="material-symbols-outlined text-[16px] text-gray-300 group-hover:text-gray-400">
-                          unfold_more
-                        </span>
-                      </div>
-                    </th>
                     <th className="px-6 py-3.5 text-[12px] font-bold tracking-tight text-center uppercase">
                       Actions
                     </th>
@@ -5368,7 +5346,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 <tbody className="divide-y divide-gray-50">
                   {paginatedTests.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-8 py-20 text-center">
+                      <td colSpan={6} className="px-8 py-20 text-center">
                         <span className="material-symbols-outlined text-6xl text-gray-200 mb-2 block">
                           quiz
                         </span>
@@ -5422,21 +5400,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           <div className="bg-[#eff1f3] rounded-3xl h-6 px-4 inline-flex items-center justify-center min-w-[80px]">
                             <span className="text-[12px] font-medium text-gray-600">
                               {Number(test.sortBy || 0).toFixed(2)}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-1.5 text-[13px] font-bold">
-                            <span className="text-gray-800">
-                              {Array.isArray((test as any).questions)
-                                ? (test as any).questions.length
-                                : Number((test as any).questions) || 0}
-                            </span>
-                            <span className="text-gray-300">/</span>
-                            <span className="text-[12px] font-medium text-gray-500">
-                              {Number((test as any).noOfQuestions) ||
-                                Number((test as any).questions) ||
-                                0}
                             </span>
                           </div>
                         </td>

@@ -33,6 +33,7 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
     });
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [showCategoryOptions, setShowCategoryOptions] = useState(false);
+    const [showMorePricingOptions, setShowMorePricingOptions] = useState(false);
     const [advSettings, setAdvSettings] = useState({
         disableCoupons: false,
         enableCombo: false,
@@ -197,29 +198,7 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
                                     />
                                 </div>
 
-                                 {/* Time and Questions */}
-                                <div className="grid grid-cols-2 gap-10 pt-4">
-                                    <div className="space-y-2">
-                                        <label className="text-[14px] font-bold text-gray-700 ml-1">Time (Minutes)<span className="text-red-500">*</span></label>
-                                        <input
-                                            type="number"
-                                            placeholder="180"
-                                            className="w-full h-12 px-6 bg-white border border-gray-200 rounded-2xl text-[16px] font-bold outline-none focus:border-black transition-all placeholder:text-gray-300 shadow-sm"
-                                            value={formData.duration}
-                                            onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[14px] font-bold text-gray-700 ml-1">No. of Questions<span className="text-red-500">*</span></label>
-                                        <input
-                                            type="number"
-                                            placeholder="100"
-                                            className="w-full h-12 px-6 bg-white border border-gray-200 rounded-2xl text-[16px] font-bold outline-none focus:border-black transition-all placeholder:text-gray-300 shadow-sm"
-                                            value={formData.noOfQuestions}
-                                            onChange={(e) => setFormData({ ...formData, noOfQuestions: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
+
 
                                 {/* Category */}
                                 <div className="">
@@ -247,16 +226,6 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
                                     ) : (
                                         <div className="space-y-8 animate-in slide-in-from-top-2 duration-300 mt-6 pt-6 border-t border-dashed border-gray-100">
                                             <div className="grid grid-cols-2 gap-8">
-                                                <div className="space-y-2">
-                                                    <label className="text-[13px] font-bold text-[#2d3748] ml-1 uppercase tracking-wider opacity-60">Sorting Order</label>
-                                                    <input
-                                                        type="text"
-                                                        placeholder="0.00"
-                                                        className="w-full h-[54px] px-6 bg-white border border-gray-200 rounded-2xl text-[15px] font-bold outline-none focus:border-gray-300 transition-all placeholder:text-gray-300 shadow-sm"
-                                                        value={formData.sortBy}
-                                                        onChange={(e) => setFormData({ ...formData, sortBy: e.target.value })}
-                                                    />
-                                                </div>
                                                 <div className="space-y-2">
                                                     <label className="text-[13px] font-bold text-[#2d3748] ml-1 uppercase tracking-wider opacity-60">Status</label>
                                                     <div className="flex bg-[#f8f8f8] p-1 rounded-2xl h-[54px] border border-gray-100">
@@ -314,10 +283,28 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
                                         </div>
                                     </div>
                                     <div className="flex justify-end pr-1">
-                                        <button className="text-[#4361EE] text-[15px] font-bold flex items-center gap-0.5 hover:underline">
-                                            More Options <span className="material-symbols-outlined text-[22px]">expand_more</span>
+                                        <button 
+                                            type="button"
+                                            onClick={() => setShowMorePricingOptions(!showMorePricingOptions)}
+                                            className="text-[#4361EE] text-[15px] font-bold flex items-center gap-0.5 hover:underline">
+                                            {showMorePricingOptions ? 'Hide Options' : 'More Options'} <span className={`material-symbols-outlined text-[22px] transition-transform ${showMorePricingOptions ? 'rotate-180' : ''}`}>expand_more</span>
                                         </button>
                                     </div>
+                                    {showMorePricingOptions && (
+                                        <div className="grid grid-cols-2 gap-10 pt-4 animate-in slide-in-from-top-2 duration-300">
+                                            <div className="space-y-2">
+                                                <label className="text-[14px] font-bold text-gray-700 ml-1">Sorting Order</label>
+                                                <input
+                                                    type="text"
+                                                    placeholder="0.00"
+                                                    className="w-full h-[60px] px-6 bg-white border border-gray-200 rounded-2xl text-[16px] font-bold outline-none focus:border-gray-300 transition-all placeholder:text-gray-300 shadow-sm"
+                                                    value={formData.sortBy}
+                                                    onChange={(e) => setFormData({ ...formData, sortBy: e.target.value })}
+                                                />
+                                                <p className="text-[13px] text-gray-400 font-medium pt-1 pl-1">Higher values will appear first in lists.</p>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Validity */}
