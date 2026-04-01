@@ -24,6 +24,23 @@ import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import * as pdfjsLib from "pdfjs-dist";
 import { generateDOCX } from "./DOCXGenerator";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || "5.5.207"}/build/pdf.worker.min.mjs`;
@@ -276,6 +293,50 @@ const CustomDropdown = ({
           )}
         </div>
       )}
+    </div>
+  );
+};
+
+const SortableQuestionItem = ({ id, question, index }: any) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 1000 : "auto",
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-6 p-4 border rounded-xl bg-white transition-all group ${isDragging ? "border-primary-400 shadow-xl scale-[1.02] cursor-grabbing" : "border-gray-100 hover:border-gray-200 hover:shadow-sm cursor-move"}`}
+      {...attributes}
+      {...listeners}
+    >
+      <div className="flex items-center justify-center text-gray-300 group-hover:text-gray-400 transition-colors">
+        <span className="material-symbols-outlined text-[20px]">
+          drag_indicator
+        </span>
+      </div>
+      <div className="flex-1 min-w-0 text-left">
+        <p className="text-[14px] font-bold text-gray-700 truncate">
+          {index + 1}. {question.questionEn || "No question text available"}
+        </p>
+        {question.subject && (
+          <span className="text-[10px] text-primary-500 font-bold uppercase tracking-wider">
+            {question.subject}
+          </span>
+        )}
+      </div>
     </div>
   );
 };
@@ -661,6 +722,34 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     useState<number[]>([]);
   const [showSortModal, setShowSortModal] = useState(false);
   const [showImportLibraryDrawer, setShowImportLibraryDrawer] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 5,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      setEditorQuestions((items) => {
+        const oldIndex = items.findIndex(
+          (i) => (i.id || i._id) === active.id,
+        );
+        const newIndex = items.findIndex(
+          (i) => (i.id || i._id) === over.id,
+        );
+
+        return arrayMove(items, oldIndex, newIndex);
+      });
+    }
+  };
   // Results Tab States
   const [results, setResults] = useState<any[]>([]);
   const [resultFilters, setResultFilters] = useState({
@@ -2199,18 +2288,17 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 if (!testId) return;
                 try {
                   // showToast is available in the component
-                  showToast("Publishing changes...");
+                  showToast("Publish changes...");
                   await testsAPI.publish(testId);
                   showToast("Test published successfully!");
-                  // Refresh data if needed, but since we are in editor, maybe just the toast is enough
                 } catch (error: any) {
                   showToast(error.message || "Failed to publish test", "error");
                 }
               }}
-              className="flex items-center gap-2 px-6 py-2 bg-black text-white rounded-xl text-[13px] font-bold shadow-md hover:bg-gray-800 transition-all active:scale-95"
+              className="flex items-center gap-2 px-6 py-2.5 bg-[#4361EE] text-white rounded-xl text-[13px] font-bold shadow-[0_4px_14px_0_rgba(67,97,238,0.39)] hover:bg-[#3451DE] transition-all active:scale-95"
             >
-              <span className="material-symbols-outlined text-[18px]">
-                history
+              <span className="material-symbols-outlined text-[19px]">
+                sync
               </span>
               Publish Changes
             </button>
@@ -2393,10 +2481,10 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                   {/* Top Right Buttons inside card */}
                   <div className="absolute top-8 right-8 flex items-center gap-4">
                     <div className="flex items-center gap-2">
-                      <span className="px-3 py-1 bg-[#E8F5E9] text-[#2E7D32] rounded uppercase text-[11px] font-bold">
-                        +{Number(q?.marks || 0).toFixed(2)}
+                      <span className="px-2.5 py-1 bg-[#E8F5E9] text-[#2E7D32] rounded-sm uppercase text-[10px] font-black tracking-wider border border-[#C8E6C9]">
+                        +{Number(q?.marks || 1).toFixed(2)}
                       </span>
-                      <span className="px-3 py-1 bg-[#FFEBEE] text-[#C62828] rounded uppercase text-[11px] font-bold">
+                      <span className="px-2.5 py-1 bg-[#FFEBEE] text-[#C62828] rounded-sm uppercase text-[10px] font-black tracking-wider border border-[#FFCDD2]">
                         -{Number(q?.negative || 0).toFixed(2)}
                       </span>
                     </div>
@@ -2423,7 +2511,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
                   <div className="space-y-8">
                     <div className="flex items-start gap-4">
-                      <span className="text-[16px] font-black text-gray-300 shrink-0 leading-[1.6]">
+                      <span className="text-[16px] font-black text-gray-800 shrink-0 leading-[1.6]">
                         {idx + 1}.
                       </span>
                       <div className="flex-1">
@@ -2443,28 +2531,31 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                     {/* Options Grid */}
                     <div className="pl-10 grid grid-cols-1 md:grid-cols-3 gap-6">
                       {(q?.displayOptions || []).map(
-                        (opt: any, oidx: number) => (
-                          <div
-                            key={oidx}
-                            className={`rounded-xl border shadow-sm overflow-hidden transition-all hover:shadow-md ${opt?.isCorrect ? "border-[#82B366] bg-[#fdfdfd]" : "border-gray-100 bg-white"}`}
-                          >
+                        (opt: any, oidx: number) => {
+                          const optionLabel = String.fromCharCode(65 + oidx);
+                          return (
                             <div
-                              className={`px-4 py-3 border-b flex items-center justify-between gap-2 ${opt?.isCorrect ? "bg-[#D5E8D4]/30 border-[#82B366] text-[#2E7D32]" : "bg-[#fcfcfc] border-gray-100 text-gray-500"}`}
+                              key={oidx}
+                              className={`rounded-xl border shadow-sm overflow-hidden transition-all hover:shadow-md flex flex-col ${opt?.isCorrect ? "border-[#82B366] ring-1 ring-[#82B366]/20" : "border-gray-100"}`}
                             >
-                              <span className="text-[11px] font-black uppercase tracking-widest">
-                                Option {opt?.id || oidx + 1}
-                              </span>
-                              {opt?.isCorrect && (
-                                <span className="material-symbols-outlined text-[18px]">
-                                  check_circle
+                              <div
+                                className={`px-4 py-2.5 border-b flex items-center justify-between gap-2 ${opt?.isCorrect ? "bg-[#D5E8D4]/40 border-[#82B366] text-[#2E7D32]" : "bg-[#fcfcfc] border-gray-100 text-gray-500"}`}
+                              >
+                                <span className="text-[11px] font-black uppercase tracking-widest">
+                                  Option {optionLabel}
                                 </span>
-                              )}
+                                {opt?.isCorrect && (
+                                  <span className="material-symbols-outlined text-[18px] font-black">
+                                    check_circle
+                                  </span>
+                                )}
+                              </div>
+                              <div className="p-8 flex-1 flex items-center justify-center min-h-[100px] text-[15px] font-bold text-gray-700 text-center leading-relaxed">
+                                {renderQuestionText(opt?.text || "Option Text")}
+                              </div>
                             </div>
-                            <div className="p-8 flex items-center justify-center min-h-[120px] text-[15px] font-bold text-gray-700 text-center leading-relaxed">
-                              {renderQuestionText(opt?.text || "Option Text")}
-                            </div>
-                          </div>
-                        ),
+                          );
+                        },
                       )}
                     </div>
                   </div>
@@ -2613,7 +2704,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           <h3 className="text-[16px] font-bold text-gray-800">No tests found</h3>
                           <p className="text-[13px] text-gray-400 font-medium max-w-[280px]">We couldn't find any tests for this series. Try adjusting your search or add a new test.</p>
                         </div>
-                        <button 
+                        <button
                           onClick={() => setShowAddSingleTestDrawer(true)}
                           className="px-6 py-2 bg-black text-white rounded-xl text-[13px] font-bold shadow-sm hover:scale-105 transition-all mt-2"
                         >
@@ -2626,88 +2717,64 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                   return filtered.map((test, index) => (
                     <div
                       key={String(test?.id || (test as any)._id || index)}
-                      className="bg-white rounded-[2rem] p-8 border border-gray-100 shadow-sm hover:shadow-md transition-all flex items-center justify-between group"
+                      className="bg-white border border-gray-100 shadow-sm hover:shadow-md transition-all"
                     >
-                      <div className="flex items-center gap-8 flex-1 text-[#1a202c]">
-                        <div className="flex items-center px-4">
-                          <input
-                            type="checkbox"
-                            className="w-[18px] h-[18px] rounded border-gray-200 accent-black cursor-pointer"
-                          />
-                        </div>
-                        <div className="space-y-1.5 flex-1">
-                          <div className="flex items-center gap-3">
-                            <h3
-                              className="text-[16px] font-black text-gray-800 group-hover:text-blue-600 transition-colors cursor-pointer"
-                              onClick={() => {
-                                setViewingQuestionEditor(test);
-                                setEditingTest(test);
-                              }}
-                            >
-                              {test.name || (test as any).title}
-                            </h3>
-                            <span className="px-3 py-1 bg-green-50 text-green-700 rounded-full text-[11px] font-black border border-green-100 flex items-center gap-1">
-                              <span className="material-symbols-outlined text-[14px]">checklist</span>
+                      <div className="px-5 py-4 flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          className="w-[16px] h-[16px] rounded border-gray-300 accent-black cursor-pointer flex-shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <h3
+                            className="text-[14px] font-bold text-gray-800 hover:text-blue-600 transition-colors cursor-pointer leading-snug"
+                            onClick={() => {
+                              setViewingQuestionEditor(test);
+                              setEditingTest(test);
+                            }}
+                          >
+                            {test.name || (test as any).title}
+                          </h3>
+                          <div className="flex items-center gap-4 mt-1 text-[12px] text-gray-500 font-medium">
+                            <span><span className="font-bold text-gray-700">{test.marks || 0}</span> Marks</span>
+                            <span><span className="font-bold text-gray-700">{test.time || 0}</span> Minutes</span>
+                            <span className={(Array.isArray((test as any).questions) ? (test as any).questions.length : Number((test as any).questions) || 0) >= (Number((test as any).noOfQuestions) || Number((test as any).questions) || 0) ? "text-green-600 font-bold" : ""}>
                               {Array.isArray((test as any).questions)
                                 ? (test as any).questions.length
                                 : Number((test as any).questions) || 0}
                               /
                               {Number((test as any).noOfQuestions) ||
                                 Number((test as any).questions) ||
-                                0} Qs
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-6 text-[12px] font-bold text-gray-400">
-                            <span className="flex items-center gap-1.5">
-                              <span className="material-symbols-outlined text-[16px] text-blue-500">
-                                assignment
-                              </span>{" "}
-                              {test.marks || test.totalMarks || 0} Marks
-                            </span>
-                            <span className="flex items-center gap-1.5">
-                              <span className="material-symbols-outlined text-[16px] text-orange-500">
-                                timer
-                              </span>{" "}
-                              {test.time || test.duration || 0} Minutes
+                                0}{" "}
+                              Questions Added
                             </span>
                           </div>
                         </div>
-                      </div>
 
-                      <div className="flex items-center gap-10">
-                        <div className="flex flex-col items-end gap-1 px-4 text-right">
-                          <span className="text-[11px] font-black text-gray-300 uppercase tracking-widest">
-                            Published
+                        <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
+                          {/* Last Published */}
+                          <span className="text-[11px] text-gray-400 whitespace-nowrap hidden xl:block mr-2">
+                            Last Published:<span className="font-semibold ml-1">{(test as any).published || "—"}</span>
                           </span>
-                          <span className="text-[13px] font-black text-gray-400 whitespace-nowrap">
-                            {(test as any).published || "N/A"}
-                          </span>
-                        </div>
 
-                        <div className="flex flex-col items-center gap-1 min-w-[60px]">
-                          <span className="text-[11px] font-black text-gray-300 uppercase tracking-widest mb-1">
-                            Price
-                          </span>
-                          <span className="text-[15px] font-black text-[#2E7D32] bg-[#E9F7EF] px-3 py-1 rounded-full border border-[#82B366]/20">
-                            ₹{(test as any).price || 0}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center gap-4">
-                          <button className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-black transition-colors">
-                            <span className="material-symbols-outlined text-[20px]">
-                              lock_open
-                            </span>
-                          </button>
+                          {/* Toggle */}
                           <button
-                            onClick={() => { }}
-                            className={`w-11 h-6 rounded-full relative transition-all duration-300 ${test.status === "active" ? "bg-black" : "bg-gray-200"}`}
+                            onClick={() => toggleStatus(test)}
+                            className={`w-9 h-[20px] rounded-full relative transition-all duration-300 ${test.status === "active" ? "bg-gray-700" : "bg-gray-200"}`}
                           >
-                            <div
-                              className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all duration-300 ${test.status === "active" ? "left-6" : "left-1"}`}
-                            />
+                            <div className={`absolute top-[2px] w-4 h-4 bg-white rounded-full transition-all duration-300 shadow ${test.status === "active" ? "left-[18px]" : "left-[2px]"}`} />
                           </button>
 
+                          {/* Lock Icon */}
+                          <button className="w-7 h-7 flex items-center justify-center text-gray-400 hover:text-gray-700 transition-colors">
+                            <span className="material-symbols-outlined text-[19px]">lock_open</span>
+                          </button>
+
+                          {/* Price */}
+                          <span className="text-[13px] font-bold text-gray-700 min-w-[32px] text-center">
+                            {Number((test as any).price || 0).toFixed(2)}
+                          </span>
+
+                          {/* Actions Dropdown */}
                           <div className="relative action-menu-container" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
                             <button
                               onClick={() =>
@@ -2718,11 +2785,10 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                                     : test.id || (test as any)._id,
                                 )
                               }
-                              className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-black transition-colors"
+                              className={`flex items-center gap-1 px-3 h-8 border rounded text-[12.5px] font-semibold transition-all whitespace-nowrap ${String(activeActionMenuId) === String(test.id || (test as any)._id) ? "bg-gray-800 text-white border-gray-800" : "bg-white border-gray-300 text-gray-700 hover:border-gray-500"}`}
                             >
-                              <span className="material-symbols-outlined">
-                                more_vert
-                              </span>
+                              Actions
+                              <span className="material-symbols-outlined text-[14px]">expand_more</span>
                             </button>
 
                             {String(activeActionMenuId) ===
@@ -2970,11 +3036,38 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           {pdf.addedOn}
                         </td>
                         <td className="px-8 py-5 text-right">
-                          <button className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-black transition-colors">
-                            <span className="material-symbols-outlined">
-                              more_vert
-                            </span>
-                          </button>
+                          <div className="relative inline-block action-menu-container">
+                            <button
+                              onClick={() => setActiveActionMenuId(activeActionMenuId === (pdf.id || idx) + 30000 ? null : (pdf.id || idx) + 30000)}
+                              className={`flex items-center justify-between gap-2 px-4 h-9 border rounded-lg text-[13px] font-bold transition-all shadow-sm w-[110px] ${activeActionMenuId === (pdf.id || idx) + 30000 ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+                            >
+                              Actions
+                              <span className={`material-symbols-outlined text-[18px] transition-all duration-200 ${activeActionMenuId === (pdf.id || idx) + 30000 ? "rotate-180 text-blue-500" : "text-gray-400 group-hover:text-gray-600"}`}>
+                                expand_more
+                              </span>
+                            </button>
+                            {activeActionMenuId === (pdf.id || idx) + 30000 && (
+                              <div className={`absolute right-0 top-full mt-1 w-[160px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[101] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right`}>
+                                {[
+                                  { id: "download", label: "Download", icon: "download", onClick: () => { setActiveActionMenuId(null); showToast("Downloading..."); } },
+                                  { id: "delete", label: "Delete", icon: "delete", color: "text-red-500", onClick: () => { setActiveActionMenuId(null); showToast("Delete functionality pending..."); } },
+                                ].map(item => (
+                                  <button
+                                    key={item.id}
+                                    onClick={() => item.onClick()}
+                                    className="w-full px-5 py-2 flex items-center gap-3 hover:bg-gray-50 transition-colors group text-left"
+                                  >
+                                    <span className={`material-symbols-outlined text-[20px] ${item.color || "text-gray-400 group-hover:text-black"}`}>
+                                      {item.icon}
+                                    </span>
+                                    <span className={`text-[13px] font-bold ${item.color || "text-gray-600 group-hover:text-black"}`}>
+                                      {item.label}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -3043,11 +3136,38 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           </span>
                         </td>
                         <td className="px-8 py-5 text-right">
-                          <button className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-black transition-colors">
-                            <span className="material-symbols-outlined">
-                              more_vert
-                            </span>
-                          </button>
+                          <div className="relative inline-block action-menu-container">
+                            <button
+                              onClick={() => setActiveActionMenuId(activeActionMenuId === (test.id || i) + 40000 ? null : (test.id || i) + 40000)}
+                              className={`flex items-center justify-between gap-2 px-4 h-9 border rounded-lg text-[13px] font-bold transition-all shadow-sm w-[110px] ${activeActionMenuId === (test.id || i) + 40000 ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+                            >
+                              Actions
+                              <span className={`material-symbols-outlined text-[18px] transition-all duration-200 ${activeActionMenuId === (test.id || i) + 40000 ? "rotate-180 text-blue-500" : "text-gray-400 group-hover:text-gray-600"}`}>
+                                expand_more
+                              </span>
+                            </button>
+                            {activeActionMenuId === (test.id || i) + 40000 && (
+                              <div className={`absolute right-0 top-full mt-1 w-[160px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[101] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right`}>
+                                {[
+                                  { id: "edit", label: "Edit Test", icon: "edit", onClick: () => { setActiveActionMenuId(null); showToast("Edit subjective..."); } },
+                                  { id: "delete", label: "Delete", icon: "delete", color: "text-red-500", onClick: () => { setActiveActionMenuId(null); showToast("Delete subjective..."); } },
+                                ].map(item => (
+                                  <button
+                                    key={item.id}
+                                    onClick={() => item.onClick()}
+                                    className="w-full px-5 py-2 flex items-center gap-3 hover:bg-gray-50 transition-colors group text-left"
+                                  >
+                                    <span className={`material-symbols-outlined text-[20px] ${item.color || "text-gray-400 group-hover:text-black"}`}>
+                                      {item.icon}
+                                    </span>
+                                    <span className={`text-[13px] font-bold ${item.color || "text-gray-600 group-hover:text-black"}`}>
+                                      {item.label}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -3117,11 +3237,38 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           {user.expiryDate}
                         </td>
                         <td className="px-8 py-5 text-right">
-                          <button className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-black transition-colors">
-                            <span className="material-symbols-outlined">
-                              more_vert
-                            </span>
-                          </button>
+                          <div className="relative inline-block action-menu-container">
+                            <button
+                              onClick={() => setActiveActionMenuId(activeActionMenuId === (user.id || idx) + 50000 ? null : (user.id || idx) + 50000)}
+                              className={`flex items-center justify-between gap-2 px-4 h-9 border rounded-lg text-[13px] font-bold transition-all shadow-sm w-[110px] ${activeActionMenuId === (user.id || idx) + 50000 ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+                            >
+                              Actions
+                              <span className={`material-symbols-outlined text-[18px] transition-all duration-200 ${activeActionMenuId === (user.id || idx) + 50000 ? "rotate-180 text-blue-500" : "text-gray-400 group-hover:text-gray-600"}`}>
+                                expand_more
+                              </span>
+                            </button>
+                            {activeActionMenuId === (user.id || idx) + 50000 && (
+                              <div className={`absolute right-0 top-full mt-1 w-[160px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[101] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right`}>
+                                {[
+                                  { id: "view", label: "View Details", icon: "visibility", onClick: () => { setActiveActionMenuId(null); } },
+                                  { id: "remove", label: "Remove", icon: "person_remove", color: "text-red-500", onClick: () => { setActiveActionMenuId(null); } },
+                                ].map(item => (
+                                  <button
+                                    key={item.id}
+                                    onClick={() => item.onClick()}
+                                    className="w-full px-5 py-2 flex items-center gap-3 hover:bg-gray-50 transition-colors group text-left"
+                                  >
+                                    <span className={`material-symbols-outlined text-[20px] ${item.color || "text-gray-400 group-hover:text-black"}`}>
+                                      {item.icon}
+                                    </span>
+                                    <span className={`text-[13px] font-bold ${item.color || "text-gray-600 group-hover:text-black"}`}>
+                                      {item.label}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -3333,61 +3480,32 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              const next =
-                                activeActionMenuId ===
-                                  (q.id || (q as any)._id) + 20000
-                                  ? null
-                                  : (q.id || (q as any)._id) + 20000;
+                              const next = activeActionMenuId === (q.id || (q as any)._id) + 20000 ? null : (q.id || (q as any)._id) + 20000;
                               setActiveActionMenuId(next);
-                              if (next !== null) {
-                                setShowFloatingAddMenu(false);
-                                setShowFloatingMoreMenu(false);
-                              }
                             }}
-                            className={`flex items-center justify-between gap-2 px-4 py-2 border rounded-lg text-[13px] font-bold transition-all shadow-sm w-[110px] ${activeActionMenuId ===
-                              (q.id || (q as any)._id) + 20000
-                              ? "bg-blue-50 border-blue-200 text-blue-700"
-                              : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
-                              }`}
+                            className={`flex items-center justify-between gap-2 px-4 py-2 border rounded-lg text-[13px] font-bold transition-all shadow-sm w-[110px] ${activeActionMenuId === (q.id || (q as any)._id) + 20000 ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
                           >
                             Actions
-                            <span
-                              className={`material-symbols-outlined text-[18px] transition-transform duration-200 ${activeActionMenuId ===
-                                (q.id || (q as any)._id) + 20000
-                                ? "rotate-180 text-blue-500"
-                                : "text-gray-400 group-hover:text-gray-600"
-                                }`}
-                            >
+                            <span className={`material-symbols-outlined text-[18px] transition-all duration-200 ${activeActionMenuId === (q.id || (q as any)._id) + 20000 ? "rotate-180 text-blue-500" : "text-gray-400 group-hover:text-gray-600"}`}>
                               expand_more
                             </span>
                           </button>
 
-                          {activeActionMenuId ===
-                            (q.id || (q as any)._id) + 20000 && (
-                              <div
-                                className={`absolute right-0 w-[140px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${filteredMaster.length > 3
-                                  ? idx >= filteredMaster.length - 2
-                                    ? "bottom-full mb-1"
-                                    : "top-full mt-1"
-                                  : idx >= filteredMaster.length - 1
-                                    ? "bottom-full mb-1"
-                                    : "top-full mt-1"
-                                  }`}
+                          {activeActionMenuId === (q.id || (q as any)._id) + 20000 && (
+                            <div className={`absolute right-0 w-[140px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${idx >= filteredMaster.length - 2 ? "bottom-full mb-1" : "top-full mt-1"}`}>
+                              <button
+                                onClick={() => { setActiveActionMenuId(null); setViewingQuestionDetail(q); }}
+                                className="w-full px-5 py-2 flex items-center gap-3 hover:bg-gray-50 transition-colors group text-left"
                               >
-                                <button
-                                  onClick={() => {
-                                    setActiveActionMenuId(null);
-                                    setViewingQuestionDetail(q);
-                                  }}
-                                  className="w-full px-4 py-1.5 flex items-center gap-3 text-left hover:bg-blue-50/50 transition-colors group text-[14px] font-bold text-gray-600"
-                                >
-                                  <span className="material-symbols-outlined text-[18px] text-blue-400 group-hover:text-blue-500 fill-current">
-                                    radio_button_checked
-                                  </span>
+                                <span className="material-symbols-outlined text-[20px] text-gray-400 group-hover:text-black">
+                                  radio_button_checked
+                                </span>
+                                <span className="text-[13px] font-bold text-gray-600 group-hover:text-black">
                                   View
-                                </button>
-                              </div>
-                            )}
+                                </span>
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -5325,113 +5443,64 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                         <td className="px-6 py-5 text-center">
                           <div className="relative inline-block action-menu-container">
                             <button
-                              onClick={() =>
-                                setActiveMenu(
-                                  activeMenu === test.id ? null : test.id,
-                                )
-                              }
-                              className={`flex items-center gap-2 px-4 h-9 border border-gray-200 rounded-lg text-[13px] font-medium transition-all ${activeMenu === test.id ? "bg-[#f8f9fa] border-gray-400 text-black" : "text-gray-600 bg-white hover:bg-gray-50"}`}
+                              onClick={() => setActiveMenu(activeMenu === test.id ? null : test.id)}
+                              className={`flex items-center justify-between gap-2 px-4 h-9 border rounded-lg text-[13px] font-bold transition-all shadow-sm w-[110px] ${activeMenu === test.id ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
                             >
                               Actions
-                              <span className="material-symbols-outlined text-[18px] text-gray-400">
+                              <span className={`material-symbols-outlined text-[18px] transition-all duration-200 ${activeMenu === test.id ? "rotate-180 text-blue-500" : "text-gray-400 group-hover:text-gray-600"}`}>
                                 expand_more
                               </span>
                             </button>
 
                             {activeMenu === test.id && (
-                              <div
-                                className={`absolute right-0 ${paginatedTests.length > 3 ? (index >= paginatedTests.length - 2 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right") : index >= paginatedTests.length - 1 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right"} w-[200px] bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-gray-100 z-[9999] py-1 animate-in fade-in zoom-in-95 duration-200 origin-top-right`}
-                              >
+                              <div className={`absolute right-0 ${paginatedTests.length > 3 ? (index >= paginatedTests.length - 2 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right") : index >= paginatedTests.length - 1 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right"} w-[180px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[9999] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right`}>
                                 {[
-                                  {
-                                    id: "view",
-                                    label: "View Tests",
-                                    icon: "folder_open",
-                                    onClick: () => {
-                                      handleSetViewingTestSeries(test);
-                                      setActiveMenu(null);
-                                    },
-                                  },
-                                  {
-                                    id: "edit",
-                                    label: "Edit",
-                                    icon: "edit",
-                                    onClick: () => {
-                                      handleOpenModal(test);
-                                      setActiveMenu(null);
-                                    },
-                                  },
-                                  {
-                                    id: "copy",
-                                    label: "Copy",
-                                    icon: "content_copy",
-                                    onClick: () => {
-                                      showToast("Copying series...");
-                                      setActiveMenu(null);
-                                    },
-                                  },
-                                  {
-                                    id: "publish",
-                                    label: "Publish Changes",
-                                    icon: "sync",
-                                    onClick: () => {
-                                      showToast("Publishing...");
-                                      setActiveMenu(null);
-                                    },
-                                  },
+                                  { id: "view", label: "View Tests", icon: "folder_open", onClick: () => { handleSetViewingTestSeries(test); setActiveMenu(null); } },
+                                  { id: "edit", label: "Edit", icon: "edit", onClick: () => { handleOpenModal(test); setActiveMenu(null); } },
+                                  { id: "duplicate", label: "Duplicate", icon: "content_copy", onClick: () => { handleDuplicateTest(test); setActiveMenu(null); } },
+                                  { id: "publish", label: "Publish Changes", icon: "sync", onClick: () => { handlePublish(test.id || (test as any)._id); setActiveMenu(null); } },
                                 ].map((item) => (
                                   <button
                                     key={item.id}
-                                    onClick={() => {
-                                      if (item.onClick) item.onClick();
-                                      else setActiveMenu(null);
-                                    }}
-                                    className="w-full px-4 py-1.5 flex items-center gap-3 hover:bg-gray-50 transition-all group"
+                                    onClick={() => item.onClick()}
+                                    className="w-full px-5 py-2 flex items-center gap-3 hover:bg-gray-50 transition-colors group text-left"
                                   >
-                                    <span className="material-symbols-outlined text-[18px] text-gray-400 group-hover:text-gray-700">
+                                    <span className="material-symbols-outlined text-[20px] text-gray-400 group-hover:text-black">
                                       {item.icon}
                                     </span>
-                                    <span className="text-[13px] font-medium text-gray-700 group-hover:text-black text-left">
+                                    <span className="text-[13px] font-bold text-gray-600 group-hover:text-black">
                                       {item.label}
                                     </span>
                                   </button>
                                 ))}
 
-                                <div className="w-full flex items-center justify-between px-4 py-1.5 hover:bg-gray-50 transition-all group">
+                                <div className="w-full flex items-center justify-between px-5 py-2 hover:bg-gray-50 transition-all group">
                                   <div className="flex items-center gap-3">
-                                    <span className="material-symbols-outlined text-[18px] text-gray-400 group-hover:text-gray-700">
-                                      info
+                                    <span className="material-symbols-outlined text-[20px] text-gray-400 group-hover:text-black">
+                                      check_circle
                                     </span>
-                                    <span className="text-[13px] font-medium text-gray-700 group-hover:text-black">
+                                    <span className="text-[13px] font-bold text-gray-600 group-hover:text-black">
                                       Enabled
                                     </span>
                                   </div>
                                   <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      toggleStatus(test);
-                                    }}
-                                    className={`w-9 h-5 rounded-full relative transition-all duration-300 ${test.status === "active" ? "bg-black" : "bg-gray-200"}`}
+                                    onClick={(e) => { e.stopPropagation(); toggleStatus(test); }}
+                                    className={`w-8 h-4.5 rounded-full relative transition-all duration-300 ${test.status === "active" ? "bg-black" : "bg-gray-200"}`}
                                   >
-                                    <div
-                                      className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all duration-300 ${test.status === "active" ? "left-5" : "left-1"}`}
-                                    />
+                                    <div className={`absolute top-0.5 w-3.5 h-3.5 bg-white rounded-full transition-all duration-300 ${test.status === "active" ? "left-4" : "left-0.5"}`} />
                                   </button>
                                 </div>
 
                                 <div className="h-[1px] bg-gray-50 my-1 mx-2"></div>
 
                                 <button
-                                  onClick={() => {
-                                    handleDelete(test.id || (test as any)._id);
-                                    setActiveMenu(null);
-                                  }}
-                                  className="w-full px-4 py-1.5 flex items-center gap-3 hover:bg-red-50 transition-all group"
+                                  onClick={() => { handleDelete(test.id || (test as any)._id); setActiveMenu(null); }}
+                                  className="w-full px-5 py-2 flex items-center gap-3 hover:bg-red-50 transition-colors group text-left"
                                 >
-                                  <span className="material-symbols-outlined text-[18px] text-red-500">
-                                    delete_outline
+                                  <span className="material-symbols-outlined text-[20px] text-red-500">
+                                    delete
                                   </span>
-                                  <span className="text-[13px] font-medium text-red-500 text-left">
+                                  <span className="text-[13px] font-bold text-red-600">
                                     Delete
                                   </span>
                                 </button>
@@ -6222,42 +6291,72 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             </div>
 
             {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto p-10 space-y-4">
-              {editorQuestions.map((q, idx) => (
-                <div
-                  key={idx}
-                  className="flex items-center gap-6 p-4 border border-gray-100 rounded-xl bg-white hover:border-gray-200 hover:shadow-sm transition-all group cursor-move"
+            <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={editorQuestions.map((q) => q.id || q._id)}
+                  strategy={verticalListSortingStrategy}
                 >
-                  <div className="flex items-center justify-center text-gray-300 group-hover:text-gray-400 transition-colors">
-                    <span className="material-symbols-outlined text-[20px]">
-                      drag_indicator
-                    </span>
+                  <div className="space-y-4">
+                    {editorQuestions.map((q, idx) => (
+                      <SortableQuestionItem
+                        key={q.id || q._id || idx}
+                        id={q.id || q._id}
+                        question={q}
+                        index={idx}
+                      />
+                    ))}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[14px] font-bold text-gray-700 truncate">
-                      {idx + 1}. {q.questionEn || "No question text available"}
-                    </p>
-                  </div>
+                </SortableContext>
+              </DndContext>
+              {editorQuestions.length === 0 && (
+                <div className="py-20 text-center">
+                  <span className="material-symbols-outlined text-gray-200 text-6xl">
+                    quiz
+                  </span>
+                  <p className="text-gray-400 mt-4 font-medium">
+                    No questions available to sort
+                  </p>
                 </div>
-              ))}
+              )}
             </div>
 
             {/* Footer */}
             <div className="px-8 py-5 border-t border-gray-100 flex items-center justify-end gap-3 bg-white rounded-b-2xl">
               <button
                 onClick={() => setShowSortModal(false)}
-                className="px-8 py-2.5 border border-gray-200 rounded-lg text-[13px] font-bold text-gray-500 hover:bg-gray-50 transition-all"
+                className="px-8 py-2.5 border border-gray-200 rounded-lg text-[13px] font-bold text-gray-500 hover:bg-gray-50 transition-all active:scale-95"
               >
-                Close
+                Cancel
               </button>
               <button
-                onClick={() => {
-                  showToast("Questions reordered successfully", "success");
-                  setShowSortModal(false);
+                onClick={async () => {
+                  try {
+                    const updates = editorQuestions.map((q, idx) => ({
+                      id: q.id,
+                      _id: q._id,
+                      orderIndex: idx + 1,
+                    }));
+
+                    await questionsAPI.updateAll(updates);
+                    showToast("Question order saved successfully", "success");
+                    setShowSortModal(false);
+                    loadData();
+                  } catch (err: any) {
+                    showToast(
+                      err.message || "Failed to save question order",
+                      "error",
+                    );
+                  }
                 }}
-                className="px-10 py-2.5 bg-[#4F46E5] text-white text-[13px] font-bold rounded-lg hover:bg-[#4338CA] transition-all shadow-md active:scale-95"
+                disabled={editorQuestions.length === 0}
+                className="px-10 py-2.5 bg-[#4F46E5] text-white text-[13px] font-bold rounded-lg hover:bg-[#4338CA] transition-all shadow-md active:scale-95 disabled:opacity-50"
               >
-                Save
+                Save Order
               </button>
             </div>
           </div>

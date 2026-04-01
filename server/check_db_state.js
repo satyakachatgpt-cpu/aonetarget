@@ -2,7 +2,7 @@ const { MongoClient, ObjectId } = require('mongodb');
 const dns = require('dns');
 dns.setServers(['8.8.8.8', '8.8.4.4']);
 
-const URI = 'mongodb+srv://AONETARGET:SACHIN123@cluster0.yvihcjy.mongodb.net/aonetarget?retryWrites=true&w=majority';
+const URI = 'mongodb+srv://AONETARGET:ANILSHARMA123@cluster0.yvihcjy.mongodb.net/aonetarget?retryWrites=true&w=majority';
 const ID = '69a02a184854be0efb3732ca';
 
 async function check() {

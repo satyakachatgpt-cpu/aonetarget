@@ -305,7 +305,7 @@ const StudentDashboard: React.FC = () => {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                navigate(`/test/${r.testId}`);
+                                navigate(`/test/${r.testId || (r as any).id || (r as any)._id}`);
                               }}
                               className="flex items-center gap-1 px-2 py-0.5 bg-blue-600/10 text-blue-600 rounded-lg text-[9px] font-black uppercase hover:bg-blue-600 hover:text-white transition-all active:scale-95"
                             >

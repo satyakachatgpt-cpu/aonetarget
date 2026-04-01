@@ -657,8 +657,8 @@ const CourseDetails: React.FC = () => {
               ))}
             </div>
 
-            {filteredVideos.length === 0 && 
-             filteredFolders.length === 0 ? (
+            {filteredVideos.length === 0 &&
+              filteredFolders.length === 0 ? (
               <div className="card-premium p-10 text-center animate-fade-in-up">
                 <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
                   <span className="material-symbols-rounded text-3xl text-gray-300">video_library</span>
@@ -823,94 +823,68 @@ const CourseDetails: React.FC = () => {
                 <p className="text-gray-400 font-medium text-sm">No tests available here</p>
               </div>
             ) : (
-              <>
-                {/* Folders in Tests Tab */}
-                {filteredFolders.map((folder) => (
+              filteredTests.map((test: any, i: number) => {
+                const isAttempted = progress.completedTests.includes(test.id);
+                const canAccess = isEnrolled || test.isFree;
+                const isLocked = !canAccess;
+                return (
                   <div
-                    key={normalizeId(folder.id || folder._id)}
-                    onClick={() => navigateIntoFolder(folder)}
-                    className="bg-white p-4 cursor-pointer active:scale-[0.98] transition-all flex items-center justify-between group rounded-[1.8rem] border-[1.5px] border-gray-50 shadow-sm hover:shadow-md hover:border-primary-100"
+                    key={test.id}
+                    className={`card-premium p-4 animate-fade-in-up ${isLocked ? 'opacity-70' : ''}`}
+                    style={{ animationDelay: `${(filteredFolders.length + i) * 60}ms` }}
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-[#3F51B5] rounded-[1rem] flex items-center justify-center text-white shadow-lg overflow-hidden relative">
-                        <div className="absolute inset-0 bg-white/10 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <span className="material-symbols-rounded text-xl">folder</span>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isLocked ? 'bg-surface-200' : 'bg-gradient-to-br from-purple-100 to-purple-50'}`}>
+                          <span className={`material-symbols-rounded text-xl ${isLocked ? 'text-gray-400' : 'text-purple-500'}`}>
+                            {isLocked ? 'lock' : 'quiz'}
+                          </span>
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-sm text-gray-800">{test.name}</h4>
+                          <p className="text-[11px] text-gray-400 font-medium mt-0.5">
+                            {test.numberOfQuestions || test.questions || 0} Questions • {test.duration || 60} mins
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-bold text-gray-900 text-sm tracking-tight leading-none mb-1 transition-colors group-hover:text-primary-600">
-                          {folder.title || (folder as any).name || 'Chapter'}
-                        </h4>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.15em] opacity-40">SECTION</p>
+                      <div className="flex items-center gap-2">
+                        {test.isFree && !isEnrolled && (
+                          <span className="bg-green-50 text-green-600 text-[10px] font-bold px-2 py-1 rounded-lg">
+                            FREE
+                          </span>
+                        )}
+                        {isAttempted && (
+                          <span className="bg-green-50 text-green-600 text-[10px] font-bold px-2 py-1 rounded-lg flex items-center gap-0.5">
+                            <span className="material-symbols-rounded text-[10px]">check_circle</span>
+                            Done
+                          </span>
+                        )}
+                        {isLocked && (
+                          <span className="bg-orange-50 text-orange-600 text-[10px] font-bold px-2 py-1 rounded-lg">
+                            LOCKED
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <span className="material-symbols-rounded text-gray-300 group-hover:text-primary-500 transition-all mr-1">chevron_right</span>
+                    {canAccess ? (
+                      <button
+                        onClick={() => navigate(`/test/${test.id || test._id}`)}
+                        className="w-full btn-primary py-3 text-sm active:scale-[0.97] transition-all duration-200"
+                      >
+                        {isAttempted ? 'View Result / Retake' : 'Start Test'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handleBuyNow}
+                        className="w-full bg-surface-200 text-gray-500 py-3 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.97] transition-all duration-200"
+                      >
+                        <span className="material-symbols-rounded text-sm">lock</span>
+                        Buy Course to Unlock
+                      </button>
+                    )}
                   </div>
-                ))}
-
-                {/* Tests List */}
-                {filteredTests.map((test: any, i: number) => {
-                  const isAttempted = progress.completedTests.includes(test.id);
-                  const canAccess = isEnrolled || test.isFree;
-                  const isLocked = !canAccess;
-                  return (
-                    <div
-                      key={test.id}
-                      className={`card-premium p-4 animate-fade-in-up ${isLocked ? 'opacity-70' : ''}`}
-                      style={{ animationDelay: `${(filteredFolders.length + i) * 60}ms` }}
-                    >
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${isLocked ? 'bg-surface-200' : 'bg-gradient-to-br from-purple-100 to-purple-50'}`}>
-                            <span className={`material-symbols-rounded text-xl ${isLocked ? 'text-gray-400' : 'text-purple-500'}`}>
-                              {isLocked ? 'lock' : 'quiz'}
-                            </span>
-                          </div>
-                          <div>
-                            <h4 className="font-bold text-sm text-gray-800">{test.name}</h4>
-                            <p className="text-[11px] text-gray-400 font-medium mt-0.5">
-                              {test.numberOfQuestions || test.questions || 0} Questions • {test.duration || 60} mins
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {test.isFree && !isEnrolled && (
-                            <span className="bg-green-50 text-green-600 text-[10px] font-bold px-2 py-1 rounded-lg">
-                              FREE
-                            </span>
-                          )}
-                          {isAttempted && (
-                            <span className="bg-green-50 text-green-600 text-[10px] font-bold px-2 py-1 rounded-lg flex items-center gap-0.5">
-                              <span className="material-symbols-rounded text-[10px]">check_circle</span>
-                              Done
-                            </span>
-                          )}
-                          {isLocked && (
-                            <span className="bg-orange-50 text-orange-600 text-[10px] font-bold px-2 py-1 rounded-lg">
-                              LOCKED
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      {canAccess ? (
-                        <button
-                          onClick={() => navigate(`/test/${test.id}`)}
-                          className="w-full btn-primary py-3 text-sm active:scale-[0.97] transition-all duration-200"
-                        >
-                          {isAttempted ? 'View Result / Retake' : 'Start Test'}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={handleBuyNow}
-                          className="w-full bg-surface-200 text-gray-500 py-3 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.97] transition-all duration-200"
-                        >
-                          <span className="material-symbols-rounded text-sm">lock</span>
-                          Buy Course to Unlock
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
-              </>
+                );
+              })
             )}
           </div>
         )}
@@ -940,7 +914,7 @@ const CourseDetails: React.FC = () => {
                     </h3>
                     <div className="space-y-4">
                       {liveStreams.map((live, idx) => (
-                        <div 
+                        <div
                           key={live.id || live._id}
                           onClick={() => handleVideoClick(live)}
                           className="card-premium overflow-hidden cursor-pointer group hover:border-accent-100 transition-all active:scale-[0.98] animate-fade-in-up"
@@ -948,30 +922,30 @@ const CourseDetails: React.FC = () => {
                         >
                           <div className="flex gap-4 p-4">
                             <div className="relative w-32 h-20 rounded-2xl overflow-hidden flex-shrink-0 shadow-lg">
-                              <img 
-                                src={getYouTubeThumbnail(live.youtubeUrl || '') || `https://picsum.photos/400/225?sig=${live.id}`} 
+                              <img
+                                src={getYouTubeThumbnail(live.youtubeUrl || '') || `https://picsum.photos/400/225?sig=${live.id}`}
                                 className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                               />
                               <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                 <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-2xl">
-                                    <span className="material-symbols-rounded text-accent-500">play_arrow</span>
-                                 </div>
+                                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-2xl">
+                                  <span className="material-symbols-rounded text-accent-500">play_arrow</span>
+                                </div>
                               </div>
                               <div className="absolute top-2 left-2 px-2 py-0.5 bg-red-600 text-white text-[8px] font-black rounded-full shadow-sm animate-pulse tracking-widest uppercase">LIVE</div>
                             </div>
                             <div className="flex-1 min-w-0 py-1">
                               <div className="flex items-center gap-2 mb-1.5">
-                                 <div className="w-1.5 h-1.5 bg-accent-500 rounded-full" />
-                                 <span className="text-[10px] font-black text-accent-500 tracking-widest uppercase opacity-70">Interactive Session</span>
+                                <div className="w-1.5 h-1.5 bg-accent-500 rounded-full" />
+                                <span className="text-[10px] font-black text-accent-500 tracking-widest uppercase opacity-70">Interactive Session</span>
                               </div>
                               <h4 className="font-black text-gray-900 text-sm leading-tight line-clamp-2">{live.title}</h4>
                               <p className="text-[10px] text-gray-400 font-bold mt-2 uppercase tracking-widest flex items-center gap-2">
-                                 <span className="material-symbols-rounded text-sm">person</span>
-                                 {live.instructor || 'Lead Instructor'}
+                                <span className="material-symbols-rounded text-sm">person</span>
+                                {live.instructor || 'Lead Instructor'}
                               </p>
                             </div>
                             <div className="self-center">
-                               <span className="material-symbols-rounded text-gray-300 group-hover:text-accent-500 transition-all">chevron_right</span>
+                              <span className="material-symbols-rounded text-gray-300 group-hover:text-accent-500 transition-all">chevron_right</span>
                             </div>
                           </div>
                         </div>
@@ -979,16 +953,16 @@ const CourseDetails: React.FC = () => {
                     </div>
                   </div>
                 )}
-                
+
                 <div className="card-premium p-4 mt-4">
                   <h3 className="font-black text-gray-800 text-xs uppercase tracking-[0.2em] flex items-center gap-2 mb-6 px-1 border-b border-surface-100 pb-4">
                     <span className="material-symbols-rounded text-sm text-primary-500">calendar_month</span>
                     Live Classes Calendar
                   </h3>
-                  <LiveClassesCalendar 
-                    studentId={studentId} 
-                    courseId={id} 
-                    batchId={student?.enrolledBatch || student?.batchId} 
+                  <LiveClassesCalendar
+                    studentId={studentId}
+                    courseId={id}
+                    batchId={student?.enrolledBatch || student?.batchId}
                     onJoinLive={handleVideoClick}
                   />
                 </div>
@@ -1041,10 +1015,10 @@ const CourseDetails: React.FC = () => {
           duration={selectedVideo.duration}
           isLive={selectedVideo.contentType === 'live_stream'}
           onClose={closeVideoPlayer}
-          onMarkComplete={() => { 
+          onMarkComplete={() => {
             const vId = selectedVideo.id || selectedVideo._id;
-            if (vId) markVideoComplete(vId as string); 
-            closeVideoPlayer(); 
+            if (vId) markVideoComplete(vId as string);
+            closeVideoPlayer();
           }}
           chatMessages={liveMessages}
           onSendMessage={(msg) => {
