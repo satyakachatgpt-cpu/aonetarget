@@ -206,8 +206,9 @@ const MockTests: React.FC = () => {
                     {group.tests.map((test, tIdx) => {
                       const status = getTestStatus(test);
                       const badge = getStatusBadge(status);
+                      const testIdentifier = test.id || test._id;
                       return (
-                        <div key={test.id} className="card-premium p-4 animate-fade-in-up" style={{ animationDelay: `${tIdx * 0.06}s` }}>
+                        <div key={testIdentifier} className="card-premium p-4 animate-fade-in-up" style={{ animationDelay: `${tIdx * 0.06}s` }}>
                           <div className="flex items-center gap-2 mb-2.5">
                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 ${badge.bg} ${badge.text}`}>
                               <span className="material-symbols-rounded text-[12px]">{badge.icon}</span>
@@ -246,7 +247,7 @@ const MockTests: React.FC = () => {
 
 
                           <button
-                            onClick={() => status !== 'upcoming' && navigate(`/test/${test.id}`)}
+                            onClick={() => status !== 'upcoming' && navigate(`/test/${test.id || test._id}`)}
                             disabled={status === 'upcoming'}
                             className={`w-full mt-4 py-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition-all duration-200 active:scale-[0.97] ${status === 'upcoming'
                                 ? 'bg-surface-200 text-gray-400 cursor-not-allowed'

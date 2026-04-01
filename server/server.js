@@ -242,7 +242,8 @@ const connectDB = async () => {
     }
   } catch (error) {
     console.error('MongoDB connection error:', error);
-    process.exit(1);
+    console.log('Retrying MongoDB connection in 5 seconds...');
+    setTimeout(connectDB, 5000);
   }
 };
 
@@ -2657,6 +2658,34 @@ app.post('/api/questions', async (req, res) => {
   }
 });
 
+// Update all questions in bulk (used for reordering)
+app.put('/api/questions/update-all', async (req, res) => {
+  try {
+    const updates = (req.body && req.body.updates) ? req.body.updates : (Array.isArray(req.body) ? req.body : []);
+    console.log(`[Reorder] Processing ${updates.length} updates`);
+    
+    for (const update of updates) {
+      const { id, _id, ...data } = update;
+      let query = null;
+      
+      if (id) {
+        query = { id: id };
+      } else if (_id) {
+        // Use the locally defined ObjectId (from mongoose.Types)
+        query = { _id: (ObjectId.isValid(_id.toString())) ? new ObjectId(_id.toString()) : _id };
+      }
+      
+      if (query) {
+        await db.collection('questions').updateOne(query, { $set: data });
+      }
+    }
+    res.json({ success: true, message: `Updated ${updates.length} questions` });
+  } catch (error) {
+    console.error('[Reorder] Error:', error);
+    res.status(500).json({ error: 'Failed to update all questions', details: error.message });
+  }
+});
+
 app.put('/api/questions/:id', async (req, res) => {
   const id = req.params.id;
   const logToFile = (msg) => {
@@ -2916,18 +2945,6 @@ app.post('/api/questions/bulk-delete', async (req, res) => {
 
 
 // Update-all questions
-app.put('/api/questions/update-all', async (req, res) => {
-  try {
-    const updates = (req.body && req.body.updates) ? req.body.updates : (Array.isArray(req.body) ? req.body : []);
-    for (const update of updates) {
-      const { id, _id, ...data } = update;
-      if (id) await db.collection('questions').updateOne({ id }, { $set: data });
-    }
-    res.json({ success: true, message: `Updated ${updates.length} questions` });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to update all questions' });
-  }
-});
 
 // Bulk upload questions from Excel
 app.post('/api/questions/bulk-excel', excelUpload.single('file'), async (req, res) => {
@@ -2974,6 +2991,7 @@ app.get('/api/courses/:courseId/tests', async (req, res) => {
 
       return {
         ...test,
+        id: test.id || test._id?.toString(),
         questions: questionCount || (Array.isArray(test.questions) ? test.questions.length : (test.questions || 0))
       };
     }));
@@ -3002,6 +3020,7 @@ app.get('/api/tests', async (req, res) => {
 
       return {
         ...test,
+        id: test.id || test._id?.toString(),
         questions: questionCount || (test.questions ? (Array.isArray(test.questions) ? test.questions.length : (test.questions || 0)) : 0)
       };
     }));

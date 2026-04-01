@@ -854,7 +854,7 @@ const CourseDetails: React.FC = () => {
                     </div>
                     {canAccess ? (
                       <button
-                        onClick={() => navigate(`/test/${test.id}`)}
+                        onClick={() => navigate(`/test/${test.id || test._id}`)}
                         className="w-full btn-primary py-3 text-sm active:scale-[0.97] transition-all duration-200"
                       >
                         {isAttempted ? 'View Result / Retake' : 'Start Test'}
