@@ -181,7 +181,15 @@ const Home: React.FC = () => {
 
     const fetchLiveClasses = async () => {
       try {
-        const data = await liveVideosAPI.getAll();
+        let data;
+        const studentId = student?.id || student?._id;
+        if (isAuthenticated && studentId) {
+          console.log('Fetching live classes for student:', studentId);
+          data = await liveVideosAPI.getByStudentId(studentId);
+        } else {
+          console.log('Fetching all live classes for guest');
+          data = await liveVideosAPI.getAll();
+        }
         setLiveClasses(Array.isArray(data) ? data : []);
       } catch (error) {
         console.error('Failed to fetch live classes:', error);
@@ -231,7 +239,7 @@ const Home: React.FC = () => {
     fetchNews();
 
     return () => { };
-  }, []);
+  }, [isAuthenticated, student]);
 
   const dismissNewsModal = () => {
     if (newsModal) {

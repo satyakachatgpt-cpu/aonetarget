@@ -45,6 +45,10 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
         type: 'link' as 'link' | 'yt'
     });
 
+    // Standardized Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
+
     const fetchLinks = async () => {
         try {
             setIsLoading(true);
@@ -111,6 +115,20 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
         : videos.filter(video =>
             (video.title || '').toLowerCase().includes(searchQuery.toLowerCase())
         );
+
+    // Standardized Pagination Logic
+    const totalItems = filteredCurrentData.length;
+    const totalPages = Math.ceil(totalItems / pageSize);
+    const startIndex = (currentPage - 1) * pageSize;
+    const endIndex = Math.min(startIndex + pageSize, totalItems);
+    const paginatedData = filteredCurrentData.slice(startIndex, endIndex);
+    const showingStart = totalItems === 0 ? 0 : startIndex + 1;
+    const showingEnd = endIndex;
+
+    // Reset pagination when tab or search changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeTab, searchQuery, pageSize]);
 
     const handleOpenAdd = () => {
         if (activeTab === 'YT History') return;
@@ -280,19 +298,19 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
                                     <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">ACTIONS</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-50">
+<tbody className="divide-y divide-gray-50">
                                 {isLoading ? (
                                     <tr>
                                         <td colSpan={5} className="px-8 py-20 text-center text-gray-400">Loading...</td>
                                     </tr>
-                                ) : filteredCurrentData.length === 0 ? (
+                                ) : paginatedData.length === 0 ? (
                                     <tr>
                                         <td colSpan={5} className="px-8 py-20 text-center text-gray-400">No data found</td>
                                     </tr>
                                 ) : (
-                                    filteredCurrentData.map((item: any, idx) => (
+                                    paginatedData.map((item: any, idx) => (
                                         <tr key={item._id || item.id} className="hover:bg-gray-50/50 transition-colors group">
-                                            <td className="pl-8 pr-4 py-6 text-[13px] font-medium text-gray-600 group-hover:text-black">{idx + 1}</td>
+                                            <td className="pl-8 pr-4 py-6 text-[13px] font-medium text-gray-600 group-hover:text-black">{startIndex + idx + 1}</td>
                                             <td className="px-6 py-6 font-bold">
                                                 <div className="w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center p-0.5 bg-white border border-gray-100 shadow-sm relative group/img">
                                                     {(() => {
@@ -428,31 +446,48 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
                     </div>
                 </div>
 
-                {/* Pagination matches screenshot structure */}
+                {/* Standardized Pagination Footer */}
                 {!isLoading && filteredCurrentData.length > 0 && (
-                    <div className="p-6 border-t border-gray-50 flex items-center justify-between">
+                    <div className="p-6 border-t border-gray-50 flex items-center justify-between bg-white rounded-b-2xl">
                         <div className="flex items-center gap-3">
                             <div className="relative flex items-center group">
-                                <select className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50">
-                                    <option>10</option>
-                                    <option>25</option>
-                                    <option>50</option>
+                                <select
+                                    value={pageSize}
+                                    onChange={(e) => {
+                                        setPageSize(Number(e.target.value));
+                                        setCurrentPage(1);
+                                    }}
+                                    className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
+                                >
+                                    <option value={10}>10</option>
+                                    <option value={25}>25</option>
+                                    <option value={50}>50</option>
                                 </select>
                                 <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400 flex items-center justify-center h-full top-0 group-focus-within:text-black">expand_more</span>
                             </div>
-                            <span className="text-[13px] font-medium text-gray-400 italic">Showing 1 to {filteredCurrentData.length} of {filteredCurrentData.length} entries</span>
+                            <span className="text-[13px] font-medium text-gray-400 italic">
+                                Showing {showingStart} to {showingEnd} of {totalItems} entries
+                            </span>
                         </div>
 
                         <div className="flex items-center p-1.5 bg-white border border-gray-200 rounded-2xl shadow-sm">
-                            <button className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all">
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                disabled={currentPage === 1}
+                                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
+                            >
                                 Previous
                             </button>
                             <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
                             <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
-                                1
+                                {currentPage}
                             </button>
                             <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
-                            <button className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all">
+                            <button
+                                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                                disabled={currentPage === totalPages || totalPages === 0}
+                                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
+                            >
                                 Next
                             </button>
                         </div>

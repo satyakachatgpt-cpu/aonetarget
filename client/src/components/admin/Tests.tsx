@@ -772,6 +772,12 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     string | number | null
   >(null);
 
+  // New states for standardized pagination
+  const [resultsPageSize, setResultsPageSize] = useState(10);
+  const [resultsCurrentPage, setResultsCurrentPage] = useState(1);
+  const [reportedPageSize, setReportedPageSize] = useState(10);
+  const [reportedCurrentPage, setReportedCurrentPage] = useState(1);
+
   // Question Library States
   const [masterQuestions, setMasterQuestions] = useState<any[]>([]);
   const [masterSearchQuery, setMasterSearchQuery] = useState("");
@@ -1653,17 +1659,24 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   }
 
   const renderResultsTab = () => {
-    const filteredResults = results.filter((r) => {
+    const filteredResults = results.filter((res) => {
       const matchSeries =
-        !resultFilters.series ||
-        r.courseName === resultFilters.series ||
-        r.courseId === resultFilters.series;
+        !resultFilters.series || res.testName.includes(resultFilters.series);
       const matchTest =
-        !resultFilters.test ||
-        r.testName === resultFilters.test ||
-        r.testId === resultFilters.test;
+        !resultFilters.test || res.testName.includes(resultFilters.test);
       return matchSeries && matchTest;
     });
+
+    const totalResults = filteredResults.length;
+    const totalResultsPages = Math.ceil(totalResults / resultsPageSize);
+    const resultsStartIndex = (resultsCurrentPage - 1) * resultsPageSize;
+    const resultsEndIndex = Math.min(resultsStartIndex + resultsPageSize, totalResults);
+    const paginatedResults = filteredResults.slice(resultsStartIndex, resultsEndIndex);
+    const resultsShowingStart = totalResults === 0 ? 0 : resultsStartIndex + 1;
+
+    useEffect(() => {
+      setResultsCurrentPage(1);
+    }, [resultFilters, resultsPageSize]);
 
     const formatTime = (seconds: number) => {
       if (!seconds) return "-";
@@ -1922,11 +1935,52 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           </div>
         </div>
 
-        <div className="px-2 pb-8">
-          <p className="text-[13px] font-medium text-gray-400 italic">
-            Showing {filteredResults.length} entries
-          </p>
-        </div>
+        {/* Standardized Pagination Footer for Results */}
+        {!loading && filteredResults.length > 0 && (
+          <div className="p-6 border-t border-gray-50 flex items-center justify-between bg-white rounded-b-2xl">
+            <div className="flex items-center gap-3">
+              <div className="relative flex items-center group">
+                <select
+                  value={resultsPageSize}
+                  onChange={(e) => setResultsPageSize(Number(e.target.value))}
+                  className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+                <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400 flex items-center justify-center h-full top-0 group-focus-within:text-black">
+                  expand_more
+                </span>
+              </div>
+              <span className="text-[13px] font-medium text-gray-400 italic">
+                Showing {resultsShowingStart} to {resultsEndIndex} of {totalResults} entries
+              </span>
+            </div>
+
+            <div className="flex items-center p-1.5 bg-white border border-gray-200 rounded-2xl shadow-sm">
+              <button
+                onClick={() => setResultsCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={resultsCurrentPage === 1}
+                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+              <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
+                {resultsCurrentPage}
+              </button>
+              <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+              <button
+                onClick={() => setResultsCurrentPage((p) => Math.min(totalResultsPages, p + 1))}
+                disabled={resultsCurrentPage === totalResultsPages || totalResultsPages === 0}
+                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -1943,6 +1997,17 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         !reportedFilters.issue || rq.issue === reportedFilters.issue;
       return matchSearch && matchIssue;
     });
+
+    const totalReported = filteredReported.length;
+    const totalReportedPages = Math.ceil(totalReported / reportedPageSize);
+    const reportedStartIndex = (reportedCurrentPage - 1) * reportedPageSize;
+    const reportedEndIndex = Math.min(reportedStartIndex + reportedPageSize, totalReported);
+    const paginatedReported = filteredReported.slice(reportedStartIndex, reportedEndIndex);
+    const reportedShowingStart = totalReported === 0 ? 0 : reportedStartIndex + 1;
+
+    useEffect(() => {
+      setReportedCurrentPage(1);
+    }, [reportedSearchQuery, reportedFilters, reportedPageSize]);
 
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
@@ -2053,7 +2118,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filteredReported.length === 0 ? (
+                {paginatedReported.length === 0 ? (
                   <tr>
                     <td colSpan={9} className="px-8 py-20 text-center">
                       <p className="text-gray-400 font-medium">
@@ -2062,7 +2127,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                     </td>
                   </tr>
                 ) : (
-                  filteredReported.map((rq, idx) => (
+                  paginatedReported.map((rq, idx) => (
                     <tr
                       key={rq.id}
                       className="hover:bg-gray-50/50 transition-colors group"
@@ -2074,7 +2139,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                         />
                       </td>
                       <td className="px-4 py-8 text-[14px] font-bold text-gray-600 align-top border-b border-gray-50/50 text-center">
-                        {idx + 1}
+                        {reportedStartIndex + idx + 1}
                       </td>
                       <td className="px-4 py-8 align-top border-b border-gray-50/50 overflow-hidden">
                         <div className="max-w-full">
@@ -2236,11 +2301,52 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           </div>
         </div>
 
-        <div className="px-2">
-          <p className="text-[13px] font-medium text-gray-400 italic">
-            Showing {filteredReported.length} entries
-          </p>
-        </div>
+        {/* Standardized Pagination Footer for Reported Questions */}
+        {!loading && filteredReported.length > 0 && (
+          <div className="p-6 border-t border-gray-50 flex items-center justify-between bg-white rounded-b-2xl">
+            <div className="flex items-center gap-3">
+              <div className="relative flex items-center group">
+                <select
+                  value={reportedPageSize}
+                  onChange={(e) => setReportedPageSize(Number(e.target.value))}
+                  className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+                <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400 flex items-center justify-center h-full top-0 group-focus-within:text-black">
+                  expand_more
+                </span>
+              </div>
+              <span className="text-[13px] font-medium text-gray-400 italic">
+                Showing {reportedShowingStart} to {reportedEndIndex} of {totalReported} entries
+              </span>
+            </div>
+
+            <div className="flex items-center p-1.5 bg-white border border-gray-200 rounded-2xl shadow-sm">
+              <button
+                onClick={() => setReportedCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={reportedCurrentPage === 1}
+                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+              <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
+                {reportedCurrentPage}
+              </button>
+              <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+              <button
+                onClick={() => setReportedCurrentPage((p) => Math.min(totalReportedPages, p + 1))}
+                disabled={reportedCurrentPage === totalReportedPages || totalReportedPages === 0}
+                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -5340,41 +5446,58 @@ const Tests: React.FC<Props> = ({ showToast }) => {
               </table>
             </div>
 
-            <div className="px-6 py-5 flex items-center justify-between bg-white border-t border-gray-50">
-              <div className="text-[13px] font-semibold text-[#4a5568]">
-                Showing {(currentPage - 1) * itemsPerPage + 1}-
-                {Math.min(currentPage * itemsPerPage, filteredTests.length)} of{" "}
-                {filteredTests.length}
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-gray-600 disabled:opacity-30 transition-all"
-                >
-                  <span className="material-symbols-outlined text-[20px]">
-                    chevron_left
+            {/* Standardized Pagination Footer */}
+            {!loading && filteredTests.length > 0 && (
+              <div className="p-6 border-t border-gray-50 flex items-center justify-between bg-white rounded-b-2xl">
+                <div className="flex items-center gap-3">
+                  <div className="relative flex items-center group">
+                    <select
+                      value={itemsPerPage}
+                      onChange={(e) => {
+                        setItemsPerPage(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
+                    >
+                      <option value={10}>10</option>
+                      <option value={20}>20</option>
+                      <option value={50}>50</option>
+                      <option value={100}>100</option>
+                    </select>
+                    <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400 flex items-center justify-center h-full top-0 group-focus-within:text-black">
+                      expand_more
+                    </span>
+                  </div>
+                  <span className="text-[13px] font-medium text-gray-400 italic">
+                    Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
+                    {Math.min(currentPage * itemsPerPage, filteredTests.length)} of{" "}
+                    {filteredTests.length} entries
                   </span>
-                </button>
-
-                <div className="flex items-center justify-center w-6 h-6 bg-[#1a202c] text-white rounded-[4px] text-[12px] font-bold shadow-sm">
-                  {currentPage}
                 </div>
 
-                <button
-                  onClick={() =>
-                    setCurrentPage((p) => Math.min(totalPages, p + 1))
-                  }
-                  disabled={currentPage === totalPages || totalPages === 0}
-                  className="w-8 h-8 flex items-center justify-center text-gray-300 hover:text-gray-600 disabled:opacity-30 transition-all"
-                >
-                  <span className="material-symbols-outlined text-[20px]">
-                    chevron_right
-                  </span>
-                </button>
+                <div className="flex items-center p-1.5 bg-white border border-gray-200 rounded-2xl shadow-sm">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
+                  >
+                    Previous
+                  </button>
+                  <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+                  <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
+                    {currentPage}
+                  </button>
+                  <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages || totalPages === 0}
+                    className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         </>
       )}

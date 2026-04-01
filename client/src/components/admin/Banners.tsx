@@ -24,6 +24,8 @@ const Banners: React.FC<Props> = ({ showToast }) => {
   const [formData, setFormData] = useState({ title: '', imageUrl: '', linkUrl: '', active: true, order: 1 });
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -114,6 +116,16 @@ const Banners: React.FC<Props> = ({ showToast }) => {
     return matchesSearch && matchesStatus;
   });
 
+  const totalPages = Math.ceil(filteredBanners.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, filteredBanners.length);
+  const paginatedBanners = filteredBanners.slice(startIndex, endIndex);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
+
   const toggleActive = async (banner: Banner) => {
     try {
       await bannersAPI.update(banner.id, { ...banner, active: !banner.active });
@@ -180,7 +192,7 @@ const Banners: React.FC<Props> = ({ showToast }) => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filteredBanners.map((banner, index) => (
+              {paginatedBanners.map((banner, index) => (
                 <tr key={banner.id} className="hover:bg-gray-50/30 transition-colors">
                   <td className="px-6 py-4 text-[13px] font-medium text-gray-500">{index + 1}</td>
                   <td className="px-6 py-4">
@@ -281,25 +293,56 @@ const Banners: React.FC<Props> = ({ showToast }) => {
           </table>
         </div>
 
-        {/* Table Footer: Pagination */}
-        <div className="p-6 border-t border-gray-50 flex flex-col md:flex-row justify-between items-center gap-4">
-          {/* Entry count select */}
-          <div className="flex items-center gap-3">
-            <select className="border border-gray-200 rounded-lg px-3 py-1.5 text-[12px] font-medium outline-none bg-white cursor-pointer">
-              <option>10</option>
-              <option>25</option>
-              <option>50</option>
-            </select>
-            <span className="text-[12px] font-medium text-gray-400">Showing 1 to {filteredBanners.length} of {filteredBanners.length} entries</span>
-          </div>
+        {/* Standardized Pagination Footer */}
+        {!loading && filteredBanners.length > 0 && (
+          <div className="p-6 border-t border-gray-50 flex items-center justify-between bg-white rounded-b-2xl">
+            <div className="flex items-center gap-3">
+              <div className="relative flex items-center group">
+                <select
+                  value={itemsPerPage}
+                  onChange={(e) => {
+                    setItemsPerPage(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400 flex items-center justify-center h-full top-0 group-focus-within:text-black">
+                  expand_more
+                </span>
+              </div>
+              <span className="text-[13px] font-medium text-gray-400 italic">
+                Showing {startIndex + 1} to {endIndex} of {filteredBanners.length} entries
+              </span>
+            </div>
 
-          {/* Pagination buttons */}
-          <div className="flex items-center border border-gray-200 rounded-lg overflow-hidden">
-            <button className="px-4 py-2 text-[12px] font-bold text-gray-400 border-r border-gray-100 hover:bg-gray-50 cursor-not-allowed">Previous</button>
-            <button className="px-4 py-2 text-[12px] font-bold bg-black text-white border-r border-gray-100">1</button>
-            <button className="px-4 py-2 text-[12px] font-bold text-gray-600 hover:bg-gray-50">Next</button>
+            <div className="flex items-center p-1.5 bg-white border border-gray-200 rounded-2xl shadow-sm">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+              <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
+                {currentPage}
+              </button>
+              <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {showModal && createPortal(

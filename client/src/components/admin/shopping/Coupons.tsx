@@ -488,61 +488,50 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
           )}
         </div>
 
-        {/* Pagination Section */}
-        {filteredCoupons.length > 0 && (
-          <div className="px-6 py-4 border-t border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
+        {/* Standardized Pagination Footer */}
+        {!loading && filteredCoupons.length > 0 && (
+          <div className="p-6 border-t border-gray-50 flex items-center justify-between bg-white rounded-b-2xl">
+            <div className="flex items-center gap-3">
+              <div className="relative flex items-center group">
                 <select
                   value={itemsPerPage}
                   onChange={(e) => {
-                    setItemsPerPage(parseInt(e.target.value));
+                    setItemsPerPage(Number(e.target.value));
                     setCurrentPage(1);
                   }}
-                  className="px-2 py-1 bg-white border border-gray-200 rounded-md text-[13px] font-medium outline-none h-8 shadow-sm"
+                  className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
                 >
-                  <option value="5">5</option>
-                  <option value="10">10</option>
-                  <option value="25">25</option>
-                  <option value="50">50</option>
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
                 </select>
-                <span className="material-symbols-outlined text-gray-400 text-[16px] -ml-7 pointer-events-none">expand_more</span>
+                <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400 flex items-center justify-center h-full top-0 group-focus-within:text-black">
+                  expand_more
+                </span>
               </div>
-              <p className="text-[13px] font-medium text-gray-500">
+              <span className="text-[13px] font-medium text-gray-400 italic">
                 Showing {startIndex + 1} to {Math.min(endIndex, filteredCoupons.length)} of {filteredCoupons.length} entries
-              </p>
+              </span>
             </div>
 
-            <div className="flex bg-gray-50 p-1 rounded-lg">
+            <div className="flex items-center p-1.5 bg-white border border-gray-200 rounded-2xl shadow-sm">
               <button
-                onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-1.5 text-[12px] font-bold text-gray-600 hover:bg-white hover:shadow-sm rounded-md transition-all disabled:opacity-50"
+                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
               >
                 Previous
               </button>
-              <div className="flex items-center px-1">
-                {Array.from({ length: totalPages }, (_, i) => i + 1)
-                  .filter(p => p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1)
-                  .map((pageNum, idx, array) => (
-                    <React.Fragment key={pageNum}>
-                      {idx > 0 && array[idx - 1] !== pageNum - 1 && (
-                        <span className="px-2 text-gray-400">...</span>
-                      )}
-                      <button
-                        onClick={() => setCurrentPage(pageNum)}
-                        className={`w-8 h-8 text-[12px] font-bold rounded-md transition-all ${currentPage === pageNum ? 'bg-black text-white shadow-md' : 'text-gray-600 hover:bg-white hover:shadow-sm'
-                          }`}
-                      >
-                        {pageNum}
-                      </button>
-                    </React.Fragment>
-                  ))}
-              </div>
+              <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+              <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
+                {currentPage}
+              </button>
+              <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
               <button
-                onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                disabled={currentPage === totalPages}
-                className="px-3 py-1.5 text-[12px] font-bold text-gray-600 hover:bg-white hover:shadow-sm rounded-md transition-all disabled:opacity-50"
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages || totalPages === 0}
+                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
               >
                 Next
               </button>

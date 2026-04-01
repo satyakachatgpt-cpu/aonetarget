@@ -262,45 +262,50 @@ const BlockedUsers: React.FC<Props> = ({ showToast }) => {
           </table>
         </div>
 
-        {/* Pagination Section */}
-        {totalItems > 0 && (
-          <div className="px-6 py-4 border-t border-gray-100 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center gap-2">
+        {/* Standardized Pagination Footer */}
+        {!loading && totalItems > 0 && (
+          <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-white rounded-b-2xl shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="relative flex items-center group">
                 <select
                   value={pageSize}
                   onChange={(e) => {
-                    setPageSize(parseInt(e.target.value));
+                    setPageSize(Number(e.target.value));
                     setCurrentPage(1);
                   }}
-                  className="px-2 py-1 bg-white border border-gray-200 rounded-md text-[13px] font-medium outline-none h-8 shadow-sm"
+                  className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
                 >
-                  <option value="10">10</option>
-                  <option value="25">25</option>
-                  <option value="50">50</option>
-                  <option value="100">100</option>
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
                 </select>
+                <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400 flex items-center justify-center h-full top-0 group-focus-within:text-black">
+                  expand_more
+                </span>
               </div>
-              <p className="text-[13px] font-medium text-gray-500">
+              <span className="text-[13px] font-medium text-gray-400 italic">
                 Showing {showingStart} to {showingEnd} of {totalItems} entries
-              </p>
+              </span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button 
+            <div className="flex items-center p-1.5 bg-white border border-gray-200 rounded-2xl shadow-sm">
+              <button
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                onClick={() => setCurrentPage(p => p - 1)}
-                className="px-3 py-1 text-gray-500 hover:text-black font-bold text-sm disabled:opacity-50 transition-colors"
+                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
               >
                 Previous
               </button>
-              <button className="px-4 py-1 bg-black text-white rounded-lg font-bold text-sm shadow-md">
+              <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+              <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
                 {currentPage}
               </button>
-              <button 
+              <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
+              <button
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages || totalPages === 0}
-                onClick={() => setCurrentPage(p => p + 1)}
-                className="px-3 py-1 text-gray-500 hover:text-black font-bold text-sm disabled:opacity-50 transition-colors"
+                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
               >
                 Next
               </button>
