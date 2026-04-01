@@ -2315,11 +2315,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                   {viewingQuestionEditor.time || 0} Minutes
                 </span>
                 <span className="text-[13px] font-bold text-gray-600">
-                  {editorQuestions.length} /{" "}
-                  {viewingQuestionEditor?.noOfQuestions ||
-                    viewingQuestionEditor?.questions ||
-                    editorQuestions.length}{" "}
-                  Questions Added
+                  {viewingQuestionEditor.time || 0} Minutes
                 </span>
               </div>
               <p className="text-[12px] font-medium text-gray-400">
@@ -2737,16 +2733,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           <div className="flex items-center gap-4 mt-1 text-[12px] text-gray-500 font-medium">
                             <span><span className="font-bold text-gray-700">{test.marks || 0}</span> Marks</span>
                             <span><span className="font-bold text-gray-700">{test.time || 0}</span> Minutes</span>
-                            <span className={(Array.isArray((test as any).questions) ? (test as any).questions.length : Number((test as any).questions) || 0) >= (Number((test as any).noOfQuestions) || Number((test as any).questions) || 0) ? "text-green-600 font-bold" : ""}>
-                              {Array.isArray((test as any).questions)
-                                ? (test as any).questions.length
-                                : Number((test as any).questions) || 0}
-                              /
-                              {Number((test as any).noOfQuestions) ||
-                                Number((test as any).questions) ||
-                                0}{" "}
-                              Questions Added
-                            </span>
                           </div>
                         </div>
 
@@ -3646,118 +3632,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           </div>
         ),
       },
-      {
-        key: "format3",
-        label: "Format 3",
-        beta: false,
-        preview: (
-          <div className="w-full h-full bg-white p-1 flex flex-col gap-[2px]">
-            <div className="p-1 space-y-1.5">
-              <div className="flex justify-between items-center bg-gray-50 p-1 rounded">
-                <div className="h-[2px] bg-gray-300 w-[50%]" />
-                <div className="h-[2px] bg-gray-300 w-[20%]" />
-              </div>
-              <div className="space-y-1 py-1">
-                <div className="h-[1px] bg-gray-200 w-full" />
-                <div className="h-[1px] bg-gray-200 w-[90%]" />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="flex gap-1 items-center">
-                    <div className="w-2 h-2 rounded-sm border border-gray-200" />
-                    <div className="h-[1px] bg-gray-100 w-[70%]" />
-                  </div>
-                ))}
-              </div>
-              <div className="bg-blue-50/50 p-1 border-t border-blue-100 mt-1">
-                <div className="h-[1px] bg-blue-200 w-[40%]" />
-              </div>
-            </div>
-          </div>
-        ),
-      },
-      {
-        key: "format4",
-        label: "Format 4",
-        beta: false,
-        preview: (
-          <div className="w-full h-full bg-white p-1 flex flex-col">
-            <div className="flex-1 border border-gray-100 rounded p-1 space-y-2">
-              <div className="flex gap-2">
-                <div className="w-4 h-4 bg-gray-100 rounded" />
-                <div className="flex-1 space-y-1">
-                  <div className="h-[1.5px] bg-gray-300 w-full" />
-                  <div className="h-[1.5px] bg-gray-300 w-[60%]" />
-                </div>
-              </div>
-              <div className="space-y-1 pl-6">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="h-[1px] bg-gray-100 w-[40%]" />
-                ))}
-              </div>
-              <div className="border-t border-gray-50 pt-1 mt-1">
-                <div className="h-[2px] bg-emerald-100 w-[30%]" />
-              </div>
-            </div>
-          </div>
-        ),
-      },
-      {
-        key: "format5",
-        label: "Format 5",
-        beta: true,
-        preview: (
-          <div className="w-full h-full bg-white p-1">
-            <div className="space-y-2">
-              <div className="h-3 bg-gray-50 rounded-sm w-[70%] mb-2" />
-              <div className="space-y-1 pl-2">
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className="flex gap-2">
-                    <div className="w-1 h-[1px] bg-gray-300" />
-                    <div className="h-[1px] bg-gray-200 w-[50%]" />
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2 mt-4">
-                <div className="w-6 h-6 border border-gray-100 rounded shadow-sm" />
-                <div className="flex-1 space-y-1">
-                  <div className="h-[1px] bg-gray-200 w-full" />
-                  <div className="h-[1px] bg-gray-200 w-[80%]" />
-                </div>
-              </div>
-            </div>
-          </div>
-        ),
-      },
-      {
-        key: "format6",
-        label: "Format 6",
-        beta: false,
-        preview: (
-          <div className="w-full h-full bg-white p-1 flex flex-col items-center justify-center">
-            <div className="w-full h-full border border-gray-100 rounded-lg p-2 flex gap-2">
-              <div className="w-1 bg-gray-200 h-full rounded-full" />
-              <div className="flex-1 space-y-4">
-                <div className="space-y-1">
-                  <div className="h-[2px] bg-gray-200 w-[80%]" />
-                  <div className="h-[1px] bg-gray-100 w-[40%]" />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div
-                      key={i}
-                      className="h-5 bg-gray-50 rounded flex items-center px-1"
-                    >
-                      <div className="w-1.5 h-1.5 rounded-full bg-gray-200 mr-1" />
-                      <div className="h-[1px] bg-gray-100 w-full" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        ),
-      },
+
     ];
 
     return (
@@ -3852,61 +3727,35 @@ const Tests: React.FC<Props> = ({ showToast }) => {
               ))}
             </div>
 
-            <div className="flex justify-end pt-2 items-center gap-3">
-              {previewQuestions.length === 0 && !isParsing && (
-                <span className="text-[11px] text-amber-600 font-medium flex items-center gap-1">
-                  <span className="material-symbols-outlined text-[14px]">
-                    warning
-                  </span>
-                  Upload a file to preview with real data
-                </span>
-              )}
-              <button
-                onClick={() => {
-                  // Save current questions to localStorage for the format view
-                  localStorage.setItem(
-                    "formatViewQuestions",
-                    JSON.stringify(previewQuestions),
-                  );
-                  localStorage.setItem(
-                    "formatViewFilename",
-                    bulkUploadData.file?.name || "question_preview.docx",
-                  );
-                  const hash = `#/admin/view-format/${bulkUploadData.format || "default"}`;
-                  const url =
-                    window.location.origin + window.location.pathname + hash;
-                  window.open(url, "_blank");
-                }}
-                disabled={isParsing}
-                className={`flex items-center gap-2 text-[13px] font-bold transition-all group ${isParsing ? "text-gray-300 cursor-not-allowed" : "text-gray-500 hover:text-black"}`}
-              >
-                <span className="material-symbols-outlined text-[18px] group-hover:scale-110 transition-transform">
-                  visibility
-                </span>
-                View Format
-              </button>
-            </div>
-
             {/* modern file uploader */}
-            <div className="space-y-4">
-              <div className="flex flex-col gap-2">
-                <label className="group h-[52px] border-2 border-dashed border-gray-200 rounded-xl flex items-center overflow-hidden bg-white hover:border-[#4361EE]/50 hover:bg-blue-50/10 transition-all cursor-pointer mt-4">
+            <div className="space-y-4 mt-6">
+              <div className="flex justify-between items-center px-1">
+                <span className="text-[12px] font-semibold text-gray-500"></span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const hash = `#/admin/view-format/${bulkUploadData.format || "default"}`;
+                    const url = window.location.origin + window.location.pathname + hash;
+                    window.open(url, "_blank");
+                  }}
+                  className="text-[13px] font-medium text-gray-600 hover:text-black"
+                >
+                  Download Format
+                </button>
+              </div>
+              <div className="flex flex-col gap-2 -mt-2">
+                <label className="group h-12 border border-gray-200 rounded-lg flex items-center overflow-hidden bg-white hover:border-gray-300 transition-all cursor-pointer">
                   <div
-                    className={`px-5 text-[14px] flex-1 flex items-center gap-3 ${bulkUploadData.file ? "text-gray-700 font-semibold" : "text-gray-400 font-medium"}`}
+                    className={`px-4 text-[13px] flex-1 flex items-center gap-2 ${bulkUploadData.file ? "text-gray-700 font-medium" : "text-gray-500"}`}
                   >
-                    <span
-                      className={`material-symbols-outlined text-[20px] ${bulkUploadData.file ? "text-blue-500" : "text-gray-300"}`}
-                    >
-                      {bulkUploadData.file ? "description" : "upload_file"}
-                    </span>
                     <span className="truncate">
                       {bulkUploadData.file
                         ? bulkUploadData.file.name
-                        : "Click to select or drag and drop file"}
+                        : "Upload file"}
                     </span>
                   </div>
-                  <div className="h-full px-5 flex items-center bg-gray-50/80 border-l border-gray-200 group-hover:bg-[#4361EE]/5 group-hover:border-[#4361EE]/20 transition-all">
-                    <span className="text-[#4361EE] text-[13px] font-bold uppercase tracking-wide">
+                  <div className="h-full px-6 flex items-center bg-[#f5f5f5] text-gray-600 border-l border-gray-200 hover:bg-gray-200 transition-all">
+                    <span className="text-[13px] font-medium">
                       Browse
                     </span>
                   </div>
@@ -4123,10 +3972,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                     );
                   }
                 }}
-                className="px-12 h-12 bg-gradient-to-r from-[#12A5B8] to-[#0E8A9A] hover:shadow-lg hover:shadow-cyan-500/30 text-white rounded-xl font-bold text-[15px] transition-all active:scale-[0.98] shadow-md flex items-center gap-2"
+                className="px-8 h-10 bg-[#12A5B8] hover:bg-[#0E8A9A] text-white rounded-lg font-medium text-[14px] transition-all active:scale-95 flex items-center justify-center w-[120px]"
               >
-                <span className="material-symbols-outlined">cloud_upload</span>
-                Upload Questions
+                Upload
               </button>
             </div>
           </div>
@@ -5352,14 +5200,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                         </span>
                       </div>
                     </th>
-                    <th className="px-6 py-3.5 text-[12px] font-bold tracking-tight">
-                      <div className="flex items-center gap-1.5 cursor-pointer group uppercase">
-                        Questions{" "}
-                        <span className="material-symbols-outlined text-[16px] text-gray-300 group-hover:text-gray-400">
-                          unfold_more
-                        </span>
-                      </div>
-                    </th>
                     <th className="px-6 py-3.5 text-[12px] font-bold tracking-tight text-center uppercase">
                       Actions
                     </th>
@@ -5368,7 +5208,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 <tbody className="divide-y divide-gray-50">
                   {paginatedTests.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-8 py-20 text-center">
+                      <td colSpan={6} className="px-8 py-20 text-center">
                         <span className="material-symbols-outlined text-6xl text-gray-200 mb-2 block">
                           quiz
                         </span>
@@ -5422,21 +5262,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           <div className="bg-[#eff1f3] rounded-3xl h-6 px-4 inline-flex items-center justify-center min-w-[80px]">
                             <span className="text-[12px] font-medium text-gray-600">
                               {Number(test.sortBy || 0).toFixed(2)}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="flex items-center gap-1.5 text-[13px] font-bold">
-                            <span className="text-gray-800">
-                              {Array.isArray((test as any).questions)
-                                ? (test as any).questions.length
-                                : Number((test as any).questions) || 0}
-                            </span>
-                            <span className="text-gray-300">/</span>
-                            <span className="text-[12px] font-medium text-gray-500">
-                              {Number((test as any).noOfQuestions) ||
-                                Number((test as any).questions) ||
-                                0}
                             </span>
                           </div>
                         </td>
