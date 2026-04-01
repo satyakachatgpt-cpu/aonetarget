@@ -1650,6 +1650,18 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     }
   };
 
+  useEffect(() => {
+    if (activeTab === "Results") {
+      setResultsCurrentPage(1);
+    }
+  }, [resultFilters, resultsPageSize, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "Reported Questions") {
+      setReportedCurrentPage(1);
+    }
+  }, [reportedSearchQuery, reportedFilters, reportedPageSize, activeTab]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -1674,9 +1686,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     const paginatedResults = filteredResults.slice(resultsStartIndex, resultsEndIndex);
     const resultsShowingStart = totalResults === 0 ? 0 : resultsStartIndex + 1;
 
-    useEffect(() => {
-      setResultsCurrentPage(1);
-    }, [resultFilters, resultsPageSize]);
 
     const formatTime = (seconds: number) => {
       if (!seconds) return "-";
@@ -2005,9 +2014,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     const paginatedReported = filteredReported.slice(reportedStartIndex, reportedEndIndex);
     const reportedShowingStart = totalReported === 0 ? 0 : reportedStartIndex + 1;
 
-    useEffect(() => {
-      setReportedCurrentPage(1);
-    }, [reportedSearchQuery, reportedFilters, reportedPageSize]);
 
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
