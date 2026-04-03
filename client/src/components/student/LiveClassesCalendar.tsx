@@ -14,6 +14,8 @@ interface LiveClass {
   status: 'scheduled' | 'live' | 'completed' | 'cancelled' | 'upcoming' | 'ended';
   publishOn?: string;
   batchId?: string;
+  scheduledDate?: string;
+  scheduledTime?: string;
 }
 
 interface Props {
@@ -85,22 +87,43 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
 
   const formatTime = (time: string) => {
     if (!time) return '';
-    const [hours, minutes] = time.split(':');
-    const h = parseInt(hours);
+    // Handle full ISO strings or HH:MM format
+    let hStr = '';
+    let mStr = '';
+    
+    if (time.includes('T')) {
+      const date = new Date(time);
+      if (isNaN(date.getTime())) return time;
+      hStr = String(date.getHours());
+      mStr = String(date.getMinutes()).padStart(2, '0');
+    } else if (time.includes(':')) {
+      const parts = time.split(':');
+      hStr = parts[0];
+      mStr = parts[1];
+    } else {
+      return time;
+    }
+
+    const h = parseInt(hStr);
     const ampm = h >= 12 ? 'PM' : 'AM';
     const hour = h % 12 || 12;
-    return `${hour}:${minutes} ${ampm}`;
+    return `${hour}:${mStr} ${ampm}`;
   };
 
   const getUpcomingClasses = () => {
-    // Get today's date string in YYYY-MM-DD format based on local time
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     
     return liveClasses
+      .map(c => {
+        // Normalize properties
+        const normalizedDate = c.scheduledDate || c.date || (c.publishOn ? c.publishOn.split('T')[0] : '');
+        const normalizedTime = c.scheduledTime || c.startTime || (c.publishOn ? c.publishOn.split('T')[1]?.substring(0, 5) : '');
+        return { ...c, date: normalizedDate, startTime: normalizedTime };
+      })
       .filter(c => {
         // Show if date is today or in the future
-        const isFutureOrToday = c.date >= todayStr;
+        const isFutureOrToday = !c.date || c.date >= todayStr;
         // Don't show cancelled ones
         const isNotCancelled = c.status !== 'cancelled';
         // Show if it's live or upcoming/scheduled, or if it ended today
@@ -110,7 +133,7 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
       })
       .sort((a, b) => {
         // Sort by date first, then by time
-        if (a.date !== b.date) return a.date.localeCompare(b.date);
+        if (a.date !== b.date) return (a.date || '').localeCompare(b.date || '');
         return (a.startTime || '').localeCompare(b.startTime || '');
       });
   };
@@ -154,61 +177,42 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
               <p className="font-medium">No upcoming classes scheduled</p>
             </div>
           ) : (
-            getUpcomingClasses().map(cls => (
-              <div key={cls.id} className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-                <div className="flex items-start justify-between">
-                  <div className="flex gap-3">
-                    <div className={`w-14 h-14 rounded-xl flex flex-col items-center justify-center ${
-                      cls.status === 'live' ? 'bg-red-500 text-white' : 'bg-blue-50 text-blue-600'
-                    }`}>
-                      <span className="text-lg font-bold leading-none">{new Date(cls.date).getDate()}</span>
-                      <span className="text-[10px] font-medium">{monthNames[new Date(cls.date).getMonth()].slice(0, 3)}</span>
-                    </div>
-                    <div>
-                      <h4 className="font-ex-bold text-[#1a1c1e] text-[16px] tracking-tight">{cls.title}</h4>
-                      <p className="text-[13px] text-gray-500 font-bold mt-1.5 flex items-center gap-2">
-                        <span className="material-symbols-outlined text-[18px]">person</span>
-                        {cls.instructor || 'Instructor Not Assigned'}
-                        {(cls.status === 'upcoming' || cls.status === 'scheduled') && (
-                           <span className="flex items-center gap-1.5 ml-2 text-blue-600">
-                             <span className="material-symbols-outlined text-[18px]">schedule</span>
-                             Starts at {formatTime(cls.startTime)}
-                           </span>
-                        )}
-                      </p>
-                    </div>
+            getUpcomingClasses().map((cls, i) => (
+              <div key={cls.id || i} className="card-premium p-4 rounded-[24px] border border-gray-100 flex gap-4 items-center hover:-translate-y-1 transition-all duration-300 group shadow-sm bg-white hover:shadow-card">
+                <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-red-600 rounded-2xl flex items-center justify-center shrink-0 relative shadow-lg shadow-red-200">
+                  <span className="material-symbols-rounded text-white text-[28px]">sensors</span>
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse shadow-sm"></span>
+                </div>
+                
+                <div className="flex-1 min-w-0">
+                  <h4 className="font-bold text-[#1a1c1e] text-[16px] tracking-tight truncate group-hover:text-red-600 transition-colors">{cls.title}</h4>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
+                    <span className="text-[12px] text-gray-500 font-medium flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[18px]">person</span>
+                      {cls.instructor || 'Instructor'}
+                    </span>
+                    <span className="w-1 h-1 rounded-full bg-gray-300 shrink-0"></span>
+                    <span className="text-[12px] text-gray-500 font-medium flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[18px]">schedule</span>
+                      {cls.status === 'live' ? 'Live Now' : formatTime(cls.startTime) || 'Upcoming'}
+                    </span>
                   </div>
-                  <div className="flex flex-col items-end gap-3">
-                    {cls.status === 'live' && (
-                      <span className="px-3.5 py-1.5 bg-red-50 text-red-600 rounded-[10px] text-[11px] font-[900] uppercase tracking-widest flex items-center gap-2 border border-red-100 animate-pulse">
-                        <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                        LIVE NOW
-                      </span>
-                    )}
-                    {cls.status === 'ended' && (
-                      <span className="px-3.5 py-1.5 bg-gray-50 text-gray-500 rounded-[10px] text-[11px] font-[900] uppercase tracking-widest flex items-center gap-2 border border-gray-100">
-                        SESSION ENDED
-                      </span>
-                    )}
+                </div>
 
-                    {cls.status === 'live' ? (
-                      <button
-                        onClick={() => onJoinLive && onJoinLive(cls)}
-                        className="h-11 px-6 bg-[#1a1c1e] text-white rounded-[12px] text-[13px] font-black uppercase tracking-wider flex items-center gap-2.5 shadow-lg shadow-black/10 active:scale-95 transition-all"
-                      >
-                        <span className="material-symbols-outlined text-[20px]">sensors</span>
-                        Join Live
-                      </button>
-                    ) : (cls.status === 'upcoming' || cls.status === 'scheduled') ? (
-                      <button
-                        disabled
-                        className="h-11 px-6 bg-gray-100 text-gray-400 rounded-[12px] text-[13px] font-black uppercase tracking-wider flex items-center gap-2.5 cursor-not-allowed"
-                      >
-                        <span className="material-symbols-outlined text-[20px]">lock</span>
-                        Not Started Yet
-                      </button>
-                    ) : null}
-                  </div>
+                <div className="flex shrink-0">
+                  {cls.status === 'live' ? (
+                    <button
+                      onClick={() => onJoinLive && onJoinLive(cls)}
+                      className="bg-red-600 hover:bg-red-700 text-white text-[13px] px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 active:scale-95 transition-all shadow-lg shadow-red-100"
+                    >
+                      <span className="material-symbols-rounded text-[18px]">videocam</span>
+                      Join
+                    </button>
+                  ) : (
+                    <div className="bg-gray-50 text-gray-400 text-[11px] px-4 py-2.5 rounded-xl font-bold uppercase tracking-widest border border-gray-100">
+                      Upcoming
+                    </div>
+                  )}
                 </div>
               </div>
             ))

@@ -43,7 +43,55 @@ const MockTests: React.FC = () => {
         coursesAPI.getAll()
       ]);
 
-      let filteredTests = Array.isArray(testsData) ? testsData.filter((t: any) => !t.status || t.status === 'active') : [];
+      const isRealTest = (item: any) => {
+        if (!item) return false;
+
+        const duration = Number(item.duration) || 0;
+        const marks = Number(item.marks || item.totalMarks) || 0;
+
+        const questions =
+          Array.isArray(item.questions)
+            ? item.questions.length
+            : Number(item.totalQuestions) || 0;
+
+        const hasValidData =
+          duration > 0 &&
+          (marks > 0 || questions > 0);
+
+        const hasChildren =
+          (Array.isArray(item.tests) && item.tests.length >= 0) ||
+          (Array.isArray(item.children) && item.children.length >= 0) ||
+          (Array.isArray(item.subTests) && item.subTests.length >= 0);
+
+        return hasValidData && !hasChildren;
+      };
+
+      const extractFinalTests = (data: any[]) => {
+        let result: any[] = [];
+
+        const traverse = (items: any[]) => {
+          if (!Array.isArray(items)) return;
+
+          items.forEach((item) => {
+            // go inside if children exist
+            if (Array.isArray(item.tests)) traverse(item.tests);
+            if (Array.isArray(item.children)) traverse(item.children);
+            if (Array.isArray(item.subTests)) traverse(item.subTests);
+
+            // only push real test
+            if (isRealTest(item)) {
+              result.push(item);
+            }
+          });
+        };
+
+        traverse(data);
+        return result;
+      };
+
+      const finalTestsData = extractFinalTests(testsData);
+      
+      let filteredTests = finalTestsData;
 
       if (subjectFilter) {
         filteredTests = filteredTests.filter((t: any) =>
@@ -152,33 +200,8 @@ const MockTests: React.FC = () => {
       </header>
 
       <div className="p-4">
-        <div className="flex gap-2 overflow-x-auto pb-3 mb-5 hide-scrollbar">
-          <button
-            onClick={() => setSelectedCourse('all')}
-            className={`px-4 py-2 rounded-full font-semibold text-xs whitespace-nowrap transition-all duration-200 active:scale-[0.97] flex items-center gap-1.5 ${selectedCourse === 'all'
-                ? 'btn-primary'
-                : 'card-premium border border-surface-300 text-gray-600'
-              }`}
-          >
-            All
-            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${selectedCourse === 'all' ? 'bg-white/20 text-white' : 'bg-surface-200 text-gray-500'
-              }`}>{tests.length}</span>
-          </button>
-          {coursesWithTests.map(group => (
-            <button
-              key={group.courseId}
-              onClick={() => setSelectedCourse(group.courseId)}
-              className={`px-4 py-2 rounded-full font-semibold text-xs whitespace-nowrap transition-all duration-200 active:scale-[0.97] flex items-center gap-1.5 ${selectedCourse === group.courseId
-                  ? 'btn-primary'
-                  : 'card-premium border border-surface-300 text-gray-600'
-                }`}
-            >
-              {group.courseName}
-              <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${selectedCourse === group.courseId ? 'bg-white/20 text-white' : 'bg-surface-200 text-gray-500'
-                }`}>{group.tests.length}</span>
-            </button>
-          ))}
-        </div>
+        {/* Tabs and filters removed as per request */}
+
 
         {loading ? (
           <div className="space-y-4">
@@ -189,84 +212,70 @@ const MockTests: React.FC = () => {
         ) : (
           <div className="space-y-6">
 
-            {filteredCourseGroups.length > 0 ? (
-              filteredCourseGroups.map((group, gIdx) => (
-                <section key={group.courseId} className="animate-fade-in-up" style={{ animationDelay: `${gIdx * 0.1}s` }}>
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-800 to-primary-600 flex items-center justify-center shadow-button">
-                      <span className="material-symbols-rounded text-white text-lg">school</span>
+            {tests.length > 0 ? (
+              <div className="space-y-4">
+                {tests.map((test, tIdx) => {
+                  const status = getTestStatus(test);
+                  const badge = getStatusBadge(status);
+                  const testIdentifier = test.id || test._id;
+                  return (
+                    <div key={testIdentifier} className="card-premium p-4 animate-fade-in-up shadow-sm border border-gray-100" style={{ animationDelay: `${tIdx * 0.05}s` }}>
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 ${badge.bg} ${badge.text}`}>
+                          <span className="material-symbols-rounded text-[12px]">{badge.icon}</span>
+                          {badge.label}
+                        </span>
+                        {test.featured && (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-600 flex items-center gap-1">
+                            <span className="material-symbols-rounded text-[12px]">star</span>
+                            Featured
+                          </span>
+                        )}
+                        {/* Show category as small tag if available */}
+                        {test.subject && (
+                          <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-50 text-blue-600 flex items-center gap-1">
+                            <span className="material-symbols-rounded text-[12px]">topic</span>
+                            {test.subject}
+                          </span>
+                        )}
+                      </div>
+
+                      <h4 className="font-bold text-[15px] text-gray-900 leading-snug">{test.title || test.name}</h4>
+
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3">
+                        <span className="flex items-center gap-1 text-[11px] text-gray-400 font-medium whitespace-nowrap">
+                          <span className="material-symbols-rounded text-[15px] text-primary-400">help</span>
+                          {test.questions?.length || test.totalQuestions || test.numberOfQuestions || 0} Questions
+                        </span>
+                        <span className="flex items-center gap-1 text-[11px] text-gray-400 font-medium whitespace-nowrap">
+                          <span className="material-symbols-rounded text-[15px] text-primary-400">timer</span>
+                          {test.duration || 60} mins
+                        </span>
+                        <span className="flex items-center gap-1 text-[11px] text-gray-400 font-medium whitespace-nowrap">
+                          <span className="material-symbols-rounded text-[15px] text-primary-400">stars</span>
+                          {parseInt(test.totalMarks) || parseInt(test.marks) || 0} Marks
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={() => status !== 'upcoming' && navigate(`/test/${test.id || test._id}`)}
+                        disabled={status === 'upcoming'}
+                        className={`w-full mt-4 py-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition-all duration-200 active:scale-[0.97] ${status === 'upcoming'
+                            ? 'bg-surface-200 text-gray-400 cursor-not-allowed'
+                            : status === 'completed'
+                              ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-button'
+                              : 'btn-primary shadow-button'
+                          }`}
+                      >
+                        <span className="material-symbols-rounded text-[18px]">
+                          {status === 'completed' ? 'visibility' : status === 'upcoming' ? 'lock' : 'play_arrow'}
+                        </span>
+                        {status === 'completed' ? 'Review Test' : status === 'upcoming' ? 'Upcoming' : 'Start Test'}
+                      </button>
                     </div>
-                    <div>
-                      <h3 className="font-bold text-sm text-gray-800">{group.courseName}</h3>
-                      <p className="text-[10px] text-gray-400 font-medium">{group.tests.length} test(s) available</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {group.tests.map((test, tIdx) => {
-                      const status = getTestStatus(test);
-                      const badge = getStatusBadge(status);
-                      const testIdentifier = test.id || test._id;
-                      return (
-                        <div key={testIdentifier} className="card-premium p-4 animate-fade-in-up" style={{ animationDelay: `${tIdx * 0.06}s` }}>
-                          <div className="flex items-center gap-2 mb-2.5">
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 ${badge.bg} ${badge.text}`}>
-                              <span className="material-symbols-rounded text-[12px]">{badge.icon}</span>
-                              {badge.label}
-                            </span>
-                            {test.featured && (
-                              <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-600 flex items-center gap-1">
-                                <span className="material-symbols-rounded text-[12px]">star</span>
-                                Featured
-                              </span>
-                            )}
-                          </div>
-
-                          <h4 className="font-bold text-[15px] text-gray-900 leading-snug">{test.title || test.name}</h4>
-
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3">
-                            <span className="flex items-center gap-1 text-[11px] text-gray-400 font-medium whitespace-nowrap">
-                              <span className="material-symbols-rounded text-[15px] text-primary-400">help</span>
-                              {test.questions?.length || test.totalQuestions || test.numberOfQuestions || 0} Questions
-                            </span>
-                            <span className="flex items-center gap-1 text-[11px] text-gray-400 font-medium whitespace-nowrap">
-                              <span className="material-symbols-rounded text-[15px] text-primary-400">timer</span>
-                              {test.duration || 60} mins
-                            </span>
-                            <span className="flex items-center gap-1 text-[11px] text-gray-400 font-medium whitespace-nowrap">
-                              <span className="material-symbols-rounded text-[15px] text-primary-400">stars</span>
-                              {parseInt(test.totalMarks) || parseInt(test.marks) || 0} Marks
-                            </span>
-                            {test.subject && (
-                              <span className="flex items-center gap-1 text-[11px] text-primary-600 font-bold whitespace-nowrap uppercase tracking-tighter">
-                                <span className="material-symbols-rounded text-[15px]">topic</span>
-                                {test.subject}
-                              </span>
-                            )}
-                          </div>
-
-
-                          <button
-                            onClick={() => status !== 'upcoming' && navigate(`/test/${test.id || test._id}`)}
-                            disabled={status === 'upcoming'}
-                            className={`w-full mt-4 py-3 rounded-2xl text-xs font-bold flex items-center justify-center gap-2 transition-all duration-200 active:scale-[0.97] ${status === 'upcoming'
-                                ? 'bg-surface-200 text-gray-400 cursor-not-allowed'
-                                : status === 'completed'
-                                  ? 'bg-gradient-to-r from-primary-600 to-primary-500 text-white shadow-button'
-                                  : 'btn-primary'
-                              }`}
-                          >
-                            <span className="material-symbols-rounded text-[18px]">
-                              {status === 'completed' ? 'visibility' : status === 'upcoming' ? 'lock' : 'play_arrow'}
-                            </span>
-                            {status === 'completed' ? 'Review Test' : status === 'upcoming' ? 'Upcoming' : 'Start Test'}
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </section>
-              ))
+                  );
+                })}
+              </div>
             ) : (
               <div className="card-premium p-10 text-center animate-fade-in-up">
                 <div className="w-20 h-20 rounded-full bg-surface-200 flex items-center justify-center mx-auto mb-4">
