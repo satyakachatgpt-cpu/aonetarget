@@ -84,8 +84,8 @@ const EbookNotes: React.FC = () => {
 
       <header className="bg-gradient-to-r from-teal-600 to-[#00695C] text-white pt-8 pb-6 px-4">
         <div className="flex items-center gap-4">
-          <button onClick={() => setSidebarOpen(true)} className="p-2 rounded-full hover:bg-white/20">
-            <span className="material-symbols-rounded">menu</span>
+          <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-white/20">
+            <span className="material-symbols-rounded">arrow_back</span>
           </button>
           <h1 className="text-lg font-bold">Study Materials</h1>
         </div>

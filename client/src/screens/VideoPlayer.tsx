@@ -42,7 +42,7 @@ const VideoPlayer: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black z-[9999] flex flex-col font-outfit overflow-hidden">
+    <div className="fixed top-0 bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-black z-[9999] flex flex-col font-outfit overflow-hidden">
       {/* Immersive Header - Visible in Portrait */}
       {!isLandscape && (
         <div className="p-4 flex items-center justify-between text-white bg-gradient-to-b from-black/90 to-transparent absolute top-0 left-0 right-0 z-20">
@@ -76,7 +76,7 @@ const VideoPlayer: React.FC = () => {
             }
           }, 50);
         }}
-        className="fixed top-0 left-0 w-24 h-24 z-[9999999] cursor-pointer group flex items-start justify-start p-8 active:scale-90 transition-all"
+        className="absolute top-0 left-0 w-24 h-24 z-[9999999] cursor-pointer group flex items-start justify-start p-8 active:scale-90 transition-all"
         style={{ touchAction: 'none' }}
       >
         <div className="w-10 h-10 bg-white/10 hover:bg-red-600/80 backdrop-blur-3xl border border-white/20 rounded-full text-white flex items-center justify-center shadow-2xl transition-all duration-200">

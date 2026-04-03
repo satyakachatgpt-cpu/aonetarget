@@ -91,11 +91,25 @@ const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
     }).catch(() => { /* silent fail - don't interrupt playback */ });
   }, [student, videoId, title, courseId, courseTitle, thumbnail, duration]);
 
+  // Keep a ref of the absolute latest pct for unmount saving
+  const latestPctRef = useRef(0);
+
+  // Unmount save
+  useEffect(() => {
+    return () => {
+      if (latestPctRef.current > 0) {
+        saveProgress(latestPctRef.current);
+      }
+    };
+  }, [saveProgress]);
+
   // Track video progress every 10% increment
   const handleTimeUpdate = useCallback(() => {
     const video = videoRef.current;
     if (!video || !video.duration) return;
     const pct = Math.round((video.currentTime / video.duration) * 100);
+    latestPctRef.current = pct;
+    
     // Save every 10% increment
     if (pct - progressSavedRef.current >= 10) {
       progressSavedRef.current = pct;
@@ -178,7 +192,14 @@ const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
         disablePictureInPicture
         playsInline
         onPlay={handlePlay}
-        onPause={() => setIsPlaying(false)}
+        onPause={() => {
+          setIsPlaying(false);
+          const video = videoRef.current;
+          if (video && video.duration) {
+             const pct = Math.round((video.currentTime / video.duration) * 100);
+             saveProgress(pct);
+          }
+        }}
         onEnded={handleEnded}
         onTimeUpdate={handleTimeUpdate}
         onError={(e) => console.error("Video playback error", e)}

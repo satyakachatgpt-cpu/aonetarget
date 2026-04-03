@@ -181,14 +181,14 @@ const Home: React.FC = () => {
 
     const fetchLiveClasses = async () => {
       try {
-        let data;
+        let data = [];
         const studentId = student?.id || student?._id;
         if (isAuthenticated && studentId) {
           console.log('Fetching live classes for student:', studentId);
           data = await liveVideosAPI.getByStudentId(studentId);
         } else {
-          console.log('Fetching all live classes for guest');
-          data = await liveVideosAPI.getAll();
+          console.log('Skipping live classes fetch for guest (Filtering to enrolled only)');
+          data = [];
         }
         setLiveClasses(Array.isArray(data) ? data : []);
       } catch (error) {
@@ -382,6 +382,21 @@ const Home: React.FC = () => {
       window.removeEventListener('touchend', handleInteractionEnd);
     };
   }, []);
+
+  const handleJoinLiveClass = (lc: any) => {
+    const link = lc.meetingLink || lc.url || lc.videoUrl || lc.link;
+    if (link) {
+      // If it's a relative URL, prepend origin or handle accordingly
+      if (link.startsWith('http')) {
+        window.open(link, '_blank');
+      } else {
+        // Internal watch page logic if needed, but usually these are external zoom/youtube links
+        window.open(link, '_blank');
+      }
+    } else {
+      navigate('/live-classes');
+    }
+  };
 
   return (
     <div className="flex flex-col bg-surface-100 min-h-screen pb-4 animate-fade-in">
@@ -633,8 +648,8 @@ const Home: React.FC = () => {
                     </div>
                   </div>
                   <button
-                    onClick={(e) => { e.stopPropagation(); navigate('/live-classes'); }}
-                    className="btn-accent text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 active:scale-[0.97] transition-all duration-200 shrink-0"
+                    onClick={(e) => { e.stopPropagation(); handleJoinLiveClass(lc); }}
+                    className="btn-accent text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 active:scale-[0.97] transition-all duration-200 shrink-0 shadow-button hover:shadow-lg"
                   >
                     <span className="material-symbols-rounded text-[14px]">videocam</span>
                     Join

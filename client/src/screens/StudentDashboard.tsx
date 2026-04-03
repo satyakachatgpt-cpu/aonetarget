@@ -136,10 +136,10 @@ const StudentDashboard: React.FC = () => {
       <header className="bg-gradient-to-r from-brandBlue to-[#1A237E] text-white pt-8 pb-20 px-4 rounded-b-[2rem]">
         <div className="flex justify-between items-start mb-4">
           <button
-            onClick={() => setSidebarOpen(true)}
+            onClick={() => navigate(-1)}
             className="p-2 rounded-full hover:bg-white/20"
           >
-            <span className="material-symbols-rounded">menu</span>
+            <span className="material-symbols-rounded">arrow_back</span>
           </button>
           <div className="flex gap-2">
             <button
