@@ -1008,7 +1008,6 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                                     {[
                                         { title: 'Choose Tabs to Show on Course Page', state: showTabs, setState: setShowTabs },
                                         { title: 'Mark As New Batch', state: markNewBatch, setState: setMarkNewBatch },
-                                        { title: 'Disable Invoice', state: disableInvoice, setState: setDisableInvoice },
                                     ].map((row, i) => (
                                         <div key={i} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
                                             <span className="text-[13px] font-medium text-gray-700">{row.title}</span>
@@ -1073,8 +1072,19 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                         )}
 
                         {/* Navigation Buttons */}
-                        <div className="flex items-center justify-end pt-8">
+                        <div className="flex items-center justify-between pt-8">
+                            {activeStep > 1 ? (
                                 <button
+                                    onClick={() => setActiveStep(prev => prev - 1)}
+                                    className="flex items-center gap-2 px-8 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-sm font-bold text-[14px] hover:bg-gray-50 transition-all group shadow-sm"
+                                >
+                                    <span className="material-symbols-outlined text-[20px] group-hover:-translate-x-1 transition-transform">arrow_left_alt</span>
+                                    Back
+                                </button>
+                            ) : (
+                                <div />
+                            )}
+                            <button
                                 onClick={() => {
                                     if (activeStep === 1) {
                                         if (!title.trim()) { alert('Please enter a course title.'); return; }
