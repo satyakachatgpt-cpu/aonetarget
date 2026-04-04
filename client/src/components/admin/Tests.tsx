@@ -3300,93 +3300,21 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       {
         key: "default",
         label: "Default",
-        beta: false,
-        preview: (
-          <div className="w-full h-full bg-white p-1 flex flex-col">
-            <div className="border-[0.5px] border-gray-200 flex-1 flex flex-col">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div
-                  key={i}
-                  className="flex border-b-[0.5px] border-gray-100 last:border-0 h-[16%]"
-                >
-                  <div className="w-[30%] bg-gray-50 border-r-[0.5px] border-gray-100" />
-                  <div className="flex-1 p-[2px]">
-                    <div
-                      className={`h-[2px] bg-gray-100 rounded-full ${i % 2 === 0 ? "w-[60%]" : "w-[80%]"}`}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ),
+        image: "/attach-assist/thumb-default.jpeg",
+        download: "/attach-assist/format-default.docx"
       },
       {
         key: "format1",
         label: "Format 1",
-        beta: false,
-        preview: (
-          <div className="w-full h-full bg-white p-1 flex flex-col gap-[2px]">
-            <div className="p-1 space-y-2">
-              <div className="space-y-1">
-                <div className="h-[2px] bg-gray-200 w-[90%]" />
-                <div className="h-[1px] bg-gray-100 w-[60%]" />
-              </div>
-              <div className="pl-2 space-y-1">
-                {[1, 2, 3, 4].map((i) => (
-                  <div key={i} className="flex gap-1">
-                    <div className="w-2 h-[1px] bg-gray-200" />
-                    <div className="h-[1px] bg-gray-100 w-[30%]" />
-                  </div>
-                ))}
-              </div>
-              <div className="pt-2">
-                <div className="h-[2px] bg-gray-200 w-[40%]" />
-              </div>
-              <div className="space-y-1">
-                <div className="h-[1px] bg-gray-100 w-[60%]" />
-                <div className="h-[1px] bg-gray-100 w-[50%]" />
-              </div>
-            </div>
-          </div>
-        ),
+        image: "/attach-assist/thumb-format1.jpeg",
+        download: "/attach-assist/format-1.docx"
       },
       {
         key: "format2",
         label: "Format 2",
-        beta: true,
-        preview: (
-          <div className="w-full h-full bg-white p-1 flex flex-col gap-[2px]">
-            <div className="p-1 space-y-2">
-              <div className="flex gap-1">
-                <span className="text-[6px] font-bold">1.</span>
-                <div className="flex-1 space-y-1">
-                  <div className="h-[2px] bg-gray-200 w-full" />
-                  <div className="h-[1px] bg-gray-100 w-[80%]" />
-                </div>
-              </div>
-              <div className="pl-2 space-y-1">
-                {["A.", "B.", "C.", "D."].map((l) => (
-                  <div key={l} className="flex gap-1">
-                    <span className="text-[5px] font-bold">{l}</span>
-                    <div className="h-[1px] bg-gray-100 w-[20%]" />
-                  </div>
-                ))}
-              </div>
-              <div className="space-y-1">
-                <div className="h-[1.5px] bg-gray-200 w-[30%]" />
-                <div className="h-[1.5px] bg-gray-200 w-[40%]" />
-              </div>
-              <div className="space-y-1">
-                <div className="h-[1px] bg-gray-100 w-full" />
-                <div className="h-[1px] bg-gray-100 w-[90%]" />
-                <div className="h-[1px] bg-gray-100 w-[85%]" />
-              </div>
-            </div>
-          </div>
-        ),
-      },
-
+        image: "/attach-assist/thumb-format2.jpeg",
+        download: "/attach-assist/format-2.docx"
+      }
     ];
 
     return (
@@ -3451,51 +3379,51 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             </div>
 
             {/* Format Selection Cards */}
-            <div className="flex flex-wrap gap-5 pt-1">
-              {formats.map((fmt) => (
-                <div
-                  key={fmt.key}
-                  onClick={() =>
-                    setBulkUploadData({ ...bulkUploadData, format: fmt.key })
-                  }
-                  className={`relative cursor-pointer rounded-lg border-2 transition-all duration-200 overflow-hidden select-none flex-shrink-0 ${bulkUploadData.format === fmt.key
-                    ? "border-black"
-                    : "border-gray-200 hover:border-gray-300"
-                    }`}
-                  style={{ width: "135px" }}
+            <div className="space-y-2 mt-2">
+              <div className="flex justify-between items-center">
+                <label className="text-[12px] font-semibold text-[#1a7a5e]">Select Format *</label>
+                <a
+                  href={formats.find(f => f.key === (bulkUploadData.format || "default"))?.download}
+                  download
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-black text-white text-[11px] font-bold uppercase rounded-lg hover:bg-gray-800 transition-all shadow-sm"
                 >
-                  {fmt.beta && (
-                    <span className="absolute top-2 right-2 bg-[#D12E34] text-white text-[9px] font-bold px-2 py-[2px] rounded-md z-10 shadow">
-                      Beta
-                    </span>
-                  )}
-                  <div className="bg-white h-[140px] flex items-center justify-center overflow-hidden p-2">
-                    {fmt.preview}
-                  </div>
-                  <div className="py-2 px-2 text-center bg-white border-t border-gray-100">
-                    <p className={`text-[12px] font-bold text-gray-700`}>
-                      {fmt.label}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                  <span className="material-symbols-outlined text-[16px]">download</span>
+                  Download Format
+                </a>
+              </div>
+              <div className="flex gap-4 pt-1">
+                {formats.map((fmt) => {
+                  const isSelected = (bulkUploadData.format || "default") === fmt.key;
+                  return (
+                    <div
+                      key={fmt.key}
+                      onClick={() =>
+                        setBulkUploadData({ ...bulkUploadData, format: fmt.key })
+                      }
+                      className={`relative cursor-pointer rounded-lg border-2 transition-all duration-200 overflow-hidden select-none flex-shrink-0 flex flex-col ${isSelected
+                        ? "border-black shadow-md"
+                        : "border-gray-200 hover:border-gray-300 opacity-70 hover:opacity-100 bg-gray-50"
+                        }`}
+                      style={{ width: "135px", height: "140px" }}
+                    >
+                      <div className="flex-1 bg-white flex items-center justify-center p-2 relative">
+                        <img src={fmt.image} alt={fmt.label} className="w-full h-full object-contain" />
+                      </div>
+                      <div className={`py-2 px-2 text-center border-t border-gray-200 ${isSelected ? "bg-black text-white" : "bg-white text-gray-700"}`}>
+                        <p className={`text-[12px] font-bold`}>
+                          {fmt.label}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* modern file uploader */}
             <div className="space-y-4 mt-6">
               <div className="flex justify-between items-center px-1">
-                <span className="text-[12px] font-semibold text-gray-500"></span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const hash = `#/admin/view-format/${bulkUploadData.format || "default"}`;
-                    const url = window.location.origin + window.location.pathname + hash;
-                    window.open(url, "_blank");
-                  }}
-                  className="text-[13px] font-medium text-gray-600 hover:text-black"
-                >
-                  Download Format
-                </button>
+                <span className="text-[12px] font-semibold text-[#1a7a5e]">Select File *</span>
               </div>
               <div className="flex flex-col gap-2 -mt-2">
                 <label className="group h-12 border border-gray-200 rounded-lg flex items-center overflow-hidden bg-white hover:border-gray-300 transition-all cursor-pointer">
@@ -3651,6 +3579,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           heading: "Full Solution",
                           text: q.solution || "",
                         },
+                        format: bulkUploadData.format || "default",
                       }));
 
                     if (questionsToUpload.length === 0) {
@@ -3695,7 +3624,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                     );
 
                     // 4. Update the test's viewFormat if needed
-                    const formatVal = bulkUploadData.format || "format1";
+                    const formatVal = bulkUploadData.format || "default";
                     await fetch(`/api/tests/${testId}`, {
                       method: "PUT",
                       headers: { "Content-Type": "application/json" },
