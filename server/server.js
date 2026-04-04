@@ -1166,48 +1166,113 @@ app.post('/api/courses/import', async (req, res) => {
       return res.status(400).json({ error: 'Missing required parameters' });
     }
 
-    const collections = ['folders', 'videos', 'notes', 'tests'];
+    const contentCollections = ['videos', 'notes', 'pdfs', 'tests'];
     let processedCount = 0;
 
-    for (const itemId of itemIds) {
-      let itemToProcess = null;
-      let targetCollection = null;
-
-      const isOid = /^[a-fA-F0-9]{24}$/.test(String(itemId));
+    // Helper: build query list for an id (String + ObjectId)
+    const buildIdQuery = (itemId) => {
       const queryList = [{ id: String(itemId) }];
-      if (isOid) {
-        try {
-          queryList.push({ _id: new ObjectId(itemId) });
-          queryList.push({ _id: String(itemId) });
-        } catch (e) { }
+      if (ObjectId.isValid(itemId)) {
+        try { queryList.push({ _id: new ObjectId(itemId) }); } catch (e) {}
+      }
+      return queryList;
+    };
+
+    // Recursive helper function to process a folder and all its descendants
+    const processFolderRecursively = async (sourceFolder, targetCourseId, action, targetParentId = null) => {
+      let targetFolderId;
+
+      if (action === 'copy') {
+        // 1. Create new folder in target course
+        const newFolder = { ...sourceFolder };
+        delete newFolder._id;
+        newFolder.id = `folder_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+        newFolder.courseId = String(targetCourseId);
+        newFolder.parentId = targetParentId;
+        newFolder.createdAt = new Date().toISOString();
+        const result = await db.collection('folders').insertOne(newFolder);
+        targetFolderId = newFolder.id; // Use custom ID string for consistency with frontend preference
+      } else {
+        // action === 'move'
+        // 1. Update existing folder
+        await db.collection('folders').updateOne(
+          { _id: sourceFolder._id },
+          { $set: { courseId: String(targetCourseId), parentId: targetParentId } }
+        );
+        targetFolderId = sourceFolder._id.toString();
       }
 
-      for (const collName of collections) {
-        const found = await db.collection(collName).findOne({ $or: queryList });
-        if (found) {
-          itemToProcess = found;
-          targetCollection = collName;
-          break;
+      // 2. Identify all possible ID variants for this folder to find its children
+      const folderIdStr = sourceFolder.id || (sourceFolder._id ? sourceFolder._id.toString() : null);
+      const folderOidStr = sourceFolder._id ? sourceFolder._id.toString() : null;
+      const folderMatchIds = [...new Set([folderIdStr, folderOidStr].filter(Boolean))];
+      // Include actual ObjectIds for the query
+      const folderMatchOids = folderMatchIds.filter(id => ObjectId.isValid(id)).map(id => new ObjectId(id));
+      const childrenFilter = { folderId: { $in: [...folderMatchIds, ...folderMatchOids] } };
+
+      // 3. Process immediate content children (videos, notes, etc.)
+      for (const collName of contentCollections) {
+        const items = await db.collection(collName).find(childrenFilter).toArray();
+        for (const item of items) {
+          if (action === 'copy') {
+            const newItem = { ...item };
+            delete newItem._id;
+            newItem.id = `${collName}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+            newItem.courseId = String(targetCourseId);
+            newItem.folderId = targetFolderId;
+            newItem.createdAt = new Date().toISOString();
+            await db.collection(collName).insertOne(newItem);
+          } else {
+            // move
+            await db.collection(collName).updateOne(
+              { _id: item._id },
+              { $set: { courseId: String(targetCourseId) } }
+            );
+          }
         }
       }
 
-      if (itemToProcess && targetCollection) {
-        if (action === 'copy') {
-          const newItem = { ...itemToProcess };
-          delete newItem._id;
-          newItem.id = `${targetCollection}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-          newItem.courseId = String(targetCourseId);
-          newItem.folderId = null; // Put in root folder
-          newItem.createdAt = new Date().toISOString();
-          await db.collection(targetCollection).insertOne(newItem);
-        } else if (action === 'move') {
-          let updatedCourseId = String(targetCourseId);
-          await db.collection(targetCollection).updateOne(
-            { _id: itemToProcess._id },
-            { $set: { courseId: updatedCourseId, folderId: null } }
-          );
-        }
+      // 4. Process sub-folders recursively
+      const subFolders = await db.collection('folders').find({ 
+        parentId: { $in: [...folderMatchIds, ...folderMatchOids] } 
+      }).toArray();
+      
+      for (const sub of subFolders) {
+        await processFolderRecursively(sub, targetCourseId, action, targetFolderId);
+      }
+    };
+
+    for (const itemId of itemIds) {
+      // Find the item in 'folders' first
+      const sourceFolder = await db.collection('folders').findOne({ $or: buildIdQuery(itemId) });
+
+      if (sourceFolder) {
+        await processFolderRecursively(sourceFolder, targetCourseId, action, null);
         processedCount++;
+      } else {
+        // Not a folder, search in content collections
+        for (const collName of contentCollections) {
+          const item = await db.collection(collName).findOne({ $or: buildIdQuery(itemId) });
+          if (item) {
+            if (action === 'copy') {
+              const newItem = { ...item };
+              delete newItem._id;
+              newItem.id = `${collName}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+              newItem.courseId = String(targetCourseId);
+              newItem.folderId = null; // direct import goes to root
+              newItem.createdAt = new Date().toISOString();
+              await db.collection(collName).insertOne(newItem);
+            } else {
+              // move
+              await db.collection(collName).updateOne(
+                { _id: item._id },
+                { $set: { courseId: String(targetCourseId), folderId: null } }
+              );
+            }
+            processedCount++;
+            break; // item found and processed
+          }
+        }
       }
     }
 
