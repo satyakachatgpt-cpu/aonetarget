@@ -10,10 +10,28 @@ export const getImageUrl = (url: string | undefined | null) => {
   
   // Map absolute URLs from old server to local uploads
   if (url.startsWith('https://aonetarget.in/uploads/') || url.startsWith('http://aonetarget.in/uploads/')) {
-    return `/uploads/${url.split('/').pop()}`;
+    const filename = url.split('/').pop();
+    return filename ? `/uploads/${filename}` : url;
+  }
+
+  // If it's a relative path starting with /uploads, we need to ensure it's resolved correctly
+  // especially when frontend and backend are on different ports
+  if (url.startsWith('/uploads/')) {
+    // In development or when using IP, we need to point to the backend port (5000)
+    // if the current window is on a different port (like 5173)
+    if (typeof window !== 'undefined' && window.location.port !== '5000' && window.location.hostname !== 'localhost') {
+       // If accessed via IP (e.g. 192.168.1.5), we must use the server's IP and port
+       return `http://${window.location.hostname}:5000${url}`;
+    }
+    // For local development on same machine (localhost:5173), proxy usually handles it, 
+    // but we'll use full path just in case for other devices
+    if (typeof window !== 'undefined' && window.location.hostname === 'localhost' && window.location.port !== '5000') {
+      return `http://localhost:5000${url}`;
+    }
   }
 
   if (url.startsWith('http') || url.startsWith('/') || url.startsWith('data:')) return url;
+  
   // Many older items might have just the filename
   return `/uploads/${url}`;
 };

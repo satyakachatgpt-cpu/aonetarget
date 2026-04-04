@@ -19,6 +19,11 @@ interface Course {
   categoryId?: string;
   videos?: number;
   tests?: number;
+  settings?: {
+    markNewBatch?: boolean;
+    showTabs?: boolean;
+    sortingOrder?: number;
+  };
 }
 
 const contentTypeConfig: Record<string, { label: string; icon: string; gradient: string }> = {
@@ -237,6 +242,11 @@ const ContentTypeDetail: React.FC = () => {
                   className="bg-white rounded-2xl overflow-hidden shadow-[0_2px_15px_rgba(0,0,0,0.06)] border border-gray-100 hover:shadow-[0_4px_25px_rgba(0,0,0,0.1)] transition-all"
                 >
                   <div className={`h-36 bg-gradient-to-br ${config.gradient} flex items-center justify-center relative overflow-hidden`}>
+                    {course.settings?.markNewBatch && (
+                      <div className="absolute top-2 left-2 z-10 px-2 py-1 bg-red-600 text-white text-[8px] font-black uppercase tracking-widest rounded-lg shadow-lg border border-white/20 animate-pulse">
+                        NEW BATCH
+                      </div>
+                    )}
                     {(course.imageUrl || course.thumbnail) ? (
                       <img
                         src={course.imageUrl || course.thumbnail}
@@ -255,17 +265,17 @@ const ContentTypeDetail: React.FC = () => {
                       </>
                     )}
                     {enrolled && (
-                      <span className="absolute top-3 right-3 flex items-center gap-1 bg-green-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-lg">
+                      <span className="absolute top-3 right-3 flex items-center gap-1 bg-green-500 text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-lg z-20">
                         <span className="material-symbols-rounded text-xs">check_circle</span>
                         ENROLLED
                       </span>
                     )}
                     {!enrolled && discount > 0 && (
-                      <span className="absolute top-3 left-3 bg-[#D32F2F] text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-lg">
+                      <span className="absolute top-3 left-3 bg-[#D32F2F] text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-lg z-20">
                         {discount}% OFF
                       </span>
                     )}
-                    <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/40 to-transparent"></div>
+                    <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-black/40 to-transparent z-10"></div>
                   </div>
 
                   <div className="p-4">

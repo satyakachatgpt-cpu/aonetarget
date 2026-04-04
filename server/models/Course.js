@@ -20,7 +20,12 @@ const courseSchema = new mongoose.Schema({
     lessons: { type: Number, default: 0 },
     videoCount: { type: Number, default: 0 },
     settings: {
-        sortingOrder: { type: Number, default: 1000 },
+        sortingOrder: { type: Number, default: 9999 },
+        showTabs: { type: Boolean, default: true },
+        markNewBatch: { type: Boolean, default: false },
+        disableInvoice: { type: Boolean, default: false },
+       
+        
         customBadge: { type: String, default: '' },
         isFeatured: { type: Boolean, default: false }
     },
