@@ -78,6 +78,14 @@ const AllNews: React.FC = () => {
               className="bg-white rounded-[16px] p-3 border border-gray-100 flex items-center justify-between gap-4 cursor-pointer hover:shadow-md transition-all duration-300 group"
             >
               <div className="flex-1 min-w-0">
+                {n.featured && (
+                  <div className="flex items-center gap-1 mb-1.5">
+                    <span className="bg-amber-100/80 text-amber-700 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1 border border-amber-200/50 shadow-sm transition-all group-hover:scale-105 origin-left">
+                      <span className="material-icons text-[10px] text-amber-500">star</span>
+                      Featured
+                    </span>
+                  </div>
+                )}
                 <h4 className="font-semibold text-[14px] text-gray-800 leading-snug line-clamp-2 mb-2 group-hover:text-blue-700 transition-colors">{n.title || n.message}</h4>
                 <div className="flex items-center gap-1 text-blue-600 font-bold text-[11px] uppercase tracking-wider">
                   <span>Read Article</span>

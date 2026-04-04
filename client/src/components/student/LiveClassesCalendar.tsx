@@ -46,14 +46,16 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
         url = `${API_BASE_URL}/students/${studentId}/live-classes${batchId ? `?batchId=${batchId}` : ''}`;
       }
       const response = await fetch(url);
-      const data = await response.json();
-      
-      // Client-side filtering as a fallback if API doesn't filter by batch
-      let classes = Array.isArray(data) ? data : [];
-      if (batchId) {
-        classes = classes.filter(c => !c.batchId || c.batchId === batchId);
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Client-side filtering as a fallback if API doesn't filter by batch
+        let classes = Array.isArray(data) ? data : [];
+        if (batchId) {
+          classes = classes.filter(c => !c.batchId || c.batchId === batchId);
+        }
+        setLiveClasses(classes);
       }
-      setLiveClasses(classes);
     } catch (error) {
       console.error('Error loading live classes:', error);
     } finally {
@@ -179,9 +181,9 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
           ) : (
             getUpcomingClasses().map((cls, i) => (
               <div key={cls.id || i} className="card-premium p-4 rounded-[24px] border border-gray-100 flex gap-4 items-center hover:-translate-y-1 transition-all duration-300 group shadow-sm bg-white hover:shadow-card">
-                <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-red-600 rounded-2xl flex items-center justify-center shrink-0 relative shadow-lg shadow-red-200">
+                <div className={`w-14 h-14 bg-gradient-to-br ${(cls.status === 'ended' || cls.status === 'completed') ? 'from-gray-400 to-gray-500' : 'from-red-500 to-red-600'} rounded-2xl flex items-center justify-center shrink-0 relative shadow-lg ${(cls.status === 'ended' || cls.status === 'completed') ? 'shadow-gray-200' : 'shadow-red-200'}`}>
                   <span className="material-symbols-rounded text-white text-[28px]">sensors</span>
-                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse shadow-sm"></span>
+                  {cls.status === 'live' && <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse shadow-sm"></span>}
                 </div>
                 
                 <div className="flex-1 min-w-0">
@@ -194,7 +196,7 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
                     <span className="w-1 h-1 rounded-full bg-gray-300 shrink-0"></span>
                     <span className="text-[12px] text-gray-500 font-medium flex items-center gap-1.5">
                       <span className="material-symbols-outlined text-[18px]">schedule</span>
-                      {cls.status === 'live' ? 'Live Now' : formatTime(cls.startTime) || 'Upcoming'}
+                      {cls.status === 'live' ? 'Live Now' : (cls.status === 'ended' || cls.status === 'completed') ? 'Ended' : formatTime(cls.startTime) || 'Upcoming'}
                     </span>
                   </div>
                 </div>
@@ -209,11 +211,13 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
                       Join
                     </button>
                   ) : (
-                    <div className="bg-gray-50 text-gray-400 text-[11px] px-4 py-2.5 rounded-xl font-bold uppercase tracking-widest border border-gray-100">
-                      Upcoming
+                    <div className={`bg-gray-50 text-gray-400 text-[11px] px-4 py-2.5 rounded-xl font-bold uppercase tracking-widest border border-gray-100`}>
+                      {(cls.status === 'ended' || cls.status === 'completed') ? 'Ended' : 'Upcoming'}
                     </div>
                   )}
                 </div>
+
+
               </div>
             ))
           )}
