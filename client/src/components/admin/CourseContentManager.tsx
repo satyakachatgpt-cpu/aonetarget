@@ -1515,29 +1515,28 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     if (id === null || id === undefined) return null;
     if (typeof id === 'string') {
       const s = id.trim();
-      if (s === 'null' || s === 'undefined' || s === '') return null;
-      return s;
+      return (s === 'null' || s === 'undefined' || s === '') ? null : s;
     }
     if (typeof id === 'object') {
-      // Handle MongoDB $oid
       if (id.$oid) return String(id.$oid);
-
-      // Handle nested _id if the object itself is passed
       if (id._id) return normalizeId(id._id);
-
-      // Handle objects with an id property
       if ((id as any).id && typeof (id as any).id === 'string') return (id as any).id;
-
       if (id.toString && typeof id.toString === 'function') {
         const str = id.toString();
-        // If toString is just the generic object string, it's not a valid ID
         if (str !== '[object Object]') return str;
       }
     }
-    // Final fallback: try to get a string, but if it's useless, return null
     const finalStr = String(id);
     return (finalStr === '[object Object]' || finalStr === 'null' || finalStr === 'undefined') ? null : finalStr;
   };
+
+  const isChildOfFolder = (itemOrFolderId: any, parentFolder: any) => {
+    if (!parentFolder) return false;
+    const cFolderId = normalizeId(itemOrFolderId);
+    if (!cFolderId) return false;
+    return cFolderId === normalizeId(parentFolder._id) || cFolderId === normalizeId(parentFolder.id);
+  };
+
 
   const filteredCourses = courses.filter(course => {
     const name = course.name || course.title || '';
@@ -2299,10 +2298,9 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
               )}
               <span className="text-[12px] text-gray-500 font-medium">
                 {isFolder ? (() => {
-                  const fId = item.id || item._id;
-                  const vCount = videos.filter(v => normalizeId(v.folderId) === normalizeId(fId)).length;
-                  const nCount = notes.filter(n => normalizeId(n.folderId) === normalizeId(fId)).length;
-                  const tCount = tests.filter(t => normalizeId(t.folderId) === normalizeId(fId)).length;
+                  const vCount = videos.filter(v => isChildOfFolder(v.folderId, item)).length;
+                  const nCount = notes.filter(n => isChildOfFolder(n.folderId, item)).length;
+                  const tCount = tests.filter(t => isChildOfFolder(t.folderId, item)).length;
                   const counts = [];
                   if (vCount > 0) counts.push(`${vCount} Videos`);
                   if (nCount > 0) counts.push(`${nCount} Notes`);
@@ -2463,12 +2461,23 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
   };
 
   const renderAccordionTree = (parentId: string | null = null, level: number = 0) => {
-    const levelFolders = folders.filter(f => normalizeId(f.parentId) === parentId).map(f => ({ ...f, type: 'folder', order: f.order || f.sortingOrder }));
-    const levelVideos = videos.filter(v => normalizeId(v.folderId) === parentId).map(v => ({ ...v, type: 'video', order: v.order }));
-    const levelNotes = notes.filter(n => normalizeId(n.folderId) === parentId).map(n => ({ ...n, type: 'note', order: n.order }));
-    const levelTests = tests.filter(t => normalizeId(t.folderId) === parentId).map(t => ({ ...t, type: 'test', order: t.order || 0 }));
+    // Determine the current parent folder object if possible
+    const currentParentObj = parentId ? folders.find(f => normalizeId(f._id) === parentId || normalizeId(f.id) === parentId) : null;
 
-    // Separate folders and other items to ensure folders always appear at the top
+    const isInsideThisFolder = (contentFolderId: any) => {
+      const normalizedCid = normalizeId(contentFolderId);
+      if (parentId === null) return normalizedCid === null;
+      if (normalizedCid === parentId) return true;
+      if (currentParentObj) return isChildOfFolder(contentFolderId, currentParentObj);
+      return false;
+    };
+
+    const levelFolders = folders.filter(f => isInsideThisFolder(f.parentId)).map(f => ({ ...f, type: 'folder', order: f.order || f.sortingOrder }));
+    const levelVideos = videos.filter(v => isInsideThisFolder(v.folderId)).map(v => ({ ...v, type: 'video', order: v.order }));
+    const levelNotes = notes.filter(n => isInsideThisFolder(n.folderId)).map(n => ({ ...n, type: 'note', order: n.order }));
+    const levelTests = tests.filter(t => isInsideThisFolder(t.folderId)).map(t => ({ ...t, type: 'test', order: t.order || 0 }));
+
+    // Sort folders and other items
     const items = [
       ...levelFolders.sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0)),
       ...[...levelVideos, ...levelNotes, ...levelTests].sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0))
