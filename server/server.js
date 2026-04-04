@@ -12,14 +12,16 @@ import crypto from 'crypto';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import dns from 'dns';
-dns.setServers(['8.8.8.8', '8.8.4.4']);
+dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']); // Enabling hardcoded DNS to correctly resolve Atlas SRV records on some networks
+if (dns.setDefaultResultOrder) dns.setDefaultResultOrder('ipv4first');
+
 import {
   generateTokens, verifyAccessToken, verifyRefreshToken,
   authMiddleware, optionalAuth, generateDeviceId,
   generateSignedUrl, verifySignedUrl
 } from './middleware/auth.js';
 import compression from 'compression';
-import { globalLimiter, authLimiter, securityHeaders, sanitizeInput } from './middleware/security.js';
+import { publicLimiter, authLimiter, securityHeaders, sanitizeInput } from './middleware/security.js';
 import { sendEmail, templates } from './utils/email.js';
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from 'docx';
 
@@ -103,7 +105,9 @@ app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(sanitizeInput);
 app.use(cookieParser());
-app.use('/api/', globalLimiter);
+// Global rate limit removed per user request to avoid throttling administrative actions.
+// Specific limiters are applied to sensitive routes below.
+
 
 const rootPath = path.resolve(__dirname, '..');
 app.use('/attach-assist', express.static(path.join(__dirname, '../client/public/attach-assist')));
@@ -226,13 +230,19 @@ const excelUpload = multer({
 app.use((req, res, next) => {
   if (req.path.startsWith('/api') || req.path === '/health') {
     const logMsg = `[${new Date().toISOString()}] ${req.method} ${req.path}\n`;
-    console.log(logMsg);
+    // console.log(logMsg); // Reduced noise
     try {
-      fs.appendFileSync(path.join(__dirname, 'api_requests.log'), logMsg);
+      if (req.path.startsWith('/api')) fs.appendFileSync(path.join(__dirname, 'api_requests.log'), logMsg);
     } catch (e) { }
   }
-  if (req.path.startsWith('/api') && !db) {
-    return res.status(503).json({ error: 'Database connecting, please retry' });
+  
+  const isConnected = mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2; // 1 = connected, 2 = connecting
+  if (req.path.startsWith('/api') && !isConnected && !req.path.includes('/heartbeat')) {
+    console.log(`[DB Pending] Rejecting ${req.path} - Database still connecting...`);
+    return res.status(503).json({ 
+      error: 'Database connecting, please retry',
+      connecting: true 
+    });
   }
   next();
 });
@@ -261,7 +271,7 @@ const connectDB = async () => {
   try {
     await mongoose.connect(MONGODB_URI, {
       dbName: 'aonetarget',
-      serverSelectionTimeoutMS: 10000 // Give more time for Atlas handshake
+      serverSelectionTimeoutMS: 30000 // Increased timeout to 30s to allow slow Atlas handshakes
     });
 
     db = mongoose.connection.db;
@@ -285,7 +295,18 @@ const connectDB = async () => {
       await db.collection('packages').createIndex({ id: 1 }, { sparse: true });
       await db.collection('folders').createIndex({ courseId: 1, parentId: 1 });
       await db.collection('tests').createIndex({ courseId: 1 });
+      await db.collection('tests').createIndex({ isSeries: 1 });
+      await db.collection('tests').createIndex({ status: 1 });
       await db.collection('pdfs').createIndex({ courseId: 1 });
+      
+      // Performance optimization indexes
+      await db.collection('questions').createIndex({ testId: 1 });
+      await db.collection('questions').createIndex({ courseId: 1 });
+      await db.collection('testResults').createIndex({ testId: 1 });
+      await db.collection('testResults').createIndex({ studentId: 1 });
+      await db.collection('enrollments').createIndex({ studentId: 1 });
+      await db.collection('liveVideos').createIndex({ courseId: 1 });
+      await db.collection('liveClasses').createIndex({ courseId: 1 });
       console.log('MongoDB indexes ensured');
       
       // Batch Sorting Migration: Convert string values to numbers
@@ -327,7 +348,12 @@ const connectDB = async () => {
       console.warn('Index creation warning (non-fatal):', indexErr.message);
     }
   } catch (error) {
-    console.error('MongoDB connection error:', error);
+    // Cleaner logging: avoid full stack trace for transient timeout errors
+    if (error.name === 'MongooseServerSelectionError') {
+      console.warn(`[Cluster Wait] Still connecting to MongoDB Atlas cluster...`);
+    } else {
+      console.error('MongoDB connection error:', error.message || error);
+    }
     console.log('Retrying MongoDB connection in 5 seconds...');
     setTimeout(connectDB, 5000);
   }
@@ -378,7 +404,37 @@ app.get('/api/students/:studentId/watch-history', async (req, res) => {
       .sort({ watchedAt: -1 })
       .limit(100)
       .toArray();
-    res.json(history);
+
+    const videoIds = history.map(h => h.videoId).filter(Boolean);
+    const obIds = videoIds.filter(id => ObjectId.isValid(id)).map(id => new ObjectId(id));
+
+    const videos = await db.collection('videos').find({
+      $or: [
+        { id: { $in: videoIds } },
+        { _id: { $in: obIds } }
+      ]
+    }).toArray();
+
+    const videoMap = {};
+    for (const v of videos) {
+      videoMap[v.id || v._id.toString()] = v;
+    }
+
+    const populatedHistory = history.map(h => {
+      const liveVideo = videoMap[h.videoId];
+      if (liveVideo) {
+        return {
+          ...h,
+          title: liveVideo.title || h.title,
+          thumbnail: liveVideo.thumbnail || liveVideo.thumbnailUrl || h.thumbnail,
+          duration: liveVideo.duration || h.duration,
+          youtubeUrl: liveVideo.youtubeUrl || liveVideo.videoUrl || null
+        };
+      }
+      return h;
+    });
+
+    res.json(populatedHistory);
   } catch (error) {
     console.error('Fetch watch history error:', error);
     res.status(500).json({ error: 'Failed to fetch watch history' });
@@ -393,6 +449,8 @@ app.post('/api/students/:studentId/watch-history', async (req, res) => {
     if (!videoId) return res.status(400).json({ error: 'videoId is required' });
 
     const now = new Date();
+    const progressValue = watchProgress !== undefined ? Number(watchProgress) : 0;
+
     await db.collection('watchHistory').updateOne(
       { studentId, videoId },
       {
@@ -404,17 +462,34 @@ app.post('/api/students/:studentId/watch-history', async (req, res) => {
           courseTitle: courseTitle || '',
           thumbnail: thumbnail || '',
           duration: duration || '',
-          watchProgress: watchProgress || 0,
           watchedAt: now
         }
       },
       { upsert: true }
     );
 
+    if (progressValue > 0) {
+      await db.collection('watchHistory').updateOne(
+        { studentId, videoId },
+        { $max: { watchProgress: progressValue } }
+      );
+    }
+
     res.json({ success: true });
   } catch (error) {
     console.error('Update watch history error:', error);
     res.status(500).json({ error: 'Failed to update watch history' });
+  }
+});
+
+app.delete('/api/students/:studentId/watch-history', async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    await db.collection('watchHistory').deleteMany({ studentId });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Clear watch history error:', error);
+    res.status(500).json({ error: 'Failed to clear watch history' });
   }
 });
 // === End Watch History Routes ===
@@ -722,30 +797,57 @@ app.get('/api/courses', async (req, res) => {
       computedSkip = (page - 1) * limit;
     }
 
-    let query = Course.find(filter).sort({ 'settings.sortingOrder': 1, 'createdAt': -1 });
+    let query = Course.find(filter).sort({ 'settings.sortingOrder': 1, createdAt: -1 });
+
+    const aggregation = [
+      { $match: filter },
+      {
+        $lookup: {
+          from: 'videos', // Assuming collection name is lowercase plural
+          let: { cId: '$id', cStrId: { $toString: '$_id' } },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $or: [
+                    { $eq: ['$courseId', '$$cId'] },
+                    { $eq: ['$courseId', '$$cStrId'] }
+                  ]
+                }
+              }
+            },
+            { $count: 'count' }
+          ],
+          as: 'videoCount'
+        }
+      },
+      {
+        $addFields: {
+          id: { $ifNull: ['$id', { $toString: '$_id' }] },
+          lessons: { $ifNull: [{ $arrayElemAt: ['$videoCount.count', 0] }, 0] },
+          videoCount: { $ifNull: [{ $arrayElemAt: ['$videoCount.count', 0] }, 0] },
+          sortOrder: {
+            $cond: {
+              if: { $or: [{ $eq: ['$settings.sortingOrder', 0] }, { $not: ['$settings.sortingOrder'] }] },
+              then: 1000,
+              else: '$settings.sortingOrder'
+            }
+          }
+        }
+      },
+      { $project: { videoCount: 0 } },
+      { $sort: { sortOrder: 1, createdAt: -1 } }
+    ];
 
     if (!isNaN(limit) && limit > 0) {
-      query = query.skip(computedSkip).limit(limit);
-    }
+      const skipCount = computedSkip;
+      const totalCourses = await db.collection('courses').countDocuments(filter);
+      const coursesWithCounts = await db.collection('courses').aggregate([
+        ...aggregation,
+        { $skip: skipCount },
+        { $limit: limit }
+      ]).toArray();
 
-    const courses = await query.lean();
-
-    // Fetch video counts for each course
-    const coursesWithCounts = await Promise.all(courses.map(async (c) => {
-      const courseId = c.id || c._id.toString();
-      const videoCount = await Video.countDocuments({
-        courseId: { $in: [courseId, c._id.toString()] }
-      });
-      return {
-        ...c,
-        id: courseId,
-        lessons: videoCount,
-        videoCount: videoCount
-      };
-    }));
-
-    if (!isNaN(limit) && limit > 0) {
-      const totalCourses = await Course.countDocuments(filter);
       res.json({
         courses: coursesWithCounts,
         total: totalCourses,
@@ -754,6 +856,7 @@ app.get('/api/courses', async (req, res) => {
         totalPages: Math.ceil(totalCourses / limit)
       });
     } else {
+      const coursesWithCounts = await db.collection('courses').aggregate(aggregation).toArray();
       res.json(coursesWithCounts);
     }
   } catch (error) {
@@ -1242,10 +1345,12 @@ app.post('/api/live-stream/end/:id', async (req, res) => {
     const id = req.params.id;
     const update = {
       status: 'ended',
+      streamStatus: 'ended',
       isLive: false,
       endedAt: new Date().toISOString(),
       endTime: new Date().toISOString() // Compatibility with getCalculatedLiveStatus
     };
+
     const query = {
       $or: [
         { id: id },
@@ -1663,14 +1768,37 @@ app.get('/api/courses/:id/live-classes', optionalAuth, async (req, res) => {
     const courseId = req.params.id;
     const course = await findCourse(courseId);
     const idVariants = await getRelatedCourseIds(course, courseId);
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const dateLimit = ninetyDaysAgo.toISOString().split('T')[0];
+
     const query = {
-      courseId: { $in: idVariants }
+      $and: [
+        { courseId: { $in: idVariants } },
+        {
+          $or: [
+            { date: { $gte: dateLimit } },
+            { publishOn: { $gte: ninetyDaysAgo.toISOString() } },
+            { createdAt: { $gte: ninetyDaysAgo } },
+            { scheduledDate: { $gte: dateLimit } },
+            { status: 'live' }
+          ]
+        }
+      ]
+    };
+
+    const projection = {
+      title: 1, name: 1, teacherName: 1, instructor: 1,
+      scheduledTime: 1, scheduledDate: 1, publishOn: 1,
+      date: 1, createdAt: 1, endTime: 1, endDateTime: 1,
+      joinBeforeMinutes: 1, status: 1, meetingLink: 1,
+      url: 1, videoUrl: 1, link: 1, id: 1, visibility: 1
     };
 
     const [c1, c2, c3] = await Promise.all([
-      db.collection('liveVideos').find(query).toArray(),
-      db.collection('liveClasses').find(query).toArray(),
-      db.collection('videos').find({ ...query, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).toArray()
+      db.collection('liveVideos').find(query).project(projection).toArray(),
+      db.collection('liveClasses').find(query).project(projection).toArray(),
+      db.collection('videos').find({ ...query, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).project(projection).toArray()
     ]);
 
     // Check enrollment for private streams if student is logged in
@@ -2615,7 +2743,7 @@ app.delete('/api/coupons', async (req, res) => {
 });
 
 // Admin Authentication Routes
-app.post('/api/admin/login', async (req, res) => {
+app.post('/api/admin/login', authLimiter, async (req, res) => {
   try {
     let { adminId, password } = req.body;
 
@@ -3322,28 +3450,30 @@ app.get('/api/courses/:courseId/tests', async (req, res) => {
 
 app.get('/api/tests', async (req, res) => {
   try {
+    const startTimeMetric = Date.now();
     const { courseId } = req.query;
-    const query = courseId ? { courseId } : {};
-    const tests = await db.collection('tests').find(query).toArray();
 
-    // Fetch question counts for each test
-    const testsWithCounts = await Promise.all(tests.map(async (test) => {
-      const testId = test.id || test._id?.toString();
-      const questionFilter = { $or: [{ testId: testId }, { testId: String(testId) }, { testId: testId?.toString() }] };
-      if (testId && !isNaN(testId)) questionFilter.$or.push({ testId: Number(testId) });
-      if (test._id && global.ObjectId && ObjectId.isValid(test._id.toString())) {
-        questionFilter.$or.push({ testId: new ObjectId(test._id.toString()) });
-      }
-      const questionCount = await db.collection('questions').countDocuments(questionFilter);
+    const aggregation = [
+      { $match: courseId ? { courseId } : {} },
+      {
+        $lookup: {
+          from: 'questions',
+          localField: 'id',
+          foreignField: 'testId',
+          as: 'qList'
+        }
+      },
+      {
+        $addFields: {
+          id: { $ifNull: ['$id', { $toString: '$_id' }] },
+          questions: { $size: '$qList' }
+        }
+      },
+      { $project: { qList: 0 } }
+    ];
 
-      return {
-        ...test,
-        id: test.id || test._id?.toString(),
-        questions: questionCount || (test.questions ? (Array.isArray(test.questions) ? test.questions.length : (test.questions || 0)) : 0)
-      };
-    }));
-
-    console.log('GET /api/tests - Found', testsWithCounts.length, 'tests with counts');
+    const testsWithCounts = await db.collection('tests').aggregate(aggregation).toArray();
+    console.log(`[PERF] Admin /api/tests loaded with counts in ${Date.now() - startTimeMetric}ms`);
     res.json(testsWithCounts);
   } catch (error) {
     console.error('Error fetching tests:', error);
@@ -4562,7 +4692,20 @@ app.put('/api/pdfs/update-all', async (req, res) => {
 // Routes for Packages/Batches
 app.get('/api/packages', async (req, res) => {
   try {
-    const packages = await db.collection('packages').find({}).toArray();
+    const packages = await db.collection('packages').aggregate([
+      {
+        $addFields: {
+          sortOrder: {
+            $cond: {
+              if: { $or: [{ $eq: ['$settings.sortingOrder', 0] }, { $not: ['$settings.sortingOrder'] }] },
+              then: 1000,
+              else: '$settings.sortingOrder'
+            }
+          }
+        }
+      },
+      { $sort: { sortOrder: 1, createdAt: -1 } }
+    ]).toArray();
     res.json(packages);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch packages' });
@@ -5290,7 +5433,14 @@ app.put('/api/notifications/bulk-update', async (req, res) => {
 
 app.delete('/api/notifications/:id', async (req, res) => {
   try {
-    const result = await db.collection('notifications').deleteOne({ id: req.params.id });
+    const id = req.params.id;
+    const query = {
+      $or: [
+        { id: id },
+        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
+      ].filter(v => v.id || v._id)
+    };
+    const result = await db.collection('notifications').deleteOne(query);
     if (result.deletedCount === 0) return res.status(404).json({ error: 'Notification not found' });
     res.json({ success: true, message: 'Notification deleted' });
   } catch (error) {
@@ -5832,8 +5982,8 @@ app.post('/api/logout', async (req, res) => {
   }
 });
 
-// Student registration without password / OTP requirement
-app.post('/api/students/register', async (req, res) => {
+// Frontend student registration — JWT + Single Device
+app.post('/api/students/register', publicLimiter, async (req, res) => {
   try {
     const { name, email, phone, class: studentClass, target, address, state, district, whatsAppNumber, alternateNumber, gender, dob } = req.body;
 
@@ -5974,7 +6124,7 @@ app.post('/api/students/session/validate', async (req, res) => {
 });
 
 // Check if a student phone is already registered
-app.post('/api/students/check-phone', async (req, res) => {
+app.post('/api/students/check-phone', publicLimiter, async (req, res) => {
   try {
     const { phone } = req.body || {};
     if (!phone) {
@@ -5998,7 +6148,7 @@ app.post('/api/students/check-phone', async (req, res) => {
 });
 
 // Check if a student email is already registered
-app.post('/api/students/check-email', async (req, res) => {
+app.post('/api/students/check-email', publicLimiter, async (req, res) => {
   try {
     const { email } = req.body || {};
     const normalizedEmail = email ? email.toLowerCase().trim() : '';
@@ -6608,12 +6758,37 @@ app.get('/api/courses/:courseId/live-classes', async (req, res) => {
     if (!course) return res.json([]);
 
     const idVariants = await getRelatedCourseIds(course, req.params.courseId);
-    const query = { courseId: { $in: idVariants } };
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const dateLimit = ninetyDaysAgo.toISOString().split('T')[0];
+
+    const query = {
+      $and: [
+        { courseId: { $in: idVariants } },
+        {
+          $or: [
+            { date: { $gte: dateLimit } },
+            { publishOn: { $gte: ninetyDaysAgo.toISOString() } },
+            { createdAt: { $gte: ninetyDaysAgo } },
+            { scheduledDate: { $gte: dateLimit } },
+            { status: 'live' }
+          ]
+        }
+      ]
+    };
+
+    const projection = {
+      title: 1, name: 1, teacherName: 1, instructor: 1,
+      scheduledTime: 1, scheduledDate: 1, publishOn: 1,
+      date: 1, createdAt: 1, endTime: 1, endDateTime: 1,
+      joinBeforeMinutes: 1, status: 1, meetingLink: 1,
+      url: 1, videoUrl: 1, link: 1, id: 1
+    };
 
     const [c1, c2, c3] = await Promise.all([
-      db.collection('liveVideos').find(query).toArray(),
-      db.collection('liveClasses').find(query).toArray(),
-      db.collection('videos').find({ ...query, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).toArray()
+      db.collection('liveVideos').find(query).project(projection).toArray(),
+      db.collection('liveClasses').find(query).project(projection).toArray(),
+      db.collection('videos').find({ ...query, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).project(projection).toArray()
     ]);
 
     const merged = [...c1, ...c2, ...c3].map(item => {
@@ -6674,26 +6849,72 @@ app.delete('/api/courses/:courseId/live-classes/:id', async (req, res) => {
   }
 });
 
-// Get all live classes for enrolled student courses
+// Get all live classes for enrolled student courses (Optimized for performance)
 app.get('/api/students/:studentId/live-classes', async (req, res) => {
   try {
+    const startTimeMetric = Date.now();
     const enrollments = await db.collection('enrollments').find({ studentId: req.params.studentId }).toArray();
-    let courseIds = enrollments.map(e => e.courseId);
+    const courseIds = [...new Set(enrollments.map(e => e.courseId).filter(Boolean))];
 
-    // Expand to idVariants for each courseId to ensure robust matching across collections
-    let expandedIds = [];
-    for (const cId of courseIds) {
-      if (cId) {
-        const variants = await getCourseIdVariants(String(cId));
-        expandedIds.push(...variants);
-      }
+    if (courseIds.length === 0) {
+      return res.json([]);
     }
-    const query = { courseId: { $in: [...new Set(expandedIds)] } };
+
+    // Single bulk query for all courses to avoid N+1 problem
+    const courses = await db.collection('courses').find({
+      $or: [
+        { id: { $in: courseIds } },
+        { _id: { $in: courseIds.filter(id => /^[a-f\d]{24}$/i.test(id)).map(id => new ObjectId(id)) } }
+      ]
+    }).toArray();
+
+    // Gather all variant IDs and names for unified search
+    const names = [];
+    const expandedIds = new Set(courseIds);
+    courses.forEach(c => {
+      if (c.id) expandedIds.add(String(c.id));
+      if (c._id) expandedIds.add(String(c._id));
+      if (c.name) names.push(c.name);
+      if (c.title) names.push(c.title);
+    });
+
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+    const dateLimit = ninetyDaysAgo.toISOString().split('T')[0];
+
+    const finalQuery = {
+      $and: [
+        {
+          $or: [
+            { courseId: { $in: Array.from(expandedIds) } },
+            { courseName: { $in: names } },
+            { title: { $in: names } }
+          ]
+        },
+        {
+          $or: [
+            { date: { $gte: dateLimit } },
+            { publishOn: { $gte: ninetyDaysAgo.toISOString() } },
+            { createdAt: { $gte: ninetyDaysAgo } },
+            { scheduledDate: { $gte: dateLimit } },
+            { status: 'live' } // Always include currently live classes regardless of date
+          ]
+        }
+      ]
+    };
+
+    const projection = {
+      title: 1, name: 1, teacherName: 1, instructor: 1,
+      scheduledTime: 1, scheduledDate: 1, publishOn: 1,
+      date: 1, createdAt: 1, endTime: 1, endDateTime: 1,
+      joinBeforeMinutes: 1, status: 1, meetingLink: 1,
+      url: 1, videoUrl: 1, link: 1, id: 1
+    };
 
     const [c1, c2, c3] = await Promise.all([
-      db.collection('liveVideos').find(query).toArray(),
-      db.collection('liveClasses').find(query).toArray(),
-      db.collection('videos').find({ ...query, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).toArray()
+      db.collection('liveVideos').find(finalQuery).project(projection).toArray(),
+      db.collection('liveClasses').find(finalQuery).project(projection).toArray(),
+      db.collection('videos').find({ ...finalQuery, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).project(projection).toArray()
     ]);
 
     const merged = [...c1, ...c2, ...c3].map(item => {

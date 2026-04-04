@@ -24,7 +24,10 @@ const courseSchema = new mongoose.Schema({
         showTabs: { type: Boolean, default: true },
         markNewBatch: { type: Boolean, default: false },
         disableInvoice: { type: Boolean, default: false },
-        customBadge: { type: String, default: '' }
+       
+        
+        customBadge: { type: String, default: '' },
+        isFeatured: { type: Boolean, default: false }
     },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }

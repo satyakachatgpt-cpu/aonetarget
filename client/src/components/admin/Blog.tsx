@@ -38,14 +38,12 @@ const Blog: React.FC<Props> = ({ showToast }) => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [isPdfUploading, setIsPdfUploading] = useState(false);
 
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
-  const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [formData, setFormData] = useState({
     title: '', content: '', excerpt: '', author: '', category: '', tags: '',
-    status: 'draft' as 'draft' | 'published', featured: false, readingTime: 0, views: 0,
-    publishDate: new Date().toISOString().split('T')[0], thumbnail: '', pdfUrl: ''
+    status: 'draft' as 'draft' | 'published', featured: false,
+    publishDate: new Date().toISOString().split('T')[0], thumbnail: ''
   });
 
   useEffect(() => { 
@@ -108,11 +106,8 @@ const Blog: React.FC<Props> = ({ showToast }) => {
         tags: formData.tags,
         status: formData.status as 'draft' | 'published',
         featured: formData.featured,
-        readingTime: parseInt(formData.readingTime.toString()) || 5,
-        views: formData.views,
         publishDate: formData.publishDate,
         thumbnail: formData.thumbnail,
-        pdfUrl: formData.pdfUrl,
         createdAt: editingPost?.createdAt || new Date().toISOString()
       };
 
@@ -127,11 +122,10 @@ const Blog: React.FC<Props> = ({ showToast }) => {
       setShowModal(false);
       setEditingPost(null);
       setThumbnailFile(null);
-      setPdfFile(null);
       setFormData({
         title: '', content: '', excerpt: '', author: '', category: '', tags: '',
-        status: 'draft', featured: false, readingTime: 0, views: 0,
-        publishDate: new Date().toISOString().split('T')[0], thumbnail: '', pdfUrl: ''
+        status: 'draft', featured: false,
+        publishDate: new Date().toISOString().split('T')[0], thumbnail: ''
       });
       loadPosts();
     } catch (error) {
@@ -174,34 +168,10 @@ const Blog: React.FC<Props> = ({ showToast }) => {
     }
   };
 
-  const handlePdfFile = async (file: File) => {
-    if (file.type !== 'application/pdf') {
-      showToast('Please select a valid PDF file', 'error');
-      return;
-    }
-
-    setIsPdfUploading(true);
-    try {
-      const formDataUpload = new FormData();
-      formDataUpload.append('file', file);
-      // Assuming /api/upload also handles PDFs
-      const res = await fetch('/api/upload', { method: 'POST', body: formDataUpload });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
-      setFormData(prev => ({ ...prev, pdfUrl: data.url }));
-      showToast('PDF uploaded successfully!');
-    } catch (err) {
-      console.error('PDF upload failed:', err);
-      showToast('PDF upload failed', 'error');
-    } finally {
-      setIsPdfUploading(false);
-    }
-  };
 
   const openEditModal = (post: BlogPost) => {
     setEditingPost(post);
     setThumbnailFile(null);
-    setPdfFile(null);
     setFormData({
       title: post.title,
       content: post.content,
@@ -211,11 +181,8 @@ const Blog: React.FC<Props> = ({ showToast }) => {
       tags: post.tags || '',
       status: post.status,
       featured: post.featured || false,
-      readingTime: post.readingTime || 5,
-      views: post.views || 0,
       publishDate: post.publishDate || new Date().toISOString().split('T')[0],
-      thumbnail: post.thumbnail || '',
-      pdfUrl: post.pdfUrl || ''
+      thumbnail: post.thumbnail || ''
     });
     setShowModal(true);
   };
@@ -247,8 +214,7 @@ const Blog: React.FC<Props> = ({ showToast }) => {
             onClick={() => {
               setEditingPost(null);
               setThumbnailFile(null);
-              setPdfFile(null);
-              setFormData({ title: '', content: '', excerpt: '', author: '', category: '', tags: '', status: 'draft', featured: false, readingTime: 0, views: 0, publishDate: new Date().toISOString().split('T')[0], thumbnail: '', pdfUrl: '' });
+              setFormData({ title: '', content: '', excerpt: '', author: '', category: '', tags: '', status: 'draft', featured: false, publishDate: new Date().toISOString().split('T')[0], thumbnail: '' });
               setShowModal(true);
             }}
             className="w-9 h-9 bg-[#1a1c1e] text-white rounded-full flex items-center justify-center shadow-lg hover:bg-black transition-all"
@@ -515,7 +481,7 @@ const Blog: React.FC<Props> = ({ showToast }) => {
             </div>
 
             {/* Media Uploads */}
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-6">
               <div className="space-y-3">
                 <label className="text-[14px] font-bold text-gray-700 ml-1 uppercase tracking-wider">Thumbnail Image</label>
                 <div
@@ -524,7 +490,7 @@ const Blog: React.FC<Props> = ({ showToast }) => {
                     if (e.dataTransfer.files[0]) handleThumbnailFile(e.dataTransfer.files[0]);
                   }}
                   onDragOver={(e) => e.preventDefault()}
-                  className="w-full border border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer hover:border-navy hover:bg-gray-50 transition-all bg-white flex flex-col justify-center min-h-[140px] shadow-sm"
+                  className="w-full border border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer hover:border-navy hover:bg-gray-50 transition-all bg-white flex flex-col justify-center min-h-[200px] shadow-sm"
                 >
                   <input
                     type="file"
@@ -557,43 +523,6 @@ const Blog: React.FC<Props> = ({ showToast }) => {
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <label className="text-[14px] font-bold text-gray-700 ml-1 uppercase tracking-wider">PDF File</label>
-                <div
-                  onDrop={(e) => {
-                    e.preventDefault();
-                    if (e.dataTransfer.files[0]) handlePdfFile(e.dataTransfer.files[0]);
-                  }}
-                  onDragOver={(e) => e.preventDefault()}
-                  className="w-full border border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer hover:border-navy hover:bg-gray-50 transition-all bg-white flex flex-col justify-center min-h-[140px] shadow-sm"
-                >
-                  <input
-                    type="file"
-                    accept="application/pdf"
-                    onChange={(e) => e.target.files && handlePdfFile(e.target.files[0])}
-                    className="hidden"
-                    id="pdf-input"
-                  />
-                  <label htmlFor="pdf-input" className="cursor-pointer flex flex-col items-center justify-center w-full h-full">
-                    {isPdfUploading ? (
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="w-8 h-8 border-4 border-navy border-t-transparent rounded-full animate-spin"></div>
-                        <p className="text-[12px] font-bold text-gray-400">Uploading...</p>
-                      </div>
-                    ) : formData.pdfUrl ? (
-                      <div className="flex flex-col items-center gap-2">
-                        <span className="material-icons-outlined text-navy text-3xl">check_circle</span>
-                        <p className="text-[11px] font-bold text-navy bg-white/80 px-2 py-1 rounded">PDF Document Ready</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col items-center gap-2">
-                        <span className="material-icons-outlined text-gray-200 text-3xl font-light">picture_as_pdf</span>
-                        <p className="text-[12px] font-bold text-gray-400 leading-tight">Drop PDF or click here</p>
-                      </div>
-                    )}
-                  </label>
-                </div>
-              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-6">
@@ -638,27 +567,6 @@ const Blog: React.FC<Props> = ({ showToast }) => {
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-[13px] font-bold text-gray-700 ml-1">Reading Time (min)</label>
-                <input
-                  type="number"
-                  placeholder="5"
-                  value={formData.readingTime}
-                  onChange={(e) => setFormData({ ...formData, readingTime: parseInt(e.target.value) || 0 })}
-                  className="w-full h-[54px] px-5 border border-gray-200 rounded-2xl text-[15px] font-medium outline-none focus:border-navy transition-all bg-white shadow-sm"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[13px] font-bold text-gray-700 ml-1">Views</label>
-                <input
-                  type="number"
-                  placeholder="0"
-                  value={formData.views}
-                  onChange={(e) => setFormData({ ...formData, views: parseInt(e.target.value) || 0 })}
-                  className="w-full h-[54px] px-5 border border-gray-200 rounded-2xl text-[15px] font-medium outline-none focus:border-navy transition-all bg-white shadow-sm"
-                />
-              </div>
 
               <div className="space-y-2 flex items-center h-full pt-4">
                 <label className="flex items-center gap-3 cursor-pointer">

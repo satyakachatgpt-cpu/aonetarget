@@ -5,13 +5,12 @@ import {
   testsAPI,
   coursesAPI,
   questionsAPI,
-  testSeriesAPI,
   invalidateCache,
 } from "../../services/apiClient";
 import QuestionPaperRenderer from "./QuestionPaperRenderer";
 import { InlineMath } from "react-katex";
 import "katex/dist/katex.min.css";
-import Topics from "./misc/Topics";
+
 import AddTestDrawer from "./AddTestDrawer";
 import AddSingleTestDrawer from "./AddSingleTestDrawer";
 import AddTestPDFDrawer from "./AddTestPDFDrawer";
@@ -19,7 +18,7 @@ import SubjectiveTestDrawer from "./SubjectiveTestDrawer";
 import AddTestPDFBulkDrawer from "./AddTestPDFBulkDrawer";
 import ViewFormatModal from "./ViewFormatModal";
 import AddQuestionDrawer from "./AddQuestionDrawer";
-import ImportGlobalLibraryDrawer from "./ImportGlobalLibraryDrawer";
+
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import * as pdfjsLib from "pdfjs-dist";
@@ -45,15 +44,7 @@ import { CSS } from "@dnd-kit/utilities";
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || "5.5.207"}/build/pdf.worker.min.mjs`;
 
-const tabs = [
-  "Tests",
-  "Results",
-  "Copy Content",
-  "Bulk Uploader",
-  "Topics",
-  "Reported Questions",
-  "Question Library",
-];
+const tabs = ["Tests", "Results", "Bulk Uploader", "Reported Questions"];
 const detailSubTabs = [
   "Tests",
   "Test PDFs",
@@ -367,43 +358,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   });
   const [activeTab, setActiveTab] = useState("Tests");
   const [selectedContentType, setSelectedContentType] = useState("");
-  const [copyData, setCopyData] = useState<{
-    sourceSeries: string;
-    sourceTitle: string;
-    sourceSection: string;
-    sourceSearch: string[];
-    targetSeries: string;
-    targetTitle: string;
-  }>({
-    sourceSeries: "",
-    sourceTitle: "",
-    sourceSection: "",
-    sourceSearch: [],
-    targetSeries: "",
-    targetTitle: "",
-  });
-  const [copyTestsData, setCopyTestsData] = useState<{
-    sourceSeries: string;
-    sourceSubject: string[];
-    sourceTitleSearch: string[];
-    targetSeriesSearch: string[];
-    targetSubject: string;
-  }>({
-    sourceSeries: "",
-    sourceSubject: [],
-    sourceTitleSearch: [],
-    targetSeriesSearch: [],
-    targetSubject: "",
-  });
-  const [copyPdfData, setCopyPdfData] = useState<{
-    sourceSeries: string;
-    sourcePdf: string[];
-    targetSeries: string;
-  }>({
-    sourceSeries: "",
-    sourcePdf: [],
-    targetSeries: "",
-  });
+
   const [bulkUploadData, setBulkUploadData] = useState<{
     testSeries: string;
     testTitle: string;
@@ -721,7 +676,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const [selectedBulkDeleteQuestions, setSelectedBulkDeleteQuestions] =
     useState<number[]>([]);
   const [showSortModal, setShowSortModal] = useState(false);
-  const [showImportLibraryDrawer, setShowImportLibraryDrawer] = useState(false);
+
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -779,15 +734,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const [reportedCurrentPage, setReportedCurrentPage] = useState(1);
 
   // Question Library States
-  const [masterQuestions, setMasterQuestions] = useState<any[]>([]);
-  const [masterSearchQuery, setMasterSearchQuery] = useState("");
-  const [isMasterFilterOpen, setIsMasterFilterOpen] = useState(false);
-  const [masterFilters, setMasterFilters] = useState({
-    subject: "",
-    section: "",
-    topic: "",
-    type: "",
-  });
+
   const [detailTests, setDetailTests] = useState<any[]>([]);
   const [detailSearchQuery, setDetailSearchQuery] = useState("");
   const [questionFormData, setQuestionFormData] = useState<any>(null);
@@ -1033,92 +980,10 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     if (activeTab === "Reported Questions") {
       loadReportedQuestions();
     }
-    if (activeTab === "Question Library") {
-      loadMasterQuestions();
-    }
+
   }, [activeTab]);
 
-  const loadMasterQuestions = () => {
-    // Master data for Question Library
-    const mockMasters = [
-      {
-        id: 1,
-        serialNo: "155956",
-        textEn:
-          "100. Price of wheat is increased by 30%. A person can purchase 6 kg less wheat in Rs. 2600. Find old and new price of wheat per kg.",
-        textHi:
-          "गेंहूँ की कीमत में 30 प्रतिशत बढ़ोतरी होने पर एक व्यक्ति 2600 रूपये में 6 किग्रा0 गेंहूँ कम खरीद सकता है। गेंहूँ की पुरानी व नई कीमत प्रति किग्रा0 क्या है?",
-        badge: "HSSC TEST-159",
-        options: [
-          "Rs. 100, Rs. 130",
-          "Rs. 200, Rs. 180",
-          "Rs. 130, Rs. 100",
-          "Rs. 150, Rs. 200",
-          "",
-        ],
-        correctAnswer: "A",
-        solution:
-          "Let old price be x. New price = 1.3x. 2600/x - 2600/1.3x = 6. Solve for x.",
-        section: "MATH-31",
-        positiveMarks: "1.00",
-        negativeMarks: "0.00",
-      },
-      {
-        id: 2,
-        serialNo: "155955",
-        textEn:
-          "99. The ratio of water and milk in a vessel is 1 : 2 and in other vessel is 3 : 4. 1 - 1 kg of mixture is drawn off from both vessels and poured into a third vessel. Then new ratio of milk and water is:",
-        textHi:
-          "एक बर्तन में पानी तथा दूध का अनुपात 1 : 2 है तथा दूसरे में यह अनुपात 3 : 4 है। दोनों बर्तनों से 1-1 किग्रा0 मिश्रण निकालकर हटा दिया जाता है और फिर दोनों को एक तीसरे बर्तन में उड़ेल दिया जाता है तो अब दूध तथा पानी का अनुपात है?",
-        badge: "HSSC TEST-159",
-        options: ["7 : 13", "13 : 7", "1 : 1", "3 : 5", ""],
-        correctAnswer: "B",
-        solution:
-          "Calculate amount of milk and water in each vessel and add them.",
-        section: "MATH-31",
-        positiveMarks: "1.00",
-        negativeMarks: "0.00",
-      },
-      {
-        id: 3,
-        serialNo: "155954",
-        textEn:
-          "98. If $x^2 + \\frac{1}{x^2} = 66$, then find the value of $\\frac{x^2 - 1 + 2x}{x}$",
-        textHi:
-          "यदि $x^2 + \\frac{1}{x^2} = 66$, तो $\\frac{x^2 - 1 + 2x}{x}$ का मान है-",
-        badge: "HSSC TEST-159",
-        options: ["10", "12", "8", "6", ""],
-        correctAnswer: "A",
-        solution:
-          "$(x-1/x)^2 = x^2 + 1/x^2 - 2 = 66 - 2 = 64$. So $x-1/x = 8$. Expression is $(x-1/x) + 2 = 8 + 2 = 10$.",
-        section: "MATH-31",
-        positiveMarks: "1.00",
-        negativeMarks: "0.00",
-      },
-      {
-        id: 4,
-        serialNo: "155953",
-        textEn:
-          "97. A rabbit was standing 180 meter far from a dog. The rabbit run with a speed of 9 km/h after watching the dog and after 1 minute the dog chasing the rabbit with a speed of 12 km/h. After how much time and how many meters from the place where the dog was standing will the dog caught the rabbit.",
-        textHi:
-          "एक कुत्ते से 180 मीटर की दूरी पर एक खरगोश खड़ा था। कुत्ते को देखकर खरगोश 9 किमी / घंटा चाल से भागा। एक मिनट बाद कुत्ते ने 12 किमी / घंटा की चाल से खरगोश का पीछा किया। ज्ञात कीजिए कितने समय बाद तथा जहाँ कुत्ता खड़ा था वहाँ से कितने मीटर की दूरी पर कुत्ता खरगोश को पकड़ लेगा?",
-        badge: "HSSC TEST-159",
-        options: [
-          "5 min, 900 m",
-          "6 min, 1080 m",
-          "4 min, 800 m",
-          "7 min, 1200 m",
-          "",
-        ],
-        correctAnswer: "B",
-        solution: "Relative speed and time calculation.",
-        section: "MATH-31",
-        positiveMarks: "1.00",
-        negativeMarks: "0.00",
-      },
-    ];
-    setMasterQuestions(mockMasters);
-  };
+
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -1287,18 +1152,31 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   };
 
   const loadData = async () => {
+    // Safety fallback: Ensure loading is disabled after 10 seconds 
+    // even if requests are extremely slow or hanging.
+    const safetyTimer = setTimeout(() => {
+      setLoading(false);
+    }, 10000);
+
     try {
       const [testData, courseData] = await Promise.all([
-        testsAPI.getAll().catch(() => []),
-        coursesAPI.getAll().catch(() => []),
+        testsAPI.getAll().catch((err) => {
+          console.error("Error fetching tests:", err);
+          return [];
+        }),
+        coursesAPI.getAll().catch((err) => {
+          console.error("Error fetching courses:", err);
+          return [];
+        }),
       ]);
       setTests(Array.isArray(testData) ? testData : []);
       setCourses(Array.isArray(courseData) ? courseData : []);
     } catch (error) {
-      console.log("Starting with empty state");
+      console.error("loadData massive failure:", error);
       setTests([]);
       setCourses([]);
     } finally {
+      clearTimeout(safetyTimer);
       setLoading(false);
     }
   };
@@ -3409,243 +3287,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     );
   };
 
-  const renderQuestionLibraryTab = () => {
-    const filteredMaster = masterQuestions.filter((q) => {
-      const matchSearch =
-        q.textEn?.toLowerCase().includes(masterSearchQuery.toLowerCase()) ||
-        q.textHi?.toLowerCase().includes(masterSearchQuery.toLowerCase()) ||
-        (q.serialNo &&
-          q.serialNo.toLowerCase().includes(masterSearchQuery.toLowerCase()));
-      const matchSubject =
-        !masterFilters.subject || q.subject === masterFilters.subject;
-      return matchSearch && matchSubject;
-    });
 
-    return (
-      <div className="space-y-6 animate-in fade-in duration-500">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className="text-[20px] font-bold text-gray-800 tracking-tight">
-              Question Library
-            </h2>
-          </div>
-          <div className="flex gap-3 items-center w-full sm:w-auto">
-            <div className="relative group flex-1 sm:w-[320px]">
-              <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-[20px] transition-colors group-focus-within:text-black">
-                search
-              </span>
-              <input
-                type="text"
-                placeholder="Search by text or serial..."
-                value={masterSearchQuery}
-                onChange={(e) => setMasterSearchQuery(e.target.value)}
-                className="w-full h-11 pl-11 pr-4 bg-[#f8f9fa] border border-gray-200 rounded-xl text-[14px] font-medium text-gray-800 outline-none transition-all placeholder:text-gray-400 focus:bg-white focus:border-black focus:shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
-              />
-            </div>
-
-            <div className="relative">
-              <button
-                onClick={() => setIsMasterFilterOpen(!isMasterFilterOpen)}
-                className={`flex items-center gap-2 px-6 h-11 rounded-xl border text-[13px] font-bold transition-all ${isMasterFilterOpen ? "bg-black text-white border-black shadow-md" : "bg-white border-gray-200 text-gray-700 hover:border-black hover:bg-gray-50"}`}
-              >
-                <span className="material-symbols-outlined text-[18px]">
-                  tune
-                </span>
-                Filters
-              </button>
-
-              {isMasterFilterOpen && (
-                <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-gray-50 p-6 z-[100] animate-in fade-in zoom-in-95 duration-200 origin-top-right">
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">
-                        Subject
-                      </label>
-                      <select
-                        value={masterFilters.subject}
-                        onChange={(e) =>
-                          setMasterFilters({
-                            ...masterFilters,
-                            subject: e.target.value,
-                          })
-                        }
-                        className="w-full h-9 px-3 bg-gray-50 border border-gray-100 rounded-lg text-[13px] outline-none focus:border-black"
-                      >
-                        <option value="">All Subjects</option>
-                        {Array.from(
-                          new Set(
-                            masterQuestions
-                              .map((q) => q.subject)
-                              .filter(Boolean),
-                          ),
-                        ).map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-[1rem] shadow-sm border border-gray-100 overflow-visible">
-          <div className="">
-            <table className="w-full text-left">
-              <thead className="bg-[#FFFFFF] border-b border-gray-100">
-                <tr>
-                  <th className="px-6 py-4 w-12 text-center">
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4 rounded border-gray-300"
-                    />
-                  </th>
-                  <th className="px-6 py-4 w-[120px] text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                    <div className="flex items-center gap-1">
-                      S. NO.{" "}
-                      <span className="material-symbols-outlined text-[14px]">
-                        unfold_more
-                      </span>
-                    </div>
-                  </th>
-                  <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                    <div className="flex items-center gap-1">
-                      QUESTION DETAILS
-                    </div>
-                  </th>
-                  <th className="px-6 py-4 w-[160px] text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap text-right pr-12">
-                    ACTIONS
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filteredMaster.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="px-8 py-20 text-center">
-                      <p className="text-gray-400 font-medium">
-                        No results found in Question Library
-                      </p>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredMaster.map((q, idx) => (
-                    <tr
-                      key={q.id}
-                      className="hover:bg-gray-50/30 transition-colors group"
-                    >
-                      <td className="px-6 py-8 text-center align-top border-b border-gray-50/50">
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 rounded border-gray-300 mt-1"
-                        />
-                      </td>
-                      <td className="px-6 py-8 text-[14px] font-bold text-gray-600 align-top border-b border-gray-50/50">
-                        {q.serialNo || idx + 1}
-                      </td>
-                      <td className="px-6 py-8 align-top border-b border-gray-50/50">
-                        <div className="space-y-4 max-w-[900px]">
-                          <div className="space-y-2">
-                            <p className="text-[14px] font-medium text-gray-700 leading-relaxed">
-                              {renderQuestionText(q.textEn)}
-                            </p>
-                            {q.textHi && (
-                              <p className="text-[16px] font-medium text-gray-800 leading-relaxed font-hindi">
-                                {renderQuestionText(q.textHi)}
-                              </p>
-                            )}
-                          </div>
-                          {q.badge && (
-                            <div className="inline-block px-3 py-1 bg-[#E8F5E9] text-[#2E7D32] rounded-[4px] text-[11px] font-black uppercase tracking-wider border border-[#C8E6C9]">
-                              {q.badge}
-                            </div>
-                          )}
-                          {q.image && (
-                            <div className="border border-gray-100 rounded-xl overflow-hidden shadow-sm inline-block bg-white p-2 mt-2">
-                              <img
-                                src={q.image}
-                                alt="Figure"
-                                className="max-w-[150px] h-auto block"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-8 align-top text-right pr-6 border-b border-gray-50/50">
-                        <div className="relative inline-block action-menu-container" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const next = activeActionMenuId === (q.id || (q as any)._id) + 20000 ? null : (q.id || (q as any)._id) + 20000;
-                              setActiveActionMenuId(next);
-                            }}
-                            className={`flex items-center justify-between gap-2 px-4 py-2 border rounded-lg text-[13px] font-bold transition-all shadow-sm w-[110px] ${activeActionMenuId === (q.id || (q as any)._id) + 20000 ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
-                          >
-                            Actions
-                            <span className={`material-symbols-outlined text-[18px] transition-all duration-200 ${activeActionMenuId === (q.id || (q as any)._id) + 20000 ? "rotate-180 text-blue-500" : "text-gray-400 group-hover:text-gray-600"}`}>
-                              expand_more
-                            </span>
-                          </button>
-
-                          {activeActionMenuId === (q.id || (q as any)._id) + 20000 && (
-                            <div className={`absolute right-0 w-[140px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${idx >= filteredMaster.length - 2 ? "bottom-full mb-1" : "top-full mt-1"}`}>
-                              <button
-                                onClick={() => { setActiveActionMenuId(null); setViewingQuestionDetail(q); }}
-                                className="w-full px-5 py-2 flex items-center gap-3 hover:bg-gray-50 transition-colors group text-left"
-                              >
-                                <span className="material-symbols-outlined text-[20px] text-gray-400 group-hover:text-black">
-                                  radio_button_checked
-                                </span>
-                                <span className="text-[13px] font-bold text-gray-600 group-hover:text-black">
-                                  View
-                                </span>
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Professional Footer inside the card */}
-          <div className="px-8 py-6 border-t border-gray-100 flex items-center justify-between bg-white">
-            <div className="flex items-center gap-4">
-              <span className="text-[13px] font-medium text-gray-400 italic">
-                Showing {filteredMaster.length} to {filteredMaster.length} of{" "}
-                {filteredMaster.length} entries
-              </span>
-            </div>
-
-            <div className="flex items-center p-1.5 bg-white border border-gray-200 rounded-2xl shadow-sm">
-              <button
-                disabled
-                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 opacity-30 cursor-not-allowed"
-              >
-                Previous
-              </button>
-              <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
-              <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white shadow-lg rounded-xl">
-                1
-              </button>
-              <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
-              <button
-                disabled
-                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 opacity-30 cursor-not-allowed"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
 
   const renderBulkUploaderTab = () => {
     const previewQuestions =
@@ -4658,477 +4300,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     );
   };
 
-  const renderCopyContentTab = () => {
-    return (
-      <div className="animate-in fade-in duration-500 space-y-6">
-        {/* Selector Card */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200/60 p-6">
-          <div className="flex items-center gap-6">
-            <label className="text-[14px] font-medium text-gray-700">
-              Content Type
-            </label>
-            <div className="w-[200px] relative z-[90]">
-              <CustomDropdown
-                options={[
-                  { value: "copy_questions", label: "Copy Questions" },
-                  { value: "copy_tests", label: "Copy Tests" },
-                  { value: "copy_pdf_tests", label: "Copy PDF Tests" },
-                ]}
-                value={selectedContentType}
-                onChange={(val: any) => setSelectedContentType(val)}
-                placeholder="Select"
-              />
-            </div>
-          </div>
-        </div>
 
-        {selectedContentType === "copy_tests" && (
-          <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8 space-y-8 animate-in slide-in-from-top-4 duration-500">
-            <div className="space-y-4">
-              {/* Alert Message */}
-              <div className="bg-[#FFEFEF] border border-[#FFDADA] rounded-xl px-6 py-3">
-                <p className="text-[12px] font-medium text-[#E84E4E]">
-                  <span className="font-bold">Note :-</span> Please be careful
-                  while using this feature. Test Title & Questions added
-                  accidentally using this will have to be removed individually
-                  and manually.
-                </p>
-              </div>
-            </div>
-
-            {/* Source Section */}
-            <div className="bg-[#F8F9FB] border border-gray-100 rounded-[1.5rem] p-6 space-y-6">
-              <div className="bg-[#FFF8E6] rounded-xl px-6 py-4">
-                <h4 className="text-[15px] font-bold text-[#856404]">Source</h4>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">
-                    Test Series/Quiz Series *
-                  </label>
-                  <CustomDropdown
-                    options={courses.map((c) => ({
-                      value: c.id || (c as any)._id,
-                      label: c.name || c.title || "",
-                    }))}
-                    value={copyTestsData.sourceSeries}
-                    onChange={(val: any) =>
-                      setCopyTestsData({ ...copyTestsData, sourceSeries: val })
-                    }
-                    placeholder="Select Test Series"
-                    searchPlaceholder="Search"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">
-                    Subject
-                  </label>
-                  <CustomDropdown
-                    isMulti
-                    options={[
-                      {
-                        value: "General Knowledge",
-                        label: "General Knowledge",
-                      },
-                      { value: "Mathematics", label: "Mathematics" },
-                      { value: "Reasoning", label: "Reasoning" },
-                      { value: "English", label: "English" },
-                      { value: "Physics", label: "Physics" },
-                    ]}
-                    value={copyTestsData.sourceSubject}
-                    onChange={(val: any) =>
-                      setCopyTestsData({ ...copyTestsData, sourceSubject: val })
-                    }
-                    placeholder="--Select Subject--"
-                    searchPlaceholder="Searching..."
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">
-                    Test Title / Quiz Title*
-                  </label>
-                  <CustomDropdown
-                    isMulti
-                    showSelectAll
-                    options={tests
-                      .filter(
-                        (t) =>
-                          !copyTestsData.sourceSeries ||
-                          t.courseId === copyTestsData.sourceSeries ||
-                          (t as any)._id === copyTestsData.sourceSeries,
-                      )
-                      .map((t) => ({
-                        value: t.id || (t as any)._id,
-                        label: t.name || "Unnamed Test",
-                      }))}
-                    value={copyTestsData.sourceTitleSearch}
-                    onChange={(val: any) =>
-                      setCopyTestsData({
-                        ...copyTestsData,
-                        sourceTitleSearch: val,
-                      })
-                    }
-                    placeholder="Search"
-                    searchPlaceholder="Searching..."
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Target Section */}
-            <div className="bg-[#F8F9FB] border border-gray-100 rounded-[1.5rem] p-6 space-y-6">
-              <div className="bg-[#E9F7EF] rounded-xl px-6 py-4">
-                <h4 className="text-[15px] font-bold text-[#155724]">Target</h4>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">
-                    Test Series/Quiz Series *
-                  </label>
-                  <CustomDropdown
-                    isMulti
-                    showSelectAll
-                    dropup
-                    options={courses.map((c) => ({
-                      value: c.id || (c as any)._id,
-                      label: c.name || c.title || "",
-                    }))}
-                    value={copyTestsData.targetSeriesSearch}
-                    onChange={(val: any) =>
-                      setCopyTestsData({
-                        ...copyTestsData,
-                        targetSeriesSearch: val,
-                      })
-                    }
-                    placeholder="Search"
-                    searchPlaceholder="Search"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">
-                    Subject
-                  </label>
-                  <CustomDropdown
-                    options={[
-                      "General Knowledge",
-                      "Mathematics",
-                      "Reasoning",
-                      "English",
-                    ].map((s) => ({ value: s, label: s }))}
-                    value={copyTestsData.targetSubject}
-                    onChange={(val: any) =>
-                      setCopyTestsData({ ...copyTestsData, targetSubject: val })
-                    }
-                    placeholder="--Select Subject--"
-                    dropup
-                  />
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() =>
-                showToast("Copying tests... This may take a moment.")
-              }
-              className="bg-[#4361EE] text-white px-8 py-2.5 rounded-lg font-bold text-[14px] hover:bg-[#3451DE] transition-colors shadow-lg active:scale-95"
-            >
-              Submit
-            </button>
-          </div>
-        )}
-
-        {selectedContentType === "copy_questions" && (
-          <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8 space-y-8 animate-in slide-in-from-top-4 duration-500">
-            <div className="space-y-4">
-              <h3 className="text-[13px] font-black text-gray-900 uppercase tracking-[0.1em]">
-                COPY PASTE TEST SERIES QUESTION
-              </h3>
-
-              {/* Alert Message */}
-              <div className="bg-[#FFEFEF] border border-[#FFDADA] rounded-xl px-6 py-3">
-                <p className="text-[12px] font-medium text-[#E84E4E]">
-                  <span className="font-bold">Note :-</span> Please be careful
-                  while using this feature. Test Title & Questions added
-                  accidentally using this will have to be removed individually
-                  and manually.
-                </p>
-              </div>
-            </div>
-
-            {/* Source Section */}
-            <div className="bg-[#F8F9FB] border border-gray-100 rounded-[1.5rem] p-6 space-y-6">
-              <div className="bg-[#FFF8E6] rounded-xl px-6 py-4">
-                <h4 className="text-[15px] font-bold text-[#856404]">Source</h4>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">
-                    Test Series / Quiz Series *
-                  </label>
-                  <CustomDropdown
-                    options={courses.map((c) => ({
-                      value: c.id || (c as any)._id,
-                      label: c.name || c.title || "",
-                    }))}
-                    value={copyData.sourceSeries}
-                    onChange={(val: any) =>
-                      setCopyData({
-                        ...copyData,
-                        sourceSeries: val,
-                        sourceTitle: "",
-                      })
-                    }
-                    placeholder="Select Test Series"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">
-                    Test Title / Quiz Title*
-                  </label>
-                  <CustomDropdown
-                    options={tests
-                      .filter(
-                        (t) =>
-                          !copyData.sourceSeries ||
-                          t.courseId === copyData.sourceSeries ||
-                          (t as any)._id === copyData.sourceSeries ||
-                          t.courseName === copyData.sourceSeries,
-                      )
-                      .map((t) => ({
-                        value: t.id || (t as any)._id,
-                        label: t.name || "Unnamed Test",
-                      }))}
-                    value={copyData.sourceTitle}
-                    onChange={(val: any) =>
-                      setCopyData({ ...copyData, sourceTitle: val })
-                    }
-                    placeholder="Select Test Title"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">
-                    Test Section / Quiz Section *
-                  </label>
-                  <CustomDropdown
-                    options={[
-                      { value: "section_1", label: "Section 1" },
-                      { value: "section_2", label: "Section 2" },
-                    ]}
-                    value={copyData.sourceSection}
-                    onChange={(val: any) =>
-                      setCopyData({ ...copyData, sourceSection: val })
-                    }
-                    placeholder="Select Test Section"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">
-                    Test Question / Quiz Question
-                  </label>
-                  <CustomDropdown
-                    isMulti
-                    showSelectAll
-                    selectAllVariant="buttons"
-                    options={[
-                      { value: "all", label: "All Questions" },
-                      { value: "q1", label: "Section 1 - Q1" },
-                      { value: "q2", label: "Section 1 - Q2" },
-                    ]}
-                    value={copyData.sourceSearch}
-                    onChange={(val: any) =>
-                      setCopyData({ ...copyData, sourceSearch: val })
-                    }
-                    placeholder="Search"
-                    searchPlaceholder="Search"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Target Section */}
-            <div className="bg-[#F8F9FB] border border-gray-100 rounded-[1.5rem] p-6 space-y-6">
-              <div className="bg-[#E9F7EF] rounded-xl px-6 py-4">
-                <h4 className="text-[15px] font-bold text-[#155724]">Target</h4>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-2xl">
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">
-                    Test Series / Quiz Series *
-                  </label>
-                  <CustomDropdown
-                    options={courses.map((c) => ({
-                      value: c.id || (c as any)._id,
-                      label: c.name || c.title || "",
-                    }))}
-                    value={copyData.targetSeries}
-                    onChange={(val: any) =>
-                      setCopyData({
-                        ...copyData,
-                        targetSeries: val,
-                        targetTitle: "",
-                      })
-                    }
-                    placeholder="Select Test Series"
-                    dropup={true}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">
-                    Test Title / Quiz Title*
-                  </label>
-                  <CustomDropdown
-                    options={tests
-                      .filter(
-                        (t) =>
-                          !copyData.targetSeries ||
-                          t.courseId === copyData.targetSeries ||
-                          (t as any)._id === copyData.targetSeries ||
-                          t.courseName === copyData.targetSeries,
-                      )
-                      .map((t) => ({
-                        value: t.id || (t as any)._id,
-                        label: t.name || "Unnamed Test",
-                      }))}
-                    value={copyData.targetTitle}
-                    onChange={(val: any) =>
-                      setCopyData({ ...copyData, targetTitle: val })
-                    }
-                    placeholder="Select Test Title"
-                    dropup={true}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => showToast("Copying questions... Please wait.")}
-              className="bg-[#4361EE] text-white px-8 py-2.5 rounded-lg font-bold text-[14px] hover:bg-[#3451DE] transition-colors shadow-lg active:scale-95"
-            >
-              Submit
-            </button>
-          </div>
-        )}
-
-        {selectedContentType === "copy_pdf_tests" && (
-          <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 p-8 space-y-8 animate-in slide-in-from-top-4 duration-500">
-            {/* Alert Message */}
-            <div className="bg-[#FFEFEF] border border-[#FFDADA] rounded-xl px-6 py-3">
-              <p className="text-[12px] font-medium text-[#E84E4E]">
-                <span className="font-bold">Note :-</span> Please be careful
-                while using this feature. Test PDF added accidentally using this
-                will have to be removed individually and manually.
-              </p>
-            </div>
-
-            {/* Source Section */}
-            <div className="bg-[#F8F9FB] border border-gray-100 rounded-[1.5rem] p-6 space-y-6">
-              <div className="bg-[#FFF8E6] rounded-xl px-6 py-4">
-                <h4 className="text-[15px] font-bold text-[#856404]">Source</h4>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">
-                    Test Series/Quiz Series *
-                  </label>
-                  <CustomDropdown
-                    options={courses.map((c) => ({
-                      value: c.id || (c as any)._id,
-                      label: c.name || c.title || "",
-                    }))}
-                    value={copyPdfData.sourceSeries}
-                    onChange={(val: any) =>
-                      setCopyPdfData({
-                        ...copyPdfData,
-                        sourceSeries: val,
-                        sourcePdf: [],
-                      })
-                    }
-                    placeholder="Select Test Series"
-                    searchPlaceholder="Search"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">
-                    Test PDF / Quiz PDF*
-                  </label>
-                  <CustomDropdown
-                    isMulti
-                    showSelectAll
-                    selectAllVariant="buttons"
-                    options={courses
-                      .filter(
-                        (c) =>
-                          !copyPdfData.sourceSeries ||
-                          c.id === copyPdfData.sourceSeries ||
-                          (c as any)._id === copyPdfData.sourceSeries,
-                      )
-                      .map((c) => ({
-                        value: c.id || (c as any)._id,
-                        label: c.name || c.title || "Select Test PDF",
-                      }))}
-                    value={copyPdfData.sourcePdf}
-                    onChange={(val: any) =>
-                      setCopyPdfData({ ...copyPdfData, sourcePdf: val })
-                    }
-                    placeholder="Search"
-                    searchPlaceholder="Search"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Target Section */}
-            <div className="bg-[#F8F9FB] border border-gray-100 rounded-[1.5rem] p-6 space-y-6">
-              <div className="bg-[#E9F7EF] rounded-xl px-6 py-4">
-                <h4 className="text-[15px] font-bold text-[#155724]">Target</h4>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-lg">
-                <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-gray-500">
-                    Test Series / Quiz Series*
-                  </label>
-                  <CustomDropdown
-                    options={courses.map((c) => ({
-                      value: c.id || (c as any)._id,
-                      label: c.name || c.title || "",
-                    }))}
-                    value={copyPdfData.targetSeries}
-                    onChange={(val: any) =>
-                      setCopyPdfData({ ...copyPdfData, targetSeries: val })
-                    }
-                    placeholder="Search"
-                    searchPlaceholder="Search"
-                    dropup
-                  />
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => showToast("Syncing PDF content...")}
-              className="bg-[#4361EE] text-white px-8 py-2.5 rounded-lg font-bold text-[14px] hover:bg-[#3451DE] transition-colors shadow-lg active:scale-95"
-            >
-              Submit
-            </button>
-          </div>
-        )}
-      </div>
-    );
-  };
 
   return (
     <div className="w-full bg-[#fafafa]">
@@ -5160,16 +4332,10 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
       {activeTab === "Results" ? (
         renderResultsTab()
-      ) : activeTab === "Copy Content" ? (
-        renderCopyContentTab()
       ) : activeTab === "Bulk Uploader" ? (
         renderBulkUploaderTab()
       ) : activeTab === "Reported Questions" ? (
         renderReportedQuestionsTab()
-      ) : activeTab === "Question Library" ? (
-        renderQuestionLibraryTab()
-      ) : activeTab === "Topics" ? (
-        <Topics showToast={showToast} />
       ) : viewingTestSeries ? (
         renderTestSeriesDetail()
       ) : (
@@ -6366,55 +5532,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         }}
       />
 
-      <ImportGlobalLibraryDrawer
-        isOpen={showImportLibraryDrawer}
-        onClose={() => setShowImportLibraryDrawer(false)}
-        onImport={async (selectedQuestions) => {
-          const testId =
-            viewingQuestionEditor?.id || viewingQuestionEditor?._id;
-          if (!testId) return;
 
-          try {
-            showToast(
-              `Importing ${selectedQuestions.length} questions...`,
-              "success",
-            );
-
-            const importPromises = selectedQuestions.map((q) => {
-              const payload = {
-                testId: testId,
-                questionEn: q.textEn || q.questionEn,
-                questionHi: q.textHi || q.questionHi || "",
-                type: q.type || "Multiple Choice Question",
-                marks: q.marks || 4,
-                negative: q.negative || -1,
-                displayOptions: q.options
-                  ? q.options.map((opt: string, i: number) => ({
-                    id: i + 1,
-                    text: opt,
-                    isCorrect:
-                      q.correctAnswer === String.fromCharCode(65 + i),
-                  }))
-                  : q.displayOptions || [],
-                solution: {
-                  heading: "Full Solution",
-                  text: q.solution || "",
-                },
-              };
-              return questionsAPI.create(payload);
-            });
-
-            await Promise.all(importPromises);
-            invalidateCache("tests");
-
-            const qs = await testsAPI.getQuestions(testId);
-            setEditorQuestions(qs);
-            showToast("Questions imported successfully", "success");
-          } catch (err: any) {
-            showToast(err.message || "Failed to import questions", "error");
-          }
-        }}
-      />
 
       {/* Re-evaluate Test Modal */}
       {viewingReevaluateTest && (
