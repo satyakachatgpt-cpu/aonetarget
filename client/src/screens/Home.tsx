@@ -208,9 +208,11 @@ const Home: React.FC = () => {
     const fetchExamDocs = async () => {
       try {
         const response = await fetch('/api/exam-documents');
-        const data = await response.json();
-        const active = (Array.isArray(data) ? data : []).filter((d: any) => d.status === 'active');
-        setExamDocs(active);
+        if (response.ok) {
+          const data = await response.json();
+          const active = (Array.isArray(data) ? data : []).filter((d: any) => d.status === 'active');
+          setExamDocs(active);
+        }
       } catch (error) {
         console.error('Failed to fetch exam docs:', error);
       }
@@ -616,46 +618,51 @@ const Home: React.FC = () => {
               </button>
             </div>
             <div className="space-y-2.5">
-              {liveClasses.slice(0, 4).map((lc: any, i: number) => (
-                <div key={lc._id || lc.id || i} className="card-premium p-3 rounded-2xl border border-gray-100/50 flex gap-3 items-center hover:-translate-y-0.5 transition-all duration-200 group">
-                  <div className="w-14 h-14 bg-gradient-to-br from-accent to-accent-600 rounded-2xl flex items-center justify-center shrink-0 relative shadow-button">
-                    <span className="material-symbols-rounded text-white text-2xl">sensors</span>
-                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-sm text-gray-800 truncate">{lc.title || lc.name || 'Live Class'}</h4>
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <span className="text-[11px] text-gray-400 flex items-center gap-1">
-                        <span className="material-symbols-rounded text-[12px]">person</span>
-                        {lc.teacherName || lc.instructor || 'Instructor'}
-                      </span>
-                      <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                      <span className="text-[11px] text-gray-400 flex items-center gap-1">
-                        <span className="material-symbols-rounded text-[12px]">schedule</span>
-                        {(() => {
-                          if (lc.scheduledTime && lc.scheduledDate) {
-                            try {
-                              const dtStr = `${lc.scheduledDate}T${lc.scheduledTime}:00`;
-                              const dt = new Date(dtStr);
-                              if (!isNaN(dt.getTime())) {
-                                return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                              }
-                            } catch (e) { }
-                          }
-                          return lc.scheduledTime || lc.time || 'Upcoming';
-                        })()}
-                      </span>
+              {liveClasses.slice(0, 4).map((lc: any, i: number) => {
+                const isEnded = lc.status === 'ended' || lc.streamStatus === 'ended' || lc.isLive === false;
+                return (
+                  <div key={lc._id || lc.id || i} className="card-premium p-3 rounded-2xl border border-gray-100/50 flex gap-3 items-center hover:-translate-y-0.5 transition-all duration-200 group">
+                    <div className={`w-14 h-14 bg-gradient-to-br ${isEnded ? 'from-gray-400 to-gray-500' : 'from-accent to-accent-600'} rounded-2xl flex items-center justify-center shrink-0 relative shadow-button`}>
+                      <span className="material-symbols-rounded text-white text-2xl">sensors</span>
+                      {!isEnded && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>}
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-sm text-gray-800 truncate">{lc.title || lc.name || 'Live Class'}</h4>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                          <span className="material-symbols-rounded text-[12px]">person</span>
+                          {lc.teacherName || lc.instructor || 'Instructor'}
+                        </span>
+                        <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                        <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                          <span className="material-symbols-rounded text-[12px]">schedule</span>
+                          {(() => {
+                            if (lc.scheduledTime && lc.scheduledDate) {
+                              try {
+                                const dtStr = `${lc.scheduledDate}T${lc.scheduledTime}:00`;
+                                const dt = new Date(dtStr);
+                                if (!isNaN(dt.getTime())) {
+                                  return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                }
+                              } catch (e) { }
+                            }
+                            return lc.scheduledTime || lc.time || 'Upcoming';
+                          })()}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      disabled={isEnded}
+                      onClick={(e) => { e.stopPropagation(); if (!isEnded) handleJoinLiveClass(lc); }}
+                      className={`${isEnded ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'btn-accent'} text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 active:scale-[0.97] transition-all duration-200 shrink-0 shadow-button hover:shadow-lg`}
+                    >
+                      <span className="material-symbols-rounded text-[14px]">{isEnded ? 'event_busy' : 'videocam'}</span>
+                      {isEnded ? 'Ended' : 'Join'}
+                    </button>
                   </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleJoinLiveClass(lc); }}
-                    className="btn-accent text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 active:scale-[0.97] transition-all duration-200 shrink-0 shadow-button hover:shadow-lg"
-                  >
-                    <span className="material-symbols-rounded text-[14px]">videocam</span>
-                    Join
-                  </button>
-                </div>
-              ))}
+                );
+              })}
+
             </div>
           </section>
         )}
@@ -868,6 +875,14 @@ const Home: React.FC = () => {
                     className="bg-white rounded-[16px] p-3 border border-gray-100 flex items-center justify-between gap-4 cursor-pointer hover:shadow-md transition-all duration-300 group"
                   >
                     <div className="flex-1 min-w-0">
+                      {news.featured && (
+                        <div className="flex items-center gap-1 mb-1.5">
+                          <span className="bg-amber-100/80 text-amber-700 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1 border border-amber-200/50 shadow-sm transition-all group-hover:scale-105 origin-left">
+                            <span className="material-icons text-[10px] text-amber-500">star</span>
+                            Featured
+                          </span>
+                        </div>
+                      )}
                       <h4 className="font-semibold text-[14px] text-gray-800 leading-snug line-clamp-2 mb-2 group-hover:text-blue-700 transition-colors">{news.title || news.message}</h4>
                       <div className="flex items-center gap-1 text-blue-600 font-bold text-[11px] uppercase tracking-wider">
                         <span>Read Article</span>

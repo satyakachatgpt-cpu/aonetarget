@@ -12,14 +12,16 @@ import crypto from 'crypto';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import dns from 'dns';
-dns.setServers(['8.8.8.8', '8.8.4.4']);
+dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']); // Enabling hardcoded DNS to correctly resolve Atlas SRV records on some networks
+if (dns.setDefaultResultOrder) dns.setDefaultResultOrder('ipv4first');
+
 import {
   generateTokens, verifyAccessToken, verifyRefreshToken,
   authMiddleware, optionalAuth, generateDeviceId,
   generateSignedUrl, verifySignedUrl
 } from './middleware/auth.js';
 import compression from 'compression';
-import { globalLimiter, authLimiter, securityHeaders, sanitizeInput } from './middleware/security.js';
+import { publicLimiter, authLimiter, securityHeaders, sanitizeInput } from './middleware/security.js';
 import { sendEmail, templates } from './utils/email.js';
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from 'docx';
 
@@ -62,7 +64,9 @@ app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(sanitizeInput);
 app.use(cookieParser());
-app.use('/api/', globalLimiter);
+// Global rate limit removed per user request to avoid throttling administrative actions.
+// Specific limiters are applied to sensitive routes below.
+
 
 const rootPath = path.resolve(__dirname, '..');
 app.use('/attach-assist', express.static(path.join(__dirname, '../client/public/attach-assist')));
@@ -185,16 +189,19 @@ const excelUpload = multer({
 app.use((req, res, next) => {
   if (req.path.startsWith('/api') || req.path === '/health') {
     const logMsg = `[${new Date().toISOString()}] ${req.method} ${req.path}\n`;
-    console.log(logMsg);
+    // console.log(logMsg); // Reduced noise
     try {
-      fs.appendFileSync(path.join(__dirname, 'api_requests.log'), logMsg);
+      if (req.path.startsWith('/api')) fs.appendFileSync(path.join(__dirname, 'api_requests.log'), logMsg);
     } catch (e) { }
   }
   
-  // Use mongoose connection readyState to provide robust connection status
-  const isConnected = mongoose.connection.readyState === 1; // 1 = connected
-  if (req.path.startsWith('/api') && !isConnected) {
-    return res.status(503).json({ error: 'Database connecting, please retry' });
+  const isConnected = mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2; // 1 = connected, 2 = connecting
+  if (req.path.startsWith('/api') && !isConnected && !req.path.includes('/heartbeat')) {
+    console.log(`[DB Pending] Rejecting ${req.path} - Database still connecting...`);
+    return res.status(503).json({ 
+      error: 'Database connecting, please retry',
+      connecting: true 
+    });
   }
   next();
 });
@@ -223,7 +230,7 @@ const connectDB = async () => {
   try {
     await mongoose.connect(MONGODB_URI, {
       dbName: 'aonetarget',
-      serverSelectionTimeoutMS: 10000 // Give more time for Atlas handshake
+      serverSelectionTimeoutMS: 30000 // Increased timeout to 30s to allow slow Atlas handshakes
     });
 
     db = mongoose.connection.db;
@@ -247,9 +254,15 @@ const connectDB = async () => {
       await db.collection('packages').createIndex({ id: 1 }, { sparse: true });
       await db.collection('folders').createIndex({ courseId: 1, parentId: 1 });
       await db.collection('tests').createIndex({ courseId: 1 });
+      await db.collection('tests').createIndex({ isSeries: 1 });
+      await db.collection('tests').createIndex({ status: 1 });
       await db.collection('pdfs').createIndex({ courseId: 1 });
       
       // Performance optimization indexes
+      await db.collection('questions').createIndex({ testId: 1 });
+      await db.collection('questions').createIndex({ courseId: 1 });
+      await db.collection('testResults').createIndex({ testId: 1 });
+      await db.collection('testResults').createIndex({ studentId: 1 });
       await db.collection('enrollments').createIndex({ studentId: 1 });
       await db.collection('liveVideos').createIndex({ courseId: 1 });
       await db.collection('liveClasses').createIndex({ courseId: 1 });
@@ -258,7 +271,12 @@ const connectDB = async () => {
       console.warn('Index creation warning (non-fatal):', indexErr.message);
     }
   } catch (error) {
-    console.error('MongoDB connection error:', error);
+    // Cleaner logging: avoid full stack trace for transient timeout errors
+    if (error.name === 'MongooseServerSelectionError') {
+      console.warn(`[Cluster Wait] Still connecting to MongoDB Atlas cluster...`);
+    } else {
+      console.error('MongoDB connection error:', error.message || error);
+    }
     console.log('Retrying MongoDB connection in 5 seconds...');
     setTimeout(connectDB, 5000);
   }
@@ -702,7 +720,7 @@ app.get('/api/courses', async (req, res) => {
       computedSkip = (page - 1) * limit;
     }
 
-    let query = Course.find(filter);
+    let query = Course.find(filter).sort({ 'settings.sortingOrder': 1, createdAt: -1 });
 
     const aggregation = [
       { $match: filter },
@@ -730,10 +748,18 @@ app.get('/api/courses', async (req, res) => {
         $addFields: {
           id: { $ifNull: ['$id', { $toString: '$_id' }] },
           lessons: { $ifNull: [{ $arrayElemAt: ['$videoCount.count', 0] }, 0] },
-          videoCount: { $ifNull: [{ $arrayElemAt: ['$videoCount.count', 0] }, 0] }
+          videoCount: { $ifNull: [{ $arrayElemAt: ['$videoCount.count', 0] }, 0] },
+          sortOrder: {
+            $cond: {
+              if: { $or: [{ $eq: ['$settings.sortingOrder', 0] }, { $not: ['$settings.sortingOrder'] }] },
+              then: 1000,
+              else: '$settings.sortingOrder'
+            }
+          }
         }
       },
-      { $project: { videoCount: 0 } }
+      { $project: { videoCount: 0 } },
+      { $sort: { sortOrder: 1, createdAt: -1 } }
     ];
 
     if (!isNaN(limit) && limit > 0) {
@@ -1232,10 +1258,12 @@ app.post('/api/live-stream/end/:id', async (req, res) => {
     const id = req.params.id;
     const update = {
       status: 'ended',
+      streamStatus: 'ended',
       isLive: false,
       endedAt: new Date().toISOString(),
       endTime: new Date().toISOString() // Compatibility with getCalculatedLiveStatus
     };
+
     const query = {
       $or: [
         { id: id },
@@ -2535,7 +2563,7 @@ app.put('/api/coupons/update-all', async (req, res) => {
 });
 
 // Admin Authentication Routes
-app.post('/api/admin/login', async (req, res) => {
+app.post('/api/admin/login', authLimiter, async (req, res) => {
   try {
     let { adminId, password } = req.body;
 
@@ -3250,31 +3278,18 @@ app.get('/api/tests', async (req, res) => {
       {
         $lookup: {
           from: 'questions',
-          let: { tId: { $toString: '$_id' }, tOriginalId: '$id' },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $or: [
-                    { $eq: ['$testId', '$$tId'] },
-                    { $eq: ['$testId', '$$tOriginalId'] },
-                    { $eq: ['$testId', { $toString: '$$tOriginalId' }] }
-                  ]
-                }
-              }
-            },
-            { $count: 'count' }
-          ],
-          as: 'questionCountArray'
+          localField: 'id',
+          foreignField: 'testId',
+          as: 'qList'
         }
       },
       {
         $addFields: {
           id: { $ifNull: ['$id', { $toString: '$_id' }] },
-          questions: { $ifNull: [{ $arrayElemAt: ['$questionCountArray.count', 0] }, 0] }
+          questions: { $size: '$qList' }
         }
       },
-      { $project: { questionCountArray: 0 } }
+      { $project: { qList: 0 } }
     ];
 
     const testsWithCounts = await db.collection('tests').aggregate(aggregation).toArray();
@@ -4497,7 +4512,20 @@ app.put('/api/pdfs/update-all', async (req, res) => {
 // Routes for Packages/Batches
 app.get('/api/packages', async (req, res) => {
   try {
-    const packages = await db.collection('packages').find({}).toArray();
+    const packages = await db.collection('packages').aggregate([
+      {
+        $addFields: {
+          sortOrder: {
+            $cond: {
+              if: { $or: [{ $eq: ['$settings.sortingOrder', 0] }, { $not: ['$settings.sortingOrder'] }] },
+              then: 1000,
+              else: '$settings.sortingOrder'
+            }
+          }
+        }
+      },
+      { $sort: { sortOrder: 1, createdAt: -1 } }
+    ]).toArray();
     res.json(packages);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch packages' });
@@ -5204,7 +5232,14 @@ app.put('/api/notifications/bulk-update', async (req, res) => {
 
 app.delete('/api/notifications/:id', async (req, res) => {
   try {
-    const result = await db.collection('notifications').deleteOne({ id: req.params.id });
+    const id = req.params.id;
+    const query = {
+      $or: [
+        { id: id },
+        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
+      ].filter(v => v.id || v._id)
+    };
+    const result = await db.collection('notifications').deleteOne(query);
     if (result.deletedCount === 0) return res.status(404).json({ error: 'Notification not found' });
     res.json({ success: true, message: 'Notification deleted' });
   } catch (error) {
@@ -5746,8 +5781,8 @@ app.post('/api/logout', async (req, res) => {
   }
 });
 
-// Student registration without password / OTP requirement
-app.post('/api/students/register', async (req, res) => {
+// Frontend student registration — JWT + Single Device
+app.post('/api/students/register', publicLimiter, async (req, res) => {
   try {
     const { name, email, phone, class: studentClass, target, address, state, district, whatsAppNumber, alternateNumber, gender, dob } = req.body;
 
@@ -5888,7 +5923,7 @@ app.post('/api/students/session/validate', async (req, res) => {
 });
 
 // Check if a student phone is already registered
-app.post('/api/students/check-phone', async (req, res) => {
+app.post('/api/students/check-phone', publicLimiter, async (req, res) => {
   try {
     const { phone } = req.body || {};
     if (!phone) {
@@ -5912,7 +5947,7 @@ app.post('/api/students/check-phone', async (req, res) => {
 });
 
 // Check if a student email is already registered
-app.post('/api/students/check-email', async (req, res) => {
+app.post('/api/students/check-email', publicLimiter, async (req, res) => {
   try {
     const { email } = req.body || {};
     const normalizedEmail = email ? email.toLowerCase().trim() : '';

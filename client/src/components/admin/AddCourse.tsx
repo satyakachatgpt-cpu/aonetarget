@@ -332,7 +332,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                     isCombo,
                     intlUptick,
                     allowUpgrade,
-                    sortingOrder,
+                    sortingOrder: parseFloat(sortingOrder) || 0,
                     customBadge,
                     markNewBatch,
                     enableDownloads,
@@ -979,8 +979,8 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                                     <div className="space-y-1.5">
                                         <label className="text-[13px] font-semibold text-gray-700">Sorting Order</label>
                                         <input
-                                            type="text"
-                                            placeholder="0.00"
+                                            type="number"
+                                            placeholder="0"
                                             value={sortingOrder}
                                             onChange={(e) => setSortingOrder(e.target.value)}
                                             className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 transition-all bg-white"

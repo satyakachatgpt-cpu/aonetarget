@@ -19,6 +19,7 @@ const PushNotifications: React.FC<Props> = ({ showToast }) => {
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [courses, setCourses] = useState<any[]>([]);
   const [formData, setFormData] = useState({ title: '', message: '', type: '', status: 'pending' as 'sent' | 'pending', targetCourseId: 'all' });
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   useEffect(() => { 
     loadItems(); 
@@ -94,11 +95,47 @@ const PushNotifications: React.FC<Props> = ({ showToast }) => {
       try {
         await notificationsAPI.delete(id);
         showToast('Deleted!');
+        setSelectedIds(prev => prev.filter(i => i !== id));
         loadItems();
       } catch (error) {
         showToast('Failed', 'error');
       }
     }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    const count = selectedIds.length;
+    if (confirm(`Delete ${count} notifications?`)) {
+      setLoading(true);
+      try {
+        // Sequential deletion as per current API structure
+        for (const id of selectedIds) {
+          await notificationsAPI.delete(id).catch(e => console.error(`Failed to delete ${id}`, e));
+        }
+        showToast(`Deleted ${count} notifications!`);
+        setSelectedIds([]);
+        loadItems();
+      } catch (error) {
+        showToast('Bulk delete encountered errors', 'error');
+        loadItems();
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const toggleSelectAll = () => {
+    const currentIds = paginatedItems.map(item => item._id || item.id || '').filter(Boolean);
+    if (selectedIds.length === currentIds.length && currentIds.every(id => selectedIds.includes(id))) {
+      setSelectedIds(prev => prev.filter(id => !currentIds.includes(id)));
+    } else {
+      setSelectedIds(prev => Array.from(new Set([...prev, ...currentIds])));
+    }
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-navy"></div></div>;
@@ -121,6 +158,17 @@ const PushNotifications: React.FC<Props> = ({ showToast }) => {
               className="w-full pl-10 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-[13px] font-medium outline-none focus:border-navy transition-all placeholder:text-gray-400"
             />
           </div>
+
+          {selectedIds.length > 0 && (
+            <button
+              onClick={handleBulkDelete}
+              className="w-9 h-9 bg-red-50 text-red-600 rounded-full flex items-center justify-center hover:bg-red-100 transition-all border border-red-200 group relative"
+              title="Bulk Delete"
+            >
+              <span className="material-icons-outlined text-lg">delete_sweep</span>
+              <span className="absolute -top-2 -right-2 bg-red-600 text-white text-[10px] font-bold w-5 h-5 rounded-full flex items-center justify-center border-2 border-white">{selectedIds.length}</span>
+            </button>
+          )}
 
           <button
             onClick={() => { setEditingItem(null); setFormData({ title: '', message: '', type: '', status: 'pending', targetCourseId: 'all' }); setShowModal(true); }}
@@ -185,8 +233,18 @@ const PushNotifications: React.FC<Props> = ({ showToast }) => {
           <>
             <div className="overflow-x-visible">
               <table className="w-full text-left">
-                <thead>
+                 <thead>
                   <tr className="bg-gray-50/50 border-b border-gray-100">
+                    <th className="px-6 py-4 w-12 text-center">
+                      <div className="flex items-center justify-center">
+                        <input 
+                          type="checkbox" 
+                          className="w-4 h-4 rounded border-gray-300 text-navy focus:ring-navy"
+                          checked={paginatedItems.length > 0 && paginatedItems.every(item => selectedIds.includes(item._id || item.id || ''))}
+                          onChange={toggleSelectAll}
+                        />
+                      </div>
+                    </th>
                     <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider w-20">S. No.</th>
                     <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                       <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-700">
@@ -211,10 +269,21 @@ const PushNotifications: React.FC<Props> = ({ showToast }) => {
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   {paginatedItems.map((item, idx) => {
-                    const itemId = item._id || item.id || `temp_${idx}`;
-                    const itemDate = item.createdDate || item.createdAt || new Date().toISOString();
-                    return (
-                    <tr key={itemId} className="hover:bg-gray-50/30 transition-colors">
+                     const itemId = item._id || item.id || `temp_${idx}`;
+                     const itemDate = item.createdDate || item.createdAt || new Date().toISOString();
+                     const isSelected = selectedIds.includes(itemId);
+                     return (
+                    <tr key={itemId} className={`${isSelected ? 'bg-blue-50/50' : ''} hover:bg-gray-50/30 transition-colors`}>
+                      <td className="px-6 py-5 w-12 text-center">
+                        <div className="flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+                          <input 
+                            type="checkbox" 
+                            className="w-4 h-4 rounded border-gray-300 text-navy focus:ring-navy pointer-events-auto"
+                            checked={isSelected}
+                            onChange={() => toggleSelect(itemId)}
+                          />
+                        </div>
+                      </td>
                       <td className="px-6 py-5 text-[13px] font-medium text-gray-600">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
                       <td className="px-6 py-5 text-[13px] font-medium text-gray-600">
                         {new Date(itemDate).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')} at {new Date(itemDate).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}

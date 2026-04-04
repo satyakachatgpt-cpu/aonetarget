@@ -247,8 +247,19 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
       const normalizedPkgs = Array.isArray(pkgs) ? normalizeData(pkgs) : [];
       const normalizedCourses = Array.isArray(courses) ? normalizeData(courses) : [];
 
-      // Combine both types into the main packages state for display
-      setPackages([...normalizedPkgs, ...normalizedCourses]);
+      // Combine both types into the main packages state for display and sort them
+      const combined = [...normalizedPkgs, ...normalizedCourses];
+      combined.sort((a, b) => {
+        const getOrder = (item: any) => {
+          const val = item.settings?.sortingOrder ?? item.sortingOrder ?? 1000;
+          return val === 0 ? 1000 : val;
+        };
+        const orderA = getOrder(a);
+        const orderB = getOrder(b);
+        if (orderA !== orderB) return orderA - orderB;
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+      });
+      setPackages(combined);
       setAvailableCourses(normalizedCourses);
 
       const subs = await subjectsAPI.getAll();

@@ -63,11 +63,11 @@ const StudyDashboard: React.FC = () => {
       try {
         setLoading(true);
         const [courseRes, vRes, nRes, tRes, fRes] = await Promise.all([
-          fetch(`/api/courses/${id}`).then(r => r.json()),
-          fetch(`/api/courses/${id}/videos`).then(r => r.json()),
-          fetch(`/api/courses/${id}/notes`).then(r => r.json()),
-          fetch(`/api/courses/${id}/tests`).then(r => r.json()),
-          fetch(`/api/courses/${id}/folders`).then(r => r.json())
+          fetch(`/api/courses/${id}`).then(r => r.ok ? r.json() : null),
+          fetch(`/api/courses/${id}/videos`).then(r => r.ok ? r.json() : []),
+          fetch(`/api/courses/${id}/notes`).then(r => r.ok ? r.json() : []),
+          fetch(`/api/courses/${id}/tests`).then(r => r.ok ? r.json() : []),
+          fetch(`/api/courses/${id}/folders`).then(r => r.ok ? r.json() : [])
         ]);
         setCourse(courseRes);
         setVideos(Array.isArray(vRes) ? vRes : []);
@@ -78,7 +78,7 @@ const StudyDashboard: React.FC = () => {
         // Fetch user downloads to check what's already offline
         if (storedStudent) {
           const s = JSON.parse(storedStudent);
-          const dRes = await fetch(`/api/students/${s.id}/downloads`).then(r => r.json());
+          const dRes = await fetch(`/api/students/${s.id}/downloads`).then(r => r.ok ? r.json() : []);
           if (Array.isArray(dRes)) {
             setDownloadedIds(new Set(dRes.map(d => d.id || d._id)));
           }
@@ -92,9 +92,11 @@ const StudyDashboard: React.FC = () => {
     const fetchSubjects = async () => {
       try {
         const res = await fetch('/api/subjects');
-        const data = await res.json();
-        if (Array.isArray(data)) {
-          setSubjects([{ id: 'all', name: 'All Subjects' }, ...data]);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data)) {
+            setSubjects([{ id: 'all', name: 'All Subjects' }, ...data]);
+          }
         }
       } catch (err) {
         console.error('Failed to fetch subjects:', err);

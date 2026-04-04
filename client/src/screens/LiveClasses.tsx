@@ -79,6 +79,68 @@ const LiveClasses: React.FC = () => {
         </div>
       </header>
 
+
+       {liveClasses.length > 0 && (
+          <section className="px-4 mt-6 mb-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-1.5 h-7 bg-gradient-to-b from-accent to-accent-600 rounded-full shadow-sm"></div>
+                <div>
+                  <h2 className="section-title">Live Classes</h2>
+                  <p className="section-subtitle">Join upcoming sessions</p>
+                </div>
+              </div>
+            </div>
+            <div className="space-y-2.5">
+              {liveClasses.slice(0, 4).map((lc: any, i: number) => {
+                const isEnded = lc.status === 'ended' || lc.streamStatus === 'ended' || lc.isLive === false;
+                return (
+                  <div key={lc._id || lc.id || i} className="card-premium p-3 rounded-2xl border border-gray-100/50 flex gap-3 items-center hover:-translate-y-0.5 transition-all duration-200 group">
+                    <div className={`w-12 h-12 bg-gradient-to-br ${isEnded ? 'from-gray-400 to-gray-500' : 'from-accent to-accent-600'} rounded-2xl flex items-center justify-center shrink-0 relative shadow-button`}>
+                      <span className="material-symbols-rounded text-white text-2xl">sensors</span>
+                      {!isEnded && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-sm text-gray-800 truncate">{lc.title || lc.name || 'Live Class'}</h4>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                          <span className="material-symbols-rounded text-[12px]">person</span>
+                          {lc.teacherName || lc.instructor || 'Instructor'}
+                        </span>
+                        <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                        <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                          <span className="material-symbols-rounded text-[12px]">schedule</span>
+                          {(() => {
+                            if (lc.scheduledTime && lc.scheduledDate) {
+                              try {
+                                const dtStr = `${lc.scheduledDate}T${lc.scheduledTime}:00`;
+                                const dt = new Date(dtStr);
+                                if (!isNaN(dt.getTime())) {
+                                  return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                }
+                              } catch (e) { }
+                            }
+                            return lc.scheduledTime || lc.time || 'Upcoming';
+                          })()}
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      disabled={isEnded}
+                      onClick={(e) => { e.stopPropagation(); if (!isEnded) handleJoinLiveClass(lc); }}
+                      className={`${isEnded ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'btn-accent'} text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 active:scale-[0.97] transition-all duration-200 shrink-0 shadow-button hover:shadow-lg`}
+                    >
+                      <span className="material-symbols-rounded text-[14px]">{isEnded ? 'event_busy' : 'videocam'}</span>
+                      {isEnded ? 'Ended' : 'Join'}
+                    </button>
+                  </div>
+                );
+              })}
+
+            </div>
+          </section>
+        )}
+
       <div className="p-4">
         <div className="bg-white rounded-[2rem] p-6 shadow-card border border-gray-100 min-h-[300px]">
           {studentId ? (
@@ -91,61 +153,7 @@ const LiveClasses: React.FC = () => {
         </div>
 
         {/* Premium Live Classes List Section (Red Box Area) */}
-        {liveClasses.length > 0 && (
-          <section className="animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-            <div className="flex justify-between items-center mb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-1.5 h-7 bg-gradient-to-b from-accent to-accent-600 rounded-full shadow-sm"></div>
-                <div>
-                  <h2 className="section-title">Live Classes</h2>
-                  <p className="section-subtitle">Join upcoming sessions</p>
-                </div>
-              </div>
-            </div>
-            <div className="space-y-2.5">
-              {liveClasses.slice(0, 4).map((lc: any, i: number) => (
-                <div key={lc._id || lc.id || i} className="card-premium p-3 rounded-2xl border border-gray-100/50 flex gap-3 items-center hover:-translate-y-0.5 transition-all duration-200 group">
-                  <div className="w-14 h-14 bg-gradient-to-br from-accent to-accent-600 rounded-2xl flex items-center justify-center shrink-0 relative shadow-button">
-                    <span className="material-symbols-rounded text-white text-2xl">sensors</span>
-                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-sm text-gray-800 truncate">{lc.title || lc.name || 'Live Class'}</h4>
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <span className="text-[11px] text-gray-400 flex items-center gap-1">
-                        <span className="material-symbols-rounded text-[12px]">person</span>
-                        {lc.teacherName || lc.instructor || 'Instructor'}
-                      </span>
-                      <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                      <span className="text-[11px] text-gray-400 flex items-center gap-1">
-                        <span className="material-symbols-rounded text-[12px]">schedule</span>
-                        {(() => {
-                          if (lc.scheduledTime && lc.scheduledDate) {
-                            try {
-                              const dtStr = `${lc.scheduledDate}T${lc.scheduledTime}:00`;
-                              const dt = new Date(dtStr);
-                              if (!isNaN(dt.getTime())) {
-                                return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                              }
-                            } catch (e) { }
-                          }
-                          return lc.scheduledTime || lc.time || 'Upcoming';
-                        })()}
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleJoinLiveClass(lc); }}
-                    className="btn-accent text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 active:scale-[0.97] transition-all duration-200 shrink-0 shadow-button hover:shadow-lg"
-                  >
-                    <span className="material-symbols-rounded text-[14px]">videocam</span>
-                    Join
-                  </button>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+       
       </div>
     </div>
   );

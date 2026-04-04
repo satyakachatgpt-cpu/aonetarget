@@ -249,11 +249,11 @@ const CourseDetails: React.FC = () => {
   const fetchCourseData = async () => {
     try {
       const [courseData, videosData, notesData, testsData, foldersData] = await Promise.all([
-        fetch(`/api/courses/${id}`).then(r => r.json()).catch(() => null),
-        fetch(`/api/courses/${id}/videos`).then(r => r.json()).catch(() => []),
-        fetch(`/api/courses/${id}/notes`).then(r => r.json()).catch(() => []),
-        fetch(`/api/courses/${id}/tests`).then(r => r.json()).catch(() => []),
-        fetch(`/api/courses/${id}/folders`).then(r => r.json()).catch(() => []),
+        fetch(`/api/courses/${id}`).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`/api/courses/${id}/videos`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/courses/${id}/notes`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/courses/${id}/tests`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/courses/${id}/folders`).then(r => r.ok ? r.json() : []).catch(() => []),
       ]);
 
       if (courseData && !courseData.error) {
@@ -268,13 +268,17 @@ const CourseDetails: React.FC = () => {
       if (studentId) {
         try {
           const enrolledRes = await fetch(`/api/students/${studentId}/enrolled/${id}`);
-          const enrolledData = await enrolledRes.json();
-          setIsEnrolled(enrolledData.enrolled || false);
+          if (enrolledRes.ok) {
+            const enrolledData = await enrolledRes.json();
+            setIsEnrolled(enrolledData.enrolled || false);
 
-          if (enrolledData.enrolled) {
-            const progressRes = await fetch(`/api/students/${studentId}/courses/${id}/progress`);
-            const progressData = await progressRes.json();
-            setProgress(progressData);
+            if (enrolledData.enrolled) {
+              const progressRes = await fetch(`/api/students/${studentId}/courses/${id}/progress`);
+              if (progressRes.ok) {
+                const progressData = await progressRes.json();
+                setProgress(progressData);
+              }
+            }
           }
         } catch { }
       }

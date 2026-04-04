@@ -2176,6 +2176,13 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
     const getCalculatedLiveStatus = (item: any) => {
       if (!isLiveStream) return null;
+
+      // Prioritize manual status set by admin
+      const explicitStatus = (item.streamStatus || item.status || '').toLowerCase();
+      if (explicitStatus === 'ended' || explicitStatus === 'completed' || explicitStatus === 'finished') {
+        return 'ended';
+      }
+
       const now = new Date();
 
       // Parse dates safely
@@ -2192,6 +2199,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       if (startTime && now < startTime) return 'upcoming';
       return 'live';
     };
+
 
     const currentLiveStatus = getCalculatedLiveStatus(item);
     const isActuallyLive = currentLiveStatus === 'live';
