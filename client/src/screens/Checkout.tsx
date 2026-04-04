@@ -19,6 +19,12 @@ interface Course {
   mrp?: number;
   category?: string;
   instructor?: string;
+  content?: {
+    upsell?: {
+      enabled: boolean;
+      courses: string[];
+    };
+  };
 }
 
 const Checkout: React.FC = () => {
@@ -73,6 +79,26 @@ const Checkout: React.FC = () => {
     };
     loadCourse();
   }, [id]);
+
+  const [upsellData, setUpsellData] = useState<Course[]>([]);
+  useEffect(() => {
+    if (course?.content?.upsell?.enabled && course.content.upsell.courses.length > 0) {
+      const fetchUpsell = async () => {
+        try {
+          const res = await fetch('/api/courses');
+          if (res.ok) {
+            const all = await res.json();
+            const recommended = all.filter((c: any) => 
+              course.content?.upsell?.courses.includes(c.title || c.name) && 
+              (c.id || c._id) !== (course.id || (course as any)._id)
+            );
+            setUpsellData(recommended);
+          }
+        } catch (e) { }
+      };
+      fetchUpsell();
+    }
+  }, [course]);
 
   const handleRazorpayPayment = async () => {
     const student = getStudentData();
@@ -310,6 +336,33 @@ const Checkout: React.FC = () => {
             />
           </div>
         </div>
+
+        {upsellData.length > 0 && (
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <h2 className="text-sm font-bold flex items-center gap-2 mb-4">
+              <span className="material-symbols-rounded text-indigo-600">recommend</span>
+              Recommended for you
+            </h2>
+            <div className="space-y-3">
+              {upsellData.map((up) => (
+                <div key={up.id || (up as any)._id} className="flex items-center gap-3 p-2 border border-gray-50 rounded-xl hover:bg-gray-50 cursor-pointer transition-all" onClick={() => navigate(`/course/${up.id || (up as any)._id}`)}>
+                  <div className="w-12 h-12 rounded-lg overflow-hidden bg-indigo-100 flex items-center justify-center shrink-0">
+                    {up.thumbnail || up.imageUrl ? (
+                      <img src={getImageUrl(up.thumbnail || up.imageUrl)} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-indigo-600 font-bold text-xs">{(up.title || up.name || 'C').charAt(0)}</span>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-[12px] font-bold text-gray-800 line-clamp-1">{up.title || up.name}</p>
+                    <p className="text-[10px] text-green-600 font-black">₹{up.price || 0}</p>
+                  </div>
+                  <span className="material-symbols-rounded text-gray-300 text-sm">chevron_right</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
           <h2 className="text-sm font-bold mb-4">Payment Summary</h2>

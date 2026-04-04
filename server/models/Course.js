@@ -19,6 +19,13 @@ const courseSchema = new mongoose.Schema({
     isActive: { type: Boolean, default: true },
     lessons: { type: Number, default: 0 },
     videoCount: { type: Number, default: 0 },
+    settings: {
+        sortingOrder: { type: Number, default: 9999 },
+        showTabs: { type: Boolean, default: true },
+        markNewBatch: { type: Boolean, default: false },
+        disableInvoice: { type: Boolean, default: false },
+        customBadge: { type: String, default: '' }
+    },
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
 }, { strict: false }); // Using strict: false temporarily to handle dynamic fields from old data

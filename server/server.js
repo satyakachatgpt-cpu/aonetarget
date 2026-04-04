@@ -246,6 +246,42 @@ const connectDB = async () => {
       await db.collection('tests').createIndex({ courseId: 1 });
       await db.collection('pdfs').createIndex({ courseId: 1 });
       console.log('MongoDB indexes ensured');
+      
+      // Batch Sorting Migration: Convert string values to numbers
+      try {
+        console.log('Running sortingOrder migration...');
+        const collections = ['courses', 'packages'];
+        for (const collName of collections) {
+          const records = await db.collection(collName).find({}).toArray();
+          for (const record of records) {
+            let needsUpdate = false;
+            const updateObj = {};
+
+            if (!record.settings) {
+              updateObj['settings'] = { sortingOrder: 9999 };
+              needsUpdate = true;
+            } else {
+              const currentOrder = record.settings.sortingOrder;
+              if (currentOrder === undefined || currentOrder === null || currentOrder === "") {
+                updateObj['settings.sortingOrder'] = 9999;
+                needsUpdate = true;
+              } else if (typeof currentOrder === 'string') {
+                updateObj['settings.sortingOrder'] = parseFloat(currentOrder) || 9999;
+                needsUpdate = true;
+              }
+            }
+
+            if (needsUpdate) {
+              console.log(`Migrating ${collName} [${record.id || record._id}]: Setting order to ${updateObj['settings.sortingOrder'] || updateObj.settings.sortingOrder}`);
+              await db.collection(collName).updateOne({ _id: record._id }, { $set: updateObj });
+            }
+          }
+        }
+        console.log('SortingOrder migration completed');
+      } catch (migErr) {
+        console.error('Migration error:', migErr);
+      }
+
     } catch (indexErr) {
       console.warn('Index creation warning (non-fatal):', indexErr.message);
     }
@@ -645,7 +681,7 @@ app.get('/api/courses', async (req, res) => {
       computedSkip = (page - 1) * limit;
     }
 
-    let query = Course.find(filter);
+    let query = Course.find(filter).sort({ 'settings.sortingOrder': 1, 'createdAt': -1 });
 
     if (!isNaN(limit) && limit > 0) {
       query = query.skip(computedSkip).limit(limit);
@@ -687,8 +723,18 @@ app.get('/api/courses', async (req, res) => {
 
 app.post('/api/courses', async (req, res) => {
   try {
-    const course = new Course(req.body);
+    const courseData = req.body;
+    if (courseData.settings && typeof courseData.settings.sortingOrder === 'string') {
+      courseData.settings.sortingOrder = parseFloat(courseData.settings.sortingOrder) || 9999;
+    }
+    const course = new Course(courseData);
     await course.save();
+    
+    // Sync Demo Video
+    if (course.demoVideo) {
+      await syncDemoVideoWithFreeContent(course, course._id.toString());
+    }
+
     res.status(201).json(course);
   } catch (error) {
     console.error('Create course error:', error);
@@ -1680,6 +1726,40 @@ app.delete('/api/courses/:id/posts/:postId', async (req, res) => {
   }
 });
 
+// Helper to sync Demo Video with Free Content
+async function syncDemoVideoWithFreeContent(record, id) {
+  try {
+    const demoUrl = record.demoVideo || record.imageUrl; // fallback if needed
+    const finalId = id || record.id || record._id?.toString();
+    if (!finalId) return;
+
+    if (record.demoVideo) {
+      const videoData = {
+        title: `Demo: ${record.name || record.title || 'Course'}`,
+        url: record.demoVideo,
+        courseId: finalId,
+        isFree: true,
+        category: record.category || 'General',
+        instructor: record.instructor || 'Institute Faculty',
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Upsert into videos collection based on courseId and "Demo:" prefix
+      await db.collection('videos').updateOne(
+        { courseId: finalId, title: { $regex: /^Demo:/i } },
+        { $set: videoData },
+        { upsert: true }
+      );
+      console.log(`[DEMO-SYNC] Synced demo video for ${finalId}`);
+    } else if (record.demoVideo === "") {
+        // Explicitly removed
+        await db.collection('videos').deleteMany({ courseId: finalId, title: { $regex: /^Demo:/i } });
+    }
+  } catch (err) {
+    console.error(`[DEMO-SYNC ERROR] ${finalId}:`, err);
+  }
+}
+
 // Generic Course Routes (Correctly placed at the end)
 app.get('/api/courses/:id', async (req, res) => {
   try {
@@ -1701,12 +1781,36 @@ app.get('/api/courses/:id', async (req, res) => {
   }
 });
 
+app.post('/api/courses/:id', async (req, res) => {
+  try {
+    const courseId = req.params.id;
+    const courseData = req.body;
+    
+    if (courseData.settings && typeof courseData.settings.sortingOrder === 'string') {
+      courseData.settings.sortingOrder = parseFloat(courseData.settings.sortingOrder) || 9999;
+    }
+
+    const result = await db.collection('courses').findOneAndUpdate(
+      { $or: [{ id: courseId }, { _id: ObjectId.isValid(courseId) ? new ObjectId(courseId) : null }].filter(f => f._id !== null) },
+      { $set: { ...courseData, updatedAt: new Date().toISOString() } },
+      { returnDocument: 'after' }
+    );
+    res.json(result.value || result);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update course' });
+  }
+});
+
 app.put('/api/courses/:id', async (req, res) => {
   try {
     console.log(`PUT /api/courses/${req.params.id} - Body size: ${JSON.stringify(req.body).length} bytes`);
     const { _id, ...updateData } = req.body;
     const id = req.params.id;
     console.log(`Aggressive PUT lookup for identifier: ${id}`);
+
+    if (updateData.settings && typeof updateData.settings.sortingOrder === 'string') {
+      updateData.settings.sortingOrder = parseFloat(updateData.settings.sortingOrder) || 9999;
+    }
 
     // Try finding in both collections with all variants
     let record = await db.collection('courses').findOne({ $or: [{ id: id }, { _id: id }] });
@@ -1730,10 +1834,24 @@ app.put('/api/courses/:id', async (req, res) => {
 
     console.log(`[TARGET MATCH] Collection: ${targetCollection}, DB _id: ${record._id}`);
 
+    const finalUpdate = { ...updateData, updatedAt: new Date().toISOString() };
+    if (updateData.settings && record.settings) {
+      finalUpdate.settings = { ...record.settings, ...updateData.settings };
+    }
+    if (updateData.content && record.content) {
+      finalUpdate.content = { ...record.content, ...updateData.content };
+    }
+
     await db.collection(targetCollection).updateOne(
       { _id: record._id },
-      { $set: { ...updateData, updatedAt: new Date().toISOString() } }
+      { $set: finalUpdate }
     );
+
+    // Sync Demo Video
+    if (finalUpdate.demoVideo !== undefined) {
+        const fullRecord = { ...record, ...finalUpdate };
+        await syncDemoVideoWithFreeContent(fullRecord, record._id.toString());
+    }
 
     res.json({ success: true, message: 'Updated successfully', collection: targetCollection });
   } catch (error) {
@@ -4392,7 +4510,14 @@ app.get('/api/packages', async (req, res) => {
 app.post('/api/packages', async (req, res) => {
   try {
     const result = await db.collection('packages').insertOne(req.body);
-    res.status(201).json({ _id: result.insertedId, ...req.body });
+    const newPackage = { _id: result.insertedId, ...req.body };
+    
+    // Sync Demo Video
+    if (newPackage.demoVideo) {
+      await syncDemoVideoWithFreeContent(newPackage, result.insertedId.toString());
+    }
+
+    res.status(201).json(newPackage);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create package' });
   }
@@ -4426,10 +4551,24 @@ app.put('/api/packages/:id', async (req, res) => {
 
     console.log(`[TARGET MATCH] Collection: ${targetCollection}, DB _id: ${record._id}`);
 
+    const finalUpdate = { ...updateData, updatedAt: new Date().toISOString() };
+    if (updateData.settings && record.settings) {
+      finalUpdate.settings = { ...record.settings, ...updateData.settings };
+    }
+    if (updateData.content && record.content) {
+      finalUpdate.content = { ...record.content, ...updateData.content };
+    }
+
     await db.collection(targetCollection).updateOne(
       { _id: record._id },
-      { $set: { ...updateData, updatedAt: new Date().toISOString() } }
+      { $set: finalUpdate }
     );
+
+    // Sync Demo Video
+    if (finalUpdate.demoVideo !== undefined) {
+        const fullRecord = { ...record, ...finalUpdate };
+        await syncDemoVideoWithFreeContent(fullRecord, record._id.toString());
+    }
 
     res.json({ success: true, message: 'Updated successfully', collection: targetCollection });
   } catch (error) {

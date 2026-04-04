@@ -3,10 +3,32 @@ import { useNavigate } from 'react-router-dom';
 import { coursesAPI } from '../services/apiClient';
 import { getImageUrl } from '../lib/utils';
 
+interface Course {
+  id: string;
+  _id?: string;
+  name: string;
+  title?: string;
+  description?: string;
+  thumbnail?: string;
+  category?: string;
+  price?: number;
+  originalPrice?: number;
+  instructor?: string;
+  videos?: number;
+  notes?: number;
+  tests?: number;
+  progress?: number;
+  settings?: {
+    markNewBatch?: boolean;
+    showTabs?: boolean;
+    sortingOrder?: number;
+  };
+}
+
 const CoursesScreen: React.FC = () => {
   const navigate = useNavigate();
-  const [courses, setCourses] = useState<any[]>([]);
-  const [enrolledCourses, setEnrolledCourses] = useState<any[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,7 +57,16 @@ const CoursesScreen: React.FC = () => {
       
       const enrolled = Array.isArray(enrolledCoursesRes) ? enrolledCoursesRes : [];
       
-      setCourses(Array.isArray(allCourses) ? allCourses : []);
+      const all = Array.isArray(allCourses) ? allCourses : [];
+      
+      // Universal Numeric Sort Fallback
+      const sorted = [...all].sort((a, b) => {
+        const orderA = a.settings?.sortingOrder ?? 9999;
+        const orderB = b.settings?.sortingOrder ?? 9999;
+        return Number(orderA) - Number(orderB);
+      });
+
+      setCourses(sorted);
       setEnrolledCourses(Array.isArray(enrolled) ? enrolled : []);
     } catch (error) {
       console.error('Error fetching courses:', error);
@@ -152,6 +183,11 @@ const CoursesScreen: React.FC = () => {
                 className="bg-white rounded-2xl shadow-sm overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
               >
                 <div className="h-32 bg-gradient-to-br from-brandBlue to-[#1A237E] relative">
+                  {course.settings?.markNewBatch && (
+                    <div className="absolute top-2 left-2 z-10 px-2 py-1 bg-red-600 text-white text-[8px] font-black uppercase tracking-widest rounded-lg shadow-lg border border-white/20 animate-pulse">
+                      NEW BATCH
+                    </div>
+                  )}
                   {course.thumbnail && (
                     <img src={getImageUrl(course.thumbnail)} alt={course.name} className="w-full h-full object-cover opacity-50" />
                   )}
