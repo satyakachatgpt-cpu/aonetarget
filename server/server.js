@@ -2177,7 +2177,7 @@ app.get('/api/students', async (req, res) => {
       documents: 0,
       fees: 0,
       notes: 0
-    }).lean();
+    }).sort({ _id: -1 }).lean();
     console.log('GET /api/students - Optimized Payload - Found', students.length, 'students');
     res.json(students);
   } catch (error) {

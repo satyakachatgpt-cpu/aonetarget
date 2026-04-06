@@ -254,7 +254,7 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     try {
       setLoading(true);
       const res = await studentsAPI.create(formData as any);
-      setStudents([...students, res]);
+      setStudents([res, ...students]);
       resetForm();
       setShowAddModal(false);
       showToast(`Student ${formData.name} added successfully`, 'success');
