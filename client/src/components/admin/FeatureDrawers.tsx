@@ -1221,30 +1221,39 @@ export const LiveStreamDrawer: React.FC<{
 }> = ({ isOpen, onClose, onSubmit, courses = [], subjects = [] }) => {
     const [formData, setFormData] = useState({
         title: '',
+        scheduledTime: '',
         streamSource: 'YouTube',
         streamId: '',
-        scheduledTime: new Date().toISOString().slice(0, 16).replace('T', ' '),
-        endTime: new Date(Date.now() + 3600000).toISOString().slice(0, 16).replace('T', ' '),
-        isFree: false,
         courseId: '',
-        subjectId: ''
+        pdf1: null as File | null,
+        pdf2: null as File | null,
+        studyMaterial: null as File | null,
+        pdf1Url: '',
+        pdf2Url: '',
+        studyMaterialUrl: ''
     });
-    const [showAdvanced, setShowAdvanced] = useState(false);
 
     useEffect(() => {
         if (!isOpen) {
             setFormData({
                 title: '',
+                scheduledTime: '',
                 streamSource: 'YouTube',
                 streamId: '',
-                scheduledTime: new Date().toISOString().slice(0, 16).replace('T', ' '),
-                endTime: new Date(Date.now() + 3600000).toISOString().slice(0, 16).replace('T', ' '),
-                isFree: false,
                 courseId: '',
-                subjectId: ''
+                pdf1: null,
+                pdf2: null,
+                studyMaterial: null,
+                pdf1Url: '',
+                pdf2Url: '',
+                studyMaterialUrl: ''
             });
         }
     }, [isOpen]);
+
+    const handleFileChange = (field: string, file: File) => {
+        setFormData(prev => ({ ...prev, [field]: file }));
+    };
 
     return (
         <RightSideDrawer isOpen={isOpen} onClose={onClose}>
@@ -1261,38 +1270,27 @@ export const LiveStreamDrawer: React.FC<{
                             />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <FormLabel label="Scheduled For" required />
-                                <FormInput
-                                    value={formData.scheduledTime}
-                                    onChange={(e) => setFormData({ ...formData, scheduledTime: e.target.value })}
-                                    placeholder="YYYY-MM-DD HH:MM"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <FormLabel label="End Time" required />
-                                <FormInput
-                                    value={formData.endTime}
-                                    onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
-                                    placeholder="YYYY-MM-DD HH:MM"
-                                />
-                            </div>
+                        <div className="space-y-2">
+                            <FormLabel label="Scheduled For" required />
+                            <FormInput
+                                type="datetime-local"
+                                value={formData.scheduledTime}
+                                onChange={(e) => setFormData({ ...formData, scheduledTime: e.target.value })}
+                                placeholder="Select Date and Time"
+                            />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <FormLabel label="Stream Source" />
-                                <FormSelect
-                                    value={formData.streamSource}
-                                    onChange={(val) => setFormData({ ...formData, streamSource: val })}
-                                    options={[
-                                        { value: 'YouTube', label: 'YouTube Live' },
-                                        { value: 'Standard', label: 'Standard HLS' },
-                                        { value: 'Zoom', label: 'Zoom Meeting' }
-                                    ]}
-                                />
-                            </div>
+                        <div className="space-y-2">
+                            <FormLabel label="Stream Source" />
+                            <FormSelect
+                                value={formData.streamSource}
+                                onChange={(val) => setFormData({ ...formData, streamSource: val })}
+                                options={[
+                                    { value: 'YouTube', label: 'YouTube Live' },
+                                    { value: 'Standard', label: 'Standard HLS' },
+                                    { value: 'Zoom', label: 'Zoom Meeting' }
+                                ]}
+                            />
                         </div>
 
                         <div className="space-y-2">
@@ -1304,76 +1302,148 @@ export const LiveStreamDrawer: React.FC<{
                             />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                                <FormLabel label="Select Product" required />
-                                <FormSelect
-                                    value={formData.courseId}
-                                    onChange={(val) => setFormData({ ...formData, courseId: val })}
-                                    options={[
-                                        { value: '', label: 'Select Course' },
-                                        ...courses.map(c => ({ value: c.id || c._id, label: c.name || c.title }))
-                                    ]}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <FormLabel label="Select Subject" required />
-                                <FormSelect
-                                    value={formData.subjectId}
-                                    onChange={(val) => setFormData({ ...formData, subjectId: val })}
-                                    options={[
-                                        { value: '', label: 'Select Subject' },
-                                        ...subjects.map(s => ({ value: s.id || s._id, label: s.name || s.title }))
-                                    ]}
-                                />
-                            </div>
+                        <div className="space-y-2">
+                            <FormLabel label="Select Batch" required />
+                            <FormSelect
+                                value={formData.courseId}
+                                onChange={(val) => setFormData({ ...formData, courseId: val })}
+                                options={[
+                                    { value: '', label: 'Select Batch' },
+                                    ...courses.map(c => ({ value: c.id || c._id, label: c.name || c.title }))
+                                ]}
+                            />
                         </div>
 
                         <div className="pt-2">
-                            <button
-                                onClick={() => setShowAdvanced(!showAdvanced)}
-                                className="flex items-center gap-1.5 text-[#3b82f6] text-[13px] font-bold hover:text-blue-700 transition-all"
-                            >
-                                <span className={`material-symbols-outlined text-[20px] transition-transform duration-300 ${showAdvanced ? 'rotate-90' : ''}`}>arrow_right</span>
-                                Advanced Options
-                            </button>
-                            {showAdvanced && (
-                                <div className="mt-5 space-y-6 animate-in slide-in-from-top-3 duration-300">
-                                    <div className="flex items-center justify-between p-4 bg-gray-50/50 rounded-2xl border border-gray-100">
-                                        <div className="flex flex-col">
-                                            <span className="text-[13px] font-bold text-gray-700">Allow Live Chat</span>
-                                            <span className="text-[11px] font-medium text-gray-400">Students can interact during session</span>
+                            <h3 className="text-[14px] font-black text-gray-800 uppercase tracking-tight mb-6">Additional Content</h3>
+                            
+                            <div className="space-y-8">
+                                {/* Attach PDF 1 */}
+                                <div className="space-y-3">
+                                    <FormLabel label="Attach PDF" />
+                                    <div className="grid grid-cols-[130px_1fr] gap-4 items-start">
+                                        <div className="h-[130px] bg-[#ececec] rounded-3xl flex flex-col items-center justify-center p-4 text-center transition-all">
+                                            <span className={`material-symbols-outlined text-[36px] mb-3 ${formData.pdf1 ? 'text-blue-600' : 'text-gray-500'}`}>
+                                                {formData.pdf1 ? 'description' : 'unknown_document'}
+                                            </span>
+                                            <span className="text-[14px] font-bold text-gray-700 truncate w-full">
+                                                {formData.pdf1 ? formData.pdf1.name : 'No PDF'}
+                                            </span>
                                         </div>
-                                        <div className="w-12 h-6 bg-blue-500 rounded-full cursor-pointer relative">
-                                            <div className="absolute right-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow-sm" />
+                                        <div 
+                                            onClick={() => {
+                                                const input = document.createElement('input');
+                                                input.type = 'file';
+                                                input.accept = '.pdf';
+                                                input.onchange = (e) => {
+                                                    const f = (e.target as HTMLInputElement).files?.[0];
+                                                    if (f) handleFileChange('pdf1', f);
+                                                };
+                                                input.click();
+                                            }}
+                                            className="h-[130px] border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center p-4 bg-white hover:bg-gray-50 hover:border-gray-300 transition-all cursor-pointer group"
+                                        >
+                                            <div className="w-10 h-10 bg-[#f8fafc] rounded-2xl border border-gray-100 shadow-sm flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                                                <span className="material-symbols-outlined text-[20px] text-gray-400 group-hover:text-blue-500">upload_file</span>
+                                            </div>
+                                            <h4 className="text-[13px] font-bold text-gray-400 group-hover:text-gray-900 tracking-tight">Upload PDF</h4>
+                                            <span className="text-[9px] font-medium text-gray-300 text-center leading-tight">Click or Drag & Drop your file here.</span>
                                         </div>
                                     </div>
                                 </div>
-                            )}
+
+                                {/* Attach PDF 2 */}
+                                <div className="space-y-3">
+                                    <FormLabel label="Attach PDF" />
+                                    <div className="grid grid-cols-[130px_1fr] gap-4 items-start">
+                                        <div className="h-[130px] bg-[#ececec] rounded-3xl flex flex-col items-center justify-center p-4 text-center transition-all">
+                                            <span className={`material-symbols-outlined text-[36px] mb-3 ${formData.pdf2 ? 'text-blue-600' : 'text-gray-500'}`}>
+                                                {formData.pdf2 ? 'description' : 'unknown_document'}
+                                            </span>
+                                            <span className="text-[14px] font-bold text-gray-700 truncate w-full">
+                                                {formData.pdf2 ? formData.pdf2.name : 'No PDF'}
+                                            </span>
+                                        </div>
+                                        <div 
+                                            onClick={() => {
+                                                const input = document.createElement('input');
+                                                input.type = 'file';
+                                                input.accept = '.pdf';
+                                                input.onchange = (e) => {
+                                                    const f = (e.target as HTMLInputElement).files?.[0];
+                                                    if (f) handleFileChange('pdf2', f);
+                                                };
+                                                input.click();
+                                            }}
+                                            className="h-[130px] border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center p-4 bg-white hover:bg-gray-50 hover:border-gray-300 transition-all cursor-pointer group"
+                                        >
+                                            <div className="w-10 h-10 bg-[#f8fafc] rounded-2xl border border-gray-100 shadow-sm flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                                                <span className="material-symbols-outlined text-[20px] text-gray-400 group-hover:text-blue-500">upload_file</span>
+                                            </div>
+                                            <h4 className="text-[13px] font-bold text-gray-400 group-hover:text-gray-900 tracking-tight">Upload PDF</h4>
+                                            <span className="text-[9px] font-medium text-gray-300 text-center leading-tight">Click or Drag & Drop your file here.</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Study Material */}
+                                <div className="space-y-3">
+                                    <FormLabel label="Study Material" />
+                                    <div className="grid grid-cols-[130px_1fr] gap-4 items-start">
+                                        <div className="h-[130px] bg-[#ececec] rounded-3xl flex flex-col items-center justify-center p-4 text-center transition-all">
+                                            <span className={`material-symbols-outlined text-[36px] mb-3 ${formData.studyMaterial ? 'text-blue-600' : 'text-gray-500'}`}>
+                                                {formData.studyMaterial ? 'article' : 'unknown_document'}
+                                            </span>
+                                            <span className="text-[14px] font-bold text-gray-700 truncate w-full">
+                                                {formData.studyMaterial ? formData.studyMaterial.name : 'No File'}
+                                            </span>
+                                        </div>
+                                        <div 
+                                            onClick={() => {
+                                                const input = document.createElement('input');
+                                                input.type = 'file';
+                                                input.accept = '.pdf';
+                                                input.onchange = (e) => {
+                                                    const f = (e.target as HTMLInputElement).files?.[0];
+                                                    if (f) handleFileChange('studyMaterial', f);
+                                                };
+                                                input.click();
+                                            }}
+                                            className="h-[130px] border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center p-4 bg-white hover:bg-gray-50 hover:border-gray-300 transition-all cursor-pointer group"
+                                        >
+                                            <div className="w-10 h-10 bg-[#f8fafc] rounded-2xl border border-gray-100 shadow-sm flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                                                <span className="material-symbols-outlined text-[20px] text-gray-400 group-hover:text-blue-500">upload_file</span>
+                                            </div>
+                                            <h4 className="text-[13px] font-bold text-gray-400 group-hover:text-gray-900 tracking-tight">Upload File</h4>
+                                            <span className="text-[9px] font-medium text-gray-300 text-center leading-tight">Click or Drag & Drop your file here.</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
+                    <div className="pt-10 pb-6 mt-10">
+                        <div className="flex gap-4">
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="flex-1 h-[56px] bg-gray-50 text-gray-400 border border-gray-100 rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-gray-100 transition-all active:scale-[0.98]"
+                            >
+                                CANCEL
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => onSubmit(formData)}
+                                disabled={!formData.title || !formData.streamId || !formData.courseId}
+                                className={`flex-[1.8] h-[56px] rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all active:scale-[0.98] shadow-lg shadow-gray-200 ${(!formData.title || !formData.streamId || !formData.courseId) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#1a1c1e] text-white hover:bg-black'}`}
+                            >
+                                SCHEDULE STREAM
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </DrawerBody>
-            <div className="px-8 pb-10 shadow-[0_-10px_40px_rgba(0,0,0,0.02)]">
-                <div className="flex gap-4">
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="flex-1 h-[60px] bg-gray-50 text-gray-400 border border-gray-100 rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-gray-100 transition-all active:scale-[0.98]"
-                    >
-                        CANCEL
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => onSubmit(formData)}
-                        disabled={!formData.title || !formData.streamId}
-                        className={`flex-[1.8] h-[60px] rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all active:scale-[0.98] shadow-lg shadow-gray-200 ${(!formData.title || !formData.streamId) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#1a1c1e] text-white hover:bg-black'}`}
-                    >
-                        SCHEDULE STREAM
-                    </button>
-                </div>
-            </div>
         </RightSideDrawer>
     );
 };

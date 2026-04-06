@@ -1,13 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { liveVideosAPI, coursesAPI } from '../../services/apiClient';
+import { liveVideosAPI, coursesAPI, uploadAPI, subjectsAPI } from '../../services/apiClient';
 import {
     RightSideDrawer,
     DrawerHeader,
     DrawerBody,
     FormLabel,
-    FormInput
+    FormInput,
+    FormSelect
 } from './DrawerSystem';
-import { subjectsAPI } from '../../services/apiClient';
 import { LiveStreamDrawer } from './FeatureDrawers';
 
 interface LiveSessionReal {
@@ -66,23 +66,18 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
             const enriched = sessionsData.map((session: any) => {
                 const course = normalizedCourses.find((c: any) => (c.id === session.courseId || c._id === session.courseId));
                 
-                // Robust date-time parsing for unified sync
-                let sDate = session.scheduledDate;
-                let sTime = session.scheduledTime;
+                let sTime = session.scheduledTime || '';
                 
-                // Handle cases where scheduledTime is a full YYYY-MM-DD HH:MM string from LiveStreamDrawer
-                if (!sDate && sTime && typeof sTime === 'string' && sTime.includes(' ')) {
-                    const parts = sTime.split(' ');
-                    sDate = parts[0];
-                    sTime = parts[1];
+                // If it's old format 'YYYY-MM-DD HH:MM', convert to 'YYYY-MM-DDTHH:MM' for HTML inputs
+                if (sTime.includes(' ')) {
+                    sTime = sTime.replace(' ', 'T');
                 }
 
                 return { 
                     ...session, 
                     id: session.id || session._id || '',
                     courseName: course?.name || course?.title || 'General',
-                    scheduledDate: sDate || 'TBD',
-                    scheduledTime: sTime || 'TBD'
+                    scheduledTime: sTime
                 };
             });
             setSessions(enriched);
@@ -146,11 +141,34 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
         if (!editingSession) return;
         setActionLoading(editingSession.id);
         try {
-            await liveVideosAPI.update(editingSession.id, editingSession);
-            await fetchData(); // Refresh to get updated course names etc
+            const uploadData = { ...editingSession };
+            
+            // Handle new file uploads
+            const fileFields = ['pdf1', 'pdf2', 'studyMaterial'];
+            for (const field of fileFields) {
+                // @ts-ignore
+                if (editingSession[field] instanceof File) {
+                    // @ts-ignore
+                    const result = await uploadAPI.uploadPDF(editingSession[field]);
+                    // @ts-ignore
+                    uploadData[`${field}Url`] = result.url;
+                }
+            }
+
+            // Clean up raw files
+            fileFields.forEach(f => delete (uploadData as any)[f]);
+
+            // Resolve course name for the session
+            const course = courses.find((c: any) => (c.id === editingSession.courseId || c._id === editingSession.courseId));
+            if (course) {
+                (uploadData as any).courseName = course.name || course.title;
+            }
+
+            await liveVideosAPI.update(editingSession.id, uploadData);
+            await fetchData();
             setEditingSession(null);
-        } catch (error) {
-            alert('Failed to update session. Please try again.');
+        } catch (error: any) {
+            alert(error.message || 'Failed to update session. Please try again.');
         } finally {
             setActionLoading(null);
         }
@@ -158,15 +176,33 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
 
     const handleAddLiveStream = async (data: any) => {
         try {
+            const uploadData = { ...data };
+            
+            // Handle file uploads sequentially
+            const fileFields = ['pdf1', 'pdf2', 'studyMaterial'];
+            for (const field of fileFields) {
+                if (data[field]) {
+                    const result = await uploadAPI.uploadPDF(data[field]);
+                    uploadData[`${field}Url`] = result.url;
+                }
+            }
+            
+            // Remove raw file objects before sending to metadata API
+            fileFields.forEach(f => delete uploadData[f]);
+
+            // Resolve course name for the new session
+            const course = courses.find((c: any) => (c.id === data.courseId || c._id === data.courseId));
+            
             await liveVideosAPI.create({
-                ...data,
+                ...uploadData,
+                courseName: course?.name || course?.title || 'General',
                 status: 'upcoming'
             });
             setShowLiveStreamDrawer(false);
             fetchData();
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            alert('Failed to schedule live stream');
+            alert(error.message || 'Failed to schedule live stream');
         }
     };
 
@@ -263,7 +299,9 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                                             <td className="px-6 py-5 text-[14px] font-medium text-[#6b7280]">{session.id.slice(-6).toUpperCase()}</td>
                                             <td className="px-6 py-5 text-[14px] font-bold text-[#111827]">{session.title}</td>
                                             <td className="px-6 py-5 text-[14px] font-medium text-[#6b7280]">{session.courseName}</td>
-                                            <td className="px-6 py-5 text-[14px] font-medium text-[#6b7280]">{session.scheduledDate} at {session.scheduledTime}</td>
+                                            <td className="px-6 py-5 text-[14px] font-medium text-[#6b7280]">
+                                                {session.scheduledTime ? session.scheduledTime.replace('T', ' ') : 'TBD'}
+                                            </td>
                                             <td className="px-6 py-5">
                                                 <button 
                                                     onClick={() => session.status !== 'live' && handleGoLive(session)}
@@ -372,38 +410,38 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                                     <div className="space-y-7">
                                         {/* Session Title */}
                                         <div className="space-y-2">
-                                            <FormLabel label="Session Title" required />
+                                            <FormLabel label="Stream Title" required />
                                             <FormInput
                                                 value={editingSession.title}
                                                 onChange={e => setEditingSession({ ...editingSession, title: e.target.value })}
-                                                placeholder="Enter session title"
-                                                className="h-[46px] shadow-sm"
+                                                placeholder="Enter title"
                                             />
                                         </div>
 
-                                        {/* Grid for Date and Time */}
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-2">
-                                                <FormLabel label="Scheduled Date" required />
-                                                <FormInput
-                                                    value={editingSession.scheduledDate}
-                                                    onChange={e => setEditingSession({ ...editingSession, scheduledDate: e.target.value })}
-                                                    placeholder="YYYY-MM-DD"
-                                                    className="h-[46px] shadow-sm"
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <FormLabel label="Scheduled Time" required />
-                                                <FormInput
-                                                    value={editingSession.scheduledTime}
-                                                    onChange={e => setEditingSession({ ...editingSession, scheduledTime: e.target.value })}
-                                                    placeholder="HH:MM"
-                                                    className="h-[46px] shadow-sm"
-                                                />
-                                            </div>
+                                        {/* Scheduled For */}
+                                        <div className="space-y-2">
+                                            <FormLabel label="Scheduled For" required />
+                                            <FormInput
+                                                type="datetime-local"
+                                                value={editingSession.scheduledTime}
+                                                onChange={e => setEditingSession({ ...editingSession, scheduledTime: e.target.value })}
+                                            />
                                         </div>
 
-                                        {/* Status Segmented Toggle (Optional but matches Screenshot 3) */}
+                                        {/* Select Batch */}
+                                        <div className="space-y-2">
+                                            <FormLabel label="Select Batch" required />
+                                            <FormSelect
+                                                value={editingSession.courseId}
+                                                onChange={val => setEditingSession({ ...editingSession, courseId: val })}
+                                                options={[
+                                                    { value: '', label: 'Select Batch' },
+                                                    ...courses.map(c => ({ value: c.id || c._id, label: c.name || c.title }))
+                                                ]}
+                                            />
+                                        </div>
+
+                                        {/* Status Segmented Toggle */}
                                         <div className="space-y-2">
                                             <FormLabel label="Status" />
                                             <div className="flex bg-[#f8fafc] p-1.5 rounded-[18px] w-full border border-gray-100">
@@ -424,47 +462,81 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                                             </div>
                                         </div>
 
-                                        {/* Advanced Settings */}
+                                        {/* Additional Content / Files */}
                                         <div className="pt-2">
-                                            <button
-                                                onClick={() => setShowAdvanced(!showAdvanced)}
-                                                className="flex items-center gap-1.5 text-[#6366f1] text-[13px] font-bold hover:text-[#4f46e5] transition-all"
-                                            >
-                                                <span className={`material-symbols-outlined text-[20px] transition-transform duration-300 ${showAdvanced ? 'rotate-90' : ''}`}>arrow_right</span>
-                                                Advanced Settings
-                                            </button>
-
-                                            {showAdvanced && (
-                                                <div className="mt-5 space-y-6 animate-in slide-in-from-top-3 duration-300">
-                                                    <div className="border-t border-gray-50 pt-5">
-                                                        <h4 className="text-[15px] font-bold text-gray-800 mb-5">Additional Info</h4>
-                                                        <p className="text-[12px] text-gray-400 font-medium">Session ID: <span className="font-bold text-gray-600 uppercase tracking-wider">{editingSession.id}</span></p>
-                                                        <p className="text-[12px] text-gray-400 font-medium mt-1">Course: <span className="font-bold text-gray-600">{editingSession.courseName}</span></p>
-                                                    </div>
-                                                </div>
-                                            )}
+                                            <h3 className="text-[14px] font-black text-gray-800 uppercase tracking-tight mb-6">Additional Content</h3>
+                                            <div className="space-y-8">
+                                                {['pdf1', 'pdf2', 'studyMaterial'].map((field) => {
+                                                    const label = field === 'studyMaterial' ? 'Study Material' : 'Attach PDF';
+                                                    const icon = field === 'studyMaterial' ? 'article' : 'picture_as_pdf';
+                                                    // @ts-ignore
+                                                    const file = editingSession[field];
+                                                    // @ts-ignore
+                                                    const existingUrl = editingSession[`${field}Url`];
+                                                    
+                                                    return (
+                                                        <div key={field} className="space-y-3">
+                                                            <FormLabel label={label} />
+                                                            <div className="grid grid-cols-[130px_1fr] gap-4 items-start">
+                                                                <div className="h-[130px] bg-[#ececec] rounded-3xl flex flex-col items-center justify-center p-4 text-center transition-all">
+                                                                    <span className={`material-symbols-outlined text-[36px] mb-3 ${(file || existingUrl) ? 'text-blue-600' : 'text-gray-500'}`}>
+                                                                        {file ? 'description' : 'unknown_document'}
+                                                                    </span>
+                                                                    <span className="text-[14px] font-bold text-gray-700 truncate w-full">
+                                                                        {file ? file.name : existingUrl ? 'Existing File' : field === 'studyMaterial' ? 'No File' : 'No PDF'}
+                                                                    </span>
+                                                                    {existingUrl && !file && (
+                                                                        <a href={existingUrl} target="_blank" rel="noreferrer" className="text-[11px] text-blue-600 font-bold mt-1.5 hover:underline decoration-2">View File</a>
+                                                                    )}
+                                                                </div>
+                                                                <div 
+                                                                    onClick={() => {
+                                                                        const input = document.createElement('input');
+                                                                        input.type = 'file';
+                                                                        input.accept = '.pdf';
+                                                                        input.onchange = (e) => {
+                                                                            const f = (e.target as HTMLInputElement).files?.[0];
+                                                                            if (f) setEditingSession({ ...editingSession, [field]: f });
+                                                                        };
+                                                                        input.click();
+                                                                    }}
+                                                                    className="h-[130px] border-2 border-dashed border-gray-200 rounded-3xl flex flex-col items-center justify-center p-4 bg-white hover:bg-gray-50 hover:border-gray-300 transition-all cursor-pointer group"
+                                                                >
+                                                                    <div className="w-10 h-10 bg-[#f8fafc] rounded-2xl shadow-sm border border-gray-100 flex items-center justify-center mb-2 group-hover:scale-110 transition-transform">
+                                                                        <span className="material-symbols-outlined text-[20px] text-gray-400 group-hover:text-blue-600">upload_file</span>
+                                                                    </div>
+                                                                    <h4 className="text-[13px] font-bold text-gray-400 group-hover:text-gray-900 tracking-tight">
+                                                                        {field === 'studyMaterial' ? 'Upload File' : 'Upload PDF'}
+                                                                    </h4>
+                                                                    <span className="text-[9px] font-medium text-gray-300 text-center leading-tight mt-0.5">Click or Drag & Drop your file here.</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
                                         </div>
-                                    </div>
 
-                                    {/* Action Buttons */}
-                                    <div className="pt-8 flex gap-4 border-t border-gray-100">
-                                        <button
-                                            onClick={() => setEditingSession(null)}
-                                            className="flex-1 py-4 bg-white border border-gray-100 text-gray-400 font-black rounded-full uppercase tracking-[0.2em] text-[10px] hover:bg-gray-50 transition-all active:scale-95"
-                                        >
-                                            Discard
-                                        </button>
-                                        <button
-                                            onClick={handleEditSave}
-                                            disabled={actionLoading === editingSession.id}
-                                            className="flex-1 py-4 bg-[#121826] text-white font-black rounded-full uppercase tracking-[0.2em] text-[10px] shadow-xl shadow-gray-300/40 hover:bg-black transition-all active:scale-[0.99] disabled:opacity-30 flex items-center justify-center"
-                                        >
-                                            {actionLoading === editingSession.id ? (
-                                                <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
-                                            ) : (
-                                                "Save Changes"
-                                            )}
-                                        </button>
+                                        {/* Action Buttons */}
+                                        <div className="pt-10 flex gap-4">
+                                            <button
+                                                type="button"
+                                                onClick={() => setEditingSession(null)}
+                                                className="flex-1 h-[56px] bg-gray-50 text-gray-400 border border-gray-100 rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-gray-100 transition-all active:scale-[0.98]"
+                                            >
+                                                DISCARD
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleEditSave}
+                                                disabled={actionLoading === editingSession.id}
+                                                className={`flex-[1.8] h-[56px] rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all active:scale-[0.98] shadow-lg shadow-gray-200 ${actionLoading === editingSession.id ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#1a1c1e] text-white hover:bg-black'}`}
+                                            >
+                                                {actionLoading === editingSession.id ? (
+                                                    <div className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin mx-auto" />
+                                                ) : "SAVE CHANGES"}
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
