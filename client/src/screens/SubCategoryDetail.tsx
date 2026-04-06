@@ -27,6 +27,11 @@ interface Course {
   tests?: number;
   isLive?: boolean;
   status?: string;
+  settings?: {
+    markNewBatch?: boolean;
+    showTabs?: boolean;
+    sortingOrder?: number;
+  };
 }
 
 interface ContentItem {
@@ -232,7 +237,12 @@ const SubCategoryDetail: React.FC = () => {
                       className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-shadow"
                     >
                       <div className="relative">
-                        <div className={`w-full h-36 bg-gradient-to-br ${getGradient()} flex items-center justify-center`}>
+                        <div className={`w-full h-36 bg-gradient-to-br ${getGradient()} flex items-center justify-center relative`}>
+                          {course.settings?.markNewBatch && (
+                            <div className="absolute top-2 left-2 z-10 px-2.5 py-1 bg-red-600 text-white text-[8px] font-black uppercase tracking-widest rounded-lg shadow-lg border border-white/20 animate-pulse">
+                              NEW BATCH
+                            </div>
+                          )}
                           {(course.imageUrl || course.thumbnail) ? (
                             <img src={getImageUrl(course.imageUrl || course.thumbnail)} alt="" className="w-full h-full object-cover" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                           ) : (

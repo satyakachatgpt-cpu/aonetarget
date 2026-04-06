@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { categoriesAPI, subcategoriesAPI, coursesAPI } from '../services/apiClient';
 import { getImageUrl } from '../lib/utils';
@@ -49,6 +49,11 @@ interface Course {
   isLive?: boolean;
   videos?: number;
   tests?: number;
+  settings?: {
+    markNewBatch?: boolean;
+    showTabs?: boolean;
+    sortingOrder?: number;
+  };
 }
 
 const contentTypes = [
@@ -77,7 +82,7 @@ const NeetIitJeePage: React.FC<{ courses: Course[]; loading: boolean }> = ({ cou
 
   const subjects = activeExam === 'neet' ? neetSubjects : jeeSubjects;
 
-  const getFilteredCourses = () => {
+  const filteredCourses = useMemo(() => {
     return courses.filter(c => {
       if (c.examType && c.examType !== activeExam) return false;
       if (!c.examType) {
@@ -87,7 +92,7 @@ const NeetIitJeePage: React.FC<{ courses: Course[]; loading: boolean }> = ({ cou
       if (selectedSubject && c.subject !== selectedSubject) return false;
       return true;
     });
-  };
+  }, [courses, activeExam, selectedSubject]);
 
   const getContentCount = (contentTypeId: string) => {
     return courses.filter(c => {
@@ -100,7 +105,13 @@ const NeetIitJeePage: React.FC<{ courses: Course[]; loading: boolean }> = ({ cou
     }).length;
   };
 
-  const filteredCourses = getFilteredCourses();
+  const contentTypeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    contentTypes.forEach(ct => {
+      counts[ct.id] = getContentCount(ct.id);
+    });
+    return counts;
+  }, [courses, activeExam]);
 
   const handleExamSwitch = (exam: 'neet' | 'iit-jee') => {
     setActiveExam(exam);
@@ -159,7 +170,7 @@ const NeetIitJeePage: React.FC<{ courses: Course[]; loading: boolean }> = ({ cou
               </div>
             ))
           ) : contentTypes.map(ct => {
-            const count = getContentCount(ct.id);
+            const count = contentTypeCounts[ct.id] || 0;
             return (
               <button
                 key={ct.id}
@@ -232,7 +243,12 @@ const NeetIitJeePage: React.FC<{ courses: Course[]; loading: boolean }> = ({ cou
                     onClick={() => navigate(`/course/${cId}`)}
                     className="w-full bg-white rounded-2xl p-4 shadow-sm flex gap-4 text-left active:scale-[0.98] transition-all border border-gray-100 hover:shadow-md"
                   >
-                    <div className={`w-16 h-16 bg-gradient-to-br ${ct?.color || 'from-[#303F9F] to-[#1A237E]'} rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden`}>
+                    <div className={`w-16 h-16 bg-gradient-to-br ${ct?.color || 'from-[#303F9F] to-[#1A237E]'} rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden relative`}>
+                      {course.settings?.markNewBatch && (
+                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-red-600/90 animate-pulse">
+                          <span className="text-[7px] text-white font-black uppercase tracking-tighter">NEW</span>
+                        </div>
+                      )}
                       {(course.imageUrl || course.thumbnail) ? (
                         <img src={getImageUrl(course.imageUrl || course.thumbnail)} alt="" className="w-full h-full object-cover" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                       ) : (
@@ -293,13 +309,29 @@ const Class11_12Page: React.FC<{ courses: Course[]; loading: boolean }> = ({ cou
   const navigate = useNavigate();
   const [activeBoard, setActiveBoard] = useState<'cbse' | 'hbse'>('cbse');
 
-  const getContentCount = (contentTypeId: string) => {
-    return courses.filter(c => {
-      if (c.categoryId !== 'iit-jee') return false;
-      if (c.boardType && c.boardType !== activeBoard) return false;
-      return c.contentType === contentTypeId;
-    }).length;
-  };
+  const contentTypeCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    contentTypes.forEach(ct => {
+      counts[ct.id] = courses.filter(c => {
+        if (c.categoryId !== 'iit-jee') return false;
+        if (c.boardType && c.boardType !== activeBoard) return false;
+        return c.contentType === ct.id;
+      }).length;
+    });
+    return counts;
+  }, [courses, activeBoard]);
+
+  const subjectCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    boardSubjects.forEach(subj => {
+      counts[subj.id] = courses.filter(c => 
+        c.categoryId === 'iit-jee' && 
+        c.subject === subj.id && 
+        (!c.boardType || c.boardType === activeBoard)
+      ).length;
+    });
+    return counts;
+  }, [courses, activeBoard]);
 
   const handleBoardSwitch = (board: 'cbse' | 'hbse') => {
     setActiveBoard(board);
@@ -357,7 +389,7 @@ const Class11_12Page: React.FC<{ courses: Course[]; loading: boolean }> = ({ cou
               </div>
             ))
           ) : contentTypes.map(ct => {
-            const count = getContentCount(ct.id);
+            const count = contentTypeCounts[ct.id] || 0;
             return (
               <button
                 key={ct.id}
@@ -403,7 +435,7 @@ const Class11_12Page: React.FC<{ courses: Course[]; loading: boolean }> = ({ cou
                 <span className="material-symbols-rounded text-lg">{subj.icon}</span>
                 <span className="text-[9px] font-bold">{subj.label}</span>
                 <span className="text-[8px] text-gray-400">
-                  {courses.filter(c => c.categoryId === 'iit-jee' && c.subject === subj.id && (!c.boardType || c.boardType === activeBoard)).length} courses
+                  {subjectCounts[subj.id] || 0} courses
                 </span>
               </button>
             ))}
@@ -482,7 +514,7 @@ const CategoryPage: React.FC = () => {
     navigate(`/explore/${categoryId}/${subId}?label=${encodeURIComponent(sub.title)}`);
   };
 
-  const getCoursesForCategory = () => {
+  const categoryCourses = useMemo(() => {
     if (categoryId === 'mock-test') {
       return courses.filter(c =>
         c.categoryId === 'mock-test' ||
@@ -492,24 +524,37 @@ const CategoryPage: React.FC = () => {
       );
     }
     return courses.filter(c => c.categoryId === categoryId);
-  };
+  }, [courses, categoryId]);
 
-  const getCourseCountForSub = (sub: SubCategory) => {
-    return courses.filter(c => c.subcategoryId === sub.id).length;
-  };
+  const subcategoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    subcategories.forEach(sub => {
+      counts[sub.id] = courses.filter(c => c.subcategoryId === sub.id).length;
+    });
+    return counts;
+  }, [courses, subcategories]);
 
-  const parentGroups: string[] = Array.from(new Set(subcategories.map(s => s.parentPath).filter(Boolean) as string[]));
-  const directSubs = subcategories.filter(s => !s.parentPath);
+  const filteredCourses = useMemo(() => {
+    return selectedSubFilter
+      ? categoryCourses.filter(c => c.subcategoryId === selectedSubFilter)
+      : categoryCourses;
+  }, [categoryCourses, selectedSubFilter]);
+
+  const parentGroups = useMemo(() => {
+    const groups = new Set<string>();
+    subcategories.forEach(s => s.parentPath && groups.add(s.parentPath));
+    return Array.from(groups);
+  }, [subcategories]);
+
   const hasGroups = parentGroups.length > 0;
 
-  const filteredGroupSubs = selectedGroup
-    ? subcategories.filter(s => s.parentPath === selectedGroup)
-    : [];
+  const filteredGroupSubs = useMemo(() => {
+    return subcategories.filter(s => s.parentPath === selectedGroup);
+  }, [subcategories, selectedGroup]);
 
-  const categoryCourses = getCoursesForCategory();
-  const filteredCourses = selectedSubFilter
-    ? categoryCourses.filter(c => c.subcategoryId === selectedSubFilter)
-    : categoryCourses;
+  const directSubs = useMemo(() => {
+    return subcategories.filter(s => !s.parentPath);
+  }, [subcategories]);
 
   const gradientColors: Record<string, string> = {
     'bg-blue-500': 'from-blue-500 to-blue-600',
@@ -590,7 +635,6 @@ const CategoryPage: React.FC = () => {
                 </h3>
                 <div className="grid grid-cols-2 gap-3">
                   {filteredGroupSubs.map(sub => {
-                    const courseCount = getCourseCountForSub(sub);
                     return (
                       <button
                         key={sub.id}
@@ -604,7 +648,7 @@ const CategoryPage: React.FC = () => {
                           <span className="text-xs font-bold text-gray-700 line-clamp-2">{sub.title.replace(sub.parentPath + ' - ', '').replace(sub.parentPath + ' ', '')}</span>
                           <p className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
                             <span className="material-icons-outlined" style={{ fontSize: '10px' }}>menu_book</span>
-                            {courseCount} {courseCount === 1 ? 'Course' : 'Courses'}
+                            {subcategoryCounts[sub.id] || 0} {subcategoryCounts[sub.id] === 1 ? 'Course' : 'Courses'}
                           </p>
                         </div>
                       </button>
@@ -624,7 +668,6 @@ const CategoryPage: React.FC = () => {
             </h3>
             <div className="grid grid-cols-2 gap-3">
               {directSubs.map(sub => {
-                const courseCount = getCourseCountForSub(sub);
                 return (
                   <button
                     key={sub.id}
@@ -637,7 +680,7 @@ const CategoryPage: React.FC = () => {
                     <p className="text-xs font-bold text-gray-800">{sub.title}</p>
                     <div className="flex items-center gap-1 mt-1">
                       <span className="material-icons-outlined text-gray-400" style={{ fontSize: '10px' }}>menu_book</span>
-                      <p className="text-[10px] text-gray-400">{courseCount} {courseCount === 1 ? 'Course' : 'Courses'}</p>
+                      <p className="text-[10px] text-gray-400">{subcategoryCounts[sub.id] || 0} {subcategoryCounts[sub.id] === 1 ? 'Course' : 'Courses'}</p>
                     </div>
                     {sub.description && (
                       <p className="text-[10px] text-gray-400 mt-1 line-clamp-2">{sub.description}</p>
@@ -665,7 +708,6 @@ const CategoryPage: React.FC = () => {
                   All Courses ({categoryCourses.length})
                 </button>
                 {subcategories.map(sub => {
-                  const count = getCourseCountForSub(sub);
                   return (
                     <button
                       key={sub.id}
@@ -677,7 +719,7 @@ const CategoryPage: React.FC = () => {
                     >
                       <span className="material-icons-outlined" style={{ fontSize: '14px' }}>{sub.icon}</span>
                       {sub.title.replace(sub.parentPath ? sub.parentPath + ' - ' : '', '').replace(sub.parentPath ? sub.parentPath + ' ' : '', '')}
-                      {count > 0 && <span className="opacity-70">({count})</span>}
+                      {(subcategoryCounts[sub.id] || 0) > 0 && <span className="opacity-70">({subcategoryCounts[sub.id]})</span>}
                     </button>
                   );
                 })}
@@ -691,7 +733,12 @@ const CategoryPage: React.FC = () => {
                   onClick={() => navigate(`/course/${course._id || course.id}`)}
                   className="w-full bg-white rounded-xl p-4 shadow-sm flex gap-4 text-left active:scale-[0.98] transition-transform border border-gray-100 hover:shadow-md"
                 >
-                  <div className={`w-16 h-16 bg-gradient-to-br ${category.gradient} rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden`}>
+                  <div className={`w-16 h-16 bg-gradient-to-br ${category.gradient} rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden relative`}>
+                    {course.settings?.markNewBatch && (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-red-600/90 animate-pulse">
+                        <span className="text-[7px] text-white font-black uppercase tracking-tighter">NEW</span>
+                      </div>
+                    )}
                     {(course.imageUrl || course.thumbnail) ? (
                       <img src={getImageUrl(course.imageUrl || course.thumbnail)} alt="" className="w-full h-full object-cover" loading="lazy" onError={(e: any) => { e.currentTarget.style.display = 'none'; const parent = e.currentTarget.parentElement; if (parent) { const span = document.createElement('span'); span.className = 'text-white text-xl font-bold opacity-60'; span.textContent = (course.name || course.title || '?').charAt(0).toUpperCase(); parent.appendChild(span); } }} />
                     ) : (

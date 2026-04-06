@@ -23,7 +23,12 @@ const courseSchema = new mongoose.Schema({
     thumbnailPublicId: { type: String },
     cloudinaryPublicId: { type: String },
     settings: {
-        sortingOrder: { type: Number, default: 1000 },
+        sortingOrder: { type: Number, default: 9999 },
+        showTabs: { type: Boolean, default: true },
+        markNewBatch: { type: Boolean, default: false },
+        disableInvoice: { type: Boolean, default: false },
+       
+        
         customBadge: { type: String, default: '' },
         isFeatured: { type: Boolean, default: false }
     },

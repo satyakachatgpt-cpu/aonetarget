@@ -118,24 +118,23 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                 }
             }
 
-            if (courseData.settings) {
-                setGstIncluded(!!courseData.settings.gstIncluded);
-                if (courseData.settings.gstPercentage) setGstPercentage(courseData.settings.gstPercentage.toString());
-                setEasyEmi(!!courseData.settings.easyEmi);
-                setIsCombo(!!courseData.settings.isCombo);
-                setIntlUptick(!!courseData.settings.intlUptick);
-                setAllowUpgrade(!!courseData.settings.allowUpgrade);
-                setSortingOrder(courseData.settings.sortingOrder || '');
-                setCustomBadge(courseData.settings.customBadge || '');
-                setMarkNewBatch(!!courseData.settings.markNewBatch);
-                setEnableDownloads(!!courseData.settings.enableDownloads);
-                setDisableCoupon(!!courseData.settings.disableCoupon);
-                setDisableInvoice(!!courseData.settings.disableInvoice);
-                setEnableTelegram(!!courseData.settings.enableTelegram);
-                setMetaTitle(courseData.settings.metaTitle || '');
-                setMetaDescription(courseData.settings.metaDescription || '');
-                setCourseLanguage(courseData.settings.courseLanguage || 'English');
-            }
+                // Additional Settings from courseData.settings
+                if (courseData.settings) {
+                    setGstIncluded(!!courseData.settings.gstIncluded);
+                    if (courseData.settings.gstPercentage) setGstPercentage(courseData.settings.gstPercentage.toString());
+                    setEasyEmi(!!courseData.settings.easyEmi);
+                    setIsCombo(!!courseData.settings.isCombo);
+                    setIntlUptick(!!courseData.settings.intlUptick);
+                    setAllowUpgrade(!!courseData.settings.allowUpgrade);
+                    setSortingOrder(courseData.settings.sortingOrder?.toString() || '0.00');
+                    setCustomBadge(courseData.settings.customBadge || '');
+                    setMarkNewBatch(!!courseData.settings.markNewBatch);
+                    setEnableDownloads(!!courseData.settings.enableDownloads);
+                    setDisableCoupon(!!courseData.settings.disableCoupon);
+                    setDisableInvoice(!!courseData.settings.disableInvoice);
+                    setEnableTelegram(!!courseData.settings.enableTelegram);
+                    setShowTabs(!!courseData.settings.showTabs);
+                }
 
             if (courseData.content) {
                 setSelectedTestSeries(courseData.content.testSeries || []);
@@ -307,7 +306,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                 settings: {
                     isFeatured,
                     gstIncluded,
-                    gstPercentage: gstIncluded ? parseFloat(gstPercentage) || 0 : 0,
+                    gstPercentage: gstPercentage ? parseFloat(gstPercentage) : 0,
                     finalPrice: parseFloat(price) + (parseFloat(price) * (parseFloat(gstPercentage) || 0) / 100),
                     easyEmi,
                     isCombo,
@@ -320,6 +319,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                     disableCoupon,
                     disableInvoice,
                     enableTelegram,
+                    showTabs,
                     metaTitle,
                     metaDescription,
                     courseLanguage
@@ -391,13 +391,13 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                     </button>
                     <button
                         onClick={handlePublish}
-                        disabled={isPublishing}
-                        className={`px-6 py-2 rounded-sm text-[13px] font-bold transition-all shadow-sm flex items-center gap-2 ${isPublishing ? 'bg-gray-400 cursor-not-allowed' : 'bg-black text-white hover:bg-gray-800'}`}
+                        disabled={isPublishing || isUploadingImage || isUploadingVideo}
+                        className={`px-6 py-2 rounded-sm text-[13px] font-bold transition-all shadow-sm flex items-center gap-2 ${(isPublishing || isUploadingImage || isUploadingVideo) ? 'bg-gray-400 cursor-not-allowed' : 'bg-black text-white hover:bg-gray-800'}`}
                     >
-                        {isPublishing ? (
+                        {(isPublishing || isUploadingImage || isUploadingVideo) ? (
                             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         ) : 'Save & Publish'}
-                        {!isPublishing && <span className="material-symbols-outlined text-[18px]">rocket_launch</span>}
+                        {!(isPublishing || isUploadingImage || isUploadingVideo) && <span className="material-symbols-outlined text-[18px]">rocket_launch</span>}
                     </button>
                 </div>
             </div>
@@ -560,6 +560,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                                                                 e.preventDefault();
                                                                 const newCats = selectedCategories.includes(catName) ? selectedCategories.filter(c => c !== catName) : [...selectedCategories, catName];
                                                                 setSelectedCategories(newCats);
+                                                                setShowCategories(false);
                                                             }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-gray-50 flex items-center justify-between ${selectedCategories.includes(catName) ? 'text-black bg-gray-50 font-semibold' : 'text-gray-600'}`}>
                                                                 {catName} {selectedCategories.includes(catName) && <span className="material-symbols-outlined text-[16px]">check</span>}
                                                             </div>
@@ -807,6 +808,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                                                                         ? selectedCoupons.filter(c => c !== coupon.code)
                                                                         : [...selectedCoupons, coupon.code];
                                                                     setSelectedCoupons(newSelected);
+                                                                    setShowCouponList(false);
                                                                 }}
                                                                 className={`px-4 py-2 cursor-pointer flex items-center justify-between text-[13px] hover:bg-gray-50 ${selectedCoupons.includes(coupon.code) ? 'bg-gray-50 font-semibold' : 'text-gray-600'}`}
                                                             >
@@ -866,6 +868,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                                                                     ? selectedTestSeries.filter(t => t !== ts)
                                                                     : [...selectedTestSeries, ts];
                                                                 setSelectedTestSeries(newSelected);
+                                                                setShowTestSeriesList(false);
                                                             }}
                                                             className={`px-4 py-2 cursor-pointer flex items-center justify-between text-[13px] hover:bg-gray-50 ${selectedTestSeries.includes(ts) ? 'bg-gray-50 font-semibold' : 'text-gray-600'}`}
                                                         >
@@ -918,7 +921,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                                             <h4 className="text-[14px] font-semibold text-gray-900">Upsell Courses</h4>
                                             <p className="text-[11px] text-gray-400">Recommend other courses at purchase</p>
                                         </div>
-                                        <button onClick={() => setUpsellCourses(!upsellCourses)} className={`w-10 h-5 rounded-full relative transition-all duration-300 ${upsellCourses ? 'bg-black' : 'bg-gray-200'}`}>
+                                        <button onClick={() => setUpsellCourses(!upsellCourses)} className={`w-10 h-5 rounded-full relative transition-all duration-300 ${upsellCourses ? 'bg-green-500' : 'bg-gray-200'}`}>
                                             <div className={`absolute top-[2px] transition-all duration-300 w-4 h-4 bg-white rounded-full ${upsellCourses ? 'left-[22px]' : 'left-[2px]'}`} />
                                         </button>
                                     </div>
@@ -952,6 +955,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                                                                     e.stopPropagation();
                                                                     const newSelected = selectedUpsellCourses.includes(title) ? selectedUpsellCourses.filter(c => c !== title) : [...selectedUpsellCourses, title];
                                                                     setSelectedUpsellCourses(newSelected);
+                                                                    setShowUpsellList(false);
                                                                 }} className={`px-4 py-2 cursor-pointer flex items-center justify-between text-[13px] hover:bg-gray-50 ${selectedUpsellCourses.includes(title) ? 'bg-gray-50 font-semibold' : 'text-gray-600'}`}>
                                                                     <span>{title}</span>
                                                                     {selectedUpsellCourses.includes(title) && <span className="material-symbols-outlined text-[16px]">check</span>}
@@ -999,14 +1003,10 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                                     {[
                                         { title: 'Choose Tabs to Show on Course Page', state: showTabs, setState: setShowTabs },
                                         { title: 'Mark As New Batch', state: markNewBatch, setState: setMarkNewBatch },
-                                        { title: 'Enable Downloads', state: enableDownloads, setState: setEnableDownloads },
-                                        { title: 'Disable Discount Coupon', state: disableCoupon, setState: setDisableCoupon },
-                                        { title: 'Disable Invoice', state: disableInvoice, setState: setDisableInvoice },
-                                        { title: 'Enable Telegram Integration', state: enableTelegram, setState: setEnableTelegram },
                                     ].map((row, i) => (
                                         <div key={i} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
                                             <span className="text-[13px] font-medium text-gray-700">{row.title}</span>
-                                            <button onClick={() => row.setState(!row.state)} className={`w-10 h-5 rounded-full relative transition-all duration-300 ${row.state ? 'bg-black' : 'bg-gray-200'}`}>
+                                            <button onClick={() => row.setState(!row.state)} className={`w-10 h-5 rounded-full relative transition-all duration-300 ${row.state ? 'bg-green-500' : 'bg-gray-200'}`}>
                                                 <div className={`absolute top-[2px] transition-all duration-300 w-4 h-4 bg-white rounded-full ${row.state ? 'left-[22px]' : 'left-[2px]'}`} />
                                             </button>
                                         </div>
@@ -1067,8 +1067,19 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                         )}
 
                         {/* Navigation Buttons */}
-                        <div className="flex items-center justify-end pt-8">
+                        <div className="flex items-center justify-between pt-8">
+                            {activeStep > 1 ? (
                                 <button
+                                    onClick={() => setActiveStep(prev => prev - 1)}
+                                    className="flex items-center gap-2 px-8 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-sm font-bold text-[14px] hover:bg-gray-50 transition-all group shadow-sm"
+                                >
+                                    <span className="material-symbols-outlined text-[20px] group-hover:-translate-x-1 transition-transform">arrow_left_alt</span>
+                                    Back
+                                </button>
+                            ) : (
+                                <div />
+                            )}
+                            <button
                                 onClick={() => {
                                     if (activeStep === 1) {
                                         if (!title.trim()) { alert('Please enter a course title.'); return; }
@@ -1093,7 +1104,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                         <div className="border border-gray-200 rounded-sm overflow-hidden bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.02]">
                             <div className="aspect-[16/10] bg-gray-50 flex items-center justify-center relative overflow-hidden group">
                                 {coverImage ? (
-                                    <img src={coverImage} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="Preview" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                    <img src={getImageUrl(coverImage)} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="Preview" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                                 ) : (
                                     <div className="flex flex-col items-center">
                                         <div className="w-20 h-20 rounded-full border border-dashed border-gray-200 flex items-center justify-center mb-3 bg-white/50">

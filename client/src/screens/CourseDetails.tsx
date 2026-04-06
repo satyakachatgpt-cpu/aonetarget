@@ -350,6 +350,26 @@ const CourseDetails: React.FC = () => {
     }
   };
 
+  const [upsellData, setUpsellData] = useState<Course[]>([]);
+  useEffect(() => {
+    if (course?.content?.upsell?.enabled && course.content.upsell.courses.length > 0) {
+      const fetchUpsell = async () => {
+        try {
+          const res = await fetch('/api/courses');
+          if (res.ok) {
+            const all = await res.json();
+            const recommended = all.filter((c: any) => 
+              course.content?.upsell?.courses.includes(c.title || c.name) && 
+              (c.id || c._id) !== (course.id || (course as any)._id)
+            );
+            setUpsellData(recommended);
+          }
+        } catch (e) { }
+      };
+      fetchUpsell();
+    }
+  }, [course]);
+
   useEffect(() => {
     fetchCourseData();
   }, [id]);
@@ -548,32 +568,34 @@ const CourseDetails: React.FC = () => {
         </div>
       </div>
 
-      <div className="sticky top-0 z-20 glass shadow-card mt-4 border-b border-surface-200">
-        <div className="flex px-2">
-          {tabConfig.map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex-1 py-3.5 text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5 relative ${activeTab === tab.key
-                ? 'text-primary-600'
-                : 'text-gray-400 hover:text-gray-600'
-                }`}
-            >
-              <span className="material-symbols-rounded text-base">{tab.icon}</span>
-              <span>{tab.label}</span>
-              {tab.key === 'live' && (
-                <span className="relative flex h-2 w-2 ml-0.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-500 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-500"></span>
-                </span>
-              )}
-              {activeTab === tab.key && (
-                <div className="absolute bottom-0 left-2 right-2 h-[3px] bg-gradient-to-r from-primary-600 to-primary-400 rounded-full" />
-              )}
-            </button>
-          ))}
+      {course.settings?.showTabs !== false && (
+        <div className="sticky top-0 z-20 glass shadow-card mt-4 border-b border-surface-200">
+          <div className="flex px-2">
+            {tabConfig.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`flex-1 py-3.5 text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5 relative ${activeTab === tab.key
+                  ? 'text-primary-600'
+                  : 'text-gray-400 hover:text-gray-600'
+                  }`}
+              >
+                <span className="material-symbols-rounded text-base">{tab.icon}</span>
+                <span>{tab.label}</span>
+                {tab.key === 'live' && (
+                  <span className="relative flex h-2 w-2 ml-0.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-500 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-500"></span>
+                  </span>
+                )}
+                {activeTab === tab.key && (
+                  <div className="absolute bottom-0 left-2 right-2 h-[3px] bg-gradient-to-r from-primary-600 to-primary-400 rounded-full" />
+                )}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       <main className="p-4 origin-top transition-transform duration-200 space-y-4">
 
@@ -989,6 +1011,47 @@ const CourseDetails: React.FC = () => {
             )}
           </div>
         )}
+
+        {upsellData.length > 0 && (
+          <div className="mt-8 px-1 pb-4">
+            <div className="flex items-center gap-3 mb-5 px-1">
+              <div className="w-1.5 h-6 bg-gradient-to-b from-indigo-600 to-indigo-400 rounded-full" />
+              <h3 className="font-black text-gray-900 text-sm tracking-tight text-primary-800 flex items-center gap-2">
+                 <span className="material-symbols-rounded text-base">recommend</span>
+                 Recommended for you
+              </h3>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {upsellData.map((up, i) => (
+                <div 
+                  key={up.id || (up as any)._id} 
+                  onClick={() => navigate(`/course/${up.id || (up as any)._id}`)}
+                  className="card-premium p-4 flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-all hover:border-indigo-100 group animate-fade-in-up shadow-sm bg-white rounded-3xl"
+                  style={{ animationDelay: `${i * 100}ms` }}
+                >
+                  <div className="w-16 h-16 rounded-[1.2rem] overflow-hidden bg-indigo-50 flex items-center justify-center shrink-0 border border-indigo-100/50">
+                    {up.thumbnail || up.imageUrl ? (
+                      <img src={getImageUrl(up.thumbnail || up.imageUrl)} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                    ) : (
+                      <span className="text-indigo-600 font-extrabold text-xl">{(up.title || up.name || 'C').charAt(0)}</span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[13px] font-extrabold text-gray-900 line-clamp-1 mb-1 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{up.title || up.name}</p>
+                    <div className="flex items-center gap-2">
+                       <span className="text-[14px] font-black text-green-600 tracking-tight">₹{up.price || 0}</span>
+                       <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest bg-gray-50 px-2 py-0.5 rounded-full">New Course</span>
+                    </div>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-all">
+                    <span className="material-symbols-rounded text-lg">chevron_right</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {!isEnrolled && (
           <div className="mt-8 mb-24 px-4 sticky bottom-4 z-40">
             <div className="bg-[#0D1B2A] p-5 rounded-[2.2rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex items-center justify-between border border-white/10 mx-auto max-w-sm animate-fade-in-up">

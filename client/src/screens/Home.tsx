@@ -89,7 +89,16 @@ const Home: React.FC = () => {
     const fetchCourses = async () => {
       try {
         const data = await coursesAPI.getAll();
-        setCourses(Array.isArray(data) ? data : []);
+        const coursesList = Array.isArray(data) ? data : [];
+        
+        // Universal Numeric Sort Fallback
+        const sorted = [...coursesList].sort((a, b) => {
+          const orderA = a.settings?.sortingOrder ?? 9999;
+          const orderB = b.settings?.sortingOrder ?? 9999;
+          return Number(orderA) - Number(orderB);
+        });
+        
+        setCourses(sorted);
       } catch (error) {
         console.error('Failed to fetch from MongoDB:', error);
       }
@@ -780,6 +789,11 @@ const Home: React.FC = () => {
                   >
                     {hasImage ? (
                       <div className="w-full h-full relative">
+                        {course.settings?.markNewBatch && (
+                          <div className="absolute top-3 left-3 z-30 px-2.5 py-1 bg-red-600 text-white text-[9px] font-black uppercase tracking-[0.1em] rounded-full shadow-lg border border-white/20 animate-pulse">
+                            NEW BATCH
+                          </div>
+                        )}
                         <img 
                           src={getImageUrl(course.imageUrl || course.thumbnail)} 
                           alt={course.title} 
@@ -802,6 +816,11 @@ const Home: React.FC = () => {
                       </div>
                     ) : (
                       <div className={`w-full h-full bg-gradient-to-br ${bgGrad} flex p-3.5 relative overflow-hidden group-hover:scale-105 transition-transform duration-500`}>
+                        {course.settings?.markNewBatch && (
+                          <div className="absolute top-3 left-3 z-30 px-2.5 py-1 bg-red-600 text-white text-[9px] font-black uppercase tracking-[0.1em] rounded-full shadow-lg border border-white/20 animate-pulse">
+                            NEW BATCH
+                          </div>
+                        )}
                         {/* Decorative circles to emulate a neat banner background */}
                         <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full blur-xl"></div>
                         <div className="absolute -bottom-6 -left-6 w-20 h-20 bg-black/10 rounded-full blur-xl"></div>

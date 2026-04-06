@@ -35,6 +35,47 @@ const normalizeId = (id) => {
   return String(id).trim();
 };
 
+const calculatePriceBreakdown = (course, coupon = null) => {
+  const basePrice = parseFloat(course.price) || 0;
+  const gstIncluded = course.settings?.gstIncluded || false;
+  const gstPercentage = parseFloat(course.settings?.gstPercentage) || 0;
+  
+  let gstAmount = 0;
+  if (gstIncluded && gstPercentage > 0) {
+    gstAmount = (basePrice * gstPercentage) / 100;
+  }
+  
+  let discountAmount = 0;
+  if (coupon && coupon.status === 'active') {
+    // Check minPurchase if exists
+    const minPurchase = parseFloat(coupon.minPurchase || 0);
+    if (basePrice >= minPurchase) {
+      if (coupon.discountType === 'percentage' || coupon.type === 'percentage') {
+        const val = parseFloat(coupon.discountValue || coupon.value || 0);
+        discountAmount = (basePrice * val) / 100;
+        // Check maxDiscount if exists
+        const maxDiscount = parseFloat(coupon.maxDiscount || 0);
+        if (maxDiscount > 0 && discountAmount > maxDiscount) {
+          discountAmount = maxDiscount;
+        }
+      } else {
+        discountAmount = parseFloat(coupon.discountValue || coupon.value || 0);
+      }
+    }
+  }
+  
+  const totalAmount = Math.max(0, basePrice + gstAmount - discountAmount);
+  
+  return {
+    basePrice,
+    gstAmount,
+    gstPercentage,
+    discountAmount,
+    totalAmount,
+    couponCode: coupon?.code || null
+  };
+};
+
 
 
 const app = express();
@@ -245,6 +286,42 @@ const connectDB = async () => {
       await db.collection('banners').createIndex({ isActive: 1 });
       await db.collection('posts').createIndex({ status: 1 });
       console.log('MongoDB indexes ensured');
+      
+      // Batch Sorting Migration: Convert string values to numbers
+      try {
+        console.log('Running sortingOrder migration...');
+        const collections = ['courses', 'packages'];
+        for (const collName of collections) {
+          const records = await db.collection(collName).find({}).toArray();
+          for (const record of records) {
+            let needsUpdate = false;
+            const updateObj = {};
+
+            if (!record.settings) {
+              updateObj['settings'] = { sortingOrder: 9999 };
+              needsUpdate = true;
+            } else {
+              const currentOrder = record.settings.sortingOrder;
+              if (currentOrder === undefined || currentOrder === null || currentOrder === "") {
+                updateObj['settings.sortingOrder'] = 9999;
+                needsUpdate = true;
+              } else if (typeof currentOrder === 'string') {
+                updateObj['settings.sortingOrder'] = parseFloat(currentOrder) || 9999;
+                needsUpdate = true;
+              }
+            }
+
+            if (needsUpdate) {
+              console.log(`Migrating ${collName} [${record.id || record._id}]: Setting order to ${updateObj['settings.sortingOrder'] || updateObj.settings.sortingOrder}`);
+              await db.collection(collName).updateOne({ _id: record._id }, { $set: updateObj });
+            }
+          }
+        }
+        console.log('SortingOrder migration completed');
+      } catch (migErr) {
+        console.error('Migration error:', migErr);
+      }
+
     } catch (indexErr) {
       console.warn('Index creation warning (non-fatal):', indexErr.message);
     }
@@ -762,8 +839,18 @@ app.get('/api/courses', async (req, res) => {
 
 app.post('/api/courses', async (req, res) => {
   try {
-    const course = new Course(req.body);
+    const courseData = req.body;
+    if (courseData.settings && typeof courseData.settings.sortingOrder === 'string') {
+      courseData.settings.sortingOrder = parseFloat(courseData.settings.sortingOrder) || 9999;
+    }
+    const course = new Course(courseData);
     await course.save();
+    
+    // Sync Demo Video
+    if (course.demoVideo) {
+      await syncDemoVideoWithFreeContent(course, course._id.toString());
+    }
+
     res.status(201).json(course);
   } catch (error) {
     console.error('Create course error:', error);
@@ -1114,48 +1201,113 @@ app.post('/api/courses/import', async (req, res) => {
       return res.status(400).json({ error: 'Missing required parameters' });
     }
 
-    const collections = ['folders', 'videos', 'notes', 'tests'];
+    const contentCollections = ['videos', 'notes', 'pdfs', 'tests'];
     let processedCount = 0;
 
-    for (const itemId of itemIds) {
-      let itemToProcess = null;
-      let targetCollection = null;
-
-      const isOid = /^[a-fA-F0-9]{24}$/.test(String(itemId));
+    // Helper: build query list for an id (String + ObjectId)
+    const buildIdQuery = (itemId) => {
       const queryList = [{ id: String(itemId) }];
-      if (isOid) {
-        try {
-          queryList.push({ _id: new ObjectId(itemId) });
-          queryList.push({ _id: String(itemId) });
-        } catch (e) { }
+      if (ObjectId.isValid(itemId)) {
+        try { queryList.push({ _id: new ObjectId(itemId) }); } catch (e) {}
+      }
+      return queryList;
+    };
+
+    // Recursive helper function to process a folder and all its descendants
+    const processFolderRecursively = async (sourceFolder, targetCourseId, action, targetParentId = null) => {
+      let targetFolderId;
+
+      if (action === 'copy') {
+        // 1. Create new folder in target course
+        const newFolder = { ...sourceFolder };
+        delete newFolder._id;
+        newFolder.id = `folder_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+        newFolder.courseId = String(targetCourseId);
+        newFolder.parentId = targetParentId;
+        newFolder.createdAt = new Date().toISOString();
+        const result = await db.collection('folders').insertOne(newFolder);
+        targetFolderId = newFolder.id; // Use custom ID string for consistency with frontend preference
+      } else {
+        // action === 'move'
+        // 1. Update existing folder
+        await db.collection('folders').updateOne(
+          { _id: sourceFolder._id },
+          { $set: { courseId: String(targetCourseId), parentId: targetParentId } }
+        );
+        targetFolderId = sourceFolder._id.toString();
       }
 
-      for (const collName of collections) {
-        const found = await db.collection(collName).findOne({ $or: queryList });
-        if (found) {
-          itemToProcess = found;
-          targetCollection = collName;
-          break;
+      // 2. Identify all possible ID variants for this folder to find its children
+      const folderIdStr = sourceFolder.id || (sourceFolder._id ? sourceFolder._id.toString() : null);
+      const folderOidStr = sourceFolder._id ? sourceFolder._id.toString() : null;
+      const folderMatchIds = [...new Set([folderIdStr, folderOidStr].filter(Boolean))];
+      // Include actual ObjectIds for the query
+      const folderMatchOids = folderMatchIds.filter(id => ObjectId.isValid(id)).map(id => new ObjectId(id));
+      const childrenFilter = { folderId: { $in: [...folderMatchIds, ...folderMatchOids] } };
+
+      // 3. Process immediate content children (videos, notes, etc.)
+      for (const collName of contentCollections) {
+        const items = await db.collection(collName).find(childrenFilter).toArray();
+        for (const item of items) {
+          if (action === 'copy') {
+            const newItem = { ...item };
+            delete newItem._id;
+            newItem.id = `${collName}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+            newItem.courseId = String(targetCourseId);
+            newItem.folderId = targetFolderId;
+            newItem.createdAt = new Date().toISOString();
+            await db.collection(collName).insertOne(newItem);
+          } else {
+            // move
+            await db.collection(collName).updateOne(
+              { _id: item._id },
+              { $set: { courseId: String(targetCourseId) } }
+            );
+          }
         }
       }
 
-      if (itemToProcess && targetCollection) {
-        if (action === 'copy') {
-          const newItem = { ...itemToProcess };
-          delete newItem._id;
-          newItem.id = `${targetCollection}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-          newItem.courseId = String(targetCourseId);
-          newItem.folderId = null; // Put in root folder
-          newItem.createdAt = new Date().toISOString();
-          await db.collection(targetCollection).insertOne(newItem);
-        } else if (action === 'move') {
-          let updatedCourseId = String(targetCourseId);
-          await db.collection(targetCollection).updateOne(
-            { _id: itemToProcess._id },
-            { $set: { courseId: updatedCourseId, folderId: null } }
-          );
-        }
+      // 4. Process sub-folders recursively
+      const subFolders = await db.collection('folders').find({ 
+        parentId: { $in: [...folderMatchIds, ...folderMatchOids] } 
+      }).toArray();
+      
+      for (const sub of subFolders) {
+        await processFolderRecursively(sub, targetCourseId, action, targetFolderId);
+      }
+    };
+
+    for (const itemId of itemIds) {
+      // Find the item in 'folders' first
+      const sourceFolder = await db.collection('folders').findOne({ $or: buildIdQuery(itemId) });
+
+      if (sourceFolder) {
+        await processFolderRecursively(sourceFolder, targetCourseId, action, null);
         processedCount++;
+      } else {
+        // Not a folder, search in content collections
+        for (const collName of contentCollections) {
+          const item = await db.collection(collName).findOne({ $or: buildIdQuery(itemId) });
+          if (item) {
+            if (action === 'copy') {
+              const newItem = { ...item };
+              delete newItem._id;
+              newItem.id = `${collName}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+              newItem.courseId = String(targetCourseId);
+              newItem.folderId = null; // direct import goes to root
+              newItem.createdAt = new Date().toISOString();
+              await db.collection(collName).insertOne(newItem);
+            } else {
+              // move
+              await db.collection(collName).updateOne(
+                { _id: item._id },
+                { $set: { courseId: String(targetCourseId), folderId: null } }
+              );
+            }
+            processedCount++;
+            break; // item found and processed
+          }
+        }
       }
     }
 
@@ -1843,6 +1995,40 @@ app.delete('/api/courses/:id/posts/:postId', async (req, res) => {
   }
 });
 
+// Helper to sync Demo Video with Free Content
+async function syncDemoVideoWithFreeContent(record, id) {
+  try {
+    const demoUrl = record.demoVideo || record.imageUrl; // fallback if needed
+    const finalId = id || record.id || record._id?.toString();
+    if (!finalId) return;
+
+    if (record.demoVideo) {
+      const videoData = {
+        title: `Demo: ${record.name || record.title || 'Course'}`,
+        url: record.demoVideo,
+        courseId: finalId,
+        isFree: true,
+        category: record.category || 'General',
+        instructor: record.instructor || 'Institute Faculty',
+        updatedAt: new Date().toISOString()
+      };
+      
+      // Upsert into videos collection based on courseId and "Demo:" prefix
+      await db.collection('videos').updateOne(
+        { courseId: finalId, title: { $regex: /^Demo:/i } },
+        { $set: videoData },
+        { upsert: true }
+      );
+      console.log(`[DEMO-SYNC] Synced demo video for ${finalId}`);
+    } else if (record.demoVideo === "") {
+        // Explicitly removed
+        await db.collection('videos').deleteMany({ courseId: finalId, title: { $regex: /^Demo:/i } });
+    }
+  } catch (err) {
+    console.error(`[DEMO-SYNC ERROR] ${finalId}:`, err);
+  }
+}
+
 // Generic Course Routes (Correctly placed at the end)
 app.get('/api/courses/:id', async (req, res) => {
   try {
@@ -1864,12 +2050,36 @@ app.get('/api/courses/:id', async (req, res) => {
   }
 });
 
+app.post('/api/courses/:id', async (req, res) => {
+  try {
+    const courseId = req.params.id;
+    const courseData = req.body;
+    
+    if (courseData.settings && typeof courseData.settings.sortingOrder === 'string') {
+      courseData.settings.sortingOrder = parseFloat(courseData.settings.sortingOrder) || 9999;
+    }
+
+    const result = await db.collection('courses').findOneAndUpdate(
+      { $or: [{ id: courseId }, { _id: ObjectId.isValid(courseId) ? new ObjectId(courseId) : null }].filter(f => f._id !== null) },
+      { $set: { ...courseData, updatedAt: new Date().toISOString() } },
+      { returnDocument: 'after' }
+    );
+    res.json(result.value || result);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update course' });
+  }
+});
+
 app.put('/api/courses/:id', async (req, res) => {
   try {
     console.log(`PUT /api/courses/${req.params.id} - Body size: ${JSON.stringify(req.body).length} bytes`);
     const { _id, ...updateData } = req.body;
     const id = req.params.id;
     console.log(`Aggressive PUT lookup for identifier: ${id}`);
+
+    if (updateData.settings && typeof updateData.settings.sortingOrder === 'string') {
+      updateData.settings.sortingOrder = parseFloat(updateData.settings.sortingOrder) || 9999;
+    }
 
     // Try finding in both collections with all variants
     let record = await db.collection('courses').findOne({ $or: [{ id: id }, { _id: id }] });
@@ -1893,10 +2103,24 @@ app.put('/api/courses/:id', async (req, res) => {
 
     console.log(`[TARGET MATCH] Collection: ${targetCollection}, DB _id: ${record._id}`);
 
+    const finalUpdate = { ...updateData, updatedAt: new Date().toISOString() };
+    if (updateData.settings && record.settings) {
+      finalUpdate.settings = { ...record.settings, ...updateData.settings };
+    }
+    if (updateData.content && record.content) {
+      finalUpdate.content = { ...record.content, ...updateData.content };
+    }
+
     await db.collection(targetCollection).updateOne(
       { _id: record._id },
-      { $set: { ...updateData, updatedAt: new Date().toISOString() } }
+      { $set: finalUpdate }
     );
+
+    // Sync Demo Video
+    if (finalUpdate.demoVideo !== undefined) {
+        const fullRecord = { ...record, ...finalUpdate };
+        await syncDemoVideoWithFreeContent(fullRecord, record._id.toString());
+    }
 
     res.json({ success: true, message: 'Updated successfully', collection: targetCollection });
   } catch (error) {
@@ -2522,12 +2746,59 @@ app.put('/api/tokens/update-all', async (req, res) => {
 });
 
 // Routes for Coupons
+// IMPORTANT: Specific routes (validate, bulk) MUST come before /:id routes
 app.get('/api/coupons', async (req, res) => {
   try {
     const coupons = await db.collection('coupons').find({}).toArray();
     res.json(coupons);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch coupons' });
+  }
+});
+
+// Coupon validation (must be before POST /api/coupons to avoid /:id conflict)
+app.post('/api/coupons/validate', async (req, res) => {
+  try {
+    const { code, courseId } = req.body;
+    if (!code || !courseId) return res.status(400).json({ error: 'Code and courseId are required' });
+
+    const coupon = await db.collection('coupons').findOne({ code: code, status: 'active' });
+    if (!coupon) return res.status(404).json({ error: 'Invalid or expired coupon code' });
+
+    const course = await findCourse(courseId);
+    if (!course) return res.status(404).json({ error: 'Course not found' });
+
+    const breakdown = calculatePriceBreakdown(course, coupon);
+    res.json({ success: true, ...breakdown });
+  } catch (error) {
+    console.error('Coupon validation error:', error);
+    res.status(500).json({ error: 'Internal server error during validation' });
+  }
+});
+
+// Bulk create coupons (must be before POST /api/coupons to avoid /:id conflict)
+app.post('/api/coupons/bulk', async (req, res) => {
+  try {
+    const { coupons } = req.body;
+    if (!Array.isArray(coupons) || coupons.length === 0) return res.status(400).json({ error: 'No coupons provided' });
+    const result = await db.collection('coupons').insertMany(coupons);
+    res.status(201).json({ success: true, inserted: result.insertedCount });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to bulk create coupons' });
+  }
+});
+
+// Update-all coupons (must be before PUT /api/coupons/:id)
+app.put('/api/coupons/update-all', async (req, res) => {
+  try {
+    const updates = (req.body && req.body.updates) ? req.body.updates : (Array.isArray(req.body) ? req.body : []);
+    for (const update of updates) {
+      const { id, _id, ...data } = update;
+      if (id) await db.collection('coupons').updateOne({ id }, { $set: data });
+    }
+    res.json({ success: true, message: `Updated ${updates.length} coupons` });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update all coupons' });
   }
 });
 
@@ -2575,32 +2846,6 @@ app.delete('/api/coupons', async (req, res) => {
     res.json({ success: true, message: `Deleted ${result.deletedCount} coupons` });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete all coupons' });
-  }
-});
-
-// Bulk create coupons
-app.post('/api/coupons/bulk', async (req, res) => {
-  try {
-    const { coupons } = req.body;
-    if (!Array.isArray(coupons) || coupons.length === 0) return res.status(400).json({ error: 'No coupons provided' });
-    const result = await db.collection('coupons').insertMany(coupons);
-    res.status(201).json({ success: true, inserted: result.insertedCount });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to bulk create coupons' });
-  }
-});
-
-// Update-all coupons
-app.put('/api/coupons/update-all', async (req, res) => {
-  try {
-    const updates = (req.body && req.body.updates) ? req.body.updates : (Array.isArray(req.body) ? req.body : []);
-    for (const update of updates) {
-      const { id, _id, ...data } = update;
-      if (id) await db.collection('coupons').updateOne({ id }, { $set: data });
-    }
-    res.json({ success: true, message: `Updated ${updates.length} coupons` });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to update all coupons' });
   }
 });
 
@@ -4586,7 +4831,14 @@ app.get('/api/packages', async (req, res) => {
 app.post('/api/packages', async (req, res) => {
   try {
     const result = await db.collection('packages').insertOne(req.body);
-    res.status(201).json({ _id: result.insertedId, ...req.body });
+    const newPackage = { _id: result.insertedId, ...req.body };
+    
+    // Sync Demo Video
+    if (newPackage.demoVideo) {
+      await syncDemoVideoWithFreeContent(newPackage, result.insertedId.toString());
+    }
+
+    res.status(201).json(newPackage);
   } catch (error) {
     res.status(500).json({ error: 'Failed to create package' });
   }
@@ -4620,10 +4872,24 @@ app.put('/api/packages/:id', async (req, res) => {
 
     console.log(`[TARGET MATCH] Collection: ${targetCollection}, DB _id: ${record._id}`);
 
+    const finalUpdate = { ...updateData, updatedAt: new Date().toISOString() };
+    if (updateData.settings && record.settings) {
+      finalUpdate.settings = { ...record.settings, ...updateData.settings };
+    }
+    if (updateData.content && record.content) {
+      finalUpdate.content = { ...record.content, ...updateData.content };
+    }
+
     await db.collection(targetCollection).updateOne(
       { _id: record._id },
-      { $set: { ...updateData, updatedAt: new Date().toISOString() } }
+      { $set: finalUpdate }
     );
+
+    // Sync Demo Video
+    if (finalUpdate.demoVideo !== undefined) {
+        const fullRecord = { ...record, ...finalUpdate };
+        await syncDemoVideoWithFreeContent(fullRecord, record._id.toString());
+    }
 
     res.json({ success: true, message: 'Updated successfully', collection: targetCollection });
   } catch (error) {
@@ -7196,7 +7462,7 @@ app.put('/api/admin/referrals/update-status', async (req, res) => {
 // Razorpay Order Creation
 app.post('/api/razorpay/create-order', async (req, res) => {
   try {
-    const { courseId, studentId } = req.body;
+    const { courseId, studentId, couponCode } = req.body;
     if (!courseId || !studentId) {
       return res.status(400).json({ error: 'courseId and studentId are required' });
     }
@@ -7214,15 +7480,9 @@ app.post('/api/razorpay/create-order', async (req, res) => {
     keyId = (keyId || '').toString().trim();
     keySecret = (keySecret || '').toString().trim();
 
-    // Log for debugging (masked)
-    const maskedId = keyId ? `${keyId.substring(0, 4)}...${keyId.slice(-4)}` : 'NULL';
-    console.log(`[Razorpay Debug] ID: ${maskedId}, State: ${(!keyId || !keySecret) ? 'MISSING' : 'OK'}`);
-
     if (!keyId || !keySecret) {
       return res.status(500).json({ error: 'Razorpay keys missing from .env and settings collection.' });
     }
-
-    console.log(`Razorpay Mode: ${keyId.startsWith('rzp_live') ? 'LIVE (Real Money)' : 'TEST (Sandbox)'}`);
 
     const student = await db.collection('students').findOne({ id: studentId });
     if (!student) {
@@ -7234,16 +7494,29 @@ app.post('/api/razorpay/create-order', async (req, res) => {
       return res.status(404).json({ error: 'Course not found' });
     }
 
-    const coursePrice = course.price || 0;
-    if (coursePrice <= 0) {
-      return res.status(400).json({ error: 'This course is free, no payment needed' });
+    let coupon = null;
+    if (couponCode) {
+      coupon = await db.collection('coupons').findOne({ code: couponCode, status: 'active' });
+    }
+
+    const breakdown = calculatePriceBreakdown(course, coupon);
+
+    if (breakdown.totalAmount <= 0) {
+      return res.status(400).json({ error: 'This course is free or discounted to zero, use manual enrollment' });
     }
 
     const orderData = {
-      amount: Math.round(coursePrice * 100),
+      amount: Math.round(breakdown.totalAmount * 100),
       currency: 'INR',
       receipt: `receipt_${Date.now()}`,
-      notes: { courseId: course.id || course._id.toString(), studentId }
+      notes: { 
+        courseId: course.id || course._id.toString(), 
+        studentId,
+        couponCode: couponCode || '',
+        basePrice: breakdown.basePrice,
+        gstAmount: breakdown.gstAmount,
+        discountAmount: breakdown.discountAmount
+      }
     };
 
     const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
@@ -7262,7 +7535,13 @@ app.post('/api/razorpay/create-order', async (req, res) => {
       return res.status(500).json({ error: order.error?.description || 'Failed to create Razorpay order' });
     }
 
-    res.json({ orderId: order.id, amount: order.amount, currency: order.currency, keyId });
+    res.json({ 
+      orderId: order.id, 
+      amount: order.amount, 
+      currency: order.currency, 
+      keyId,
+      breakdown 
+    });
   } catch (error) {
     console.error('Razorpay order error:', error);
     res.status(500).json({ error: 'Failed to create payment order' });
@@ -7273,7 +7552,7 @@ app.post('/api/razorpay/create-order', async (req, res) => {
 // Razorpay Payment Verification
 app.post('/api/razorpay/verify', async (req, res) => {
   try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, courseId, studentId, referralCode } = req.body;
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, courseId, studentId, referralCode, couponCode } = req.body;
 
     // Get credentials (same logic as create-order)
     const settings = await db.collection('settings').findOne({});
@@ -7334,25 +7613,15 @@ app.post('/api/razorpay/verify', async (req, res) => {
         }
       } catch (e) { }
     }
-    if (!course) {
-      return res.status(404).json({ error: 'Course not found' });
+
+    if (!course) return res.status(404).json({ error: 'Course not found during fulfillment' });
+
+    let coupon = null;
+    if (couponCode) {
+      coupon = await db.collection('coupons').findOne({ code: couponCode, status: 'active' });
     }
 
-    const expectedAmount = Math.round((course.price || 0) * 100);
-    if (paymentData.amount < expectedAmount) {
-      console.error('Payment amount mismatch:', paymentData.amount, 'vs expected', expectedAmount);
-      // Send Failure Email
-      if (studentId && courseId) {
-        try {
-          const student = await db.collection('students').findOne({ id: studentId });
-          if (student && student.email) {
-            const { subject, html } = templates.paymentFailed(student.name || 'Student', course.name || course.title, course.price, 'Payment amount mismatch');
-            sendEmail({ to: student.email, subject, html }).catch(e => console.error('Payment failure email error:', e));
-          }
-        } catch (e) { }
-      }
-      return res.status(400).json({ error: 'Payment amount does not match course price' });
-    }
+    const breakdown = calculatePriceBreakdown(course, coupon);
 
     const student = await db.collection('students').findOne({ id: studentId });
     if (!student) {
@@ -7364,13 +7633,18 @@ app.post('/api/razorpay/verify', async (req, res) => {
 
     const purchase = {
       id: `purchase_${Date.now()}`,
+      razorpayPaymentId: razorpay_payment_id,
+      razorpayOrderId: razorpay_order_id,
       studentId,
       courseId: actualCourseId,
       courseName: course.name || course.title || courseId,
-      amount: actualAmount,
-      paymentMethod: 'razorpay',
-      razorpayOrderId: razorpay_order_id,
-      razorpayPaymentId: razorpay_payment_id,
+      amount: breakdown.totalAmount || actualAmount,
+      basePrice: breakdown.basePrice,
+      gstAmount: breakdown.gstAmount,
+      gstPercentage: breakdown.gstPercentage,
+      discountAmount: breakdown.discountAmount,
+      couponCode: coupon?.code || '',
+      paymentMethod: paymentData.method || 'razorpay',
       referralCode: referralCode || null,
       status: 'completed',
       createdAt: new Date()
@@ -7389,10 +7663,10 @@ app.post('/api/razorpay/verify', async (req, res) => {
     if (referralCode) {
       const referral = await db.collection('referrals').findOne({ referralCode });
       if (referral) {
-        const settings = await db.collection('referralSettings').findOne({}) || { commissionType: 'fixed', commissionValue: 50 };
-        let earning = settings.commissionValue || 50;
-        if (settings.commissionType === 'percentage') {
-          earning = Math.round((purchase.amount * settings.commissionValue) / 100);
+        const referralSettings = await db.collection('referralSettings').findOne({}) || { commissionType: 'fixed', commissionValue: 50 };
+        let earning = referralSettings.commissionValue || 50;
+        if (referralSettings.commissionType === 'percentage') {
+          earning = Math.round((purchase.amount * referralSettings.commissionValue) / 100);
         }
         const alreadyReferred = referral.referredStudents && referral.referredStudents.some(r => r.studentId === studentId);
         if (!alreadyReferred) {

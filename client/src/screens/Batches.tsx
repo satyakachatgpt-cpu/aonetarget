@@ -23,7 +23,16 @@ const Batches: React.FC = () => {
       try {
         setLoading(true);
         const data = await coursesAPI.getAll();
-        setCourses(Array.isArray(data) ? data : []);
+        const coursesList = Array.isArray(data) ? data : [];
+        
+        // Final numeric sort fallback
+        const sorted = [...coursesList].sort((a, b) => {
+          const orderA = a.settings?.sortingOrder ?? 9999;
+          const orderB = b.settings?.sortingOrder ?? 9999;
+          return Number(orderA) - Number(orderB);
+        });
+        
+        setCourses(sorted);
       } catch (error) {
         console.error('Failed to fetch batches:', error);
       } finally {
@@ -96,6 +105,11 @@ const Batches: React.FC = () => {
                 >
                   {hasImage ? (
                     <div className="w-full h-full relative">
+                      {course.settings?.markNewBatch && (
+                        <div className="absolute top-3 left-3 z-30 px-2.5 py-1 bg-gradient-to-r from-orange-600 to-red-600 text-white text-[9px] font-black uppercase tracking-[0.1em] rounded-full shadow-lg border border-white/20 animate-pulse">
+                          NEW BATCH
+                        </div>
+                      )}
                       <img 
                         src={getImageUrl(course.imageUrl || course.thumbnail)} 
                         alt={batchName} 
@@ -129,6 +143,11 @@ const Batches: React.FC = () => {
                     </div>
                   ) : (
                     <div className={`w-full h-full bg-gradient-to-br ${bgGrad} p-4 flex flex-col justify-between relative overflow-hidden`}>
+                      {course.settings?.markNewBatch && (
+                        <div className="absolute top-3 left-3 z-30 px-2.5 py-1 bg-red-600 text-white text-[9px] font-black uppercase tracking-[0.1em] rounded-full shadow-lg border border-white/20 animate-pulse">
+                          NEW BATCH
+                        </div>
+                      )}
                       {/* Decorative elements */}
                       <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
                       <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-black/10 rounded-full blur-2xl"></div>
