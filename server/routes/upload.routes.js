@@ -33,29 +33,29 @@ router.post('/v2/upload/image', authMiddleware, uploadImage.single('file'), asyn
   }
 });
 
-// ─────────────────────────────────
-// POST /api/v2/upload/pdf
-// ─────────────────────────────────
+// POST /api/v2/upload/pdf (Handles all documents: PDF, Word, Excel, etc.)
 router.post('/v2/upload/pdf', authMiddleware, uploadPDF.single('file'), async (req, res) => {
   if (!req.file) {
-    return res.status(400).json({ success: false, error: "No PDF provided" });
+    return res.status(400).json({ success: false, error: "No document provided" });
   }
 
   try {
+    // Using auto resource_type for documents
     const result = await uploadToCloudinary(req.file.buffer, {
-      folder: 'aot/pdfs',
-      resource_type: 'raw',
-      allowed_formats: ['pdf']
+      folder: 'aot/documents',
+      resource_type: 'auto'
     });
 
     return res.status(200).json({
       success: true,
       url: result.url,
       public_id: result.public_id,
-      bytes: result.bytes
+      bytes: result.bytes,
+      format: result.format
     });
   } catch (error) {
-    return res.status(500).json({ success: false, error: "Failed to upload PDF" });
+    console.error('Document upload failed:', error);
+    return res.status(500).json({ success: false, error: "Failed to upload document" });
   }
 });
 

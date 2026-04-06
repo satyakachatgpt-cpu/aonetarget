@@ -10,7 +10,7 @@ const apiCache: Record<string, { data: any; timestamp: number }> = {};
 const pendingRequests: Record<string, Promise<any>> = {};
 const CACHE_TTL = 30000;
 
-function getAdminHeaders(): Record<string, string> {
+export function getAdminHeaders(): Record<string, string> {
   const adminToken = localStorage.getItem('adminToken');
   if (adminToken) {
     return { 'Authorization': `Bearer ${adminToken}` };
@@ -221,7 +221,10 @@ export const studentsAPI = {
       throw new Error(`API returned non-JSON response. Status: ${response.status}`);
     }
 
-    if (!response.ok) throw new Error(`Failed to create student (${response.status})`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || errorData.details || `Failed to create student (${response.status})`);
+    }
     return response.json();
   },
 
@@ -238,7 +241,10 @@ export const studentsAPI = {
       throw new Error('API returned non-JSON response');
     }
 
-    if (!response.ok) throw new Error(`Failed to update student (${response.status})`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || errorData.details || `Failed to update student (${response.status})`);
+    }
     return response.json();
   },
 
@@ -371,7 +377,7 @@ export const uploadAPI = {
     }
   },
 
-  uploadPDF: async (file: File, options: any = {}) => {
+  uploadDocument: async (file: File, options: any = {}) => {
     const formData = new FormData();
     formData.append('file', file);
 
@@ -384,9 +390,13 @@ export const uploadAPI = {
       const res = await axios.post(`${API_BASE_URL}/v2/upload/pdf`, formData, config);
       return res.data;
     } catch (err: any) {
-      const errMsg = err.response?.data?.error || 'PDF upload failed';
+      const errMsg = err.response?.data?.error || 'Document upload failed';
       throw new Error(errMsg);
     }
+  },
+  // Alias for backward compatibility
+  uploadPDF: async (file: File, options: any = {}) => {
+    return uploadAPI.uploadDocument(file, options);
   }
 };
 

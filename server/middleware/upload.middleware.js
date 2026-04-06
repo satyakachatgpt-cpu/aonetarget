@@ -22,14 +22,24 @@ export const uploadImage = multer({
   limits: { fileSize: IMAGE_LIMIT }
 });
 
-// 2. uploadPDF
+// 2. uploadDocument (formerly uploadPDF)
 export const uploadPDF = multer({
   storage: storage,
   fileFilter: (req, file, cb) => {
-    if (file.mimetype === 'application/pdf') {
+    const allowed = [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'text/csv',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    ];
+    if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error("INVALID_TYPE: Only PDF allowed"), false);
+      cb(new Error("INVALID_TYPE: Only PDF, Word, Excel, CSV, and PPT allowed"), false);
     }
   },
   limits: { fileSize: PDF_LIMIT }

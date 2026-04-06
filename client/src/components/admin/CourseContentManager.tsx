@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { getImageUrl, getVideoUrl, getPdfUrl, toYouTubeEmbed } from '../../lib/utils';
 import { createPortal } from 'react-dom';
-import { coursesAPI, categoriesAPI, packagesAPI } from '../../services/apiClient';
+import { coursesAPI, categoriesAPI, packagesAPI, uploadAPI, getAdminHeaders } from '../../services/apiClient';
 import FileUploadButton from '../shared/FileUploadButton';
 import AddCourse from './AddCourse';
 import CourseGroupChat from './CourseGroupChat';
@@ -285,20 +285,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
     setImageUploadLoading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch(`${API_BASE_URL}/v2/upload/image`, {
-        method: 'POST',
-        headers: {
-          'x-admin-id': localStorage.getItem('adminId') || '',
-          'Authorization': `Bearer ${localStorage.getItem('adminToken') || ''}`
-        },
-        body: formData,
-      });
-
-      if (!response.ok) throw new Error('Failed to upload image');
-      const data = await response.json();
+      const data = await uploadAPI.uploadImage(file);
 
       setCourseFormData(prev => ({
         ...prev,
@@ -401,9 +388,13 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     try {
       const courseId = (selectedCourse as any)._id || selectedCourse.id;
       const endpoint = selectedCourse.id?.toString().startsWith('pkg_') ? 'packages' : 'courses';
+      const adminToken = localStorage.getItem('adminToken');
       await fetch(`${API_BASE_URL}/${endpoint}/${courseId}`, {
         method: 'PUT',
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
         body: JSON.stringify({ isPublished: newStatus, status: newStatus ? 'active' : 'inactive' })
       });
       setIsPublished(newStatus);
@@ -436,9 +427,13 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const newStatus = video.status === 'active' ? 'inactive' : 'active';
       const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
       const videoId = (video as any)._id || video.id;
+      const adminToken = localStorage.getItem('adminToken');
       await fetch(`${API_BASE_URL}/courses/${courseId}/videos/${videoId}`, {
         method: 'PUT',
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
         body: JSON.stringify({ ...video, status: newStatus })
       });
       setVideos(prev => prev.map(v => ((v as any)._id || v.id) === videoId ? { ...v, status: newStatus } : v));
@@ -451,9 +446,13 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const newFree = !video.isFree;
       const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
       const videoId = (video as any)._id || video.id;
+      const adminToken = localStorage.getItem('adminToken');
       await fetch(`${API_BASE_URL}/courses/${courseId}/videos/${videoId}`, {
         method: 'PUT',
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
         body: JSON.stringify({ ...video, isFree: newFree })
       });
       setVideos(prev => prev.map(v => ((v as any)._id || v.id) === videoId ? { ...v, isFree: newFree } : v));
@@ -466,9 +465,13 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const newStatus = note.status === 'active' ? 'inactive' : 'active';
       const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
       const noteId = (note as any)._id || note.id;
+      const adminToken = localStorage.getItem('adminToken');
       await fetch(`${API_BASE_URL}/courses/${courseId}/notes/${noteId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
         body: JSON.stringify({ ...note, status: newStatus })
       });
       setNotes(prev => prev.map(n => ((n as any)._id || n.id) === noteId ? { ...n, status: newStatus } : n));
@@ -481,9 +484,13 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const newFree = !note.isFree;
       const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
       const noteId = (note as any)._id || note.id;
+      const adminToken = localStorage.getItem('adminToken');
       await fetch(`${API_BASE_URL}/courses/${courseId}/notes/${noteId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
         body: JSON.stringify({ ...note, isFree: newFree })
       });
       setNotes(prev => prev.map(n => ((n as any)._id || n.id) === noteId ? { ...n, isFree: newFree } : n));
@@ -496,9 +503,13 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const newStatus = test.status === 'active' ? 'inactive' : 'active';
       const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
       const testId = (test as any)._id || test.id;
+      const adminToken = localStorage.getItem('adminToken');
       await fetch(`${API_BASE_URL}/courses/${courseId}/tests/${testId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
         body: JSON.stringify({ ...test, status: newStatus })
       });
       setTests(prev => prev.map(t => ((t as any)._id || t.id) === testId ? { ...t, status: newStatus } : t));
@@ -511,9 +522,13 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const newFree = !test.isFree;
       const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
       const testId = (test as any)._id || test.id;
+      const adminToken = localStorage.getItem('adminToken');
       await fetch(`${API_BASE_URL}/courses/${courseId}/tests/${testId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
         body: JSON.stringify({ ...test, isFree: newFree })
       });
       setTests(prev => prev.map(t => ((t as any)._id || t.id) === testId ? { ...t, isFree: newFree } : t));
@@ -680,15 +695,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/v2/upload/image', { 
-        method: 'POST', 
-        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
-        body: formData 
-      });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
+      const data = await uploadAPI.uploadImage(file);
       setEditingFolder((prev: any) => prev ? { ...prev, thumbnail: data.url } : { thumbnail: data.url });
       showToast('Image uploaded', 'success');
     } catch (error) {
@@ -701,15 +708,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/v2/upload/image', { 
-        method: 'POST', 
-        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
-        body: formData 
-      });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
+      const data = await uploadAPI.uploadImage(file);
       setLiveStreamForm(prev => ({ ...prev, image: data.url }));
       showToast('Image uploaded', 'success');
     } catch (error) {
@@ -721,15 +720,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/v2/upload/pdf', { 
-        method: 'POST', 
-        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
-        body: formData 
-      });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
+      const data = await uploadAPI.uploadDocument(file);
       setLiveStreamForm(prev => ({ ...prev, [field]: data.url }));
       showToast('File uploaded', 'success');
     } catch (error) {
@@ -741,15 +732,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/v2/upload/image', { 
-        method: 'POST', 
-        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
-        body: formData 
-      });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
+      const data = await uploadAPI.uploadImage(file);
       setYoutubeZoomForm(prev => ({ ...prev, image: data.url }));
       showToast('Image uploaded', 'success');
     } catch (error) {
@@ -761,15 +744,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/v2/upload/pdf', { 
-        method: 'POST', 
-        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
-        body: formData 
-      });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
+      const data = await uploadAPI.uploadDocument(file);
       setYoutubeZoomForm(prev => ({ ...prev, [field]: data.url }));
       showToast('File uploaded', 'success');
     } catch (error) {
@@ -781,15 +756,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/v2/upload/image', { 
-        method: 'POST', 
-        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
-        body: formData 
-      });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
+      const data = await uploadAPI.uploadImage(file);
       setWebinarForm(prev => ({ ...prev, image: data.url }));
       showToast('Image uploaded', 'success');
     } catch (error) {
@@ -801,15 +768,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/v2/upload/pdf', { 
-        method: 'POST', 
-        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
-        body: formData 
-      });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
+      const data = await uploadAPI.uploadDocument(file);
       setWebinarForm(prev => ({ ...prev, [field]: data.url }));
       showToast('File uploaded', 'success');
     } catch (error) {
@@ -1721,23 +1680,12 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
   const uploadFolderImage = async (file: File): Promise<string> => {
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/v2/upload/image', {
-        method: 'POST',
-        headers: {
-          'x-admin-id': localStorage.getItem('adminId') || '',
-          'Authorization': `Bearer ${localStorage.getItem('adminToken') || ''}`
-        },
-        body: formData,
-      });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
+      const data = await uploadAPI.uploadImage(file);
       return data.url;
     } catch (error) {
       console.error('Folder image upload error:', error);
       showToast('Failed to upload image', 'error');
-      throw error;
+      return '';
     }
   };
 
@@ -1844,55 +1792,47 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
   const handleFilesUpload = async (files: File[], type: 'note' | 'audio' | 'image' | 'document') => {
     if (!selectedCourse || files.length === 0) return;
     const courseId = normalizeId((selectedCourse as any)._id || selectedCourse.id);
-    const folderIdVal = currentFolder?._id || currentFolder?.id || null;
-    const folderId = normalizeId(folderIdVal);
+    const folderId = normalizeId(currentFolder?._id || currentFolder?.id || null);
 
     showToast(`Uploading ${files.length} file(s)...`, 'success');
 
     try {
       await Promise.all(files.map(async (file) => {
-        const formData = new FormData();
-        formData.append('file', file);
-        let uploadEndpoint = '/api/v2/upload/pdf'; // Default to PDF for documents/notes
-        if (type === 'image') uploadEndpoint = '/api/v2/upload/image';
-        if (type === 'audio') uploadEndpoint = '/api/v2/upload/video';
-        
-        const res = await fetch(uploadEndpoint, { 
-          method: 'POST', 
-          headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
-          body: formData 
-        });
-        if (!res.ok) throw new Error('Upload failed');
-        const data = await res.json();
+        let data;
+        if (type === 'image') data = await uploadAPI.uploadImage(file);
+        else if (type === 'audio') data = await uploadAPI.uploadVideo(file);
+        else data = await uploadAPI.uploadDocument(file);
 
         const fileData = {
           ...data,
           title: file.name,
-          description: '',
           fileUrl: data.url,
           fileSize: (file.size / 1024).toFixed(2) + ' KB',
           isFree: false,
           status: 'active',
-          order: notes.length + 1,
-          folderId: folderId,
-          courseId: courseId,
-          type: type,
+          order: (notes.length || 0) + 1,
+          folderId,
+          courseId,
+          type,
           id: `note_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`
         };
 
         const response = await fetch(`${API_BASE_URL}/courses/${courseId}/notes`, {
           method: 'POST',
-          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            ...getAdminHeaders()
+          },
           body: JSON.stringify(fileData)
         });
 
-        if (!response.ok) throw new Error('Note save failed');
+        if (!response.ok) throw new Error('Failed to save file info');
       }));
 
-      showToast(`Finished uploading ${files.length} file(s)`, 'success');
+      showToast(`Successfully uploaded ${files.length} file(s)`, 'success');
       loadCourseContent();
     } catch (error) {
-      console.error('Upload error:', error);
+      console.error('Upload Error:', error);
       showToast('Failed to upload files', 'error');
     }
   };
@@ -4456,21 +4396,16 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         onClose={() => { setShowNoteModal(false); setEditingNote(null); }}
         onSubmit={handleNoteSubmit}
         onUploadFile={async (file, type) => {
-          const formData = new FormData();
-          formData.append('file', file);
-          
-          let endpoint = '/api/v2/upload/image';
-          if (type === 'note' || type === 'document') endpoint = '/api/v2/upload/pdf';
-          else if (type === 'audio') endpoint = '/api/v2/upload/video';
-
-          const res = await fetch(endpoint, { 
-            method: 'POST', 
-            headers: getAuthHeaders(),
-            body: formData 
-          });
-          if (!res.ok) throw new Error('Upload failed');
-          const data = await res.json();
-          return data.url;
+          if (type === 'note' || type === 'document') {
+            const data = await uploadAPI.uploadDocument(file);
+            return data.url;
+          } else if (type === 'audio') {
+            const data = await uploadAPI.uploadVideo(file);
+            return data.url;
+          } else {
+            const data = await uploadAPI.uploadImage(file);
+            return data.url;
+          }
         }}
         editingNote={editingNote}
       />

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { studentsAPI, coursesAPI } from '../../services/apiClient';
+import { studentsAPI, coursesAPI, uploadAPI } from '../../services/apiClient';
 import { getImageUrl, getPdfUrl } from '../../lib/utils';
 import { RightSideDrawer, DrawerHeader, DrawerBody, DrawerFooter, FormInput, FormLabel, FormSelect, PrimaryButton } from './DrawerSystem';
 
@@ -254,13 +254,13 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     try {
       setLoading(true);
       const res = await studentsAPI.create(formData as any);
-      setStudents([...students, res]);
+      setStudents([res, ...students]);
       resetForm();
       setShowAddModal(false);
       showToast(`Student ${formData.name} added successfully`, 'success');
     } catch (error: any) {
       console.error('Add student error:', error);
-      showToast(error.response?.data?.error || 'Failed to add student', 'error');
+      showToast(error.message || 'Failed to add student', 'error');
     } finally {
       setLoading(false);
     }
@@ -280,7 +280,7 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       showToast('Student updated successfully', 'success');
     } catch (error: any) {
       console.error('Update student error:', error);
-      showToast(error.response?.data?.error || 'Failed to update student', 'error');
+      showToast(error.message || 'Failed to update student', 'error');
     } finally {
       setLoading(false);
     }
@@ -479,20 +479,13 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
   const handleFileUpload = async (file: File, field: string) => {
     try {
       setUploadingField(field);
-      const uploadFormData = new FormData();
-      uploadFormData.append('file', file);
-
-      // Determine endpoint based on field type
-      const endpoint = field === 'marksheet' ? '/api/v2/upload/pdf' : '/api/v2/upload/image';
-
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
-        body: uploadFormData
-      });
-
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
+      
+      let data;
+      if (file.type === 'application/pdf') {
+        data = await uploadAPI.uploadPDF(file);
+      } else {
+        data = await uploadAPI.uploadImage(file);
+      }
       
       setFormData(prev => ({ ...prev, [field]: data.url }));
       showToast(`${field.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())} uploaded`, 'success');
@@ -920,7 +913,10 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                       type="tel"
                       placeholder="10-digit mobile"
                       value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9]/g, '');
+                        if (val.length <= 10) setFormData({ ...formData, phone: val });
+                      }}
                     />
                   </div>
                 </div>
@@ -932,7 +928,10 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                       type="tel"
                       placeholder="10-digit alternate mobile"
                       value={formData.alternatePhone}
-                      onChange={(e) => setFormData({ ...formData, alternatePhone: e.target.value })}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9]/g, '');
+                        if (val.length <= 10) setFormData({ ...formData, alternatePhone: val });
+                      }}
                     />
                   </div>
                   <div className="space-y-2">
@@ -980,9 +979,14 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                 <div className="space-y-2">
                   <FormLabel label="Marks / Percentage" />
                   <FormInput
-                    placeholder="e.g. 85%"
+                    placeholder="e.g. 85"
                     value={formData.marksPercentage}
-                    onChange={(e) => setFormData({ ...formData, marksPercentage: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9.]/g, '');
+                      if (val === '' || (parseFloat(val) <= 100)) {
+                        setFormData({ ...formData, marksPercentage: val });
+                      }
+                    }}
                   />
                 </div>
                 <div className="space-y-2">
@@ -990,7 +994,12 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                   <FormInput
                     placeholder="e.g. 2023"
                     value={formData.passingYear}
-                    onChange={(e) => setFormData({ ...formData, passingYear: e.target.value })}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, '');
+                      if (val.length <= 4) {
+                        setFormData({ ...formData, passingYear: val });
+                      }
+                    }}
                   />
                 </div>
               </div>
@@ -1077,9 +1086,10 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                   <FormInput
                     type="number"
                     placeholder="0"
-                    value={formData.totalFees}
+                    value={formData.totalFees === 0 ? '' : formData.totalFees}
                     onChange={(e) => {
-                      const total = parseFloat(e.target.value) || 0;
+                      const val = e.target.value;
+                      const total = val === '' ? 0 : parseFloat(val);
                       setFormData(prev => ({ 
                         ...prev, 
                         totalFees: total,
@@ -1093,9 +1103,10 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                   <FormInput
                     type="number"
                     placeholder="0"
-                    value={formData.paidAmount}
+                    value={formData.paidAmount === 0 ? '' : formData.paidAmount}
                     onChange={(e) => {
-                      const paid = parseFloat(e.target.value) || 0;
+                      const val = e.target.value;
+                      const paid = val === '' ? 0 : parseFloat(val);
                       setFormData(prev => ({ 
                         ...prev, 
                         paidAmount: paid,

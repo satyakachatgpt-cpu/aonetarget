@@ -459,8 +459,7 @@ export const UploadDrawer: React.FC<{ isOpen: boolean; onClose: () => void; titl
     const handleSubmit = async () => {
         if (selectedFiles.length === 0) return;
         setIsUploading(true);
-        // Simulate real upload delay proportional to number of files
-        await new Promise(resolve => setTimeout(resolve, 1000 + (selectedFiles.length * 200)));
+        // Upload is handled by the parent onSubmit callback
         setIsUploading(false);
         onSubmit(selectedFiles);
         setSelectedFiles([]);
