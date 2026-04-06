@@ -5,7 +5,7 @@ interface AddNoteDrawerProps {
     isOpen: boolean;
     onClose: () => void;
     onSubmit: (data: any) => void;
-    onUploadFile: (file: File) => Promise<string>;
+    onUploadFile: (file: File, type?: string) => Promise<string>;
     editingNote?: any;
 }
 

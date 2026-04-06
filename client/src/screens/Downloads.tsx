@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import FileViewer from '../components/FileViewer';
+import { getImageUrl, getVideoUrl, getPdfUrl } from '../lib/utils';
 
 const Downloads: React.FC = () => {
   const navigate = useNavigate();
@@ -194,23 +195,22 @@ const Downloads: React.FC = () => {
                   </button>
                   <button
                     onClick={async () => {
-                      if (!item.fileUrl) return;
-                      setDownloadingId(item._id || item.id);
-                      showToast('Downloading...');
+                    const resolvedUrl = item.type?.toLowerCase() === 'pdf' ? getPdfUrl(item.fileUrl) : (item.type?.toLowerCase() === 'video' ? getVideoUrl(item.fileUrl) : getImageUrl(item.fileUrl));
+                    showToast('Downloading...');
+                    try {
+                      const cache = await caches.open('aone-downloads');
                       try {
-                        const cache = await caches.open('aone-downloads');
-                        try {
-                          const response = await fetch(item.fileUrl, { mode: 'cors' });
-                          if (response.ok) await cache.put(item.fileUrl, response);
-                          else {
-                            const opaque = await fetch(item.fileUrl, { mode: 'no-cors' });
-                            await cache.put(item.fileUrl, opaque);
-                          }
-                        } catch (e) {
-                          const opaque = await fetch(item.fileUrl, { mode: 'no-cors' });
-                          await cache.put(item.fileUrl, opaque);
+                        const response = await fetch(resolvedUrl, { mode: 'cors' });
+                        if (response.ok) await cache.put(resolvedUrl, response);
+                        else {
+                          const opaque = await fetch(resolvedUrl, { mode: 'no-cors' });
+                          await cache.put(resolvedUrl, opaque);
                         }
-                        showToast('File saved to app offline cache!');
+                      } catch (e) {
+                        const opaque = await fetch(resolvedUrl, { mode: 'no-cors' });
+                        await cache.put(resolvedUrl, opaque);
+                      }
+                      showToast('File saved to app offline cache!');
                       } catch (e) {
                         console.error('Download error:', e);
                         showToast('Error saving file offline.');

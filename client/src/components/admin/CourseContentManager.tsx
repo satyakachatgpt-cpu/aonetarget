@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { getImageUrl, getVideoUrl, getPdfUrl, toYouTubeEmbed } from '../../lib/utils';
 import { createPortal } from 'react-dom';
 import { coursesAPI, categoriesAPI, packagesAPI } from '../../services/apiClient';
 import FileUploadButton from '../shared/FileUploadButton';
@@ -278,8 +279,9 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(`${API_BASE_URL}/upload`, {
+      const response = await fetch(`${API_BASE_URL}/v2/upload/image`, {
         method: 'POST',
+        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
         body: formData,
       });
 
@@ -668,7 +670,11 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const res = await fetch('/api/v2/upload/image', { 
+        method: 'POST', 
+        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+        body: formData 
+      });
       if (!res.ok) throw new Error('Upload failed');
       const data = await res.json();
       setEditingFolder((prev: any) => prev ? { ...prev, thumbnail: data.url } : { thumbnail: data.url });
@@ -678,23 +684,6 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     }
   };
 
-  const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      showToast('Uploading video...', 'success');
-      const formData = new FormData();
-      formData.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
-      setVideoForm(prev => ({ ...prev, videoUrl: data.url }));
-      showToast(`Video "${file.name}" uploaded successfully`, 'success');
-    } catch (error) {
-      console.error('Video upload error:', error);
-      showToast('Upload failed', 'error');
-    }
-  };
 
   const handleLiveStreamImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -702,7 +691,11 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const res = await fetch('/api/v2/upload/image', { 
+        method: 'POST', 
+        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+        body: formData 
+      });
       if (!res.ok) throw new Error('Upload failed');
       const data = await res.json();
       setLiveStreamForm(prev => ({ ...prev, image: data.url }));
@@ -718,7 +711,11 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const res = await fetch('/api/v2/upload/pdf', { 
+        method: 'POST', 
+        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+        body: formData 
+      });
       if (!res.ok) throw new Error('Upload failed');
       const data = await res.json();
       setLiveStreamForm(prev => ({ ...prev, [field]: data.url }));
@@ -734,7 +731,11 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const res = await fetch('/api/v2/upload/image', { 
+        method: 'POST', 
+        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+        body: formData 
+      });
       if (!res.ok) throw new Error('Upload failed');
       const data = await res.json();
       setYoutubeZoomForm(prev => ({ ...prev, image: data.url }));
@@ -750,7 +751,11 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const res = await fetch('/api/v2/upload/pdf', { 
+        method: 'POST', 
+        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+        body: formData 
+      });
       if (!res.ok) throw new Error('Upload failed');
       const data = await res.json();
       setYoutubeZoomForm(prev => ({ ...prev, [field]: data.url }));
@@ -766,7 +771,11 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const res = await fetch('/api/v2/upload/image', { 
+        method: 'POST', 
+        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+        body: formData 
+      });
       if (!res.ok) throw new Error('Upload failed');
       const data = await res.json();
       setWebinarForm(prev => ({ ...prev, image: data.url }));
@@ -782,7 +791,11 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const res = await fetch('/api/v2/upload/pdf', { 
+        method: 'POST', 
+        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+        body: formData 
+      });
       if (!res.ok) throw new Error('Upload failed');
       const data = await res.json();
       setWebinarForm(prev => ({ ...prev, [field]: data.url }));
@@ -1659,8 +1672,9 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         id: videoId || `video_${Date.now()}`,
         courseId: courseId,
         folderId: folderId,
-        url: finalData.videoUrl || finalData.youtubeUrl || finalData.link || '',
-        platform: finalData.videoUrl ? 'Upload' : (finalData.youtubeUrl ? 'YouTube' : 'YouTube'),
+        url: toYouTubeEmbed(finalData.youtubeUrl || finalData.videoUrl || finalData.link || ''),
+        youtubeUrl: toYouTubeEmbed(finalData.youtubeUrl || finalData.videoUrl || finalData.link || ''),
+        platform: 'YouTube',
         status: 'active',
         isFree: finalData.status === 'Free' || finalData.isFree === true,
         order: parseInt(finalData.order?.toString() || '0') || videos.length + 1
@@ -1696,8 +1710,9 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch('/api/upload', {
+      const res = await fetch('/api/v2/upload/image', {
         method: 'POST',
+        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
         body: formData,
       });
       if (!res.ok) throw new Error('Upload failed');
@@ -1822,7 +1837,15 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       await Promise.all(files.map(async (file) => {
         const formData = new FormData();
         formData.append('file', file);
-        const res = await fetch('/api/upload', { method: 'POST', body: formData });
+        let uploadEndpoint = '/api/v2/upload/pdf'; // Default to PDF for documents/notes
+        if (type === 'image') uploadEndpoint = '/api/v2/upload/image';
+        if (type === 'audio') uploadEndpoint = '/api/v2/upload/video';
+        
+        const res = await fetch(uploadEndpoint, { 
+          method: 'POST', 
+          headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+          body: formData 
+        });
         if (!res.ok) throw new Error('Upload failed');
         const data = await res.json();
 
@@ -2228,7 +2251,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
               const url = item.fileUrl || item.url || item.link;
               if (url) {
                 // Open in internal integrated viewer
-                window.open(`/#/pdf-viewer?url=${encodeURIComponent(url)}&title=${encodeURIComponent(item.title)}`, '_blank');
+                window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent(item.title)}`, '_blank');
               }
             } else if (isTest) {
               // tests could also open in a new tab if there's a specific route
@@ -2250,7 +2273,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                 isLiveStream ? 'bg-[#fdf2ff]' : 'bg-[#eff6ff]'
             }`}>
             {item.thumbnail || item.image ? (
-              <img src={item.thumbnail || item.image} alt="" className="w-full h-full object-cover" />
+              <img src={getImageUrl(item.thumbnail || item.image)} alt="" className="w-full h-full object-cover" />
             ) : (
               <span className={`material-symbols-outlined text-[28px] ${isNote ? 'text-[#f97316]' :
                 isTest ? 'text-[#22c55e]' :
@@ -3580,7 +3603,11 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                                     showToast('Uploading PDF...', 'success');
                                     const formData = new FormData();
                                     formData.append('file', file);
-                                    const res = await fetch('/api/upload', { method: 'POST', body: formData });
+                                    const res = await fetch('/api/v2/upload/pdf', { 
+                                      method: 'POST', 
+                                      headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+                                      body: formData 
+                                    });
                                     if (!res.ok) throw new Error('Upload failed');
                                     const data = await res.json();
                                     setYoutubeZoomForm(prev => ({ ...prev, [fieldName]: data.url }));
@@ -3632,7 +3659,11 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                                 showToast('Uploading material...', 'success');
                                 const formData = new FormData();
                                 formData.append('file', file);
-                                const res = await fetch('/api/upload', { method: 'POST', body: formData });
+                                const res = await fetch('/api/v2/upload/pdf', { 
+                                  method: 'POST', 
+                                  headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+                                  body: formData 
+                                });
                                 if (!res.ok) throw new Error('Upload failed');
                                 const data = await res.json();
                                 setYoutubeZoomForm(prev => ({ ...prev, studyMaterial: data.url }));
@@ -3802,7 +3833,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                       <div className="flex gap-4">
                         <div className="w-[120px] h-[100px] bg-gray-100 rounded-[12px] flex flex-col items-center justify-center gap-2 border border-gray-200 shrink-0 relative overflow-hidden group">
                           {webinarForm.image ? (
-                            <img src={webinarForm.image} className="w-full h-full object-cover" alt="Preview" />
+                            <img src={getImageUrl(webinarForm.image)} className="w-full h-full object-cover" alt="Preview" />
                           ) : (
                             <>
                               <span className="material-symbols-outlined text-[28px] text-gray-400">image</span>
@@ -4408,10 +4439,19 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         isOpen={showNoteModal}
         onClose={() => { setShowNoteModal(false); setEditingNote(null); }}
         onSubmit={handleNoteSubmit}
-        onUploadFile={async (file) => {
+        onUploadFile={async (file, type) => {
           const formData = new FormData();
           formData.append('file', file);
-          const res = await fetch('/api/upload', { method: 'POST', body: formData });
+          
+          let endpoint = '/api/v2/upload/image';
+          if (type === 'note' || type === 'document') endpoint = '/api/v2/upload/pdf';
+          else if (type === 'audio') endpoint = '/api/v2/upload/video';
+
+          const res = await fetch(endpoint, { 
+            method: 'POST', 
+            headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+            body: formData 
+          });
           if (!res.ok) throw new Error('Upload failed');
           const data = await res.json();
           return data.url;

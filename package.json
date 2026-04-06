@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "concurrently --raw \"npm run server -s\" \"npm run client -s\"",
+    "dev": "echo '🚀 Starting Dev Environment... (Client will wait for Server boot)' && concurrently --raw \"npm run server -s\" \"npm run client -s\"",
     "server": "cd server && npm run dev -s",
     "client": "cd client && npm run dev -s",
     "install-all": "npm install && cd client && npm install --legacy-peer-deps && cd ../server && npm install",

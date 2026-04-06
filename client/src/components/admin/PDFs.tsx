@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getPdfUrl } from '../../lib/utils';
 import { pdfsAPI, coursesAPI, categoriesAPI } from '../../services/apiClient';
 import {
   RightSideDrawer,
@@ -149,10 +150,23 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
     try {
       let finalData = { ...formData };
       if (selectedFile) {
-        // In a real app, upload the file here and get the URL
-        // For now, we simulate with a dummy URL if file skipped but Title exists
-        if (!finalData.fileUrl) finalData.fileUrl = `https://storage.example.com/ebooks/${selectedFile.name}`;
-        if (!finalData.title) finalData.title = selectedFile.name.split('.')[0];
+        try {
+          const formData = new FormData();
+          formData.append('file', selectedFile);
+          const res = await fetch('/api/v2/upload/pdf', {
+            method: 'POST',
+            headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+            body: formData
+          });
+          if (!res.ok) throw new Error('PDF upload failed');
+          const data = await res.json();
+          finalData.fileUrl = data.url;
+          if (!finalData.title) finalData.title = selectedFile.name.split('.')[0];
+        } catch (error) {
+          console.error('PDF upload failed:', error);
+          showToast('Failed to upload PDF file', 'error');
+          return;
+        }
       }
 
       if (editingPdf) {
@@ -303,7 +317,7 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
                           {openActionMenuId === (pdf._id || pdf.id) && (
                             <div className={`absolute right-0 ${idx >= filteredPdfs.length - 2 ? 'bottom-full mb-2' : 'top-full mt-2'} w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-gray-100 py-3 z-[999] animate-in fade-in zoom-in duration-200 ${idx >= filteredPdfs.length - 2 ? 'origin-bottom-right' : 'origin-top-right'}`}>
                               <button
-                                onClick={() => { window.open(pdf.fileUrl, '_blank'); setOpenActionMenuId(null); }}
+                                onClick={() => { window.open(getPdfUrl(pdf.fileUrl), '_blank'); setOpenActionMenuId(null); }}
                                 className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors"
                               >
                                 <span className="material-symbols-outlined text-[20px] text-blue-500">visibility</span>

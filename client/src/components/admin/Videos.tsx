@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { videosAPI, coursesAPI } from '../../services/apiClient';
-import { getImageUrl } from '../../lib/utils';
+import { getImageUrl, extractYouTubeId, toYouTubeEmbed } from '../../lib/utils';
 
 interface Course {
   id: string;
@@ -56,7 +56,6 @@ const Videos: React.FC<Props> = ({ showToast }) => {
     duration: '',
     quality: 'HD 1080P',
     videoUrl: '',
-    videoFile: null as File | null,
     thumbnail: '',
     thumbnailFile: null as File | null,
     status: 'active' as 'active' | 'inactive' | 'archived',
@@ -67,14 +66,6 @@ const Videos: React.FC<Props> = ({ showToast }) => {
   const [dragActive, setDragActive] = useState(false);
   const [uploadingFile, setUploadingFile] = useState(false);
 
-  const handleVideoFile = (file: File) => {
-    if (file.type.startsWith('video/')) {
-      setFormData(prev => ({ ...prev, videoFile: file, videoUrl: file.name }));
-      showToast(`Video file selected: ${file.name}`);
-    } else {
-      showToast('Please select a valid video file', 'error');
-    }
-  };
 
   const handleThumbnailFile = (file: File) => {
     if (file.type.startsWith('image/')) {
@@ -95,18 +86,14 @@ const Videos: React.FC<Props> = ({ showToast }) => {
     }
   };
 
-  const handleDrop = (e: React.DragEvent, type: 'video' | 'thumbnail') => {
+  const handleDrop = (e: React.DragEvent, type: 'thumbnail') => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
 
     const files = e.dataTransfer.files;
     if (files && files[0]) {
-      if (type === 'video') {
-        handleVideoFile(files[0]);
-      } else {
-        handleThumbnailFile(files[0]);
-      }
+      handleThumbnailFile(files[0]);
     }
   };
 
@@ -155,25 +142,19 @@ const Videos: React.FC<Props> = ({ showToast }) => {
       let finalVideoUrl = formData.videoUrl;
       let finalThumbnail = formData.thumbnail;
 
-      // Handle Video File Upload
-      if (formData.videoFile) {
-        const vFormData = new FormData();
-        vFormData.append('file', formData.videoFile);
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          body: vFormData,
-        });
-        if (!res.ok) throw new Error('Video upload failed');
-        const data = await res.json();
-        finalVideoUrl = data.url;
+      // Handle YouTube URL Formatting
+      if (formData.videoUrl) {
+        finalVideoUrl = toYouTubeEmbed(formData.videoUrl);
       }
 
       // Handle Thumbnail File Upload
       if (formData.thumbnailFile) {
+        const adminId = localStorage.getItem('adminId');
         const tFormData = new FormData();
         tFormData.append('file', formData.thumbnailFile);
-        const res = await fetch('/api/upload', {
+        const res = await fetch('/api/v2/upload/image', {
           method: 'POST',
+          headers: { 'x-admin-id': adminId || '' },
           body: tFormData,
         });
         if (!res.ok) throw new Error('Thumbnail upload failed');
@@ -212,7 +193,7 @@ const Videos: React.FC<Props> = ({ showToast }) => {
 
       setShowModal(false);
       setEditingVideo(null);
-      setFormData({ title: '', subject: '', topic: '', course: '', courseId: '', instructor: '', duration: '', quality: 'HD 1080P', videoUrl: '', videoFile: null, thumbnail: '', thumbnailFile: null, status: 'active', isFree: false, isLiveRecording: false });
+      setFormData({ title: '', subject: '', topic: '', course: '', courseId: '', instructor: '', duration: '', quality: 'HD 1080P', videoUrl: '', thumbnail: '', thumbnailFile: null, status: 'active', isFree: false, isLiveRecording: false });
       loadVideos();
     } catch (error) {
       console.error('Upload/Save error:', error);
@@ -248,7 +229,6 @@ const Videos: React.FC<Props> = ({ showToast }) => {
       thumbnail: video.thumbnail || '',
       thumbnailFile: null,
       videoUrl: video.videoUrl || '',
-      videoFile: null,
       status: video.status,
       isFree: video.isFree || false,
       isLiveRecording: video.isLiveRecording || false
@@ -312,7 +292,7 @@ const Videos: React.FC<Props> = ({ showToast }) => {
               <p className="text-white/80 text-sm font-semibold">Manage and organize your video lectures</p>
             </div>
             <button
-              onClick={() => { setEditingVideo(null); setFormData({ title: '', subject: '', topic: '', course: '', courseId: '', instructor: '', duration: '', quality: 'HD 1080P', videoUrl: '', videoFile: null, thumbnail: '', thumbnailFile: null, status: 'active', isFree: false, isLiveRecording: false }); setShowModal(true); }}
+              onClick={() => { setEditingVideo(null); setFormData({ title: '', subject: '', topic: '', course: '', courseId: '', instructor: '', duration: '', quality: 'HD 1080P', videoUrl: '', thumbnail: '', thumbnailFile: null, status: 'active', isFree: false, isLiveRecording: false }); setShowModal(true); }}
               className="bg-white/20 hover:bg-white/30 backdrop-blur-md text-white px-6 py-3 rounded-2xl font-black text-sm uppercase shadow-lg border border-white/20 transition-all hover:shadow-xl hover:scale-105"
             >
               <span className="flex items-center gap-2">
@@ -856,44 +836,44 @@ const Videos: React.FC<Props> = ({ showToast }) => {
                 </label>
               </div>
 
-              {/* Video Upload */}
-              <div>
-                <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-3">Upload Video File</label>
-                <div
-                  onDragEnter={handleDrag}
-                  onDragLeave={handleDrag}
-                  onDragOver={handleDrag}
-                  onDrop={(e) => handleDrop(e, 'video')}
-                  className={`relative border-2 border-dashed rounded-2xl p-8 text-center transition-all cursor-pointer ${dragActive
-                      ? 'border-indigo-500 bg-indigo-50'
-                      : formData.videoFile
-                        ? 'border-green-300 bg-green-50'
-                        : 'border-gray-300 bg-gray-50 hover:border-indigo-300'
-                    }`}
-                >
-                  <input
-                    type="file"
-                    accept="video/*"
-                    onChange={(e) => e.target.files && handleVideoFile(e.target.files[0])}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                  <div className="pointer-events-none">
-                    <div className="mb-3">
-                      {formData.videoFile ? (
-                        <span className="material-icons-outlined text-4xl text-green-600">check_circle</span>
-                      ) : (
-                        <span className="material-icons-outlined text-4xl text-gray-400">cloud_upload</span>
-                      )}
-                    </div>
-                    <p className="font-black text-gray-700 text-sm mb-1">
-                      {formData.videoFile ? 'Video selected' : 'Drag & drop your video here'}
-                    </p>
-                    <p className="text-xs text-gray-500">or click to browse your files</p>
-                    {formData.videoFile && (
-                      <p className="text-xs font-bold text-green-600 mt-2">📁 {formData.videoFile.name}</p>
-                    )}
+              {/* YouTube Video URL & Preview */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-xs font-black text-gray-700 uppercase tracking-wider mb-2">YouTube Video URL *</label>
+                  <div className="relative group">
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-red-500 transition-colors">link</span>
+                    <input
+                      type="text"
+                      placeholder="Paste YouTube link: https://youtube.com/watch?v=..."
+                      value={formData.videoUrl}
+                      onChange={(e) => setFormData({ ...formData, videoUrl: e.target.value })}
+                      className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl font-semibold outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all placeholder:text-gray-300"
+                    />
                   </div>
                 </div>
+
+                {extractYouTubeId(formData.videoUrl) ? (
+                  <div className="relative aspect-video rounded-2xl overflow-hidden shadow-2xl border-4 border-white ring-1 ring-gray-100 group animate-in zoom-in-95 duration-300">
+                    <iframe
+                      src={toYouTubeEmbed(formData.videoUrl)}
+                      className="w-full h-full"
+                      allowFullScreen
+                      title="Video Preview"
+                    />
+                    <div className="absolute top-4 left-4 bg-red-600 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase shadow-lg flex items-center gap-1.5 backdrop-blur-md">
+                      <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
+                      YouTube Preview
+                    </div>
+                  </div>
+                ) : formData.videoUrl ? (
+                  <div className="p-6 border-2 border-dashed border-red-100 bg-red-50/50 rounded-2xl flex flex-col items-center justify-center text-center">
+                    <span className="material-symbols-outlined text-red-400 text-3xl mb-2">error</span>
+                    <p className="text-red-500 text-xs font-black uppercase tracking-widest leading-relaxed">
+                      Invalid YouTube Link Provided<br/>
+                      <span className="text-[10px] font-bold text-red-300">Please provide a valid watch or embed URL</span>
+                    </p>
+                  </div>
+                ) : null}
               </div>
 
               {/* Thumbnail Upload */}

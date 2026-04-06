@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RightSideDrawer, DrawerHeader, DrawerBody, DrawerFooter, PrimaryButton } from './DrawerSystem';
+import { getImageUrl } from '../../lib/utils';
 
 interface AddFolderDrawerProps {
     isOpen: boolean;
@@ -120,7 +121,7 @@ const AddFolderDrawer: React.FC<AddFolderDrawerProps> = ({
                                 {isUploading ? (
                                     <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
                                 ) : formData.thumbnail ? (
-                                    <img src={formData.thumbnail} alt="Preview" className="w-full h-full object-cover" />
+                                    <img src={getImageUrl(formData.thumbnail)} alt="Preview" className="w-full h-full object-cover" />
                                 ) : (
                                     <>
                                         <span className="material-symbols-outlined text-[32px] text-[#8e8e8e]">image</span>

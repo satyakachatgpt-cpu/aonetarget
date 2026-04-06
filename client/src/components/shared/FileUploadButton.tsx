@@ -7,9 +7,18 @@ interface Props {
   icon?: string;
   className?: string;
   hideLabel?: boolean;
+  uploadType?: 'image' | 'video' | 'pdf';
 }
 
-const FileUploadButton: React.FC<Props> = ({ onUpload, accept = 'image/*', label = 'Upload', icon = 'upload', className, hideLabel = false }) => {
+const FileUploadButton: React.FC<Props> = ({ 
+  onUpload, 
+  accept = 'image/*', 
+  label = 'Upload', 
+  icon = 'upload', 
+  className, 
+  hideLabel = false,
+  uploadType = 'image'
+}) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -17,11 +26,15 @@ const FileUploadButton: React.FC<Props> = ({ onUpload, accept = 'image/*', label
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setUploading(true);
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const adminId = localStorage.getItem('adminId');
+      const res = await fetch(`/api/v2/upload/${uploadType}`, {
+        method: 'POST',
+        headers: adminId ? { 'x-admin-id': adminId } : {},
+        body: formData
+      });
       if (!res.ok) throw new Error('Upload failed');
       const data = await res.json();
       onUpload(data.url);

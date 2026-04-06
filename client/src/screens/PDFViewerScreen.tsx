@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import mammoth from 'mammoth';
 import * as pdfjsLib from 'pdfjs-dist';
-import { getImageUrl } from '../lib/utils';
+import { getPdfUrl } from '../lib/utils';
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
@@ -23,7 +23,7 @@ const PDFViewerScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
 
-  const fullPdfUrl = getImageUrl(pdfUrl);
+  const fullPdfUrl = getPdfUrl(pdfUrl);
   const isDocx = (pdfUrl || '').toLowerCase().split('?')[0].split('.').pop()?.startsWith('doc') || false;
 
   const handleExit = useCallback(() => {

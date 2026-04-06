@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import { testsAPI, notificationsAPI } from '../services/apiClient';
+import { getImageUrl } from '../lib/utils';
 import { useAuthStore } from '../store/authStore';
 
 interface TestResult {
@@ -234,7 +235,7 @@ const StudentDashboard: React.FC = () => {
                       <div className="w-12 h-12 bg-gradient-to-br from-[#303F9F] to-[#1A237E] rounded-xl flex items-center justify-center shrink-0 overflow-hidden">
                         {(c.imageUrl || c.thumbnail) ? (
                           <img
-                            src={c.imageUrl || c.thumbnail}
+                            src={getImageUrl(c.imageUrl || c.thumbnail)}
                             alt=""
                             className="w-full h-full object-cover"
                             onError={(e) => {

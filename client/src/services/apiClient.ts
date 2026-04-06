@@ -1,3 +1,4 @@
+import axios from 'axios';
 const API_BASE_URL = '/api';
 if (typeof window !== 'undefined') {
   console.log('Hostname:', window.location.hostname);
@@ -8,6 +9,24 @@ if (typeof window !== 'undefined') {
 const apiCache: Record<string, { data: any; timestamp: number }> = {};
 const pendingRequests: Record<string, Promise<any>> = {};
 const CACHE_TTL = 30000;
+
+function getAdminHeaders(): Record<string, string> {
+  const adminToken = localStorage.getItem('adminToken');
+  if (adminToken) {
+    return { 'Authorization': `Bearer ${adminToken}` };
+  }
+  const adminId = localStorage.getItem('adminId');
+  if (adminId) {
+    // Fallback for transition period if token is missing
+    return { 'x-admin-id': adminId };
+  }
+  const token = localStorage.getItem('token') || 
+                localStorage.getItem('accessToken') || '';
+  if (token) {
+    return { 'Authorization': `Bearer ${token}` };
+  }
+  return {};
+}
 
 
 
@@ -22,7 +41,20 @@ async function cachedFetch(url: string, ttl = CACHE_TTL): Promise<any> {
     return pendingRequests[url];
   }
 
-  const promise = fetch(url).then(async (response) => {
+  const promise = fetch(url, { headers: getAdminHeaders() }).then(async (response) => {
+    if (response.status === 401) {
+      const data = await response.json().catch(() => ({}));
+      if (data.code === 'TOKEN_EXPIRED' || data.code === 'INVALID_TOKEN' || data.code === 'NO_AUTH') {
+        if (localStorage.getItem('adminToken') || localStorage.getItem('isAdminAuthenticated')) {
+          localStorage.removeItem('adminToken');
+          localStorage.removeItem('adminId');
+          localStorage.removeItem('isAdminAuthenticated');
+          window.location.href = '/admin/login';
+          return;
+        }
+      }
+    }
+
     if (!response.ok) throw new Error(`Failed to fetch ${url}`);
     const data = await response.json();
     apiCache[url] = { data, timestamp: Date.now() };
@@ -302,15 +334,59 @@ export const tokensAPI = {
 
 // Upload API
 export const uploadAPI = {
-  upload: async (file: File) => {
+  uploadImage: async (file: File, options: any = {}) => {
     const formData = new FormData();
     formData.append('file', file);
-    const response = await fetch(`${API_BASE_URL}/upload`, {
-      method: 'POST',
-      body: formData,
-    });
-    if (!response.ok) throw new Error('Upload failed');
-    return response.json();
+    
+    const config = {
+      headers: { ...getAdminHeaders(), 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: options.onUploadProgress
+    };
+
+    try {
+      const res = await axios.post(`${API_BASE_URL}/v2/upload/image`, formData, config);
+      return res.data;
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Image upload failed';
+      throw new Error(errMsg);
+    }
+  },
+
+  uploadVideo: async (file: File, options: any = {}) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const config = {
+      headers: { ...getAdminHeaders(), 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: options.onUploadProgress,
+      timeout: 300000 // 5 min timeout for videos
+    };
+
+    try {
+      const res = await axios.post(`${API_BASE_URL}/v2/upload/video`, formData, config);
+      return res.data;
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'Video upload failed';
+      throw new Error(errMsg);
+    }
+  },
+
+  uploadPDF: async (file: File, options: any = {}) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const config = {
+      headers: { ...getAdminHeaders(), 'Content-Type': 'multipart/form-data' },
+      onUploadProgress: options.onUploadProgress
+    };
+
+    try {
+      const res = await axios.post(`${API_BASE_URL}/v2/upload/pdf`, formData, config);
+      return res.data;
+    } catch (err: any) {
+      const errMsg = err.response?.data?.error || 'PDF upload failed';
+      throw new Error(errMsg);
+    }
   }
 };
 

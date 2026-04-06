@@ -9,6 +9,7 @@ import {
   PrimaryButton 
 } from './DrawerSystem';
 import RichTextEditor from '../shared/RichTextEditor';
+import { extractYouTubeId, toYouTubeEmbed } from '../../lib/utils';
 
 interface QuestionForm {
   id?: string | number;
@@ -28,7 +29,7 @@ interface QuestionForm {
     heading: string;
     text: string;
     images: (File | null)[];  // array of 2
-    video: File | null;
+    video: string;
   };
   positiveMarks: number;
   negativeMarks: number;
@@ -218,7 +219,7 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
       heading: 'Full Solution',
       text: '',
       images: [null, null],
-      video: null
+      video: ''
     },
     positiveMarks: 1,
     negativeMarks: 0
@@ -262,28 +263,28 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
       const finalOptions = paddedOptions.slice(0, 5);
 
       // --- Normalize solution: handle string, object, or missing ---
-      let normalizedSolution: { heading: string; text: string; images: (File | null)[]; video: File | null };
+      let normalizedSolution: { heading: string; text: string; images: (File | null)[]; video: string };
       const rawSolution = editingQuestion.solution;
       if (typeof rawSolution === 'string') {
         normalizedSolution = {
           heading: 'Full Solution',
           text: rawSolution,
           images: [null, null],
-          video: null
+          video: ''
         };
       } else if (rawSolution && typeof rawSolution === 'object') {
         normalizedSolution = {
           heading: rawSolution.heading || 'Full Solution',
           text: rawSolution.text || '',
           images: Array.isArray(rawSolution.images) ? [...rawSolution.images, null, null].slice(0, 2) : [null, null],
-          video: rawSolution.video || null
+          video: typeof rawSolution.video === 'string' ? rawSolution.video : ''
         };
       } else {
         normalizedSolution = {
           heading: 'Full Solution',
           text: '',
           images: [null, null],
-          video: null
+          video: ''
         };
       }
 
@@ -320,7 +321,7 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
           heading: 'Full Solution',
           text: '',
           images: [null, null],
-          video: null
+          video: ''
         },
         positiveMarks: 1,
         negativeMarks: 0
@@ -634,41 +635,49 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
           </div>
 
 
-          <div className="space-y-4">
-            <label className="text-[13px] font-bold text-gray-800 tracking-tight block">Solution Video</label>
-            <div className="grid grid-cols-[160px_1fr] gap-4">
-              <div className="h-[120px] bg-gray-100 rounded-lg flex flex-col items-center justify-center relative overflow-hidden group border border-gray-100">
-                {form.solution.video ? (
-                  <>
-                    <video src={URL.createObjectURL(form.solution.video)} className="w-full h-full object-cover" />
-                    <button 
-                      onClick={() => setForm({ ...form, solution: { ...form.solution, video: null } })}
-                      className="absolute inset-0 bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                    >
-                      <span className="material-symbols-outlined">delete</span>
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined text-gray-400 text-[32px]">videocam</span>
-                    <span className="text-[12px] font-bold text-gray-400 mt-1">No Video</span>
-                  </>
-                )}
-              </div>
-              <label className="border-2 border-dashed border-gray-200 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-gray-300 transition-all bg-white p-4">
-                <input 
-                  type="file" 
-                  className="hidden" 
-                  accept="video/*" 
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) setForm({ ...form, solution: { ...form.solution, video: file } });
-                  }}
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-[13px] font-bold text-gray-800 tracking-tight block mb-2">Solution Video (YouTube URL)</label>
+              <div className="relative group">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-red-500 transition-colors">link</span>
+                <input
+                  type="text"
+                  placeholder="Paste YouTube link: https://youtube.com/watch?v=..."
+                  value={form.solution.video}
+                  onChange={(e) => setForm({ ...form, solution: { ...form.solution, video: e.target.value } })}
+                  className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl font-semibold outline-none focus:ring-2 focus:ring-indigo-500/30 transition-all placeholder:text-gray-300 shadow-sm"
                 />
-                <span className="text-[14px] font-bold text-gray-700">Upload Video</span>
-                <span className="text-[12px] text-gray-400 text-center mt-1 leading-[1.3] font-medium tracking-tight">Click or Drag & Drop your file here.</span>
-              </label>
+              </div>
             </div>
+
+            {extractYouTubeId(form.solution.video) ? (
+              <div className="relative aspect-video rounded-2xl overflow-hidden shadow-2xl border-4 border-white ring-1 ring-gray-100 group animate-in zoom-in-95 duration-300">
+                <iframe
+                  src={toYouTubeEmbed(form.solution.video)}
+                  className="w-full h-full"
+                  allowFullScreen
+                  title="Video Preview"
+                />
+                <div className="absolute top-4 left-4 bg-red-600 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase shadow-lg flex items-center gap-1.5 backdrop-blur-md">
+                  <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
+                  YouTube Preview
+                </div>
+                <button 
+                  onClick={() => setForm({ ...form, solution: { ...form.solution, video: '' } })}
+                  className="absolute top-4 right-4 w-10 h-10 bg-black/40 text-white rounded-full opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center hover:bg-black/60"
+                >
+                  <span className="material-symbols-outlined">delete</span>
+                </button>
+              </div>
+            ) : form.solution.video ? (
+              <div className="p-6 border-2 border-dashed border-red-100 bg-red-50 rounded-2xl flex flex-col items-center justify-center text-center">
+                <span className="material-symbols-outlined text-red-400 text-3xl mb-2">error</span>
+                <p className="text-red-500 text-[11px] font-black uppercase tracking-widest leading-relaxed">
+                  Invalid YouTube Link Provided<br/>
+                  <span className="text-[10px] font-bold text-red-300">Check the URL or provide a different link</span>
+                </p>
+              </div>
+            ) : null}
           </div>
         </div>
 

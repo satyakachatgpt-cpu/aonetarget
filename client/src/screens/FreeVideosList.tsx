@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import StudentSidebar from '../components/StudentSidebar';
+import { getImageUrl, getVideoUrl, getYouTubeThumbnail, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
 
 const FreeVideosList: React.FC = () => {
     const navigate = useNavigate();
@@ -39,21 +40,10 @@ const FreeVideosList: React.FC = () => {
         }
     };
 
-    const getYouTubeThumbnail = (url: string): string => {
-        if (!url) return '';
-        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/)([^#&?]*).*/;
-        const match = url.match(regExp);
-        const videoId = (match && match[2].length === 11) ? match[2] : null;
-        return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : '';
-    };
-
-    const isYouTubeUrl = (url: string) => {
-        if (!url) return false;
-        return url.includes('youtube.com') || url.includes('youtu.be') || url.includes('youtube-nocookie.com');
-    };
 
     const handleVideoClick = (video: any) => {
-        navigate('/video-player', { state: { video, courseTitle: 'Free Content', courseId: video.courseId || '' } });
+        const vUrl = toYouTubeEmbed(video.youtubeUrl || video.videoUrl || video.url || video.fileUrl);
+        navigate('/video-player', { state: { video: { ...video, videoUrl: vUrl }, courseTitle: 'Free Content', courseId: video.courseId || '' } });
     };
 
     const filteredVideos = freeVideos.filter(v => activeSubject === 'All Subjects' || v.subject === activeSubject);
@@ -108,7 +98,7 @@ const FreeVideosList: React.FC = () => {
                             >
                                 <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-md shrink-0 bg-black flex items-center justify-center relative">
                                     <img
-                                        src={video.thumbnail || getYouTubeThumbnail(video.videoUrl || video.url || '') || '/attached_assets/alonelogo_1770810181717.jpg'}
+                                        src={getImageUrl(video.thumbnail) || getYouTubeThumbnail(video.videoUrl || video.url || '') || '/attached_assets/alonelogo_1770810181717.jpg'}
                                         alt={video.title}
                                         className="w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-500"
                                     />

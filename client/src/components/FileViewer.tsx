@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { getImageUrl, getVideoUrl, getPdfUrl } from '../lib/utils';
 
 interface FileViewerProps {
   file: {
@@ -57,7 +58,7 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, onClose }) => {
             controls
             autoPlay
             className="w-full h-full max-h-full object-contain"
-            src={file.fileUrl}
+            src={getVideoUrl(file.fileUrl)}
           >
             Your browser does not support the video tag.
           </video>
@@ -69,7 +70,7 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, onClose }) => {
       return (
         <div className={`w-full bg-white relative group ${isFullscreen ? 'h-full' : 'h-[600px] rounded-xl overflow-hidden'}`}>
           <iframe
-            src={`${file.fileUrl}#toolbar=1&navpanes=0`}
+            src={`${getPdfUrl(file.fileUrl)}#toolbar=1&navpanes=0`}
             className="w-full h-full border-none"
             title={file.title}
           />
@@ -106,7 +107,7 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, onClose }) => {
       return (
         <div className={`w-full flex items-center justify-center bg-gray-50 relative group ${isFullscreen ? 'h-full' : 'max-h-[70vh]'}`}>
           <img
-            src={file.fileUrl}
+            src={getImageUrl(file.fileUrl)}
             alt={file.title}
             className="max-w-full max-h-full object-contain transition-all duration-300"
           />
@@ -123,7 +124,7 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, onClose }) => {
           <h3 className="font-bold text-xl text-gray-800 mb-2">{file.title}</h3>
           <p className="text-gray-400 text-sm mb-8">This file format is not supported for direct preview.</p>
           <a
-            href={file.fileUrl}
+            href={file.type?.toLowerCase() === 'pdf' ? getPdfUrl(file.fileUrl) : (file.type?.toLowerCase() === 'video' ? getVideoUrl(file.fileUrl) : getImageUrl(file.fileUrl))}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-3 bg-[#1A237E] text-white px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest hover:shadow-xl active:scale-95 transition-all shadow-lg"

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { studentsAPI } from '../../services/apiClient';
+import { studentsAPI, coursesAPI } from '../../services/apiClient';
+import { getImageUrl, getPdfUrl } from '../../lib/utils';
 import { RightSideDrawer, DrawerHeader, DrawerBody, DrawerFooter, FormInput, FormLabel, FormSelect, PrimaryButton } from './DrawerSystem';
 
 interface Student {
@@ -481,8 +482,12 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       const uploadFormData = new FormData();
       uploadFormData.append('file', file);
 
-      const res = await fetch('/api/upload', {
+      // Determine endpoint based on field type
+      const endpoint = field === 'marksheet' ? '/api/v2/upload/pdf' : '/api/v2/upload/image';
+
+      const res = await fetch(endpoint, {
         method: 'POST',
+        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
         body: uploadFormData
       });
 
@@ -813,7 +818,7 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                 <div className="relative group">
                   <div className="w-24 h-24 rounded-2xl bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden transition-all group-hover:border-blue-400">
                     {formData.profilePhoto ? (
-                      <img src={formData.profilePhoto} alt="Profile" className="w-full h-full object-cover" />
+                      <img src={getImageUrl(formData.profilePhoto)} alt="Profile" className="w-full h-full object-cover" />
                     ) : (
                       <span className="material-symbols-outlined text-gray-300 text-[40px]">person</span>
                     )}
@@ -1128,7 +1133,7 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                           <span className="text-[11px] font-bold text-green-600 uppercase tracking-wider flex items-center gap-1">
                             <span className="material-symbols-outlined text-[14px]">check_circle</span> Uploaded
                           </span>
-                          <a href={formData[doc.id as keyof typeof formData] as string} target="_blank" className="text-[11px] font-black text-blue-500 uppercase hover:underline">View</a>
+                          <a href={doc.id === 'marksheet' ? getPdfUrl(formData[doc.id as keyof typeof formData] as string) : getImageUrl(formData[doc.id as keyof typeof formData] as string)} target="_blank" className="text-[11px] font-black text-blue-500 uppercase hover:underline">View</a>
                         </div>
                       ) : (
                         <p className="text-[11px] font-medium text-gray-400 mt-1 uppercase">Max Size: 5MB • JPG, PNG, PDF</p>
@@ -1220,7 +1225,7 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
               <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm flex items-center gap-5">
                 <div className="w-20 h-20 rounded-2xl bg-[#1a237e]/5 border border-[#1a237e]/10 overflow-hidden flex items-center justify-center">
                   {selectedStudent.documents?.profilePhoto ? (
-                    <img src={selectedStudent.documents.profilePhoto} alt="" className="w-full h-full object-cover" />
+                    <img src={getImageUrl(selectedStudent.documents.profilePhoto)} alt="" className="w-full h-full object-cover" />
                   ) : (
                     <span className="material-symbols-outlined text-[#1a237e] text-[40px]">person</span>
                   )}

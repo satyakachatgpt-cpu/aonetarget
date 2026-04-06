@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import SecureVideoPlayer from '../components/SecureVideoPlayer';
+import { getImageUrl, getVideoUrl, toYouTubeEmbed } from '../lib/utils';
 
 const VideoPlayer: React.FC = () => {
   const location = useLocation();
@@ -34,7 +35,7 @@ const VideoPlayer: React.FC = () => {
 
   if (!video) return null;
 
-  const videoUrl = video.videoUrl || video.url || video.link || video.youtubeUrl || '';
+  const videoUrl = toYouTubeEmbed(video.youtubeUrl || video.videoUrl || video.url || '');
 
   const handleMarkDone = () => {
     // We could call an API here if needed, but for now just navigate back
@@ -92,7 +93,7 @@ const VideoPlayer: React.FC = () => {
             videoId={video._id || video.id || video.videoId || videoUrl}
             courseId={courseId || video.courseId || ''}
             courseTitle={courseTitle || ''}
-            thumbnail={video.thumbnail || video.thumbnailUrl || ''}
+            thumbnail={getImageUrl(video.thumbnail || video.thumbnailUrl) || ''}
             duration={video.duration || ''}
           />
         </div>

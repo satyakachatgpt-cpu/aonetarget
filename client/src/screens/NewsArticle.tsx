@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { blogAPI } from '../services/apiClient';
+import { getImageUrl } from '../lib/utils';
 
 const NewsArticle: React.FC = () => {
   const { id } = useParams();
@@ -9,11 +10,7 @@ const NewsArticle: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const getImageUrl = (url: string) => {
-      if (!url) return '';
-      if (url.startsWith('http') || url.startsWith('/') || url.startsWith('data:')) return url;
-      return `/uploads/${url}`;
-    };
+    // Removed local getImageUrl implementation in favour of global utility
 
     const fetchNewsArticle = async () => {
       try {

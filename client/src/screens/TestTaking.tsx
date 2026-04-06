@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { getImageUrl } from '@/lib/utils';
 
 type QuestionStatus = 'unanswered' | 'answered' | 'flagged' | 'flagged-answered';
 
@@ -448,7 +449,7 @@ const TestTaking: React.FC = () => {
                 {currentQuestion.question || currentQuestion.questionEn || currentQuestion.text}
               </p>
               {currentQuestion.questionImage && (
-                <img src={currentQuestion.questionImage} alt="Question" className="mt-3 max-w-full rounded-lg border max-h-60 object-contain" />
+                <img src={getImageUrl(currentQuestion.questionImage)} alt="Question" className="mt-3 max-w-full rounded-lg border max-h-60 object-contain" />
               )}
               {(test?.negativeMarking > 0 || currentQuestion.negativeMarks > 0) && (
                 <p className="text-[10px] text-[#D32F2F] mt-2 flex items-center gap-1">
@@ -487,7 +488,7 @@ const TestTaking: React.FC = () => {
                         </span>
                       )}
                       {opt.image && (
-                        <img src={opt.image} alt={`Option ${opt.key}`} className="mt-1 max-h-32 rounded border object-contain" />
+                        <img src={getImageUrl(opt.image)} alt={`Option ${opt.key}`} className="mt-1 max-h-32 rounded border object-contain" />
                       )}
                     </div>
                   </button>

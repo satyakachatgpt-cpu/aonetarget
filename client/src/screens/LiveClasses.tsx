@@ -93,7 +93,9 @@ const LiveClasses: React.FC = () => {
             </div>
             <div className="space-y-2.5">
               {liveClasses.slice(0, 4).map((lc: any, i: number) => {
-                const isEnded = lc.status === 'ended' || lc.streamStatus === 'ended' || lc.isLive === false;
+                const isEnded = lc.status === 'ended' || lc.streamStatus === 'ended';
+                const isUpcoming = lc.status === 'upcoming' || (!lc.status && !lc.isLive);
+                const isLive = lc.status === 'live' || lc.isLive === true;
                 return (
                   <div key={lc._id || lc.id || i} className="card-premium p-3 rounded-2xl border border-gray-100/50 flex gap-3 items-center hover:-translate-y-0.5 transition-all duration-200 group">
                     <div className={`w-12 h-12 bg-gradient-to-br ${isEnded ? 'from-gray-400 to-gray-500' : 'from-accent to-accent-600'} rounded-2xl flex items-center justify-center shrink-0 relative shadow-button`}>
@@ -111,6 +113,8 @@ const LiveClasses: React.FC = () => {
                         <span className="text-[11px] text-gray-400 flex items-center gap-1">
                           <span className="material-symbols-rounded text-[12px]">schedule</span>
                           {(() => {
+                            if (isEnded) return 'Ended';
+                            if (isLive) return 'Live Now';
                             if (lc.scheduledTime && lc.scheduledDate) {
                               try {
                                 const dtStr = `${lc.scheduledDate}T${lc.scheduledTime}:00`;

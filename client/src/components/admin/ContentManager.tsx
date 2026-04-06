@@ -9,6 +9,7 @@ import {
     UploadArea,
     FilePreviewItem
 } from './DrawerSystem';
+import { toYouTubeEmbed } from '../../lib/utils';
 
 const BigActionTile: React.FC<{ icon: string; label: string; desc?: string; onClick: () => void; color?: string }> = ({ icon, label, onClick, color = 'bg-blue-50 text-blue-600' }) => (
     <button
@@ -104,7 +105,7 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
             if (Array.isArray(data)) {
                 // Legacy bulk upload (just files)
                 for (const file of data) {
-                    const uploadRes = await uploadAPI.upload(file);
+                    const uploadRes = await uploadAPI.uploadVideo(file);
                     await videosAPI.create({
                         title: file.name,
                         url: uploadRes.url,
@@ -118,7 +119,7 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
             } else if (data.files && Array.isArray(data.files)) {
                 // Bulk upload with metadata from drawer
                 for (const file of data.files) {
-                    const uploadRes = await uploadAPI.upload(file);
+                    const uploadRes = await uploadAPI.uploadVideo(file);
                     await videosAPI.create({
                         title: file.name,
                         url: uploadRes.url,
@@ -130,11 +131,25 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
                         subjectId: data.subjectId || ''
                     });
                 }
+            } else if (data.youtubeLinks && Array.isArray(data.youtubeLinks)) {
+                // Bulk YouTube links from drawer
+                for (const link of data.youtubeLinks) {
+                    await videosAPI.create({
+                        title: link.title || `Video ${data.youtubeLinks.indexOf(link) + 1}`,
+                        url: toYouTubeEmbed(link.url),
+                        link: toYouTubeEmbed(link.url),
+                        isFree: mode === 'free' || mode === 'demo' || data.status === 'Free',
+                        isDemo: mode === 'demo' || data.isDemo,
+                        status: data.status || (mode === 'free' || mode === 'demo' ? 'Free' : 'Paid'),
+                        courseId: data.courseId || (courseFilter !== 'all' ? courseFilter : ''),
+                        subjectId: data.subjectId || ''
+                    });
+                }
             } else {
                 // Single video with metadata
                 let finalUrl = data.url || data.link;
                 if (data.file && data.file instanceof File) {
-                    const uploadRes = await uploadAPI.upload(data.file);
+                    const uploadRes = await uploadAPI.uploadVideo(data.file);
                     finalUrl = uploadRes.url;
                 }
                 await videosAPI.create({
@@ -160,7 +175,7 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
         try {
             if (Array.isArray(data)) {
                 for (const file of data) {
-                    const uploadRes = await uploadAPI.upload(file);
+                    const uploadRes = await uploadAPI.uploadPDF(file);
                     await pdfsAPI.create({
                         title: file.name,
                         fileUrl: uploadRes.url,
@@ -170,7 +185,7 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
                     });
                 }
             } else if (data.file && data.file instanceof File) {
-                const uploadRes = await uploadAPI.upload(data.file);
+                const uploadRes = await uploadAPI.uploadPDF(data.file);
                 await pdfsAPI.create({
                     ...data,
                     fileUrl: uploadRes.url,
@@ -368,7 +383,12 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
             let finalUrl = editLink;
 
             if (selectedEditFile) {
-                const uploadRes = await uploadAPI.upload(selectedEditFile);
+                let uploadRes;
+                if (editingItem.type === 'PDF') {
+                    uploadRes = await uploadAPI.uploadPDF(selectedEditFile);
+                } else {
+                    uploadRes = await uploadAPI.uploadVideo(selectedEditFile);
+                }
                 finalUrl = uploadRes.url;
             }
 

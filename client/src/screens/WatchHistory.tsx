@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
+import { getImageUrl, getVideoUrl, getYouTubeThumbnail, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
 
 const WatchHistory: React.FC = () => {
   const navigate = useNavigate();
@@ -39,11 +40,11 @@ const WatchHistory: React.FC = () => {
       _id: item.videoId,
       id: item.videoId,
       title: item.title || 'Video',
-      thumbnail: item.thumbnail || '',
-      thumbnailUrl: item.thumbnail || '',
+      thumbnail: getImageUrl(item.thumbnail) || '',
+      thumbnailUrl: getImageUrl(item.thumbnail) || '',
       duration: item.duration || '',
       youtubeUrl: item.youtubeUrl || null,
-      videoUrl: item.youtubeUrl || null,
+      videoUrl: toYouTubeEmbed(item.youtubeUrl || item.videoUrl || item.url || item.fileUrl || ''),
       courseId: item.courseId,
     };
     navigate('/video-player', {
@@ -69,15 +70,8 @@ const WatchHistory: React.FC = () => {
   };
 
   const getThumbnail = (item: any): string | null => {
-    if (item.thumbnail && item.thumbnail.trim() !== '') return item.thumbnail;
-    const url = item.youtubeUrl;
-    if (url && (url.includes('youtube') || url.includes('youtu.be'))) {
-      const match = url.match(
-        /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/
-      );
-      if (match && match[1]) return `https://img.youtube.com/vi/${match[1]}/mqdefault.jpg`;
-    }
-    return null;
+    if (item.thumbnail && item.thumbnail.trim() !== '') return getImageUrl(item.thumbnail);
+    return getYouTubeThumbnail(item.youtubeUrl || item.videoUrl || item.url || '');
   };
 
   const formatDate = (dateStr: string) => {

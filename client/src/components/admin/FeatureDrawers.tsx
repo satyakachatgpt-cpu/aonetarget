@@ -12,6 +12,7 @@ import {
 } from './DrawerSystem';
 import { useRef } from 'react';
 import { coursesAPI, subjectsAPI } from '../../services/apiClient';
+import { extractYouTubeId, toYouTubeEmbed } from '../../lib/utils';
 
 /**
  * 1. OMR TEST DRAWER
@@ -548,6 +549,27 @@ export const VideoDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSub
     });
     const [selectedVideos, setSelectedVideos] = useState<File[]>([]);
     const [isUploading, setIsUploading] = useState(false);
+    const [youtubeLinks, setYoutubeLinks] = useState([
+        { id: 1, url: '', title: '' }
+    ]);
+
+    const addLink = () => {
+        setYoutubeLinks(prev => [
+            ...prev,
+            { id: Date.now(), url: '', title: '' }
+        ]);
+    };
+
+    const removeLink = (id: number) => {
+        if (youtubeLinks.length === 1) return;
+        setYoutubeLinks(prev => prev.filter(link => link.id !== id));
+    };
+
+    const updateLink = (id: number, field: string, value: string) => {
+        setYoutubeLinks(prev => prev.map(link =>
+            link.id === id ? { ...link, [field]: value } : link
+        ));
+    };
 
     useEffect(() => {
         const loadData = () => {
@@ -585,9 +607,23 @@ export const VideoDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSub
         if (mode === 'link') {
             onSubmit(formData);
         } else {
-            // For bulk, we send the files but also the common metadata (course, subject, demo status)
+            // Validate links
+            const hasInvalid = youtubeLinks.some(l => l.url.trim() !== '' && !extractYouTubeId(l.url));
+            if (hasInvalid) {
+                alert('Please fix invalid YouTube links before submitting');
+                setIsUploading(false);
+                return;
+            }
+
+            const validLinks = youtubeLinks.filter(l => l.url.trim() !== '');
+            if (validLinks.length === 0) {
+                alert('Please add at least one YouTube link');
+                setIsUploading(false);
+                return;
+            }
+
             onSubmit({
-                files: selectedVideos,
+                youtubeLinks: validLinks,
                 courseId: formData.courseId,
                 subjectId: formData.subjectId,
                 status: formData.status,
@@ -604,6 +640,7 @@ export const VideoDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSub
             subjectId: ''
         });
         setSelectedVideos([]);
+        setYoutubeLinks([{ id: 1, url: '', title: '' }]);
     };
 
     return (
@@ -624,7 +661,7 @@ export const VideoDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSub
                                 onClick={() => setMode('upload')}
                                 className={`flex-1 py-3 text-[13px] font-black uppercase tracking-wider rounded-xl transition-all ${mode === 'upload' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400'}`}
                             >
-                                Bulk Upload
+                                Multiple Links
                             </button>
                         </div>
 
@@ -731,49 +768,72 @@ export const VideoDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSub
                             </div>
                         ) : (
                             <div className="space-y-6">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <FormLabel label="Select Product" required />
-                                        <FormSelect
-                                            value={formData.courseId}
-                                            onChange={(val) => setFormData({ ...formData, courseId: val })}
-                                            options={[
-                                                { value: '', label: 'Select Course' },
-                                                ...courses.map(c => ({ value: c.id || c._id, label: c.name || c.title }))
-                                            ]}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <FormLabel label="Select Subject" required />
-                                        <FormSelect
-                                            value={formData.subjectId}
-                                            onChange={(val) => setFormData({ ...formData, subjectId: val })}
-                                            options={[
-                                                { value: '', label: 'Select Subject' },
-                                                ...subjects.map(s => ({ value: s.id || s._id, label: s.name || s.title }))
-                                            ]}
-                                        />
-                                    </div>
-                                </div>
+                                <div className="space-y-4">
+                                    {youtubeLinks.map((link, index) => (
+                                        <div key={link.id} className="border border-gray-100 rounded-2xl p-4 bg-gray-50/50 space-y-3 relative group">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                                                    Video {index + 1}
+                                                </span>
+                                                {youtubeLinks.length > 1 && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => removeLink(link.id)}
+                                                        className="text-red-400 hover:text-red-600 transition-colors"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[18px]">close</span>
+                                                    </button>
+                                                )}
+                                            </div>
 
-                                <UploadArea
-                                    title="Select Video Files"
-                                    subtitle="Drag and drop your MP4 files"
-                                    onFilesSelect={(files) => setSelectedVideos(prev => [...prev, ...files])}
-                                    accept="video/*"
-                                    multiple={true}
-                                />
-                                {selectedVideos.length > 0 && (
-                                    <div className="space-y-2">
-                                        {selectedVideos.map((file, idx) => (
-                                            <FilePreviewItem
-                                                key={idx}
-                                                file={file}
-                                                onRemove={() => setSelectedVideos(prev => prev.filter((_, i) => i !== idx))}
-                                            />
-                                        ))}
-                                    </div>
-                                )}
+                                            <div className="space-y-1">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Video Title (optional)"
+                                                    value={link.title}
+                                                    onChange={(e) => updateLink(link.id, 'title', e.target.value)}
+                                                    className="w-full h-11 bg-white border border-gray-100 rounded-xl px-4 text-[13px] font-bold outline-none focus:border-blue-400 transition-all"
+                                                />
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <input
+                                                    type="text"
+                                                    placeholder="YouTube URL: https://youtube.com/..."
+                                                    value={link.url}
+                                                    onChange={(e) => updateLink(link.id, 'url', e.target.value)}
+                                                    className={`w-full h-11 bg-white border rounded-xl px-4 text-[13px] font-bold outline-none transition-all ${link.url ? (extractYouTubeId(link.url) ? 'border-green-100 focus:border-green-400' : 'border-red-100 focus:border-red-400') : 'border-gray-100 focus:border-blue-400'}`}
+                                                />
+                                                {link.url && (
+                                                    <div className="flex items-center gap-1.5 ml-1">
+                                                        {extractYouTubeId(link.url) ? (
+                                                            <>
+                                                                <span className="material-symbols-outlined text-green-500 text-[14px]">check_circle</span>
+                                                                <span className="text-[10px] font-bold text-green-600 uppercase tracking-tight">Valid YouTube Link</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <span className="material-symbols-outlined text-red-500 text-[14px]">error</span>
+                                                                <span className="text-[10px] font-bold text-red-600 uppercase tracking-tight">Invalid YouTube URL</span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+
+                                    <button
+                                        type="button"
+                                        onClick={addLink}
+                                        className="w-full h-[70px] border-2 border-dashed border-gray-100 rounded-2xl flex items-center justify-center gap-3 text-gray-400 hover:border-blue-200 hover:text-blue-500 hover:bg-blue-50/30 transition-all group"
+                                    >
+                                        <div className="w-8 h-8 rounded-full bg-gray-50 flex items-center justify-center group-hover:bg-blue-100 transition-all">
+                                            <span className="material-symbols-outlined text-[20px]">add</span>
+                                        </div>
+                                        <span className="text-[13px] font-black uppercase tracking-widest">Add Another Video</span>
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -787,9 +847,9 @@ export const VideoDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSub
                         </button>
                         <button
                             type="button"
-                            disabled={isUploading || (mode === 'link' && !formData.link) || (mode === 'upload' && selectedVideos.length === 0)}
+                            disabled={isUploading || (mode === 'link' && !formData.link) || (mode === 'upload' && youtubeLinks.filter(l => l.url.trim() !== '').length === 0)}
                             onClick={handleSubmit}
-                            className={`flex-[2] h-[60px] rounded-2xl font-bold text-[15px] transition-all active:scale-[0.98] shadow-lg ${(isUploading || (mode === 'link' && !formData.link) || (mode === 'upload' && selectedVideos.length === 0)) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#1a1c1e] text-white hover:bg-black'}`}
+                            className={`flex-[2] h-[60px] rounded-2xl font-bold text-[15px] transition-all active:scale-[0.98] shadow-lg ${(isUploading || (mode === 'link' && !formData.link) || (mode === 'upload' && youtubeLinks.filter(l => l.url.trim() !== '').length === 0)) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#1a1c1e] text-white hover:bg-black'}`}
                         >
                             {isUploading ? (
                                 <div className="flex items-center justify-center gap-2">

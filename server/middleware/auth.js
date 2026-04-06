@@ -19,6 +19,17 @@ export function generateTokens(student) {
   return { accessToken, refreshToken };
 }
 
+export function generateAdminToken(admin) {
+  const payload = {
+    adminId: admin.adminId || admin._id?.toString(),
+    name: admin.name,
+    role: 'admin',
+    isAdmin: true
+  };
+
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
+}
+
 export function verifyAccessToken(token) {
   return jwt.verify(token, JWT_SECRET);
 }
@@ -46,35 +57,88 @@ export function verifySignedUrl(filePath, signature, expiry) {
 }
 
 export function authMiddleware(req, res, next) {
+  const authHeader = req.headers['authorization'] || req.headers['Authorization'];
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      error: 'Authentication required',
+      code: 'NO_AUTH'
+    });
+  }
+
+  const token = authHeader.split(' ')[1];
+
   try {
-    let token = null;
-
-    const authHeader = req.headers.authorization;
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7);
-    }
-
-    if (!token && req.cookies?.accessToken) {
-      token = req.cookies.accessToken;
-    }
-
-    if (!token && req.cookies?.sessionToken) {
-      req._legacySession = true;
-      return next();
-    }
-
-    if (!token) {
-      return res.status(401).json({ error: 'Authentication required' });
-    }
-
     const decoded = verifyAccessToken(token);
+    
+    // Set user info based on role
+    if (decoded.isAdmin || decoded.role === 'admin') {
+      req.admin = { 
+        id: decoded.adminId, 
+        name: decoded.name,
+        role: 'admin'
+      };
+      req.user = decoded;
+    } else {
+      req.user = decoded;
+    }
+    
+    next();
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        error: 'Session expired. Please login again.',
+        code: 'TOKEN_EXPIRED'
+      });
+    }
+    return res.status(401).json({
+      error: 'Invalid token. Please login again.',
+      code: 'INVALID_TOKEN'
+    });
+  }
+}
+
+export function adminMiddleware(req, res, next) {
+  const authHeader = req.headers['authorization'] || req.headers['Authorization'];
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      error: 'Admin authentication required',
+      code: 'NO_AUTH'
+    });
+  }
+
+  const token = authHeader.split(' ')[1];
+
+  try {
+    const decoded = verifyAccessToken(token);
+
+    if (!decoded.isAdmin && decoded.role !== 'admin') {
+      return res.status(403).json({
+        error: 'Admin access required',
+        code: 'FORBIDDEN'
+      });
+    }
+
+    req.admin = {
+      id: decoded.adminId,
+      name: decoded.name,
+      role: 'admin'
+    };
     req.user = decoded;
     next();
-  } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ error: 'Token expired', code: 'TOKEN_EXPIRED' });
+
+  } catch (err) {
+    if (err.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        error: 'Admin session expired. Please login again.',
+        code: 'TOKEN_EXPIRED'
+      });
     }
-    return res.status(401).json({ error: 'Invalid token' });
+    return res.status(401).json({
+      error: 'Invalid admin token.',
+      code: 'INVALID_TOKEN'
+    });
   }
 }
 

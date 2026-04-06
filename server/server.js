@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import './config/cloudinary.config.js';
 import express from 'express';
 import cors from 'cors';
 import { fileURLToPath } from "url";
@@ -6,18 +7,20 @@ import path from 'path';
 import fs from 'fs';
 import http from 'http';
 import { createServer as createViteServer } from 'vite';
-import multer from 'multer';
+// Multer has been moved to separate middleware
 import * as XLSX from 'xlsx';
 import crypto from 'crypto';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import dns from 'dns';
+import { uploadAPK } from './middleware/upload.middleware.js';
+import uploadV2Routes from './routes/upload.routes.js';
 dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']); // Enabling hardcoded DNS to correctly resolve Atlas SRV records on some networks
 if (dns.setDefaultResultOrder) dns.setDefaultResultOrder('ipv4first');
 
 import {
-  generateTokens, verifyAccessToken, verifyRefreshToken,
-  authMiddleware, optionalAuth, generateDeviceId,
+  generateTokens, generateAdminToken, verifyAccessToken, verifyRefreshToken,
+  authMiddleware, adminMiddleware, optionalAuth, generateDeviceId,
   generateSignedUrl, verifySignedUrl
 } from './middleware/auth.js';
 import compression from 'compression';
@@ -75,8 +78,8 @@ const calculatePriceBreakdown = (course, coupon = null) => {
 
 
 
-// Config moved to top
 const app = express();
+// Config moved to top
 console.log('============================================');
 console.log('SERVER IS STARTING (VERSION: EMAIL_FIX_v1)');
 console.log('============================================');
@@ -91,13 +94,16 @@ const __dirname = path.dirname(__filename);
 
 app.use(securityHeaders);
 app.use(cors({
-  origin: '*',
-  credentials: false,
+  origin: process.env.ALLOWED_ORIGINS 
+    ? process.env.ALLOWED_ORIGINS.split(',') 
+    : ['http://localhost:5173'],
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Content-Type',
     'Authorization',
-    'x-client-id'
+    'x-client-id',
+    'x-admin-id'
   ],
   maxAge: 86400
 }));
@@ -120,6 +126,8 @@ app.use('/attached_assets', (req, res, next) => {
   }
   res.redirect(301, `/attach-assist${req.path}`);
 });
+
+app.use('/api', uploadV2Routes);
 
 // Routes
 app.get('/api/secure-video/:filename', authMiddleware, async (req, res) => {
@@ -161,7 +169,7 @@ app.get('/api/secure-video/:filename', authMiddleware, async (req, res) => {
     res.setHeader('Content-Disposition', 'inline');
 
     const stat = fs.statSync(filePath);
-    const range = req.headers.range;
+    const imageUrl = process.env.DEFAULT_SPLASH_URL || "https://res.cloudinary.com/dffu9799t/image/upload/v1741168434/aot/images/splash_default.jpg";
 
     if (range) {
       const parts = range.replace(/bytes=/, '').split('-');
@@ -186,42 +194,13 @@ app.get('/api/secure-video/:filename', authMiddleware, async (req, res) => {
   }
 });
 
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Secure video streaming above still uses local path for legacy files if they exist
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, 'uploads');
-    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const ext = path.extname(file.originalname);
-    cb(null, uniqueSuffix + ext);
-  }
-});
-const upload = multer({
-  storage,
-  limits: { fileSize: 500 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = [
-      'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
-      'application/pdf',
-      'video/mp4', 'video/webm', 'video/ogg', 'video/avi', 'video/mov',
-      'video/quicktime', 'video/x-msvideo', 'video/x-ms-wmv', 'video/mpeg',
-      'application/vnd.android.package-archive',
-      'application/octet-stream',
-      'application/vnd.ms-excel',
-      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'text/csv', 'text/plain',
-      'application/csv'
-    ];
-    if (allowedTypes.includes(file.mimetype)) cb(null, true);
-    else cb(null, true); // accept all for now to avoid issues with browser mime type detection
-  }
-});
+// Multer instances have been moved to server/middleware/upload.middleware.js
 
 // Excel/CSV file parser middleware
+// Excel upload only — do not use for images/videos/pdfs
+import multer from 'multer';
 const excelUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }
@@ -229,11 +208,7 @@ const excelUpload = multer({
 
 app.use((req, res, next) => {
   if (req.path.startsWith('/api') || req.path === '/health') {
-    const logMsg = `[${new Date().toISOString()}] ${req.method} ${req.path}\n`;
-    // console.log(logMsg); // Reduced noise
-    try {
-      if (req.path.startsWith('/api')) fs.appendFileSync(path.join(__dirname, 'api_requests.log'), logMsg);
-    } catch (e) { }
+    // [LOG REMOVED] Synchronous file append was blocking the event loop here.
   }
   
   const isConnected = mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2; // 1 = connected, 2 = connecting
@@ -307,6 +282,9 @@ const connectDB = async () => {
       await db.collection('enrollments').createIndex({ studentId: 1 });
       await db.collection('liveVideos').createIndex({ courseId: 1 });
       await db.collection('liveClasses').createIndex({ courseId: 1 });
+      await db.collection('categories').createIndex({ isActive: 1 });
+      await db.collection('banners').createIndex({ isActive: 1 });
+      await db.collection('posts').createIndex({ status: 1 });
       console.log('MongoDB indexes ensured');
       
       // Batch Sorting Migration: Convert string values to numbers
@@ -628,21 +606,7 @@ app.delete('/api/courses/:courseId/folders/:folderId', async (req, res) => {
   }
 });
 
-app.post('/api/upload', upload.single('file'), (req, res) => {
-  try {
-    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const fileUrl = `/uploads/${req.file.filename}`;
-    res.json({
-      url: fileUrl,
-      filename: req.file.originalname,
-      size: req.file.size,
-      mimetype: req.file.mimetype
-    });
-  } catch (error) {
-    console.error('Upload error:', error);
-    res.status(500).json({ error: 'Upload failed' });
-  }
-});
+// Old generic /api/upload route removed per design audit v2
 
 // ✅ REAL DOCX Generation Endpoint
 app.post('/api/generate-docx', async (req, res) => {
@@ -751,7 +715,7 @@ app.get('/api/download/apk', (req, res) => {
 });
 
 // APK upload endpoint (admin only)
-app.post('/api/upload/apk', upload.single('apk'), (req, res) => {
+app.post('/api/upload/apk', uploadAPK.single('apk'), (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No APK file uploaded' });
     const apkDir = path.join(__dirname, 'uploads');
@@ -835,7 +799,15 @@ app.get('/api/courses', async (req, res) => {
           }
         }
       },
-      { $project: { videoCount: 0 } },
+      { 
+        $project: { 
+          videoCount: 0, 
+          description: 0, 
+          longDescription: 0, 
+          syllabus: 0,
+          curriculum: 0 
+        } 
+      },
       { $sort: { sortOrder: 1, createdAt: -1 } }
     ];
 
@@ -1022,20 +994,43 @@ async function getRelatedCourseIds(course, originalId) {
     originalId
   ].filter(Boolean));
 
-  // Also check names or titles for cross-collection linking
+  // 1. If this is a package, include its child courses
+  if (course.courses && Array.isArray(course.courses)) {
+    course.courses.forEach(id => relatedIds.add(String(id)));
+  }
+
+  // 2. Identify if this course belongs to any packages
+  try {
+    const currentId = String(course.id || course._id || originalId);
+    const parentPackages = await db.collection('packages').find({
+      $or: [
+        { courses: currentId },
+        { courses: { $elemMatch: { $eq: currentId } } },
+        { courses: { $in: [currentId] } }
+      ]
+    }).project({ _id: 1, id: 1 }).toArray();
+
+    parentPackages.forEach(pkg => {
+      if (pkg._id) relatedIds.add(pkg._id.toString());
+      if (pkg.id) relatedIds.add(pkg.id.toString());
+    });
+  } catch (e) {
+    console.warn('Failed to find parent packages:', e.message);
+  }
+
+  // 3. Also check names or titles for cross-collection linking
   const names = [course.name, course.title].filter(Boolean);
   if (names.length > 0) {
     const allPossibleCollections = ['courses', 'packages', 'subcourses', 'testSeries', 'test-series', 'test_series'];
     for (const col of allPossibleCollections) {
       try {
-        // Escape special regex characters in names
         const escapedNames = names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
         const matchedItems = await db.collection(col).find({
           $or: [
             { name: { $in: names } },
             { title: { $in: names } },
-            { name: { $regex: new RegExp("^" + escapedNames[0] + "$", "i") } }, // Case-insensitive exact name match
-            { title: { $regex: new RegExp("^" + escapedNames[0] + "$", "i") } } // Case-insensitive exact title match
+            { name: { $regex: new RegExp("^" + escapedNames[0] + "$", "i") } },
+            { title: { $regex: new RegExp("^" + escapedNames[0] + "$", "i") } }
           ],
           status: { $nin: ['inactive', 'deleted'] },
           isPublished: { $ne: false }
@@ -1063,6 +1058,46 @@ app.get('/api/courses/:id/videos', async (req, res) => {
 
     const idVariants = await getRelatedCourseIds(course, req.params.id);
     const primaryId = req.params.id;
+
+    // --- CHECK ENROLLMENT ---
+    const studentId = req.query.studentId || req.headers['student-id'];
+    let isEnrolled = false;
+
+    if (studentId) {
+      const student = await db.collection('students').findOne({ 
+        $or: [
+          { id: studentId },
+          { _id: ObjectId.isValid(studentId) ? new ObjectId(studentId) : null }
+        ].filter(f => f.id || f._id)
+      });
+      if (student) {
+        const enrolledCourses = student.enrolledCourses || [];
+        isEnrolled = idVariants.some(id => enrolledCourses.includes(id)) || 
+                     (course.price === 0 || course.isFree === true); // Free courses are always "enrolled"
+      }
+    }
+
+    // If not enrolled and not a free course, only return demo video
+    if (!isEnrolled && course.price > 0) {
+      if (course.demoVideo) {
+        return res.json([{
+          id: 'demo_' + (course.id || course._id),
+          _id: 'demo_' + (course.id || course._id),
+          title: 'Course Preview (Demo)',
+          youtubeUrl: course.demoVideo,
+          videoUrl: course.demoVideo,
+          url: course.demoVideo,
+          isFree: true,
+          isDemo: true,
+          thumbnail: course.thumbnail || course.imageUrl,
+          duration: 'Preview',
+          order: -1,
+          contentType: 'video'
+        }]);
+      }
+      return res.json([]);
+    }
+    // --- END ENROLLMENT CHECK ---
 
     // Fetch from all relevant batches
     let allRawVideos = await db.collection('videos').find({ 
@@ -2136,8 +2171,14 @@ app.post('/api/users', async (req, res) => {
 // Routes for Students
 app.get('/api/students', async (req, res) => {
   try {
-    const students = await Student.find({}).lean();
-    console.log('GET /api/students - Found', students.length, 'students');
+    const students = await Student.find({}, {
+      admission: 0,
+      academic: 0,
+      documents: 0,
+      fees: 0,
+      notes: 0
+    }).lean();
+    console.log('GET /api/students - Optimized Payload - Found', students.length, 'students');
     res.json(students);
   } catch (error) {
     console.error('Error fetching students:', error);
@@ -2170,17 +2211,23 @@ app.get('/api/students/:id/live-classes', async (req, res) => {
     const student = await Student.findOne(studentQuery).lean();
     if (!student) return res.status(404).json({ error: 'Student not found' });
 
-    const enrolledCourses = student.enrolledCourses || [];
-    if (enrolledCourses.length === 0) return res.json([]);
+    // Get all variants for all enrolled courses from both student object and enrollments collection
+    const enrollmentRecords = await db.collection('enrollments').find({
+      studentId: req.params.id
+    }).project({ courseId: 1 }).toArray();
 
-    // Get all variants for all enrolled courses
+    const allEnrolledIds = new Set([
+      ...(student.enrolledCourses || []),
+      ...enrollmentRecords.map(e => e.courseId)
+    ].filter(Boolean));
+
     let allIdVariants = [];
-    for (const courseId of enrolledCourses) {
-      const variants = await getCourseIdVariants(courseId);
+    for (const enrolledId of allEnrolledIds) {
+      const variants = await getCourseIdVariants(enrolledId);
       allIdVariants = [...allIdVariants, ...variants];
     }
 
-    // Remote duplicates
+    // Remove duplicates
     allIdVariants = [...new Set(allIdVariants)];
 
     const query = {
@@ -2194,23 +2241,8 @@ app.get('/api/students/:id/live-classes', async (req, res) => {
     ]);
 
     const merged = [...c1, ...c2, ...c3].map(item => {
-      const now = new Date();
-      const startTime = new Date(item.publishOn || item.date || item.createdAt);
-      const targetEnd = item.endTime || item.endDateTime;
-      const endTime = targetEnd ? new Date(targetEnd) : new Date(startTime.getTime() + 60 * 60 * 1000); // Default 1 hour
-      const joinBeforeMin = parseInt(item.joinBeforeMinutes) || 10;
-      const joinTime = new Date(startTime.getTime() - joinBeforeMin * 60 * 1000);
-
-      // Dynamic Status Calculation
-      if (item.status === 'inactive' || item.status === 'ended' || item.status === 'completed') {
-        item.status = 'ended';
-      } else if (now < joinTime) {
-        item.status = 'upcoming';
-      } else if (now >= joinTime && now <= endTime) {
-        item.status = 'live';
-      } else {
-        item.status = 'ended';
-      }
+      // Use consolidated helper for status
+      item.status = calculateStreamStatus(item);
 
       // Ensure date/startTime properties exist
       if (!item.date && (item.publishOn || item.createdAt)) {
@@ -2226,7 +2258,17 @@ app.get('/api/students/:id/live-classes', async (req, res) => {
       }
 
       return item;
-    }).sort((a, b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
+    })
+    .filter(item => {
+      // Visibility Filter: 
+      // - Students in this route are already checked for enrollment against the courseIdVariants.
+      // - However, we still respect the 'private' visibility flag to ensure consistent behavior.
+      if (item.visibility === 'private' && !allIdVariants.includes(String(item.courseId))) {
+         return false;
+      }
+      return true;
+    })
+    .sort((a, b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
 
     res.json(merged);
   } catch (error) {
@@ -2836,11 +2878,16 @@ app.post('/api/admin/login', authLimiter, async (req, res) => {
     }
 
     console.log(`[LOGIN SUCCESS] Admin: ${adminId}, Name: ${admin.name}`);
+    
+    // Generate secure admin token
+    const adminToken = generateAdminToken(admin);
+
     res.json({
       success: true,
       message: 'Login successful',
       adminId: admin.adminId,
-      name: admin.name
+      name: admin.name,
+      token: adminToken
     });
   } catch (error) {
     console.error('[LOGIN ERROR]', error);
@@ -2874,6 +2921,7 @@ app.get('/api/admin/verify', async (req, res) => {
 
 // Reports Router
 app.use('/api/admin/reports', reportsRouter);
+app.use('/api', uploadV2Routes);
 
 // Get Dashboard Stats for Admin
 app.get('/api/admin/dashboard-stats', async (req, res) => {
@@ -3200,9 +3248,7 @@ app.put('/api/questions/update-all', async (req, res) => {
 app.put('/api/questions/:id', async (req, res) => {
   const id = req.params.id;
   const logToFile = (msg) => {
-    try {
-      fs.appendFileSync(path.join(__dirname, 'api_requests.log'), `[DEBUG][Question Update] ${msg}\n`);
-    } catch (e) { }
+    // console.log(`[DEBUG][Question Update] ${msg}`); // Synchronous file append removed - performance-limiting operation
     console.log(`[Question Update] ${msg}`);
   };
 
@@ -3613,9 +3659,7 @@ app.get('/api/tests/:id', async (req, res) => {
 app.patch('/api/tests/:id/publish', async (req, res) => {
   const id = req.params.id;
   const logToFile = (msg) => {
-    try {
-      fs.appendFileSync(path.join(__dirname, 'api_requests.log'), `[DEBUG][Publish] ${msg}\n`);
-    } catch (e) { }
+    // console.log(`[DEBUG][Publish] ${msg}`); // Synchronous file append removed - performance-limiting operation
     console.log(`[Publish] ${msg}`);
   };
 
@@ -4769,6 +4813,13 @@ app.get('/api/packages', async (req, res) => {
           }
         }
       },
+      { 
+        $project: { 
+          description: 0,
+          content: 0,
+          features: 0 
+        } 
+      },
       { $sort: { sortOrder: 1, createdAt: -1 } }
     ]).toArray();
     res.json(packages);
@@ -4990,7 +5041,7 @@ app.get('/api/splash-screen', async (req, res) => {
     const splash = await db.collection('settings').findOne({ type: 'splash_screen' });
     const defaultSplash = {
       type: 'splash_screen',
-      imageUrl: '/attach-assist/ChatGPT_Image_Feb_8,_2026,_05_51_58_PM_1770553325908.png',
+      imageUrl: process.env.DEFAULT_SPLASH_URL || '/attach-assist/ChatGPT_Image_Feb_8,_2026,_05_51_58_PM_1770553325908.png',
       isActive: true,
       duration: 3000
     };
@@ -4999,7 +5050,7 @@ app.get('/api/splash-screen', async (req, res) => {
     console.error('Error fetching splash screen:', error);
     const defaultSplash = {
       type: 'splash_screen',
-      imageUrl: '/attach-assist/ChatGPT_Image_Feb_8,_2026,_05_51_58_PM_1770553325908.png',
+      imageUrl: process.env.DEFAULT_SPLASH_URL || '/attach-assist/ChatGPT_Image_Feb_8,_2026,_05_51_58_PM_1770553325908.png',
       isActive: true,
       duration: 3000
     };
@@ -7919,6 +7970,24 @@ app.post('/api/live-chat/:videoId/messages', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Failed to send message' });
   }
+});
+
+app.use((err, req, res, next) => {
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(400).json({
+      success: false,
+      error: `File too large. Check your size limits in .env`,
+      code: 'FILE_TOO_LARGE'
+    });
+  }
+  if (err.message && err.message.startsWith('INVALID_TYPE')) {
+    return res.status(400).json({
+      success: false,
+      error: err.message.replace('INVALID_TYPE: ', ''),
+      code: 'INVALID_FILE_TYPE'
+    });
+  }
+  next(err);
 });
 
 async function startServer() {
