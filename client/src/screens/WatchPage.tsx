@@ -29,7 +29,12 @@ const WatchPage: React.FC = () => {
       if (!batchId) return;
       try {
         setLoading(true);
-        const response = await fetch(`/api/courses/${batchId}/videos`);
+        const response = await fetch(`/api/courses/${batchId}/videos`, {
+          headers: {
+            'x-admin-id': localStorage.getItem('adminId') || '',
+            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
+          }
+        });
         const videos = await response.json();
         
         if (Array.isArray(videos) && videos.length > 0) {

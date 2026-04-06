@@ -25,6 +25,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   className = ''
 }) => {
   const playerRef = useRef<any>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const intervalRef = useRef<any>(null);
   
   const [isPlaying, setIsPlaying] = useState(false);
@@ -93,6 +94,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             else if (s === 2) { setIsPlaying(false); }
             else if (s === 0) { setIsPlaying(false); onEnded?.(); }
           },
+          onError: (e: any) => {
+            console.error('YT Player Error:', e.data);
+            setIsReady(false);
+          },
           onPlaybackQualityChange: (e: any) => {
              const newQ = e.data;
              // DEFEND MANUAL CHOICE: If YouTube tries to shift back, we re-verify our intent
@@ -146,11 +151,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   // RAZOR-SHARP TICK SYNC
   useEffect(() => {
-    if (isPlaying && playerRef.current?.getCurrentTime) {
+    if (isPlaying) {
       intervalRef.current = setInterval(() => {
-        if (playerRef.current) {
+        if (playerRef.current?.getCurrentTime) {
           const t = playerRef.current.getCurrentTime();
           setCurrentTime(t);
+        } else if (videoRef.current) {
+          setCurrentTime(videoRef.current.currentTime);
         }
       }, 400);
     } else {
@@ -160,22 +167,36 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }, [isPlaying]);
 
   const togglePlay = () => {
-    if (!playerRef.current) return;
-    if (isPlaying) {
-      playerRef.current.pauseVideo();
-      setIsPlaying(false);
-    } else {
-      playerRef.current.playVideo();
-      setIsPlaying(true);
-      setShowQualityMenu(false);
+    if (videoId && playerRef.current) {
+      if (isPlaying) {
+        playerRef.current.pauseVideo();
+        setIsPlaying(false);
+      } else {
+        playerRef.current.playVideo();
+        setIsPlaying(true);
+        setShowQualityMenu(false);
+      }
+    } else if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+        setIsPlaying(false);
+      } else {
+        videoRef.current.play();
+        setIsPlaying(true);
+      }
     }
   };
 
   const skip = (s: number) => {
-    if (!playerRef.current) return;
-    const t = Math.max(0, Math.min(duration, playerRef.current.getCurrentTime() + s));
-    playerRef.current.seekTo(t, true);
-    setCurrentTime(t);
+    if (videoId && playerRef.current) {
+      const t = Math.max(0, Math.min(duration, playerRef.current.getCurrentTime() + s));
+      playerRef.current.seekTo(t, true);
+      setCurrentTime(t);
+    } else if (videoRef.current) {
+      const t = Math.max(0, Math.min(videoRef.current.duration, videoRef.current.currentTime + s));
+      videoRef.current.currentTime = t;
+      setCurrentTime(t);
+    }
   };
 
   const handleQualityChange = (level: string) => {
@@ -226,9 +247,26 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       onMouseEnter={() => setShowControls(true)}
       onMouseLeave={() => isPlaying && !showQualityMenu && setShowControls(false)}
     >
-      {/* THE IFRAME: Perfect Scaling */}
+      {/* THE PLAYER: Perfect Scaling */}
       <div className="absolute inset-0 z-10 w-full h-full pointer-events-none">
-         <div id={`lockdown-p-${videoId}`} className="w-full h-full" />
+         {videoId ? (
+           <div id={`lockdown-p-${videoId}`} className="w-full h-full" />
+         ) : src ? (
+           <video
+             ref={videoRef}
+             src={src}
+             className="w-full h-full object-contain pointer-events-auto"
+             onPlay={() => setIsPlaying(true)}
+             onPause={() => setIsPlaying(false)}
+             onEnded={() => { setIsPlaying(false); onEnded?.(); }}
+             onLoadedMetadata={(e) => {
+               setDuration(e.currentTarget.duration);
+               setIsReady(true);
+             }}
+             autoPlay
+             playsInline
+           />
+         ) : null}
       </div>
 
       {/* INDUSTRIAL HARD MASK: TOP */}
@@ -270,7 +308,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               value={currentTime} 
               onChange={(e) => {
                 const t = parseFloat(e.target.value);
-                playerRef.current?.seekTo(t, true);
+                if (videoId && playerRef.current) {
+                  playerRef.current.seekTo(t, true);
+                } else if (videoRef.current) {
+                  videoRef.current.currentTime = t;
+                }
                 setCurrentTime(t);
               }}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-[60]"
@@ -346,7 +388,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                </div>
 
                <button 
-                  onClick={(e) => { e.stopPropagation(); if (playerRef.current) { if (isMuted) playerRef.current.unMute(); else playerRef.current.mute(); setIsMuted(!isMuted); } }}
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    if (videoId && playerRef.current) { 
+                      if (isMuted) playerRef.current.unMute(); else playerRef.current.mute(); 
+                    } else if (videoRef.current) {
+                      videoRef.current.muted = !isMuted;
+                    }
+                    setIsMuted(!isMuted); 
+                  }}
                   className="text-white/40 hover:text-white transition-all active:scale-95"
                >
                   <span className="material-symbols-rounded text-[28px]">
