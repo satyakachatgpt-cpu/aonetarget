@@ -187,6 +187,15 @@ interface Props {
 
 const API_BASE_URL = '/api';
 
+const getAuthHeaders = () => {
+  const adminToken = localStorage.getItem('adminToken');
+  const adminId = localStorage.getItem('adminId');
+  const headers: any = {};
+  if (adminToken) headers['Authorization'] = `Bearer ${adminToken}`;
+  if (adminId) headers['x-admin-id'] = adminId;
+  return headers;
+};
+
 const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onClearInitialCourse, onBack, setActiveView, initialMainTab }) => {
   const [activeMainTab, setActiveMainTab] = useState(initialMainTab || 'Content');
   const [courses, setCourses] = useState<Course[]>([]);
@@ -281,7 +290,10 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
       const response = await fetch(`${API_BASE_URL}/v2/upload/image`, {
         method: 'POST',
-        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+        headers: {
+          'x-admin-id': localStorage.getItem('adminId') || '',
+          'Authorization': `Bearer ${localStorage.getItem('adminToken') || ''}`
+        },
         body: formData,
       });
 
@@ -391,7 +403,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const endpoint = selectedCourse.id?.toString().startsWith('pkg_') ? 'packages' : 'courses';
       await fetch(`${API_BASE_URL}/${endpoint}/${courseId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ isPublished: newStatus, status: newStatus ? 'active' : 'inactive' })
       });
       setIsPublished(newStatus);
@@ -426,7 +438,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const videoId = (video as any)._id || video.id;
       await fetch(`${API_BASE_URL}/courses/${courseId}/videos/${videoId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...video, status: newStatus })
       });
       setVideos(prev => prev.map(v => ((v as any)._id || v.id) === videoId ? { ...v, status: newStatus } : v));
@@ -441,7 +453,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const videoId = (video as any)._id || video.id;
       await fetch(`${API_BASE_URL}/courses/${courseId}/videos/${videoId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...video, isFree: newFree })
       });
       setVideos(prev => prev.map(v => ((v as any)._id || v.id) === videoId ? { ...v, isFree: newFree } : v));
@@ -1184,7 +1196,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
   const fetchAllCourses = async () => {
     try {
-      const res = await fetch(`${API_BASE_URL}/courses`);
+      const res = await fetch(`${API_BASE_URL}/courses`, { headers: getAuthHeaders() });
       const data = await res.json();
       setCourses(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -1197,7 +1209,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     try {
       const courseId = (selectedCourse as any)?._id || selectedCourse?.id || 'global';
       // Fetch series specifically for this course
-      const res = await fetch(`${API_BASE_URL}/test-series?courseId=${courseId}`);
+      const res = await fetch(`${API_BASE_URL}/test-series?courseId=${courseId}`, { headers: getAuthHeaders() });
       const data = await res.json();
       const list = Array.isArray(data) ? data : [];
 
@@ -1234,7 +1246,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     try {
       const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
       // Fetch specifically by type and course
-      const res = await fetch(`${API_BASE_URL}/tests?seriesId=${seriesId}&courseId=${courseId}&testType=${type}`);
+      const res = await fetch(`${API_BASE_URL}/tests?seriesId=${seriesId}&courseId=${courseId}&testType=${type}`, { headers: getAuthHeaders() });
       const data = await res.json();
       const list = Array.isArray(data) ? data : [];
 
@@ -1280,9 +1292,9 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     try {
       // In a real database, we would fetch content based on courseId
       const [videosRes, notesRes, testsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/courses/${courseId}/videos`),
-        fetch(`${API_BASE_URL}/courses/${courseId}/notes`),
-        fetch(`${API_BASE_URL}/courses/${courseId}/tests`)
+        fetch(`${API_BASE_URL}/courses/${courseId}/videos`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE_URL}/courses/${courseId}/notes`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE_URL}/courses/${courseId}/tests`, { headers: getAuthHeaders() })
       ]);
       const videos = await videosRes.json();
       const notes = await notesRes.json();
@@ -1569,11 +1581,12 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
     try {
       const t = Date.now();
+      const headers = getAuthHeaders();
       const [videosRes, notesRes, testsRes, foldersRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/courses/${courseId}/videos?t=${t}`),
-        fetch(`${API_BASE_URL}/courses/${courseId}/notes?t=${t}`),
-        fetch(`${API_BASE_URL}/courses/${courseId}/tests?t=${t}`),
-        fetch(`${API_BASE_URL}/courses/${courseId}/folders?t=${t}`)
+        fetch(`${API_BASE_URL}/courses/${courseId}/videos?t=${t}`, { headers }),
+        fetch(`${API_BASE_URL}/courses/${courseId}/notes?t=${t}`, { headers }),
+        fetch(`${API_BASE_URL}/courses/${courseId}/tests?t=${t}`, { headers }),
+        fetch(`${API_BASE_URL}/courses/${courseId}/folders?t=${t}`, { headers })
       ]);
 
       const videosData = await videosRes.json().catch(() => []);
@@ -1687,7 +1700,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(videoData)
       });
 
@@ -1712,7 +1725,10 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       formData.append('file', file);
       const res = await fetch('/api/v2/upload/image', {
         method: 'POST',
-        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+        headers: {
+          'x-admin-id': localStorage.getItem('adminId') || '',
+          'Authorization': `Bearer ${localStorage.getItem('adminToken') || ''}`
+        },
         body: formData,
       });
       if (!res.ok) throw new Error('Upload failed');
@@ -1757,7 +1773,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(folderData)
       });
 
@@ -1807,7 +1823,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(noteData)
       });
 
@@ -1866,7 +1882,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
         const response = await fetch(`${API_BASE_URL}/courses/${courseId}/notes`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
           body: JSON.stringify(fileData)
         });
 
@@ -1909,7 +1925,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(testData)
       });
 
@@ -1950,7 +1966,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
       const response = await fetch(`${API_BASE_URL}/courses/${courseId}/tests/${testId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...currentTestForQuestions, questions: updatedQuestions })
       });
 
@@ -1977,7 +1993,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       setVideos(prev => prev.filter(v => normalizeId(v._id || v.id) !== vId));
 
       const courseId = normalizeId((selectedCourse as any)._id || selectedCourse.id);
-      const response = await fetch(`${API_BASE_URL}/courses/${courseId}/videos/${vId}`, { method: 'DELETE' });
+      const response = await fetch(`${API_BASE_URL}/courses/${courseId}/videos/${vId}`, { method: 'DELETE', headers: getAuthHeaders() });
       if (!response.ok) throw new Error('API Delete failed');
       showToast('Video deleted!');
     } catch (error) {
@@ -1994,7 +2010,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       setNotes(prev => prev.filter(n => normalizeId(n._id || n.id) !== nId));
 
       const courseId = normalizeId((selectedCourse as any)._id || selectedCourse.id);
-      const response = await fetch(`${API_BASE_URL}/courses/${courseId}/notes/${nId}`, { method: 'DELETE' });
+      const response = await fetch(`${API_BASE_URL}/courses/${courseId}/notes/${nId}`, { method: 'DELETE', headers: getAuthHeaders() });
       if (!response.ok) throw new Error('API Delete failed');
       showToast('Note deleted!');
     } catch (error) {
@@ -2030,7 +2046,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       setTests(prev => prev.filter(t => !allIdsToRemove.includes(normalizeId(t.folderId)!)));
 
       const courseId = normalizeId((selectedCourse as any)._id || selectedCourse.id);
-      const response = await fetch(`${API_BASE_URL}/courses/${courseId}/folders/${fId}`, { method: 'DELETE' });
+      const response = await fetch(`${API_BASE_URL}/courses/${courseId}/folders/${fId}`, { method: 'DELETE', headers: getAuthHeaders() });
       if (!response.ok) throw new Error('API Delete failed');
       showToast('Folder deleted!');
     } catch (error) {
@@ -2047,7 +2063,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       setTests(prev => prev.filter(t => normalizeId(t._id || t.id) !== tId));
 
       const courseId = normalizeId((selectedCourse as any)._id || selectedCourse.id);
-      const response = await fetch(`${API_BASE_URL}/courses/${courseId}/tests/${tId}`, { method: 'DELETE' });
+      const response = await fetch(`${API_BASE_URL}/courses/${courseId}/tests/${tId}`, { method: 'DELETE', headers: getAuthHeaders() });
       if (!response.ok) throw new Error('API Delete failed');
       showToast('Test deleted!');
     } catch (error) {
@@ -2065,7 +2081,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const updatedQuestions = currentTestForQuestions.questions.filter(q => normalizeId((q as any)._id || q.id) !== qId);
       await fetch(`${API_BASE_URL}/courses/${courseId}/tests/${testId}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...currentTestForQuestions, questions: updatedQuestions })
       });
       showToast('Question deleted!');
@@ -2359,7 +2375,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                   const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
                   fetch(`${API_BASE_URL}/courses/${courseId}/folders/${item._id || item.id}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
                     body: JSON.stringify({ ...item, status: item.status === 'active' ? 'inactive' : 'active' })
                   }).then(() => { showToast(item.status === 'active' ? 'Folder disabled' : 'Folder enabled'); loadCourseContent(); });
                 }
@@ -2397,7 +2413,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                     const videoId = item._id || item.id;
                     const res = await fetch(`${API_BASE_URL}/live-stream/end/${videoId}`, {
                       method: 'POST',
-                      headers: { 'Content-Type': 'application/json' }
+                      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }
                     });
 
                     if (res.ok) {
@@ -2425,7 +2441,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                   const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
                   fetch(`${API_BASE_URL}/courses/${courseId}/folders/${item._id || item.id}`, {
                     method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
                     body: JSON.stringify({ ...item, isFree: !item.isFree })
                   }).then(() => { showToast(!item.isFree ? 'Folder set to Free' : 'Folder set to Locked'); loadCourseContent(); });
                 }
@@ -2537,7 +2553,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
               const courseId = (editedCourse as any)._id || (editedCourse as any).id;
               const isPackage = courseId?.toString().startsWith('pkg_');
               const endpoint = isPackage ? 'packages' : 'courses';
-              const res = await fetch(`/api/${endpoint}/${courseId}`);
+              const res = await fetch(`/api/${endpoint}/${courseId}`, { headers: getAuthHeaders() });
               if (res.ok) {
                 const freshCourse = await res.json();
                 if (freshCourse && !freshCourse.error) {
@@ -3605,7 +3621,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                                     formData.append('file', file);
                                     const res = await fetch('/api/v2/upload/pdf', { 
                                       method: 'POST', 
-                                      headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+                                      headers: getAuthHeaders(),
                                       body: formData 
                                     });
                                     if (!res.ok) throw new Error('Upload failed');
@@ -3661,7 +3677,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                                 formData.append('file', file);
                                 const res = await fetch('/api/v2/upload/pdf', { 
                                   method: 'POST', 
-                                  headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+                                  headers: getAuthHeaders(),
                                   body: formData 
                                 });
                                 if (!res.ok) throw new Error('Upload failed');
@@ -4125,7 +4141,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
               const testData = { ...test, courseId, folderId, id: `test_${Date.now()}_${Math.random().toString(36).substr(2, 5)}` };
               await fetch(`${API_BASE_URL}/courses/${courseId}/tests`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
                 body: JSON.stringify(testData)
               });
             }));
@@ -4157,7 +4173,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
               const testData = { ...test, courseId, folderId, id: `test_${Date.now()}_${Math.random().toString(36).substr(2, 5)}` };
               await fetch(`${API_BASE_URL}/courses/${courseId}/tests`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
                 body: JSON.stringify(testData)
               });
             }));
@@ -4186,7 +4202,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
               };
               await fetch(`${API_BASE_URL}/courses/${courseId}/tests`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
                 body: JSON.stringify(quizData)
               });
             }));
@@ -4244,7 +4260,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
             };
             const res = await fetch(`${API_BASE_URL}/courses/${courseId}/notes`, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
               body: JSON.stringify(linkData)
             });
             if (res.ok) {
@@ -4449,7 +4465,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
           const res = await fetch(endpoint, { 
             method: 'POST', 
-            headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+            headers: getAuthHeaders(),
             body: formData 
           });
           if (!res.ok) throw new Error('Upload failed');

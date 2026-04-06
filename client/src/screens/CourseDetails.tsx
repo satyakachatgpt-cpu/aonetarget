@@ -63,6 +63,8 @@ interface Course {
   enrollmentCount?: number;
   notesCount?: number;
   demoVideo?: string;
+  settings?: { showTabs?: boolean; [key: string]: any };
+  content?: { upsell?: { enabled?: boolean; courses: string[] }; [key: string]: any };
 }
 
 interface Progress {
@@ -157,10 +159,34 @@ const CourseDetails: React.FC = () => {
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [shareSuccess, setShareSuccess] = useState(false);
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
-  const normalizeId = (id: any) => {
-    if (!id) return null;
-    if (typeof id === 'object' && id._id) return String(id._id);
-    return String(id);
+  const normalizeId = (id: any): string | null => {
+    if (id === null || id === undefined) return null;
+    if (typeof id === 'string') {
+      const s = id.trim();
+      return (s === 'null' || s === 'undefined' || s === '') ? null : s;
+    }
+    if (typeof id === 'object') {
+      if (id.$oid) return String(id.$oid);
+      if (id._id) return normalizeId(id._id);
+      if ((id as any).id && typeof (id as any).id === 'string') return (id as any).id;
+      if (id.toString && typeof id.toString === 'function') {
+        const str = id.toString();
+        if (str !== '[object Object]') return str;
+      }
+    }
+    const finalStr = String(id);
+    return (finalStr === '[object Object]' || finalStr === 'null' || finalStr === 'undefined') ? null : finalStr;
+  };
+
+  const getAuthHeaders = () => {
+    const adminId = localStorage.getItem('adminId');
+    const adminToken = localStorage.getItem('adminToken');
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json'
+    };
+    if (adminId) headers['x-admin-id'] = adminId;
+    if (adminToken) headers['Authorization'] = `Bearer ${adminToken}`;
+    return headers;
   };
 
 
@@ -242,7 +268,6 @@ const CourseDetails: React.FC = () => {
   const studentId = getStudentId();
 
   const [folders, setFolders] = useState<any[]>([]);
-  const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [navigationHistory, setNavigationHistory] = useState<any[]>([]);
 
   const closeVideoPlayer = () => {
@@ -252,12 +277,13 @@ const CourseDetails: React.FC = () => {
 
   const fetchCourseData = async () => {
     try {
+      const h = getAuthHeaders();
       const [courseData, videosData, notesData, testsData, foldersData] = await Promise.all([
-        fetch(`/api/courses/${id}`).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch(`/api/courses/${id}/videos?studentId=${studentId}`).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`/api/courses/${id}/notes`).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`/api/courses/${id}/tests`).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`/api/courses/${id}/folders`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/courses/${id}`, { headers: h }).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`/api/courses/${id}/videos?studentId=${studentId}`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/courses/${id}/notes`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/courses/${id}/tests`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/courses/${id}/folders`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
       ]);
 
       if (courseData && !courseData.error) {
@@ -375,16 +401,12 @@ const CourseDetails: React.FC = () => {
   }, [id]);
 
   const navigateIntoFolder = (folder: any) => {
-    const fId = normalizeId(folder.id || folder._id);
-    setCurrentFolderId(fId);
     setNavigationHistory(prev => [...prev, folder]);
   };
 
   const navigateUp = () => {
     const newHistory = [...navigationHistory];
     newHistory.pop();
-    const lastFolder = newHistory[newHistory.length - 1];
-    setCurrentFolderId(lastFolder ? normalizeId(lastFolder.id || lastFolder._id) : null);
     setNavigationHistory(newHistory);
   };
 
@@ -392,10 +414,36 @@ const CourseDetails: React.FC = () => {
 
   const recordedVideos = videos.filter(v => v.contentType === 'video' || v.contentType === 'recorded' || !v.contentType);
   const liveStreams = videos.filter(v => v.contentType === 'live_stream');
-  const filteredVideos = recordedVideos.filter(v => normalizeId(v.folderId) === normalizeId(currentFolderId));
-  const filteredNotes = notes.filter(n => normalizeId((n as any).folderId) === normalizeId(currentFolderId));
-  const filteredTests = tests.filter(t => normalizeId((t as any).folderId) === normalizeId(currentFolderId));
-  const filteredFolders = folders.filter(f => normalizeId(f.parentId) === normalizeId(currentFolderId));
+  
+  const currentFolderId = normalizeId(currentFolder?._id || currentFolder?.id);
+
+  const filteredVideos = recordedVideos.filter(v => {
+    const vFolderId = normalizeId(v.folderId);
+    return vFolderId === currentFolderId || 
+           (vFolderId && currentFolder?._id && vFolderId === normalizeId(currentFolder._id)) ||
+           (vFolderId && currentFolder?.id && vFolderId === normalizeId(currentFolder.id));
+  });
+
+  const filteredNotes = notes.filter(n => {
+    const nFolderId = normalizeId((n as any).folderId);
+    return nFolderId === currentFolderId ||
+           (nFolderId && currentFolder?._id && nFolderId === normalizeId(currentFolder._id)) ||
+           (nFolderId && currentFolder?.id && nFolderId === normalizeId(currentFolder.id));
+  });
+
+  const filteredTests = tests.filter(t => {
+    const tFolderId = normalizeId((t as any).folderId);
+    return tFolderId === currentFolderId ||
+           (tFolderId && currentFolder?._id && tFolderId === normalizeId(currentFolder._id)) ||
+           (tFolderId && currentFolder?.id && tFolderId === normalizeId(currentFolder.id));
+  });
+
+  const filteredFolders = folders.filter(f => {
+    const fParentId = normalizeId(f.parentId);
+    return fParentId === currentFolderId ||
+           (fParentId && currentFolder?._id && fParentId === normalizeId(currentFolder._id)) ||
+           (fParentId && currentFolder?.id && fParentId === normalizeId(currentFolder.id));
+  });
 
   const totalVideos = recordedVideos.length;
   const completedVideos = progress.completedVideos.length;
@@ -600,7 +648,7 @@ const CourseDetails: React.FC = () => {
       <main className="p-4 origin-top transition-transform duration-200 space-y-4">
 
 
-        {course.description && !currentFolderId && (
+        {course.description && navigationHistory.length === 0 && (
           <div className="card-premium p-4 animate-fade-in-up">
             <h3 className="font-bold text-sm text-primary-800 mb-3 flex items-center gap-2">
               <div className="w-1 h-4 bg-gradient-to-b from-primary-600 to-primary-400 rounded-full" />
@@ -614,7 +662,7 @@ const CourseDetails: React.FC = () => {
           </div>
         )}
 
-        {(videos.length > 0 || notes.length > 0 || tests.length > 0) && !currentFolderId && (
+        {(videos.length > 0 || notes.length > 0 || tests.length > 0) && navigationHistory.length === 0 && (
           <div className="card-premium p-4 animate-fade-in-up" style={{ animationDelay: '80ms' }}>
             <h3 className="font-bold text-sm text-primary-800 mb-3 flex items-center gap-2">
               <div className="w-1 h-4 bg-gradient-to-b from-primary-600 to-primary-400 rounded-full" />
@@ -653,18 +701,18 @@ const CourseDetails: React.FC = () => {
             {/* Course Content Header/Grid similar to Reference */}
 
 
-            {currentFolderId && (
+            {navigationHistory.length > 0 && (
               <button
                 onClick={navigateUp}
                 className="flex items-center gap-1.5 text-primary-600 font-black text-[10px] mb-4 px-3 py-2 bg-primary-50 w-fit rounded-xl hover:bg-primary-100 transition-all uppercase tracking-widest border border-primary-100/50 active:scale-95"
               >
                 <span className="material-symbols-rounded text-base">chevron_left</span>
-                Back to {navigationHistory.length > 0 ? navigationHistory[navigationHistory.length - 1].title : 'All Content'}
+                Back to {navigationHistory.length > 1 ? navigationHistory[navigationHistory.length - 2].title : 'All Content'}
               </button>
             )}
 
             <div className="space-y-4">
-              {folders.filter(f => normalizeId(f.parentId) === normalizeId(currentFolderId)).map((folder) => (
+              {filteredFolders.map((folder) => (
                 <div
                   key={normalizeId(folder.id || folder._id)}
                   onClick={() => navigateIntoFolder(folder)}
@@ -699,7 +747,7 @@ const CourseDetails: React.FC = () => {
               filteredVideos.map((video, index) => {
                 const videoId = video.id || video._id;
                 const isCompleted = progress.completedVideos.includes(videoId as string);
-                const canPlay = isEnrolled || video.isFree || video.isDemo || (index === 0 && !currentFolderId);
+                const canPlay = isEnrolled || video.isFree || video.isDemo || (index === 0 && navigationHistory.length === 0);
                 const isLocked = !canPlay;
                 return (
                   <div
@@ -737,7 +785,7 @@ const CourseDetails: React.FC = () => {
                         <div className="absolute bottom-1.5 right-1.5 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md">
                           {video.duration || '00:00'}
                         </div>
-                        {(video.isFree || video.isDemo || (index === 0 && !currentFolderId)) && !isEnrolled && (
+                        {(video.isFree || video.isDemo || (index === 0 && navigationHistory.length === 0)) && !isEnrolled && (
                           <div className="absolute top-1.5 left-1.5 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">
                             {video.isDemo ? 'DEMO' : 'FREE'}
                           </div>
@@ -835,13 +883,13 @@ const CourseDetails: React.FC = () => {
 
         {activeTab === 'tests' && (
           <div className="space-y-4">
-            {currentFolderId && (
+            {navigationHistory.length > 0 && (
               <button
                 onClick={navigateUp}
                 className="flex items-center gap-1.5 text-primary-600 font-black text-[10px] mb-4 px-3 py-2 bg-primary-50 w-fit rounded-xl hover:bg-primary-100 transition-all uppercase tracking-widest border border-primary-100/50 active:scale-95"
               >
                 <span className="material-symbols-rounded text-base">chevron_left</span>
-                Back to {navigationHistory.length > 0 ? navigationHistory[navigationHistory.length - 1].title : 'All Content'}
+                Back to {navigationHistory.length > 1 ? navigationHistory[navigationHistory.length - 2].title : 'All Content'}
               </button>
             )}
 

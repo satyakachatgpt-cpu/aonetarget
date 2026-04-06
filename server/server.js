@@ -1061,9 +1061,12 @@ app.get('/api/courses/:id/videos', async (req, res) => {
 
     // --- CHECK ENROLLMENT ---
     const studentId = req.query.studentId || req.headers['student-id'];
+    const adminId = req.headers['x-admin-id'];
     let isEnrolled = false;
 
-    if (studentId) {
+    if (adminId) {
+      isEnrolled = true;
+    } else if (studentId) {
       const student = await db.collection('students').findOne({ 
         $or: [
           { id: studentId },
@@ -1186,7 +1189,30 @@ app.get('/api/courses/:id/videos', async (req, res) => {
       }
     });
 
+    // If admin and course has a demoVideo that's not already in the list, prepend it
+    if (adminId && course.demoVideo) {
+      const demoNormUrl = normalizeUrl(course.demoVideo);
+      const alreadyPresent = uniqueVideos.some(v => normalizeUrl(v.youtubeUrl || v.videoUrl || v.url) === demoNormUrl);
+      if (!alreadyPresent) {
+        uniqueVideos.unshift({
+          id: 'demo_' + (course.id || course._id),
+          _id: 'demo_' + (course.id || course._id),
+          title: 'Course Preview (Demo)',
+          youtubeUrl: course.demoVideo,
+          videoUrl: course.demoVideo,
+          url: course.demoVideo,
+          isFree: true,
+          isDemo: true,
+          thumbnail: course.thumbnail || course.imageUrl,
+          duration: 'Preview',
+          order: -1,
+          contentType: 'video'
+        });
+      }
+    }
+
     res.json(uniqueVideos);
+
   } catch (error) {
     console.error('Fetch videos error:', error);
     res.status(500).json({ error: 'Failed to fetch videos' });
@@ -1902,8 +1928,10 @@ app.get('/api/courses/:id/live-classes', optionalAuth, async (req, res) => {
     ]);
 
     // Check enrollment for private streams if student is logged in
-    let isEnrolled = false;
-    if (req.user && req.user.studentId) {
+    const adminId = req.headers['x-admin-id'];
+    let isEnrolled = !!adminId;
+
+    if (!isEnrolled && req.user && req.user.studentId) {
       const enrollment = await db.collection('enrollments').findOne({
         studentId: req.user.studentId,
         courseId: { $in: idVariants }
@@ -4319,77 +4347,7 @@ app.get('/api/videos', async (req, res) => {
   }
 });
 
-// Get videos by course
-app.get('/api/courses/:courseId/videos', async (req, res) => {
-  try {
-    const course = await findCourse(req.params.courseId);
-    const courseNames = [];
-    if (course) {
-      if (course.name) courseNames.push(course.name);
-      if (course.title && course.title !== course.name) courseNames.push(course.title);
-    }
-    const matchConditions = [
-      { courseId: req.params.courseId }
-    ];
-    if (course) {
-      const idVariants = [String(course.id || ''), String(course._id || '')].filter(Boolean);
-      matchConditions.push({ courseId: { $in: idVariants } });
-    }
-    if (courseNames.length > 0) {
-      matchConditions.push({ course: { $in: courseNames } });
-    }
-    const videos = await db.collection('videos').find({ $or: matchConditions }).sort({ order: 1 }).toArray();
-    res.json(videos);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch course videos' });
-  }
-});
-
-// Add video to course
-app.post('/api/courses/:courseId/videos', async (req, res) => {
-  try {
-    const videoData = { ...req.body, courseId: req.params.courseId };
-    const result = await db.collection('videos').insertOne(videoData);
-    res.status(201).json({ _id: result.insertedId, ...videoData });
-  } catch (error) {
-    console.error('[SERVER_ERROR] POST /api/courses/:courseId/videos:', error);
-    res.status(500).json({ error: 'Failed to add video to course', details: error.message });
-  }
-});
-
-// Update video in course
-app.put('/api/courses/:courseId/videos/:videoId', async (req, res) => {
-  try {
-    const videoId = req.params.videoId;
-    const { _id, ...updateData } = req.body;
-
-    // Search by both id and _id for maximum compatibility
-    const query = {
-      $or: [
-        { id: videoId },
-        { _id: ObjectId.isValid(videoId) ? new ObjectId(videoId) : null }
-      ].filter(v => v.id || v._id),
-      courseId: req.params.courseId
-    };
-
-    const result = await db.collection('videos').updateOne(query, { $set: updateData });
-    if (result.matchedCount === 0) return res.status(404).json({ error: 'Video not found' });
-    res.json({ success: true, message: 'Video updated' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to update video' });
-  }
-});
-
-// Delete video from course
-app.delete('/api/courses/:courseId/videos/:videoId', async (req, res) => {
-  try {
-    const result = await db.collection('videos').deleteOne({ id: req.params.videoId, courseId: req.params.courseId });
-    if (result.deletedCount === 0) return res.status(404).json({ error: 'Video not found' });
-    res.json({ success: true, message: 'Video deleted' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to delete video' });
-  }
-});
+// Redundant specific course video routes removed to ensure consistent behavior with the primary implementation above (line 1054+)
 
 app.post('/api/videos', async (req, res) => {
   try {
