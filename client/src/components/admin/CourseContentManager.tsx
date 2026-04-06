@@ -811,7 +811,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
       const response = await fetch(`${API_BASE_URL}/courses/${courseId}/videos`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(webinarData)
       });
 
@@ -866,7 +866,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
       const response = await fetch(`${API_BASE_URL}/courses/${courseId}/videos`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(streamData)
       });
 
@@ -924,7 +924,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         
         type: 'live',
         contentType: 'live_stream', // Legacy compatibility
-        status: streamStatus,
+        status: 'active',
         streamStatus: streamStatus, // Legacy compatibility
         endTime: youtubeZoomForm.endTime,
         endDateTime: youtubeZoomForm.endTime, // Legacy compatibility
@@ -954,7 +954,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
       const response = await fetch(endpointUrl, {
         method: videoId ? 'PUT' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify(streamData)
       });
 
