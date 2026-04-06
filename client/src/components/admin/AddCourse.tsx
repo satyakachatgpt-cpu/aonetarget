@@ -391,13 +391,13 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                     </button>
                     <button
                         onClick={handlePublish}
-                        disabled={isPublishing || isUploadingImage || isUploadingVideo}
-                        className={`px-6 py-2 rounded-sm text-[13px] font-bold transition-all shadow-sm flex items-center gap-2 ${(isPublishing || isUploadingImage || isUploadingVideo) ? 'bg-gray-400 cursor-not-allowed' : 'bg-black text-white hover:bg-gray-800'}`}
+                        disabled={isPublishing || isUploadingImage}
+                        className={`px-6 py-2 rounded-sm text-[13px] font-bold transition-all shadow-sm flex items-center gap-2 ${(isPublishing || isUploadingImage) ? 'bg-gray-400 cursor-not-allowed' : 'bg-black text-white hover:bg-gray-800'}`}
                     >
-                        {(isPublishing || isUploadingImage || isUploadingVideo) ? (
+                        {(isPublishing || isUploadingImage) ? (
                             <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         ) : 'Save & Publish'}
-                        {!(isPublishing || isUploadingImage || isUploadingVideo) && <span className="material-symbols-outlined text-[18px]">rocket_launch</span>}
+                        {!(isPublishing || isUploadingImage) && <span className="material-symbols-outlined text-[18px]">rocket_launch</span>}
                     </button>
                 </div>
             </div>
