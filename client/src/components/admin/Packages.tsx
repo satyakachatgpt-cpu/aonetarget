@@ -157,6 +157,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   useEffect(() => {
     loadData();
@@ -426,6 +427,42 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
     }
   };
 
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    setConfirmAction({
+      title: 'Bulk Delete Batches',
+      desc: `Are you sure you want to delete ${selectedIds.length} selected batches? This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          await Promise.all(selectedIds.map(id => coursesAPI.delete(id)));
+          showToast(`${selectedIds.length} batches deleted successfully!`, 'success');
+          setSelectedIds([]);
+          loadData();
+        } catch (error) {
+          showToast('Failed to delete some batches', 'error');
+          loadData();
+        }
+        setShowConfirmDrawer(false);
+      }
+    });
+    setShowConfirmDrawer(true);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredPackages.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredPackages.map(p => p.id || p._id));
+    }
+  };
+
+  const toggleSelectOne = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
   const handleDuplicate = (pkg: Package) => {
     const duplicateData = {
       ...pkg,
@@ -541,6 +578,17 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                   </div>
                 )}
               </div>
+
+              {selectedIds.length > 0 && (
+                <button
+                  onClick={handleBulkDelete}
+                  className="flex items-center gap-2 px-6 py-3 bg-red-50 text-red-600 border border-red-100 rounded-2xl text-[11px] font-black uppercase tracking-wider transition-all shadow-sm hover:bg-red-500 hover:text-white hover:border-red-500 animate-in fade-in slide-in-from-right-4 group"
+                >
+                  <span className="material-symbols-outlined text-[18px] group-hover:scale-110 transition-transform">delete_sweep</span>
+                  Bulk Delete ({selectedIds.length})
+                </button>
+              )}
+
               <button
                 onClick={() => setIsAddingCourse(true)}
                 className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center hover:bg-gray-800 transition-all shadow-md active:scale-95 shrink-0"
@@ -638,7 +686,23 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
               <table className="w-full text-left border-collapse table-fixed">
                 <thead>
                   <tr className="bg-gray-50/10 border-b border-gray-100">
-                    <th className="w-[80px] pl-8 pr-4 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] whitespace-nowrap">
+                    <th className="w-[60px] pl-8 py-5">
+                      <div
+                        onClick={toggleSelectAll}
+                        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all cursor-pointer ${selectedIds.length === filteredPackages.length && filteredPackages.length > 0
+                          ? 'bg-navy border-navy text-white'
+                          : 'border-gray-200 bg-white hover:border-gray-400'
+                          }`}
+                      >
+                        {selectedIds.length === filteredPackages.length && filteredPackages.length > 0 && (
+                          <span className="material-symbols-outlined text-[14px]">check</span>
+                        )}
+                        {selectedIds.length > 0 && selectedIds.length < filteredPackages.length && (
+                          <span className="w-2 h-0.5 bg-gray-400 rounded-full"></span>
+                        )}
+                      </div>
+                    </th>
+                    <th className="w-[80px] px-4 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] whitespace-nowrap">
                       S. No.
                     </th>
                     <th className="w-1/3 px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] whitespace-nowrap">
@@ -666,10 +730,23 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                         </div>
                       </td>
                     </tr>
-                  ) : (
-                    paginatedItems.map((pkg, idx) => (
-                      <tr key={pkg.id} onClick={() => onCourseSelect(pkg)} className="hover:bg-gray-50/50 transition-colors group cursor-pointer">
-                        <td className="pl-8 pr-4 py-6 text-[13px] font-black text-gray-300">{startIndex + idx + 1}</td>
+                    ) : (
+                      paginatedItems.map((pkg, idx) => (
+                        <tr key={pkg.id} onClick={() => onCourseSelect(pkg)} className={`hover:bg-gray-50/50 transition-colors group cursor-pointer ${selectedIds.includes(pkg.id) ? 'bg-blue-50/40' : ''}`}>
+                          <td className="pl-8 py-6" onClick={(e) => e.stopPropagation()}>
+                            <div
+                              onClick={(e) => toggleSelectOne(e, pkg.id)}
+                              className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all cursor-pointer ${selectedIds.includes(pkg.id)
+                                ? 'bg-[#1a237e] border-[#1a237e] text-white shadow-sm'
+                                : 'border-gray-200 bg-white hover:border-gray-400'
+                                }`}
+                            >
+                              {selectedIds.includes(pkg.id) && (
+                                <span className="material-symbols-outlined text-[14px] font-bold">check</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-4 py-6 text-[13px] font-black text-gray-300">{startIndex + idx + 1}</td>
                         <td className="px-6 py-6">
                           <div className="flex items-center gap-4">
                             <div className="w-12 h-12 bg-gray-50 rounded-xl flex-shrink-0 flex items-center justify-center border border-gray-100 group-hover:bg-white transition-colors">
@@ -808,13 +885,26 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                     <p className="text-sm font-black text-slate-400 uppercase tracking-widest">No batches found matching your criteria</p>
                   </div>
                 ) : (
-                  paginatedItems.map((pkg) => (
-                    <div
-                      key={pkg.id}
-                      onClick={() => onCourseSelect(pkg)}
-                      className="bg-white rounded-[1.5rem] border border-gray-100 shadow-sm hover:shadow-md transition-all p-6 cursor-pointer group flex flex-col"
-                    >
-                      <div className="flex justify-between items-start mb-4">
+                    paginatedItems.map((pkg) => (
+                      <div
+                        key={pkg.id}
+                        onClick={() => onCourseSelect(pkg)}
+                        className={`bg-white rounded-[1.5rem] border transition-all p-6 cursor-pointer group flex flex-col relative ${selectedIds.includes(pkg.id) ? 'border-blue-500 shadow-md ring-1 ring-blue-500/20' : 'border-gray-100 shadow-sm hover:shadow-md'}`}
+                      >
+                        {/* Checkbox Overlay for Grid */}
+                        <div
+                          onClick={(e) => toggleSelectOne(e, pkg.id)}
+                          className={`absolute top-4 right-4 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all z-10 ${selectedIds.includes(pkg.id)
+                            ? 'bg-[#1a237e] border-[#1a237e] text-white shadow-lg scale-110'
+                            : 'bg-white/80 backdrop-blur-sm border-gray-200 opacity-0 group-hover:opacity-100 hover:border-gray-400'
+                            }`}
+                        >
+                          {selectedIds.includes(pkg.id) && (
+                            <span className="material-symbols-outlined text-[16px] font-bold">check</span>
+                          )}
+                        </div>
+
+                        <div className="flex justify-between items-start mb-4">
                         <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
                           <span className="material-symbols-outlined text-blue-500">inventory_2</span>
                         </div>
