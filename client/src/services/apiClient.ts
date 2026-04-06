@@ -221,7 +221,10 @@ export const studentsAPI = {
       throw new Error(`API returned non-JSON response. Status: ${response.status}`);
     }
 
-    if (!response.ok) throw new Error(`Failed to create student (${response.status})`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || errorData.details || `Failed to create student (${response.status})`);
+    }
     return response.json();
   },
 
@@ -238,7 +241,10 @@ export const studentsAPI = {
       throw new Error('API returned non-JSON response');
     }
 
-    if (!response.ok) throw new Error(`Failed to update student (${response.status})`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || errorData.details || `Failed to update student (${response.status})`);
+    }
     return response.json();
   },
 

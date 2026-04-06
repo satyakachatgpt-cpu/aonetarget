@@ -2301,9 +2301,9 @@ app.post('/api/students', async (req, res) => {
     // Structure data for new schema
     const studentData = {
       id: studentId,
-      name: req.body.name,
-      email: req.body.email,
-      phone: req.body.phone,
+      name: (req.body.name || "").trim(),
+      email: (req.body.email && req.body.email.trim()) ? req.body.email.trim() : null, // Handle empty string as null for sparse unique index
+      phone: (req.body.phone || "").trim(),
       dob: req.body.dob,
       city: req.body.city,
       course: req.body.course,
@@ -2314,10 +2314,10 @@ app.post('/api/students', async (req, res) => {
       paymentStatus: req.body.paymentStatus || 'pending',
 
       admission: {
-        fatherName: req.body.fatherName,
-        motherName: req.body.motherName,
+        fatherName: (req.body.fatherName || "").trim(),
+        motherName: (req.body.motherName || "").trim(),
         gender: req.body.gender,
-        alternatePhone: req.body.alternatePhone,
+        alternatePhone: (req.body.alternatePhone || "").trim(),
         fullAddress: req.body.fullAddress,
         batchTiming: req.body.batchTiming,
         admissionDate: req.body.admissionDate || new Date()
@@ -2347,8 +2347,11 @@ app.post('/api/students', async (req, res) => {
     console.log('Student created successfully with ID:', studentId);
     res.status(201).json(student);
   } catch (error) {
-    console.error('Error creating student:', error);
-    res.status(500).json({ error: 'Failed to create student', details: error.message });
+    console.error('Error creating student (FULL ERROR):', error);
+    res.status(500).json({ 
+      error: error.code === 11000 ? 'Duplicate key error: A student with this phone or email already exists.' : 'Failed to create student', 
+      details: error.message 
+    });
   }
 });
 
@@ -2358,9 +2361,9 @@ app.put('/api/students/:id', async (req, res) => {
     const { _id, ...body } = req.body;
 
     const updateData = {
-      name: body.name,
-      email: body.email,
-      phone: body.phone,
+      name: body.name ? body.name.trim() : body.name,
+      email: (body.email && body.email.trim()) ? body.email.trim() : null, // Handle empty string as null
+      phone: body.phone ? body.phone.trim() : body.phone,
       dob: body.dob,
       city: body.city,
       course: body.course,
@@ -2370,10 +2373,10 @@ app.put('/api/students/:id', async (req, res) => {
       notes: body.notes,
       paymentStatus: body.paymentStatus,
       admission: {
-        fatherName: body.fatherName,
-        motherName: body.motherName,
+        fatherName: body.fatherName ? body.fatherName.trim() : body.fatherName,
+        motherName: body.motherName ? body.motherName.trim() : body.motherName,
         gender: body.gender,
-        alternatePhone: body.alternatePhone,
+        alternatePhone: body.alternatePhone ? body.alternatePhone.trim() : body.alternatePhone,
         fullAddress: body.fullAddress,
         batchTiming: body.batchTiming,
         admissionDate: body.admissionDate
@@ -2411,8 +2414,11 @@ app.put('/api/students/:id', async (req, res) => {
     console.log('Student updated successfully:', req.params.id);
     res.json(student);
   } catch (error) {
-    console.error('Error updating student:', error);
-    res.status(500).json({ error: 'Failed to update student', details: error.message });
+    console.error('Error updating student (FULL ERROR):', error);
+    res.status(500).json({ 
+      error: error.code === 11000 ? 'Duplicate key error: A student with this phone or email already exists.' : 'Failed to update student', 
+      details: error.message 
+    });
   }
 });
 
