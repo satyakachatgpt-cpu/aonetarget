@@ -10,12 +10,12 @@ interface Props {
   uploadType?: 'image' | 'video' | 'pdf';
 }
 
-const FileUploadButton: React.FC<Props> = ({ 
-  onUpload, 
-  accept = 'image/*', 
-  label = 'Upload', 
-  icon = 'upload', 
-  className, 
+const FileUploadButton: React.FC<Props> = ({
+  onUpload,
+  accept = 'image/*',
+  label = 'Upload',
+  icon = 'upload',
+  className,
   hideLabel = false,
   uploadType = 'image'
 }) => {

@@ -58,7 +58,7 @@ export function verifySignedUrl(filePath, signature, expiry) {
 
 export function authMiddleware(req, res, next) {
   const authHeader = req.headers['authorization'] || req.headers['Authorization'];
-  
+
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({
       error: 'Authentication required',
@@ -70,11 +70,11 @@ export function authMiddleware(req, res, next) {
 
   try {
     const decoded = verifyAccessToken(token);
-    
+
     // Set user info based on role
     if (decoded.isAdmin || decoded.role === 'admin') {
-      req.admin = { 
-        id: decoded.adminId, 
+      req.admin = {
+        id: decoded.adminId,
         name: decoded.name,
         role: 'admin'
       };
@@ -82,7 +82,7 @@ export function authMiddleware(req, res, next) {
     } else {
       req.user = decoded;
     }
-    
+
     next();
   } catch (err) {
     if (err.name === 'TokenExpiredError') {
