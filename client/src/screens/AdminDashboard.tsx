@@ -1,10 +1,16 @@
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, lazy, Suspense, useCallback, useTransition } from 'react';
 import { useNavigate, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AdminUIContext } from '../context/AdminUIContext';
 
-const Dashboard = lazy(() => import('../components/admin/Dashboard'));
+// --- Eager Load Core Components for INSTANT navigation ---
+import Dashboard from '../components/admin/Dashboard';
+import Students from '../components/admin/Students';
+import Packages from '../components/admin/Packages';
+import Categories from '../components/admin/Categories';
+import Courses from '../components/admin/misc/Courses';
+
+// --- Keep Rare/Heavy Components as Lazy (with pre-fetching) ---
 const MiscSection = lazy(() => import('../components/admin/MiscSection'));
-const Students = lazy(() => import('../components/admin/Students'));
 const Store = lazy(() => import('../components/admin/store/StoreManagement'));
 const Institute = lazy(() => import('../components/admin/Institute'));
 const Questions = lazy(() => import('../components/admin/Questions'));
@@ -17,7 +23,6 @@ const Videos = lazy(() => import('../components/admin/Videos'));
 const VideoSeries = lazy(() => import('../components/admin/VideoSeries'));
 const LiveVideos = lazy(() => import('../components/admin/LiveVideos'));
 const PDFs = lazy(() => import('../components/admin/PDFs'));
-const Packages = lazy(() => import('../components/admin/Packages'));
 const Messages = lazy(() => import('../components/admin/Messages'));
 const Blog = lazy(() => import('../components/admin/Blog'));
 const Settings = lazy(() => import('../components/admin/Settings'));
@@ -26,7 +31,6 @@ const Banners = lazy(() => import('../components/admin/Banners'));
 const Buyers = lazy(() => import('../components/admin/shopping/Buyers'));
 const Tokens = lazy(() => import('../components/admin/shopping/Tokens'));
 const Coupons = lazy(() => import('../components/admin/shopping/Coupons'));
-const Courses = lazy(() => import('../components/admin/misc/Courses'));
 const QuickLinks = lazy(() => import('../components/admin/QuickLinks'));
 const CourseContentManager = lazy(() => import('../components/admin/CourseContentManager'));
 const LiveClassScheduler = lazy(() => import('../components/admin/LiveClassScheduler'));
@@ -37,7 +41,6 @@ const Instructions = lazy(() => import('../components/admin/misc/Instructions'))
 const ExamDocuments = lazy(() => import('../components/admin/misc/ExamDocuments'));
 const GlobalNews = lazy(() => import('../components/admin/misc/GlobalNews'));
 const PushNotifications = lazy(() => import('../components/admin/misc/PushNotifications'));
-const Categories = lazy(() => import('../components/admin/Categories'));
 const Referrals = lazy(() => import('../components/admin/Referrals'));
 const ChatSupport = lazy(() => import('../components/admin/ChatSupport'));
 const LiveSessions = lazy(() => import('../components/admin/LiveSessions'));
@@ -63,10 +66,33 @@ interface MenuItem {
 const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
   const navigate = useNavigate();
   const location = useLocation();
+  const [isPending, startTransition] = useTransition();
 
-  // Restore last active view from localStorage on mount (persists across refreshes)
+  // Background pre-fetcher for remaining lazy components to ensure "instant" feel later
+  useEffect(() => {
+    const prefetch = async () => {
+      try {
+        const components = [
+          () => import('../components/admin/Tests'),
+          () => import('../components/admin/MiscSection'),
+          () => import('../components/admin/store/StoreManagement'),
+          () => import('../components/admin/Institute'),
+          () => import('../components/admin/AllReports'),
+          () => import('../components/admin/Videos'),
+          () => import('../components/admin/LiveSessions'),
+          () => import('../components/admin/PDFs'),
+          () => import('../components/admin/CourseContentManager')
+        ];
+        // Low priority pre-fetching
+        for (const comp of components) {
+          setTimeout(() => comp(), 2000); 
+        }
+      } catch (err) { /* silent */ }
+    };
+    prefetch();
+  }, []);
+
   const [activeView, setActiveViewState] = useState<AdminView>(() => {
-    // Check URL first
     const pathParts = location.pathname.split('/');
     const lastPart = pathParts[pathParts.length - 1];
     const secondToLastPart = pathParts[pathParts.length - 2];
@@ -76,7 +102,6 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
 
     const saved = localStorage.getItem('admin_active_view');
     if (!saved) return 'dashboard';
-    // For course-content, only restore if we also have the course data saved
     if (saved === 'course-content') {
       const savedCourse = localStorage.getItem('admin_selected_course');
       if (savedCourse) return 'course-content';
@@ -85,7 +110,6 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
     return saved as AdminView;
   });
 
-  // Sync state with URL
   useEffect(() => {
     const pathParts = location.pathname.split('/');
     const lastPart = pathParts[pathParts.length - 1];
@@ -98,16 +122,17 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
     }
   }, [location.pathname]);
 
-  // Wrapper that also persists to localStorage
   const setActiveView = (view: AdminView) => {
     localStorage.setItem('admin_active_view', view);
-    setActiveViewState(view);
-    navigate(`/admin/${view}`);
+    // Use transition to prioritize UI reactivity (like the sidebar click) over the full view render
+    startTransition(() => {
+      setActiveViewState(view);
+      navigate(`/admin/${view}`);
+    });
   };
 
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
-
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
   const [expandedMenu, setExpandedMenu] = useState<string | null>(null);
   const [selectedCourseForContent, setSelectedCourseForContent] = useState<any>(() => {
@@ -120,18 +145,18 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
     return localStorage.getItem('admin_content_tab') || 'Content';
   });
 
-  const handleSelectCourseForContent = (course: any, tab: string = 'Content') => {
+  const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const handleSelectCourseForContent = useCallback((course: any, tab: string = 'Content') => {
     localStorage.setItem('admin_selected_course', JSON.stringify(course));
     localStorage.setItem('admin_content_tab', tab);
     setSelectedCourseForContent(course);
     setInitialContentTab(tab);
     setActiveView('course-content');
-  };
-
-  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
-    setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
-  };
+  }, []);
 
   const menuItems: MenuItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: 'grid_view', color: 'text-gray-700' },
@@ -215,23 +240,28 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
 
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredMenuItems = menuItems.map(item => {
-    if (item.label.toLowerCase().includes(searchQuery.toLowerCase())) return item;
-    if (item.submenu) {
-      const filteredSub = item.submenu.filter(sub => sub.label.toLowerCase().includes(searchQuery.toLowerCase()));
-      if (filteredSub.length > 0) return { ...item, submenu: filteredSub };
-    }
-    return null;
-  }).filter(Boolean) as MenuItem[];
+  const filteredMenuItems = React.useMemo(() => (
+    menuItems.map(item => {
+      if (item.label.toLowerCase().includes(searchQuery.toLowerCase())) return item;
+      if (item.submenu) {
+        const filteredSub = item.submenu.filter(sub => sub.label.toLowerCase().includes(searchQuery.toLowerCase()));
+        if (filteredSub.length > 0) return { ...item, submenu: filteredSub };
+      }
+      return null;
+    }).filter(Boolean) as MenuItem[]
+  ), [menuItems, searchQuery]);
 
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     localStorage.removeItem('isAdminAuthenticated');
+    localStorage.removeItem('adminId');
+    localStorage.removeItem('adminName');
+    localStorage.removeItem('adminToken');
     localStorage.removeItem('admin_active_view');
     localStorage.removeItem('admin_selected_course');
     localStorage.removeItem('admin_content_tab');
     setAuth(false);
     navigate('/admin-login');
-  };
+  }, [navigate]);
 
   const renderContent = () => {
     const props = { showToast };
@@ -288,10 +318,8 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
     );
   };
 
-
   return (
     <div className="flex h-screen bg-[#FDFDFD] overflow-hidden font-sans text-gray-800">
-      {/* Toast Notification */}
       {toast && (
         <div className={`fixed top-6 right-6 z-[999999] px-6 py-4 rounded-2xl shadow-2xl animate-fade-in flex items-center gap-3 border ${toast.type === 'success' ? 'bg-white border-green-100 text-green-600' : 'bg-white border-red-100 text-red-600'}`}>
           <span className="material-icons-outlined">{toast.type === 'success' ? 'check_circle' : 'error'}</span>
@@ -305,16 +333,14 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
           onMouseEnter={() => setSidebarOpen(true)}
           onMouseLeave={() => {
             setSidebarOpen(false);
-            setExpandedMenu(null); // Reset submenus when sidebar closes
+            setExpandedMenu(null);
           }}
-          className="bg-white border-r border-gray-100 flex flex-col z-50 shrink-0 relative will-change-[width,transform] transition-[width] duration-300 ease-[cubic-bezier(0.2,0,0,1)]"
+          className="bg-white border-r border-gray-100 flex flex-col z-50 shrink-0 relative transition-[width] duration-300 ease-[cubic-bezier(0.2,0,0,1)]"
           style={{
             width: isSidebarOpen ? '280px' : '80px',
-            transform: 'translateZ(0)',
-            backfaceVisibility: 'hidden'
+            willChange: 'width'
           }}
         >
-          {/* Logo Section */}
           <div className={`p-6 flex items-center bg-white shrink-0 transition-all duration-300 ${isSidebarOpen ? 'gap-3 px-8' : 'justify-center px-4'}`}>
             <div className="w-11 h-11 bg-[#1A237E] rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-indigo-100 transition-all duration-500 hover:scale-105 active:scale-95 cursor-pointer">
               <span className="text-white font-black italic text-xl tracking-tighter">A1</span>
@@ -325,7 +351,6 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
             </div>
           </div>
 
-          {/* Search Section */}
           <div className={`px-5 mb-4 transition-all duration-500 ease-in-out ${isSidebarOpen ? 'opacity-100 max-h-20 translate-y-0' : 'opacity-0 max-h-0 -translate-y-4 overflow-hidden'}`}>
             <div className="relative flex items-center bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 transition-all group focus-within:ring-1 focus-within:ring-gray-200 focus-within:bg-white shadow-sm">
               <span className="material-symbols-outlined text-gray-400 text-[18px] mr-2">search</span>
@@ -339,21 +364,14 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
             </div>
           </div>
 
-          {/* Navigation Content */}
           <nav className="flex-1 overflow-y-auto custom-scrollbar py-2 px-3 space-y-0.5">
             {filteredMenuItems.map((item) => (
-              <div
-                key={item.id}
-                className="mb-0.5"
-              >
+              <div key={item.id} className="mb-0.5">
                 <button
                   onClick={() => {
                     if (item.submenu) {
                       setExpandedMenu(expandedMenu === item.id ? null : item.id);
-                      // Special case for Test Portal: clicking it navigates to Tests
-                      if (item.id === 'test-portal') {
-                        setActiveView('tests');
-                      }
+                      if (item.id === 'test-portal') setActiveView('tests');
                     } else {
                       setActiveView(item.id as AdminView);
                     }
@@ -441,7 +459,9 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         <div className={`flex-1 overflow-y-auto ${sidebarHidden ? 'p-0' : 'p-4 lg:p-6'} bg-[#fcfcfc] min-h-0 custom-scrollbar`}>
           <div className="h-full">
             <AdminUIContext.Provider value={{ sidebarHidden, setSidebarHidden }}>
-              {renderContent()}
+              <Suspense fallback={<div className="flex items-center justify-center h-full"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1A237E]"></div></div>}>
+                {renderContent()}
+              </Suspense>
             </AdminUIContext.Provider>
           </div>
         </div>

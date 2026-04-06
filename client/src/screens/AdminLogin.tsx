@@ -54,6 +54,9 @@ const AdminLogin: React.FC<Props> = ({ setAuth }) => {
         localStorage.setItem('isAdminAuthenticated', 'true');
         localStorage.setItem('adminId', response.adminId);
         localStorage.setItem('adminName', response.name);
+        if (response.token) {
+          localStorage.setItem('adminToken', response.token);
+        }
         setAuth(true);
         navigate('/admin');
       } else {

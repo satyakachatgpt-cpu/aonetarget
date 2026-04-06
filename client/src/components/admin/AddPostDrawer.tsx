@@ -103,7 +103,11 @@ const AddPostDrawer: React.FC<AddPostDrawerProps> = ({ isOpen, onClose, courseId
             try {
                 const formData = new FormData();
                 formData.append('file', file);
-                const res = await fetch('/api/upload', { method: 'POST', body: formData });
+                const res = await fetch('/api/v2/upload/image', { 
+                    method: 'POST', 
+                    headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+                    body: formData 
+                });
                 if (!res.ok) throw new Error('Upload failed');
                 const data = await res.json();
                 setImagePreview(data.url);
@@ -123,7 +127,11 @@ const AddPostDrawer: React.FC<AddPostDrawerProps> = ({ isOpen, onClose, courseId
             try {
                 const formData = new FormData();
                 formData.append('file', file);
-                const res = await fetch('/api/upload', { method: 'POST', body: formData });
+                const res = await fetch('/api/v2/upload/video', { 
+                    method: 'POST', 
+                    headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+                    body: formData 
+                });
                 if (!res.ok) throw new Error('Upload failed');
                 const data = await res.json();
                 setVideoPreview(data.url);

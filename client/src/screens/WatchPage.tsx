@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import VideoPlayer from '../components/VideoPlayer';
 import Playlist from '../components/Playlist';
+import { getVideoUrl, toYouTubeEmbed } from '../lib/utils';
 import { curriculumAPI } from '../services/apiClient';
 
 const WatchPage: React.FC = () => {
@@ -134,7 +135,7 @@ const WatchPage: React.FC = () => {
         {/* VIDEO PLAYER AREA */}
         <div className={`bg-black flex-shrink-0 relative group ${isLandscape ? 'flex-1 h-full' : 'w-full aspect-video shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-40'}`}>
           <VideoPlayer
-            src={currentVideo.youtubeUrl || currentVideo.videoUrl || currentVideo.url || ''}
+            src={toYouTubeEmbed(currentVideo.youtubeUrl || currentVideo.videoUrl || currentVideo.url || '')}
             title={currentVideo.title}
             onEnded={playNext}
             onClose={() => navigate(-1)}

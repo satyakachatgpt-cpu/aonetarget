@@ -27,7 +27,7 @@ interface Banner {
 }
 
 import { CATEGORY_ICONS, CATEGORY_GRADIENTS } from '../constants';
-import { getImageUrl } from '../lib/utils';
+import { getImageUrl, getPdfUrl } from '../lib/utils';
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
@@ -184,10 +184,8 @@ const Home: React.FC = () => {
         let data = [];
         const studentId = student?.id || student?._id;
         if (isAuthenticated && studentId) {
-          console.log('Fetching live classes for student:', studentId);
           data = await liveVideosAPI.getByStudentId(studentId);
         } else {
-          console.log('Skipping live classes fetch for guest (Filtering to enrolled only)');
           data = [];
         }
         setLiveClasses(Array.isArray(data) ? data : []);
@@ -200,9 +198,7 @@ const Home: React.FC = () => {
       try {
         const data = await testSeriesAPI.getAll();
         setTestSeries(Array.isArray(data) ? data : []);
-      } catch (error) {
-        // Handle test series fetch failure
-      }
+      } catch (error) { /* Silent fail */ }
     };
 
     const fetchExamDocs = async () => {
@@ -227,20 +223,25 @@ const Home: React.FC = () => {
       }
     };
 
-    const fetchAll = () => {
-      fetchCourses();
-      fetchCategories();
-      fetchBanners();
-      fetchLiveClasses();
-      fetchTestSeries();
-      fetchExamDocs();
-      fetchQuickLinks();
+    const fetchAll = async () => {
+      // Parallelize independent fetches to speed up initial load
+      try {
+        await Promise.all([
+          fetchCourses(),
+          fetchCategories(),
+          fetchBanners(),
+          fetchLiveClasses(),
+          fetchTestSeries(),
+          fetchExamDocs(),
+          fetchQuickLinks(),
+          fetchNews()
+        ]);
+      } catch (err) {
+        console.error('Initial data load error:', err);
+      }
     };
 
     fetchAll();
-    fetchNews();
-
-    return () => { };
   }, [isAuthenticated, student]);
 
   const dismissNewsModal = () => {
@@ -439,7 +440,7 @@ const Home: React.FC = () => {
               <div className="flex-1 flex justify-center items-center">
                 <div className="bg-white rounded-[20px] px-4 py-1 shadow-md flex items-center justify-center h-[54px] w-[230px] overflow-hidden mix-blend-normal">
                   <img
-                    src="/attach-assist/alonelogo_1770810181717.jpg"
+                    src={getImageUrl("/attach-assist/alonelogo_1770810181717.jpg")}
                     alt="Aone Target"
                     className="h-full w-full object-contain"
                   />
@@ -619,7 +620,9 @@ const Home: React.FC = () => {
             </div>
             <div className="space-y-2.5">
               {liveClasses.slice(0, 4).map((lc: any, i: number) => {
-                const isEnded = lc.status === 'ended' || lc.streamStatus === 'ended' || lc.isLive === false;
+                const isEnded = lc.status === 'ended' || lc.streamStatus === 'ended';
+                const isUpcoming = lc.status === 'upcoming' || (!lc.status && !lc.isLive);
+                const isLive = lc.status === 'live' || lc.isLive === true;
                 return (
                   <div key={lc._id || lc.id || i} className="card-premium p-3 rounded-2xl border border-gray-100/50 flex gap-3 items-center hover:-translate-y-0.5 transition-all duration-200 group">
                     <div className={`w-14 h-14 bg-gradient-to-br ${isEnded ? 'from-gray-400 to-gray-500' : 'from-accent to-accent-600'} rounded-2xl flex items-center justify-center shrink-0 relative shadow-button`}>
@@ -637,6 +640,8 @@ const Home: React.FC = () => {
                         <span className="text-[11px] text-gray-400 flex items-center gap-1">
                           <span className="material-symbols-rounded text-[12px]">schedule</span>
                           {(() => {
+                            if (isEnded) return 'Ended';
+                            if (isLive) return 'Live Now';
                             if (lc.scheduledTime && lc.scheduledDate) {
                               try {
                                 const dtStr = `${lc.scheduledDate}T${lc.scheduledTime}:00`;
@@ -733,7 +738,7 @@ const Home: React.FC = () => {
               {examDocs.slice(0, 5).map((doc: any, i: number) => (
                 <div
                   key={doc._id || doc.id || i}
-                  onClick={() => doc.fileUrl && window.open(doc.fileUrl, '_blank')}
+                  onClick={() => doc.fileUrl && window.open(getPdfUrl(doc.fileUrl), '_blank')}
                   className="w-36 flex-shrink-0 card-premium p-2.5 rounded-2xl border border-gray-100/50 cursor-pointer hover:shadow-lg transition-all"
                 >
                   <div className="w-9 h-9 bg-teal-50 rounded-xl flex items-center justify-center mb-2.5">
@@ -781,9 +786,15 @@ const Home: React.FC = () => {
                           loading="lazy" 
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
                         />
-                        {/* We add a very subtle bottom gradient purely to ensure text/icons are somewhat readable, but keeping the banner mostly visible like the screenshot */}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        
+                        {/* Name Overlay Gradient */}
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 rounded-b-xl">
+                          <p className="text-white font-bold text-sm leading-tight">
+                            {course.name || course.title || course.courseName}
+                          </p>
+                        </div>
+
+                        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-30">
                           <button className="bg-yellow-400 text-black text-[9px] font-bold px-3 py-1 rounded-full shadow-lg">
                             JOIN NOW
                           </button>

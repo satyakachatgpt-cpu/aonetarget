@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuthStore } from '../store/authStore';
+import { extractYouTubeId, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
 
 interface SecureVideoPlayerProps {
   src: string;
@@ -124,7 +125,7 @@ const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
     onEnded?.();
   }, [saveProgress, onEnded]);
 
-  const isYouTube = !!src && (src.includes('youtube.com') || src.includes('youtu.be') || src.includes('youtube-nocookie.com'));
+  const isYouTube = isYouTubeUrl(src);
 
   // Save initial entry when video starts playing (for YouTube too)
   const handlePlay = useCallback(() => {
@@ -135,16 +136,8 @@ const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
   }, [saveProgress]);
 
   if (isYouTube) {
-    const getYouTubeId = (url: string) => {
-      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=|shorts\/|live\/)([^#&?]*).*/;
-      const match = url.match(regExp);
-      return (match && match[2].length === 11) ? match[2] : null;
-    };
-
-    const videoId_ = getYouTubeId(src);
-    const embedUrl = videoId_ 
-      ? `https://www.youtube.com/embed/${videoId_}?autoplay=1&controls=0&modestbranding=1&rel=0&showinfo=0&mute=0&iv_load_policy=3&disablekb=1`
-      : src;
+    const videoId_ = extractYouTubeId(src);
+    const embedUrl = toYouTubeEmbed(src);
 
     // Save history entry for YouTube when component mounts (can't track time in iframe)
     useEffect(() => {

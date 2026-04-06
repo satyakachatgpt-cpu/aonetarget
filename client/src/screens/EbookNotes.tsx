@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
+import { getPdfUrl } from '../lib/utils';
 
 const EbookNotes: React.FC = () => {
   const navigate = useNavigate();
@@ -125,7 +126,7 @@ const EbookNotes: React.FC = () => {
                   <div className="flex gap-2 mt-3">
                     <button
                       className="flex-1 bg-teal-600 text-white py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1"
-                      onClick={() => item.fileUrl && window.open(item.fileUrl, '_blank')}
+                      onClick={() => item.fileUrl && window.open(getPdfUrl(item.fileUrl), '_blank')}
                     >
                       <span className="material-symbols-rounded text-sm">visibility</span>
                       View
@@ -146,25 +147,26 @@ const EbookNotes: React.FC = () => {
                           showToast('Downloading...');
 
                           try {
+                            const resolvedUrl = getPdfUrl(item.fileUrl);
                             // 1. App Cache
                             const cache = await caches.open('aone-downloads');
                             try {
-                              const response = await fetch(item.fileUrl, { mode: 'cors' });
-                              if (response.ok) await cache.put(item.fileUrl, response);
+                              const response = await fetch(resolvedUrl, { mode: 'cors' });
+                              if (response.ok) await cache.put(resolvedUrl, response);
                               else {
-                                const opaque = await fetch(item.fileUrl, { mode: 'no-cors' });
-                                await cache.put(item.fileUrl, opaque);
+                                const opaque = await fetch(resolvedUrl, { mode: 'no-cors' });
+                                await cache.put(resolvedUrl, opaque);
                               }
                             } catch (e) {
-                              const opaque = await fetch(item.fileUrl, { mode: 'no-cors' });
-                              await cache.put(item.fileUrl, opaque);
+                              const opaque = await fetch(resolvedUrl, { mode: 'no-cors' });
+                              await cache.put(resolvedUrl, opaque);
                             }
 
                             // 2. DB Metadata
                             const downloadData = {
                               id: `download_${Date.now()}`,
                               title: item.title,
-                              type: item.type === 'ebook' ? 'pdf' : 'pdf',
+                              type: 'pdf',
                               fileUrl: item.fileUrl,
                               size: item.pages ? `${item.pages} pages` : 'N/A',
                               courseId: 'ebook-general',
@@ -183,8 +185,8 @@ const EbookNotes: React.FC = () => {
                             } else {
                               showToast('Error: Failed to sync metadata.');
                             }
-                          } catch (e) {
-                            console.error('Download error:', e);
+                          } catch (error) {
+                            console.error('Download error:', error);
                             showToast('Error saving file offline.');
                           } finally {
                             setDownloadingId(null);

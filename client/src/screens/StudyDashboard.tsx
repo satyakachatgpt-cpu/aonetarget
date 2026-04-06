@@ -1,7 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import LiveClassesCalendar from '../components/student/LiveClassesCalendar';
+import { getPdfUrl, getVideoUrl, getImageUrl, getYouTubeThumbnail, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
+import { useAuthStore } from '../store/authStore';
 
 const QUIZ_QUESTIONS = [
   {
@@ -62,9 +63,10 @@ const StudyDashboard: React.FC = () => {
     const fetchCourseData = async () => {
       try {
         setLoading(true);
+        const sId = storedStudent ? JSON.parse(storedStudent).id : '';
         const [courseRes, vRes, nRes, tRes, fRes] = await Promise.all([
           fetch(`/api/courses/${id}`).then(r => r.ok ? r.json() : null),
-          fetch(`/api/courses/${id}/videos`).then(r => r.ok ? r.json() : []),
+          fetch(`/api/courses/${id}/videos?studentId=${sId}`).then(r => r.ok ? r.json() : []),
           fetch(`/api/courses/${id}/notes`).then(r => r.ok ? r.json() : []),
           fetch(`/api/courses/${id}/tests`).then(r => r.ok ? r.json() : []),
           fetch(`/api/courses/${id}/folders`).then(r => r.ok ? r.json() : [])
@@ -112,10 +114,6 @@ const StudyDashboard: React.FC = () => {
   const isFreeContent = course?.price === 0 || course?.isFree === true ||
     course?.categoryId === 'free-content' ||
     course?.type === 'free';
-  const isYouTubeUrl = (url: string) => {
-    if (!url) return false;
-    return url.includes('youtube.com') || url.includes('youtu.be') || url.includes('youtube-nocookie.com');
-  };
 
   // Download handler - saves to app's downloads collection AND caches file for offline use
   const handleDownload = async (item: any, type: 'video' | 'pdf' | 'audio') => {
@@ -124,7 +122,7 @@ const StudyDashboard: React.FC = () => {
       return;
     }
 
-    const fileUrl = item.fileUrl || item.youtubeUrl || item.url || '';
+    const fileUrl = toYouTubeEmbed(item.youtubeUrl || item.fileUrl || item.url || item.videoUrl || '');
     if (!fileUrl) {
       showToast('Error: No file URL available to download.');
       return;
@@ -187,8 +185,9 @@ const StudyDashboard: React.FC = () => {
     if (type === 'video') {
       navigate('/video-player', { state: { video: item, courseTitle: course?.title || course?.name, courseId: id } });
     } else {
-      if (item.fileUrl || item.url || item.link) {
-        navigate('/pdf-viewer', { state: { pdf: item, title: item.title || item.name } });
+      const pdfUrl = getPdfUrl(item.fileUrl || item.url || item.link);
+      if (pdfUrl) {
+        navigate('/pdf-viewer', { state: { pdf: { ...item, fileUrl: pdfUrl }, title: item.title || item.name } });
       } else {
         showToast('Error: No file URL available to view.');
       }
@@ -311,7 +310,7 @@ const StudyDashboard: React.FC = () => {
                   }}
                 >
                   <div className="relative w-24 h-16 bg-gray-200 rounded-lg overflow-hidden shrink-0">
-                    <img src={`https://img.youtube.com/vi/${videos[0].youtubeUrl?.includes('v=') ? videos[0].youtubeUrl.split('v=')[1].split('&')[0] : (videos[0].youtubeUrl?.includes('be/') ? videos[0].youtubeUrl.split('be/')[1].split('?')[0] : '')}/mqdefault.jpg`} className="w-full h-full object-cover" alt="Thumb" />
+                    <img src={getYouTubeThumbnail(videos[0].youtubeUrl || videos[0].videoUrl || videos[0].url || '') || getImageUrl(videos[0].thumbnail)} className="w-full h-full object-cover" alt="Thumb" />
                     <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
                       <span className="material-symbols-rounded text-white">
                         {isFreeContent || downloadedIds.has(videos[0]._id || videos[0].id) ? 'play_arrow' : 'download'}

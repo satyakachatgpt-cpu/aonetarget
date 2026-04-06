@@ -10,8 +10,10 @@ const videoSchema = new mongoose.Schema({
     isFree: { type: Boolean, default: false },
     allowDownload: { type: Boolean, default: false },
 
-    createdAt: { type: Date, default: Date.now }
-}, { strict: false });
+    status: { type: String, default: 'active' },
+    cloudinaryPublicId: { type: String },
+    thumbnailPublicId: { type: String }
+}, { timestamps: true });
 
 const Video = mongoose.model('Video', videoSchema);
 export default Video;

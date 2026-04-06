@@ -8,6 +8,8 @@ const folderSchema = new mongoose.Schema({
     courseId: { type: String, required: true },
     parentId: { type: String, default: null },
     isFree: { type: Boolean, default: false },
+    thumbnailPublicId: { type: String },
+    cloudinaryPublicId: { type: String },
     status: { type: String, default: 'active' },
     order: { type: Number, default: 0 },
     sortingOrder: { type: String },

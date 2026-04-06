@@ -155,7 +155,11 @@ const Blog: React.FC<Props> = ({ showToast }) => {
     try {
       const formDataUpload = new FormData();
       formDataUpload.append('file', file);
-      const res = await fetch('/api/upload', { method: 'POST', body: formDataUpload });
+      const res = await fetch('/api/v2/upload/image', { 
+        method: 'POST', 
+        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+        body: formDataUpload 
+      });
       if (!res.ok) throw new Error('Upload failed');
       const data = await res.json();
       setFormData(prev => ({ ...prev, thumbnail: data.url }));

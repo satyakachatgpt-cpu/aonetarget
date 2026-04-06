@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getImageUrl } from '../lib/utils';
+import { getImageUrl, getVideoUrl, getPdfUrl, getYouTubeThumbnail, getGradientPlaceholder, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
 import LiveClassesCalendar from '../components/student/LiveClassesCalendar';
 import StudentVideoPlayer from '../components/student/StudentVideoPlayer';
 import { useAuthStore } from '../store/authStore';
 import { useUIStore } from '../store/uiStore';
-import { getYouTubeThumbnail, getGradientPlaceholder } from '../lib/utils';
 import { CATEGORY_GRADIENTS } from '../constants';
 
 interface Video {
@@ -29,6 +28,10 @@ interface Video {
   instructor?: string;
   url?: string;
   folderId?: string | null;
+  status?: string;
+  streamStatus?: string;
+  isLive?: boolean;
+  isDemo?: boolean;
 }
 
 interface Note {
@@ -59,6 +62,7 @@ interface Course {
   category?: string;
   enrollmentCount?: number;
   notesCount?: number;
+  demoVideo?: string;
 }
 
 interface Progress {
@@ -183,12 +187,12 @@ const CourseDetails: React.FC = () => {
 
 
   const handleVideoClick = (video: Video) => {
-    console.log('Video clicked:', video.title, 'Playable:', isEnrolled || video.isFree, 'URL:', video.youtubeUrl || video.videoUrl);
-    const canPlay = isEnrolled || video.isFree;
+    console.log('Video clicked:', video.title, 'Playable:', isEnrolled || video.isFree || video.isDemo, 'URL:', video.youtubeUrl || video.videoUrl);
+    const canPlay = isEnrolled || video.isFree || video.isDemo;
 
-    const url = video.youtubeUrl || video.videoUrl || video.url || video.meetingLink;
+    const url = toYouTubeEmbed(video.youtubeUrl || video.videoUrl || video.url || video.meetingLink || '');
     if (canPlay && url) {
-      setSelectedVideo(video);
+      setSelectedVideo({ ...video, url });
       setShowVideoPlayer(true);
     } else if (!canPlay) {
       alert('Please enroll in this course to watch this video.');
@@ -250,7 +254,7 @@ const CourseDetails: React.FC = () => {
     try {
       const [courseData, videosData, notesData, testsData, foldersData] = await Promise.all([
         fetch(`/api/courses/${id}`).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch(`/api/courses/${id}/videos`).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`/api/courses/${id}/videos?studentId=${studentId}`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/courses/${id}/notes`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/courses/${id}/tests`).then(r => r.ok ? r.json() : []).catch(() => []),
         fetch(`/api/courses/${id}/folders`).then(r => r.ok ? r.json() : []).catch(() => []),
@@ -673,7 +677,7 @@ const CourseDetails: React.FC = () => {
               filteredVideos.map((video, index) => {
                 const videoId = video.id || video._id;
                 const isCompleted = progress.completedVideos.includes(videoId as string);
-                const canPlay = isEnrolled || video.isFree || (index === 0 && !currentFolderId);
+                const canPlay = isEnrolled || video.isFree || video.isDemo || (index === 0 && !currentFolderId);
                 const isLocked = !canPlay;
                 return (
                   <div
@@ -686,7 +690,7 @@ const CourseDetails: React.FC = () => {
                       <div className="relative w-28 h-20 rounded-2xl overflow-hidden flex-shrink-0">
                         {!failedImages.has(video.id) ? (
                           <img
-                            src={video.thumbnail || getYouTubeThumbnail(video.youtubeUrl || video.videoUrl || '') || `https://picsum.photos/400/225?sig=${video.id}`}
+                            src={getImageUrl(video.thumbnail) || getYouTubeThumbnail(video.youtubeUrl || video.videoUrl || '') || `https://picsum.photos/400/225?sig=${video.id}`}
                             alt={video.title}
                             className="w-full h-full object-cover"
                             loading="lazy"
@@ -711,9 +715,9 @@ const CourseDetails: React.FC = () => {
                         <div className="absolute bottom-1.5 right-1.5 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md">
                           {video.duration || '00:00'}
                         </div>
-                        {(video.isFree || (index === 0 && !currentFolderId)) && !isEnrolled && (
+                        {(video.isFree || video.isDemo || (index === 0 && !currentFolderId)) && !isEnrolled && (
                           <div className="absolute top-1.5 left-1.5 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">
-                            FREE
+                            {video.isDemo ? 'DEMO' : 'FREE'}
                           </div>
                         )}
                       </div>
@@ -793,7 +797,7 @@ const CourseDetails: React.FC = () => {
                       </p>
                     </div>
                     <a
-                      href={note.fileUrl}
+                      href={getPdfUrl(note.fileUrl)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-10 h-10 bg-primary-50 rounded-xl flex items-center justify-center text-primary-600 active:scale-[0.97] transition-all duration-200 hover:bg-primary-100"
@@ -917,43 +921,54 @@ const CourseDetails: React.FC = () => {
                       Ongoing Live Sessions
                     </h3>
                     <div className="space-y-4">
-                      {liveStreams.map((live, idx) => (
-                        <div
-                          key={live.id || live._id}
-                          onClick={() => handleVideoClick(live)}
-                          className="card-premium overflow-hidden cursor-pointer group hover:border-accent-100 transition-all active:scale-[0.98] animate-fade-in-up"
-                          style={{ animationDelay: `${idx * 100}ms` }}
-                        >
-                          <div className="flex gap-4 p-4">
-                            <div className="relative w-32 h-20 rounded-2xl overflow-hidden flex-shrink-0 shadow-lg">
-                              <img
-                                src={getYouTubeThumbnail(live.youtubeUrl || '') || `https://picsum.photos/400/225?sig=${live.id}`}
-                                className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                              />
-                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-2xl">
-                                  <span className="material-symbols-rounded text-accent-500">play_arrow</span>
+                      {liveStreams.map((live, idx) => {
+                        const isLiveNow = live.status === 'live' || live.streamStatus === 'live' || live.isLive === true;
+                        const isPast = live.status === 'ended' || live.streamStatus === 'ended';
+                        const thumbUrl = getImageUrl(live.thumbnail) || getYouTubeThumbnail(live.youtubeUrl || '') || `https://picsum.photos/400/225?sig=${live.id || live._id || idx}`;
+
+                        return (
+                          <div
+                            key={live.id || live._id}
+                            onClick={() => handleVideoClick(live)}
+                            className="card-premium overflow-hidden cursor-pointer group hover:border-accent-100 transition-all active:scale-[0.98] animate-fade-in-up"
+                            style={{ animationDelay: `${idx * 100}ms` }}
+                          >
+                            <div className="flex gap-4 p-4">
+                              <div className="relative w-32 h-20 rounded-2xl overflow-hidden flex-shrink-0 shadow-lg">
+                                <img
+                                  src={thumbUrl}
+                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                  onError={(e) => { e.currentTarget.src = `https://picsum.photos/400/225?sig=${live.id || live._id || idx}`; }}
+                                />
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-2xl">
+                                    <span className="material-symbols-rounded text-accent-500">play_arrow</span>
+                                  </div>
+                                </div>
+                                <div className={`absolute top-2 left-2 px-2 py-0.5 ${isPast ? 'bg-gray-600' : 'bg-red-600'} text-white text-[8px] font-black rounded-full shadow-sm ${isPast ? '' : 'animate-pulse'} tracking-widest uppercase`}>
+                                  {isPast ? 'ENDED' : 'LIVE'}
                                 </div>
                               </div>
-                              <div className="absolute top-2 left-2 px-2 py-0.5 bg-red-600 text-white text-[8px] font-black rounded-full shadow-sm animate-pulse tracking-widest uppercase">LIVE</div>
-                            </div>
-                            <div className="flex-1 min-w-0 py-1">
-                              <div className="flex items-center gap-2 mb-1.5">
-                                <div className="w-1.5 h-1.5 bg-accent-500 rounded-full" />
-                                <span className="text-[10px] font-black text-accent-500 tracking-widest uppercase opacity-70">Interactive Session</span>
+                              <div className="flex-1 min-w-0 py-1">
+                                <div className="flex items-center gap-2 mb-1.5">
+                                  <div className={`w-1.5 h-1.5 ${isPast ? 'bg-gray-400' : 'bg-accent-500'} rounded-full`} />
+                                  <span className={`text-[10px] font-black ${isPast ? 'text-gray-500' : 'text-accent-500'} tracking-widest uppercase opacity-70`}>
+                                    {isPast ? 'Completed Session' : 'Interactive Session'}
+                                  </span>
+                                </div>
+                                <h4 className="font-black text-gray-900 text-sm leading-tight line-clamp-2">{live.title}</h4>
+                                <p className="text-[10px] text-gray-400 font-bold mt-2 uppercase tracking-widest flex items-center gap-2">
+                                  <span className="material-symbols-rounded text-sm">person</span>
+                                  {live.instructor || 'Lead Instructor'}
+                                </p>
                               </div>
-                              <h4 className="font-black text-gray-900 text-sm leading-tight line-clamp-2">{live.title}</h4>
-                              <p className="text-[10px] text-gray-400 font-bold mt-2 uppercase tracking-widest flex items-center gap-2">
-                                <span className="material-symbols-rounded text-sm">person</span>
-                                {live.instructor || 'Lead Instructor'}
-                              </p>
-                            </div>
-                            <div className="self-center">
-                              <span className="material-symbols-rounded text-gray-300 group-hover:text-accent-500 transition-all">chevron_right</span>
+                              <div className="self-center">
+                                <span className="material-symbols-rounded text-gray-300 group-hover:text-accent-500 transition-all">chevron_right</span>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -1011,7 +1026,7 @@ const CourseDetails: React.FC = () => {
       {showVideoPlayer && selectedVideo && (
         <StudentVideoPlayer
           videoId={selectedVideo.id || selectedVideo._id || ''}
-          src={selectedVideo.youtubeUrl || selectedVideo.videoUrl || selectedVideo.url || selectedVideo.meetingLink || ''}
+          src={selectedVideo.youtubeUrl ? selectedVideo.youtubeUrl : (selectedVideo.videoUrl ? getVideoUrl(selectedVideo.videoUrl) : (selectedVideo.url ? (selectedVideo.url.includes('youtube.com') || selectedVideo.url.includes('youtu.be') ? selectedVideo.url : getVideoUrl(selectedVideo.url)) : selectedVideo.meetingLink || ''))}
           title={selectedVideo.title}
           courseTitle={course?.name || course?.title}
           courseId={id}

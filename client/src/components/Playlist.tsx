@@ -1,4 +1,5 @@
 import React from 'react';
+import { getImageUrl } from '@/lib/utils';
 
 interface Video {
   id: string;
@@ -49,7 +50,7 @@ const Playlist: React.FC<PlaylistProps> = ({ videos, activeVideoId, onSelect }) 
 
               <div className="relative w-28 aspect-video rounded-2xl overflow-hidden shrink-0 bg-black/40 shadow-2xl transition-transform group-hover/item:scale-105 duration-500">
                 {v.thumbnail ? (
-                  <img src={v.thumbnail} alt="" className={`w-full h-full object-cover transition-opacity duration-700 ${isActive ? 'opacity-40' : 'opacity-60 group-hover/item:opacity-80'}`} />
+                  <img src={getImageUrl(v.thumbnail)} alt="" className={`w-full h-full object-cover transition-opacity duration-700 ${isActive ? 'opacity-40' : 'opacity-60 group-hover/item:opacity-80'}`} />
                 ) : (
                   <div className="w-full h-full bg-white/5 flex items-center justify-center">
                     <span className="material-symbols-rounded text-white/10 text-xl font-light tracking-tighter italic">AO</span>

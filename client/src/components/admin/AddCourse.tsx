@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
-import { couponsAPI, coursesAPI, categoriesAPI, testSeriesAPI, pdfsAPI, packagesAPI } from '../../services/apiClient';
+import { couponsAPI, coursesAPI, categoriesAPI, testSeriesAPI, pdfsAPI, packagesAPI, uploadAPI } from '../../services/apiClient';
 import RichTextEditor from '../shared/RichTextEditor';
 import { AdminUIContext } from '../../context/AdminUIContext';
+import { getImageUrl, getVideoUrl, extractYouTubeId, toYouTubeEmbed } from '../../lib/utils';
 
 interface Props {
     onClose: () => void;
@@ -12,6 +13,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
     const isEditMode = !!courseData && !courseData.isDuplicate;
     const [activeStep, setActiveStep] = useState(1);
     const { setSidebarHidden } = useContext(AdminUIContext);
+    const [uploadProgress, setUploadProgress] = useState(0);
 
     useEffect(() => {
         // Hide sidebar on mount
@@ -34,9 +36,8 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
     const [endMonth, setEndMonth] = useState('');
     const [endYear, setEndYear] = useState('');
     const [coverImage, setCoverImage] = useState<string | null>(courseData?.thumbnail || courseData?.imageUrl || null);
-    const [demoVideo, setDemoVideo] = useState<string | null>(courseData?.demoVideo || null);
+    const [demoVideoUrl, setDemoVideoUrl] = useState(courseData?.demoVideo || '');
     const [isUploadingImage, setIsUploadingImage] = useState(false);
-    const [isUploadingVideo, setIsUploadingVideo] = useState(false);
     const [title, setTitle] = useState(courseData?.name || courseData?.title || '');
     const [price, setPrice] = useState(courseData?.price?.toString() || '');
     const [originalPrice, setOriginalPrice] = useState(courseData?.originalPrice?.toString() || '');
@@ -152,7 +153,12 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
 
     const editorRef = useRef<any>(null);
 
-    // Auto-calculate end date when "Set Validity" changes
+    const handleUploadProgress = (progressEvent: any) => {
+        if (!progressEvent.total) return;
+        const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+        setUploadProgress(percent);
+    };
+
     useEffect(() => {
         if (validityTab === 'set' && validityValue) {
             const now = new Date();
@@ -171,7 +177,6 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
         }
     }, [validityValue, validityUnit, validityTab]);
     const imageInputRef = useRef<HTMLInputElement>(null);
-    const videoInputRef = useRef<HTMLInputElement>(null);
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -180,15 +185,9 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
             const localUrl = URL.createObjectURL(file);
             setCoverImage(localUrl);
             setIsUploadingImage(true);
+            setUploadProgress(0);
             try {
-                const formData = new FormData();
-                formData.append('file', file);
-                const res = await fetch('/api/upload', { method: 'POST', body: formData });
-                if (!res.ok) {
-                    const errData = await res.json().catch(() => ({}));
-                    throw new Error(errData.error || `Server error: ${res.status}`);
-                }
-                const data = await res.json();
+                const data = await uploadAPI.uploadImage(file, { onUploadProgress: handleUploadProgress });
                 setCoverImage(data.url); // Replace local URL with server URL
             } catch (error: any) {
                 console.error('Image upload failed:', error);
@@ -196,31 +195,13 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                 setCoverImage(null); // Reset on failure
             } finally {
                 setIsUploadingImage(false);
+                setUploadProgress(0);
                 // Reset file input so same file can be re-selected
                 if (imageInputRef.current) imageInputRef.current.value = '';
             }
         }
     };
 
-    const handleVideoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            setIsUploadingVideo(true);
-            try {
-                const formData = new FormData();
-                formData.append('file', file);
-                const res = await fetch('/api/upload', { method: 'POST', body: formData });
-                if (!res.ok) throw new Error('Upload failed');
-                const data = await res.json();
-                setDemoVideo(data.url);
-            } catch (error) {
-                console.error('Video upload failed:', error);
-                alert('Video upload failed');
-            } finally {
-                setIsUploadingVideo(false);
-            }
-        }
-    };
 
     useEffect(() => {
         const fetchData = async () => {
@@ -322,7 +303,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                 },
                 thumbnail: coverImage,
                 imageUrl: coverImage,
-                demoVideo: demoVideo,
+                demoVideo: toYouTubeEmbed(demoVideoUrl),
                 settings: {
                     isFeatured,
                     gstIncluded,
@@ -497,7 +478,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                                             ) : coverImage ? (
                                                 <>
                                                     <img
-                                                        src={coverImage}
+                                                        src={getImageUrl(coverImage)}
                                                         className="absolute inset-0 w-full h-full object-cover"
                                                         alt="Preview"
                                                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -525,24 +506,39 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                                         </div>
                                     </div>
                                     <div className="space-y-1.5">
-                                        <label className="text-[13px] font-semibold text-gray-700">Demo Video</label>
-                                        <input type="file" ref={videoInputRef} onChange={handleVideoUpload} accept="video/*" className="hidden" />
-                                        <div onClick={() => !isUploadingVideo && videoInputRef.current?.click()} className="border border-dashed border-gray-300 rounded-sm p-6 flex flex-col items-center justify-center bg-white hover:bg-gray-50 transition-all cursor-pointer min-h-[140px] relative overflow-hidden shadow-sm">
-                                            {isUploadingVideo ? (
-                                                <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
-                                            ) : demoVideo ? (
-                                                <div className="flex flex-col items-center">
-                                                    <span className="material-symbols-outlined text-green-500 text-[32px]">check_circle</span>
-                                                    <p className="text-[13px] font-medium text-gray-600 mt-2">Video Selected</p>
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <span className="material-symbols-outlined text-gray-300 text-[32px] mb-2">videocam</span>
-                                                    <p className="text-[13px] font-medium text-gray-500">Upload Video</p>
-                                                    <p className="text-[11px] text-gray-400 text-center">Click or Drag & Drop your<br/>file here.</p>
-                                                </>
-                                            )}
-                                        </div>
+                                        <label className="text-[13px] font-semibold text-gray-700">Demo Video (YouTube Link)</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Paste YouTube link: https://youtube.com/watch?v=..."
+                                            value={demoVideoUrl}
+                                            onChange={(e) => setDemoVideoUrl(e.target.value)}
+                                            className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 transition-all placeholder:text-gray-400"
+                                        />
+                                        
+                                        {/* Live preview when valid YouTube URL pasted */}
+                                        {extractYouTubeId(demoVideoUrl) && (
+                                            <div className="mt-2">
+                                                <p className="text-[11px] text-green-600 font-bold uppercase tracking-wider flex items-center gap-1">
+                                                    <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                                                    Valid YouTube link
+                                                </p>
+                                                <iframe
+                                                    src={toYouTubeEmbed(demoVideoUrl)}
+                                                    width="100%"
+                                                    height="200"
+                                                    allowFullScreen
+                                                    title="Demo Video Preview"
+                                                    className="rounded-sm mt-1 border border-gray-100 shadow-sm"
+                                                />
+                                            </div>
+                                        )}
+                                        
+                                        {demoVideoUrl && !extractYouTubeId(demoVideoUrl) && (
+                                            <p className="text-[11px] text-red-500 font-bold uppercase tracking-wider flex items-center gap-1 mt-1">
+                                                <span className="material-symbols-outlined text-[14px]">error</span>
+                                                Invalid YouTube link
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 

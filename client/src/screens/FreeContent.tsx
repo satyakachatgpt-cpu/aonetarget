@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import StudentSidebar from '../components/StudentSidebar';
 import { testsAPI, testSeriesAPI, coursesAPI } from '../services/apiClient';
+import { getImageUrl, getVideoUrl, getPdfUrl, getYouTubeThumbnail, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
 
 const FreeContent: React.FC = () => {
     const navigate = useNavigate();
@@ -111,38 +112,18 @@ const FreeContent: React.FC = () => {
         }
     };
 
-    const getYouTubeVideoId = (url: string): string => {
-        if (!url) return '';
-        let videoId = '';
-        if (url.includes('youtube.com/watch')) {
-            const urlParams = new URLSearchParams(url.split('?')[1]);
-            videoId = urlParams.get('v') || '';
-        } else if (url.includes('youtu.be/')) {
-            videoId = url.split('youtu.be/')[1]?.split(/[?#]/)[0] || '';
-        } else if (url.includes('youtube.com/embed/')) {
-            videoId = url.split('youtube.com/embed/')[1]?.split(/[?#]/)[0] || '';
-        }
-        return videoId;
-    };
-
-    const getYouTubeEmbedUrl = (url: string): string => {
-        const videoId = getYouTubeVideoId(url);
-        return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0` : url;
-    };
-
-    const getYouTubeThumbnail = (url: string): string => {
-        const videoId = getYouTubeVideoId(url);
-        return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : '';
-    };
-
-    const isYouTubeUrl = (url: string) => {
-        if (!url) return false;
-        return url.includes('youtube.com') || url.includes('youtu.be') || url.includes('youtube-nocookie.com');
-    };
 
     const handleDownload = async (item: any) => {
         // Support all possible URL field names used in across different collections
-        const fileUrl = item.fileUrl || item.videoUrl || item.url || item.youtubeUrl || item.pdfUrl;
+        const isPdf = item.pdfUrl || item.fileUrl?.endsWith('.pdf') || (activeTab === 'notes');
+        const isVid = item.videoUrl || item.url?.endsWith('.mp4') || (activeTab === 'videos');
+        
+        let fileUrl = item.youtubeUrl || '';
+        if (!fileUrl) {
+            if (isPdf) fileUrl = getPdfUrl(item.pdfUrl || item.fileUrl || item.url || item.link);
+            else if (isVid) fileUrl = getVideoUrl(item.videoUrl || item.url || item.fileUrl);
+            else fileUrl = getImageUrl(item.imageUrl || item.thumbnail || item.fileUrl || item.url);
+        }
 
         if (!fileUrl) {
             toast.error('Download link not available for this item');
@@ -200,7 +181,8 @@ const FreeContent: React.FC = () => {
 
     const handleVideoClick = (video: any) => {
         if (video.videoUrl || video.youtubeUrl || video.url || video.link) {
-            navigate('/video-player', { state: { video, courseTitle: 'Free Content', courseId: video.courseId || video._id || '' } });
+            const vUrl = toYouTubeEmbed(video.youtubeUrl || video.videoUrl || video.url || video.link);
+            navigate('/video-player', { state: { video: { ...video, videoUrl: vUrl }, courseTitle: 'Free Content', courseId: video.courseId || video._id || '' } });
         } else {
             toast.error('Video link not available');
         }
@@ -208,7 +190,8 @@ const FreeContent: React.FC = () => {
 
     const handlePDFClick = (pdf: any) => {
         if (pdf.fileUrl || pdf.url || pdf.link) {
-            navigate('/pdf-viewer', { state: { pdf, title: pdf.title || pdf.name } });
+            const pUrl = getPdfUrl(pdf.fileUrl || pdf.url || pdf.link);
+            navigate('/pdf-viewer', { state: { pdf: { ...pdf, fileUrl: pUrl }, title: pdf.title || pdf.name } });
         } else {
             toast.error('File link not available');
         }
@@ -310,7 +293,7 @@ const FreeContent: React.FC = () => {
                                                 {/* ... course card content ... */}
                                                 <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-md shrink-0">
                                                     <img
-                                                        src={course.imageUrl || course.thumbnail || '/attached_assets/alonelogo_1770810181717.jpg'}
+                                                        src={getImageUrl(course.imageUrl || course.thumbnail) || '/attached_assets/alonelogo_1770810181717.jpg'}
                                                         alt={course.title}
                                                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                                                     />
@@ -344,7 +327,7 @@ const FreeContent: React.FC = () => {
                                             >
                                                 <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-md shrink-0 bg-black flex items-center justify-center relative">
                                                     <img
-                                                        src={video.thumbnail || getYouTubeThumbnail(video.videoUrl || video.url || '') || '/attached_assets/alonelogo_1770810181717.jpg'}
+                                                        src={getImageUrl(video.thumbnail) || getYouTubeThumbnail(video.videoUrl || video.url || '') || '/attached_assets/alonelogo_1770810181717.jpg'}
                                                         alt={video.title}
                                                         className="w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-500"
                                                     />

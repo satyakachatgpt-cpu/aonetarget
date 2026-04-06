@@ -29,7 +29,7 @@ dist-ssr/
 .env.*
 
 # Project specific
-server/uploads/
+# server/uploads/
 client/dist/
 server/node_modules/
 client/node_modules/
@@ -37,3 +37,11 @@ client/node_modules/
 *.tmp
 .temp_bulk_server.txt
 .temp_bulk_uploader.txt
+
+# Upload folders - ignore files but keep folder structure
+server/uploads/images/*
+server/uploads/videos/*
+server/uploads/pdfs/*
+!server/uploads/images/.gitkeep
+!server/uploads/videos/.gitkeep
+!server/uploads/pdfs/.gitkeep

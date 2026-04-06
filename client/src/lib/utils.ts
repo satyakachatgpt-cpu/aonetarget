@@ -5,43 +5,74 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const getImageUrl = (url: string | undefined | null) => {
-  if (!url || typeof url !== 'string') return '';
-  
-  // Map absolute URLs from old server to local uploads
-  if (url.startsWith('https://aonetarget.in/uploads/') || url.startsWith('http://aonetarget.in/uploads/')) {
-    return `/uploads/${url.split('/').pop()}`;
+export const getImageUrl = (url: string | undefined | null): string => {
+  if (!url) return '';
+  // Cloudinary URLs are already absolute
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
   }
-
-  if (url.startsWith('http') || url.startsWith('/') || url.startsWith('data:')) return url;
-  // Many older items might have just the filename
-  return `/uploads/${url}`;
+  // Legacy local uploads fallback
+  if (url.startsWith('/uploads/')) {
+    return `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}${url}`;
+  }
+  return url;
 };
 
-export const getYouTubeVideoId = (url: string): string => {
+export const getVideoUrl = (url: string | undefined | null): string => {
   if (!url) return '';
-  let videoId = '';
-  if (url.includes('youtube.com/watch')) {
-    const urlParams = new URLSearchParams(url.split('?')[1]);
-    videoId = urlParams.get('v') || '';
-  } else if (url.includes('youtu.be/')) {
-    videoId = url.split('youtu.be/')[1]?.split(/[?#]/)[0] || '';
-  } else if (url.includes('youtube.com/embed/')) {
-    videoId = url.split('youtube.com/embed/')[1]?.split(/[?#]/)[0] || '';
-  } else if (url.includes('youtube.com/live/')) {
-    videoId = url.split('youtube.com/live/')[1]?.split(/[?#]/)[0] || '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('/uploads/')) {
+    return `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}${url}`;
   }
-  return videoId;
+  return url;
+};
+
+export const getPdfUrl = (url: string | undefined | null): string => {
+  if (!url) return '';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  if (url.startsWith('/uploads/')) {
+    return `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}${url}`;
+  }
+  return url;
+};
+
+export const extractYouTubeId = (url: string): string | null => {
+  if (!url) return null;
+  
+  // Handle all YouTube URL formats
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+    /youtube\.com\/watch\?.*v=([^&\n?#]+)/
+  ];
+  
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+};
+
+export const toYouTubeEmbed = (url: string): string => {
+  if (!url) return '';
+  
+  // Already an embed URL
+  if (url.includes('youtube.com/embed/')) return url;
+  
+  const id = extractYouTubeId(url);
+  if (id) return `https://www.youtube.com/embed/${id}`;
+  
+  // Return as-is if not YouTube (e.g. Cloudinary video URL)
+  return url;
+};
+
+export const isYouTubeUrl = (url: string): boolean => {
+  if (!url) return false;
+  return url.includes('youtube.com') || url.includes('youtu.be');
 };
 
 export const getYouTubeThumbnail = (url: string): string => {
-  const videoId = getYouTubeVideoId(url);
+  const videoId = extractYouTubeId(url);
   return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : '';
-};
-
-export const getYouTubeEmbedUrl = (url: string): string => {
-  const videoId = getYouTubeVideoId(url);
-  return videoId ? `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1` : url;
 };
 
 export const getGradientPlaceholder = (name: string, gradients: string[]) => {

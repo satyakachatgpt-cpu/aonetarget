@@ -19,7 +19,12 @@ export default defineConfig(({ mode }) => {
           target: backendUrl,
           changeOrigin: true,
           configure: (proxy) => {
-            proxy.on('error', (err, req, res) => {
+            const bootTime = Date.now();
+            proxy.on('error', (err: any, req, res) => {
+              // Suppress connection errors during the first 10 seconds of startup (expected race condition)
+              if (err.code === 'ECONNREFUSED' && (Date.now() - bootTime) < 10000) {
+                return;
+              }
               console.log('[proxy error]', req.url, err.message);
             });
           }
@@ -28,12 +33,13 @@ export default defineConfig(({ mode }) => {
           target: backendUrl,
           changeOrigin: true,
         },
-        '/attach-assist': 'http://localhost:5000',
+        // '/attach-assist' removed: Vite serves these directly from public/ during dev
         '/attached_assets': {
           target: backendUrl,
           changeOrigin: true,
         },
       }
+
     },
 
     preview: {

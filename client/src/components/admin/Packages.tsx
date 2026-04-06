@@ -272,26 +272,30 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
     }
   };
 
-  const filteredPackages = packages.filter(pkg => {
-    const nameStr = String(pkg?.name || pkg?.title || '');
-    const descStr = String(pkg?.description || '');
-    const matchesSearch = nameStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (descStr || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (pkg.title || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || pkg.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  const filteredPackages = React.useMemo(() => {
+    return packages.filter(pkg => {
+      const nameStr = String(pkg?.name || pkg?.title || '');
+      const descStr = String(pkg?.description || '');
+      const matchesSearch = nameStr.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (descStr || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (pkg.title || '').toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || pkg.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    });
+  }, [packages, searchQuery, statusFilter]);
 
   const totalItems = filteredPackages.length;
   const totalPages = Math.ceil(totalItems / pageSize);
 
+  const paginatedItems = React.useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    const end = Math.min(start + pageSize, filteredPackages.length);
+    return filteredPackages.slice(start, end);
+  }, [filteredPackages, currentPage, pageSize]);
+
   const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, totalItems);
-
-  const paginatedItems = filteredPackages.slice(startIndex, endIndex);
-
   const showingStart = totalItems === 0 ? 0 : startIndex + 1;
-  const showingEnd = endIndex;
+  const showingEnd = Math.min(startIndex + pageSize, totalItems);
 
   // Reset page when search/filter changes
   useEffect(() => {

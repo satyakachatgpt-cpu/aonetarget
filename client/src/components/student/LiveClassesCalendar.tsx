@@ -196,7 +196,7 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
                     <span className="w-1 h-1 rounded-full bg-gray-300 shrink-0"></span>
                     <span className="text-[12px] text-gray-500 font-medium flex items-center gap-1.5">
                       <span className="material-symbols-outlined text-[18px]">schedule</span>
-                      {cls.status === 'live' ? 'Live Now' : (cls.status === 'ended' || cls.status === 'completed') ? 'Ended' : formatTime(cls.startTime) || 'Upcoming'}
+                      {cls.status === 'live' ? 'Live Now' : (cls.status === 'ended' || cls.status === 'completed' || cls.streamStatus === 'ended') ? 'Ended' : formatTime(cls.startTime) || 'Upcoming'}
                     </span>
                   </div>
                 </div>
@@ -212,7 +212,7 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
                     </button>
                   ) : (
                     <div className={`bg-gray-50 text-gray-400 text-[11px] px-4 py-2.5 rounded-xl font-bold uppercase tracking-widest border border-gray-100`}>
-                      {(cls.status === 'ended' || cls.status === 'completed') ? 'Ended' : 'Upcoming'}
+                      {(cls.status === 'ended' || cls.status === 'completed' || cls.streamStatus === 'ended') ? 'Ended' : 'Upcoming'}
                     </div>
                   )}
                 </div>

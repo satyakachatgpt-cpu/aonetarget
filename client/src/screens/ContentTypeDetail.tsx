@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { getImageUrl } from '../lib/utils';
 
 interface Course {
   _id?: string;
@@ -239,7 +240,7 @@ const ContentTypeDetail: React.FC = () => {
                   <div className={`h-36 bg-gradient-to-br ${config.gradient} flex items-center justify-center relative overflow-hidden`}>
                     {(course.imageUrl || course.thumbnail) ? (
                       <img
-                        src={course.imageUrl || course.thumbnail}
+                        src={getImageUrl(course.imageUrl || course.thumbnail)}
                         alt={courseName}
                         className="w-full h-full object-cover"
                         loading="lazy"

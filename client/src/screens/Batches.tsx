@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { coursesAPI } from '../services/apiClient';
+import { getImageUrl } from '../lib/utils';
 
 const categoryGradients: string[] = [
   'from-[#1A237E] to-[#303F9F]',
@@ -96,7 +97,7 @@ const Batches: React.FC = () => {
                   {hasImage ? (
                     <div className="w-full h-full relative">
                       <img 
-                        src={course.imageUrl || course.thumbnail} 
+                        src={getImageUrl(course.imageUrl || course.thumbnail)} 
                         alt={batchName} 
                         className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
                       />
