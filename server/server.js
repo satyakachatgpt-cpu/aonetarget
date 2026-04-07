@@ -1705,8 +1705,9 @@ app.get('/api/courses/:id/notes', async (req, res) => {
     };
     
     // Check both pdfs and notes collections for backward compatibility
-    const pdfs = await db.collection('pdfs').find(query).sort({ order: 1 }).toArray();
-    const notes = await db.collection('notes').find(query).sort({ order: 1 }).toArray();
+    // Sort by sortBy first (new), then order (legacy), then creation date
+    const pdfs = await db.collection('pdfs').find(query).sort({ sortBy: 1, order: 1, createdAt: -1 }).toArray();
+    const notes = await db.collection('notes').find(query).sort({ sortBy: 1, order: 1, createdAt: -1 }).toArray();
     
     // Merge all raw notes
     const allRawNotes = [...pdfs, ...notes];
