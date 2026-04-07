@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getImageUrl } from '@/lib/utils';
+import { reportedQuestionsAPI } from '../services/apiClient';
 
 type QuestionStatus = 'unanswered' | 'answered' | 'flagged' | 'flagged-answered';
 
@@ -24,6 +25,10 @@ const TestTaking: React.FC = () => {
   const [student, setStudent] = useState<any>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(Date.now());
+  const [reportModal, setReportModal] = useState<{ isOpen: boolean, question: any } | null>(null);
+  const [reportIssue, setReportIssue] = useState('');
+  const [reportComment, setReportComment] = useState('');
+  const [reportingStatus, setReportingStatus] = useState(false);
 
   useEffect(() => {
     // Reset session state when changing tests
@@ -35,6 +40,7 @@ const TestTaking: React.FC = () => {
     setResult(null);
     setLoading(true);
     setError('');
+    setReportModal(null);
 
     const storedStudent = localStorage.getItem('studentData');
     if (storedStudent && storedStudent !== 'undefined') {
@@ -49,6 +55,33 @@ const TestTaking: React.FC = () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [testId]);
+
+  const handleReportSubmit = async () => {
+    if (!reportIssue || !reportModal) return;
+    setReportingStatus(true);
+    try {
+      await reportedQuestionsAPI.report({
+        studentId: student?.id,
+        studentName: student?.name,
+        testId: testId,
+        testTitle: test?.title || 'Unknown Test',
+        questionId: reportModal.question.id,
+        questionEn: reportModal.question.questionEn || reportModal.question.question || reportModal.question.text,
+        questionHi: reportModal.question.questionHi || '',
+        issue: reportIssue,
+        comment: reportComment
+      });
+      alert('Report submitted successfully!');
+      setReportModal(null);
+      setReportIssue('');
+      setReportComment('');
+    } catch (err) {
+      console.error(err);
+      alert('Failed to submit report. Please try again.');
+    } finally {
+      setReportingStatus(false);
+    }
+  };
 
   const fetchTestData = async () => {
     try {
@@ -317,6 +350,13 @@ const TestTaking: React.FC = () => {
                       {q.explanation && (
                         <p className="text-[10px] text-gray-500 mt-1 italic">{q.explanation}</p>
                       )}
+                      <button 
+                        onClick={() => setReportModal({ isOpen: true, question: q })}
+                        className="mt-2 flex items-center gap-1 text-[10px] text-amber-600 font-bold hover:bg-amber-50 p-1 rounded transition-colors"
+                      >
+                        <span className="material-symbols-rounded text-[14px]">report</span>
+                        Report Issue
+                      </button>
                     </div>
                   );
                 })}
@@ -594,6 +634,55 @@ const TestTaking: React.FC = () => {
                     Submit
                   </>
                 )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Report Question Modal */}
+      {reportModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl overflow-hidden">
+            <h3 className="font-bold text-lg text-gray-800 mb-1">Report Question</h3>
+            <p className="text-xs text-gray-500 mb-4">Please select the issue you found in this question.</p>
+            
+            <div className="space-y-1.5 mb-4 max-h-[40vh] overflow-y-auto pr-1">
+              {['Formatting Issue', 'Wrong Answer', 'Wrong Question', 'Image Hidden/Broken', 'Other'].map(issue => (
+                <button
+                  key={issue}
+                  onClick={() => setReportIssue(issue)}
+                  className={`w-full text-left px-4 py-2 rounded-lg border text-sm transition-all ${reportIssue === issue 
+                    ? 'border-[#1A237E] bg-blue-50 text-[#1A237E] font-bold' 
+                    : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
+                >
+                  {issue}
+                </button>
+              ))}
+            </div>
+
+            <textarea
+              value={reportComment}
+              onChange={(e) => setReportComment(e.target.value)}
+              placeholder="Additional comments (optional)"
+              className="w-full h-20 p-3 border border-gray-200 rounded-lg text-sm mb-4 focus:outline-none focus:border-[#1A237E]"
+            />
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setReportModal(null)}
+                className="flex-1 py-2.5 rounded-lg border border-gray-200 text-gray-600 text-sm font-bold"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleReportSubmit}
+                disabled={!reportIssue || reportingStatus}
+                className="flex-1 py-2.5 rounded-lg bg-[#1A237E] text-white text-sm font-bold flex items-center justify-center gap-1 disabled:opacity-50"
+              >
+                {reportingStatus ? (
+                  <span className="material-symbols-rounded animate-spin text-[16px]">progress_activity</span>
+                ) : 'Submit'}
               </button>
             </div>
           </div>

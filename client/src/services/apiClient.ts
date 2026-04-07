@@ -344,8 +344,9 @@ export const uploadAPI = {
     const formData = new FormData();
     formData.append('file', file);
     
+    // Explicitly don't set Content-Type header to let browser handle boundary
     const config = {
-      headers: { ...getAdminHeaders(), 'Content-Type': 'multipart/form-data' },
+      headers: { ...getAdminHeaders() },
       onUploadProgress: options.onUploadProgress
     };
 
@@ -353,6 +354,14 @@ export const uploadAPI = {
       const res = await axios.post(`${API_BASE_URL}/v2/upload/image`, formData, config);
       return res.data;
     } catch (err: any) {
+      if (err.response?.status === 401) {
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminId');
+        localStorage.removeItem('isAdminAuthenticated');
+        localStorage.removeItem('adminLoginTimestamp');
+        window.location.href = '#/admin-login';
+        return;
+      }
       const errMsg = err.response?.data?.error || 'Image upload failed';
       throw new Error(errMsg);
     }
@@ -363,7 +372,7 @@ export const uploadAPI = {
     formData.append('file', file);
 
     const config = {
-      headers: { ...getAdminHeaders(), 'Content-Type': 'multipart/form-data' },
+      headers: { ...getAdminHeaders() },
       onUploadProgress: options.onUploadProgress,
       timeout: 300000 // 5 min timeout for videos
     };
@@ -372,6 +381,14 @@ export const uploadAPI = {
       const res = await axios.post(`${API_BASE_URL}/v2/upload/video`, formData, config);
       return res.data;
     } catch (err: any) {
+      if (err.response?.status === 401) {
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminId');
+        localStorage.removeItem('isAdminAuthenticated');
+        localStorage.removeItem('adminLoginTimestamp');
+        window.location.href = '#/admin-login';
+        return;
+      }
       const errMsg = err.response?.data?.error || 'Video upload failed';
       throw new Error(errMsg);
     }
@@ -382,7 +399,7 @@ export const uploadAPI = {
     formData.append('file', file);
 
     const config = {
-      headers: { ...getAdminHeaders(), 'Content-Type': 'multipart/form-data' },
+      headers: { ...getAdminHeaders() },
       onUploadProgress: options.onUploadProgress
     };
 
@@ -390,6 +407,14 @@ export const uploadAPI = {
       const res = await axios.post(`${API_BASE_URL}/v2/upload/pdf`, formData, config);
       return res.data;
     } catch (err: any) {
+      if (err.response?.status === 401) {
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminId');
+        localStorage.removeItem('isAdminAuthenticated');
+        localStorage.removeItem('adminLoginTimestamp');
+        window.location.href = '#/admin-login';
+        return;
+      }
       const errMsg = err.response?.data?.error || 'Document upload failed';
       throw new Error(errMsg);
     }
@@ -1594,6 +1619,35 @@ export const quickLinksAPI = {
   delete: async (id: string) => {
     const response = await fetch(`${API_BASE_URL}/quick-links/${id}`, { method: 'DELETE' });
     if (!response.ok) throw new Error('Failed to delete quick link');
+    return response.json();
+  }
+};
+
+// Reported Questions API
+export const reportedQuestionsAPI = {
+  report: async (data: any) => {
+    const response = await fetch(`${API_BASE_URL}/reported-questions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('Failed to report question');
+    return response.json();
+  },
+  getAll: async () => {
+    const response = await fetch(`${API_BASE_URL}/admin/reported-questions`, {
+      headers: getAdminHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch reported questions');
+    return response.json();
+  },
+  updateStatus: async (id: string, status: string) => {
+    const response = await fetch(`${API_BASE_URL}/admin/reported-questions/${id}`, {
+      method: 'PATCH',
+      headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status }),
+    });
+    if (!response.ok) throw new Error('Failed to update report status');
     return response.json();
   }
 };

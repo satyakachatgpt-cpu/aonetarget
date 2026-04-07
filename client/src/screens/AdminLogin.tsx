@@ -57,6 +57,7 @@ const AdminLogin: React.FC<Props> = ({ setAuth }) => {
         if (response.token) {
           localStorage.setItem('adminToken', response.token);
         }
+        localStorage.setItem('adminLoginTimestamp', Date.now().toString());
         setAuth(true);
         navigate('/admin');
       } else {

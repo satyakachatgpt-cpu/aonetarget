@@ -1612,7 +1612,7 @@ app.get('/api/pdfs', async (req, res) => {
   try {
     const isFree = req.query.isFree === 'true';
     const query = isFree ? { isFree: true } : {};
-    const pdfs = await db.collection('pdfs').find(query).toArray();
+    const pdfs = await db.collection('pdfs').find(query).sort({ sortBy: 1 }).toArray();
     res.json(pdfs);
   } catch (error) {
     res.status(500).json({ error: 'Failed' });
@@ -3368,9 +3368,9 @@ app.delete('/api/questions/:id', async (req, res) => {
     // Deleting from global questions collection
     const mainResult = await db.collection('questions').deleteMany({ $or: orConditions });
 
-    // Clean up embedded questions in any test
+    // Clean up embedded questions in any test - only if questions field is an array
     const testResult = await db.collection('tests').updateMany(
-      {},
+      { questions: { $type: 'array' } },
       {
         $pull: {
           questions: {
@@ -3417,33 +3417,51 @@ app.post('/api/questions/bulk-delete', async (req, res) => {
       return res.status(400).json({ error: 'No question IDs provided' });
     }
 
-    // Attempt to delete by both 'id' field and MongoDB '_id' for compatibility
-    const filter = {
+    // Ensure all IDs are strings for consistency and collect possible Mongo ObjectIds
+    const stringIds = finalIds.map(id => String(id));
+    const mongoIds = [];
+    stringIds.forEach(id => {
+      if (id && id.length === 24 && /^[0-9a-fA-F]{24}$/.test(id)) {
+        try {
+          mongoIds.push(new mongoose.Types.ObjectId(id));
+        } catch (e) { }
+      }
+    });
+
+    // Attempt to delete by 'id' field, number 'id', and MongoDB '_id'
+    const qFilter = {
       $or: [
-        { id: { $in: finalIds } },
-        { _id: { $in: finalIds.filter(id => id && /^[a-f\d]{24}$/i.test(id)).map(id => new ObjectId(id)) } }
+        { id: { $in: finalIds } },      // original ids (might be numbers)
+        { id: { $in: stringIds } },    // as strings
+        { _id: { $in: mongoIds } },     // as ObjectIds
+        { _id: { $in: stringIds } }     // as strings
       ]
     };
 
-    const result = await db.collection('questions').deleteMany(filter);
+    const result = await db.collection('questions').deleteMany(qFilter);
     console.log(`[Bulk Delete] Deleted ${result.deletedCount} questions from the questions collection.`);
 
     // Important: Also remove these questions from any tests that might have them embedded
-    // We search all tests and pull any question where its id or _id is in the list
     // We only apply this to documents where 'questions' is actually an array
-    await db.collection('tests').updateMany(
-      { questions: { $type: 'array' } },
-      {
-        $pull: {
-          questions: {
-            $or: [
-              { id: { $in: finalIds } },
-              { _id: { $in: finalIds.filter(id => id && /^[a-f\d]{24}$/i.test(id)).map(id => new ObjectId(id)) } }
-            ]
+    try {
+      await db.collection('tests').updateMany(
+        { questions: { $type: 'array' } },
+        {
+          $pull: {
+            questions: {
+              $or: [
+                { id: { $in: finalIds } },
+                { id: { $in: stringIds } },
+                { _id: { $in: mongoIds } },
+                { _id: { $in: stringIds } }
+              ]
+            }
           }
         }
-      }
-    );
+      );
+    } catch (pullErr) {
+      console.warn('[Bulk Delete] Embedded cleanup warning:', pullErr.message);
+    }
 
     res.json({
       success: true,
@@ -3451,10 +3469,11 @@ app.post('/api/questions/bulk-delete', async (req, res) => {
       deletedCount: result.deletedCount
     });
   } catch (error) {
-    console.error('Bulk delete questions error:', error);
+    console.error('[Bulk Delete] Server Error:', error);
     res.status(500).json({ error: 'Failed to bulk delete questions', details: error.message });
   }
 });
+
 
 // Bulk create questions
 app.post('/api/questions/bulk', async (req, res) => {
@@ -3467,73 +3486,6 @@ app.post('/api/questions/bulk', async (req, res) => {
     res.status(500).json({ error: 'Failed to bulk create questions' });
   }
 });
-
-// Bulk delete questions (Using POST to ensure body is sent/parsed correctly)
-app.post('/api/questions/bulk-delete', async (req, res) => {
-  try {
-    const { questionIds } = req.body;
-    console.log('[Bulk Delete] Processing IDs:', (questionIds || []).length);
-
-    if (!Array.isArray(questionIds) || questionIds.length === 0) {
-      return res.status(400).json({ error: 'No IDs provided for bulk delete' });
-    }
-
-    // Ensure all IDs are strings for consistency
-    const stringIds = questionIds.map(id => String(id));
-
-    // Collect possible Mongo ObjectIds
-    const mongoIds = [];
-    stringIds.forEach(id => {
-      if (id && id.length === 24 && /^[0-9a-fA-F]{24}$/.test(id)) {
-        try {
-          mongoIds.push(new mongoose.mongo.ObjectId(id));
-        } catch (e) { }
-      }
-    });
-
-    // Delete from both the separate questions collection and potentially from ALL test embedded arrays
-    const qFilter = {
-      $or: [
-        { id: { $in: questionIds } },  // Might be numbers
-        { id: { $in: stringIds } },    // As strings
-        { _id: { $in: mongoIds } }     // As ObjectIds
-      ]
-    };
-
-    const result = await db.collection('questions').deleteMany(qFilter);
-
-    // Also remove from any tests that might have these questions embedded
-    try {
-      await db.collection('tests').updateMany(
-        {},
-        {
-          $pull: {
-            questions: {
-              $or: [
-                { id: { $in: questionIds } },
-                { id: { $in: stringIds } },
-                { _id: { $in: stringIds } }
-              ]
-            }
-          }
-        }
-      );
-    } catch (pullErr) {
-      console.warn('[Bulk Delete] Embedded cleanup warning:', pullErr.message);
-    }
-
-    console.log(`[Bulk Delete] Result: ${result.deletedCount} items permanently deleted`);
-    res.json({ success: true, deleted: result.deletedCount });
-  } catch (error) {
-    console.error('[Bulk Delete] Server Crash:', error);
-    res.status(500).json({
-      error: 'Bulk delete operation failed internally',
-      details: error.message,
-      stack: isProduction ? undefined : error.stack
-    });
-  }
-});
-
 
 // Update-all questions
 
@@ -4702,19 +4654,7 @@ app.post('/api/pdfs', async (req, res) => {
   }
 });
 
-app.put('/api/pdfs/:id', async (req, res) => {
-  try {
-    const { _id, ...updateData } = req.body;
-    const result = await db.collection('pdfs').updateOne(
-      { id: req.params.id },
-      { $set: updateData }
-    );
-    if (result.matchedCount === 0) return res.status(404).json({ error: 'PDF not found' });
-    res.json({ success: true, message: 'PDF updated' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to update PDF' });
-  }
-});
+    // Redundant route removed for consolidation with line 1622
 
 app.delete('/api/pdfs/:id', async (req, res) => {
   try {
@@ -6781,6 +6721,97 @@ app.post('/api/students/:id/watch-history', async (req, res) => {
   } catch (error) {
     console.error('Error saving watch history:', error);
     res.status(500).json({ error: 'Failed to save watch history' });
+  }
+});
+
+// Reported Questions Routes
+app.post('/api/reported-questions', async (req, res) => {
+  try {
+    const reportData = {
+      ...req.body,
+      status: 'pending',
+      reportedAt: new Date(),
+    };
+    const result = await db.collection('reportedQuestions').insertOne(reportData);
+    res.status(201).json({ id: result.insertedId, ...reportData });
+  } catch (error) {
+    console.error('Error reporting question:', error);
+    res.status(500).json({ error: 'Failed to report question' });
+  }
+});
+
+app.get('/api/admin/reported-questions', adminMiddleware, async (req, res) => {
+  try {
+    const reports = await db.collection('reportedQuestions').aggregate([
+      {
+        $lookup: {
+          from: 'students',
+          localField: 'studentId',
+          foreignField: 'id',
+          as: 'studentInfo'
+        }
+      },
+      {
+        $lookup: {
+          from: 'questions',
+          localField: 'questionId',
+          foreignField: 'id',
+          as: 'questionInfo'
+        }
+      },
+      {
+        $lookup: {
+          from: 'tests',
+          localField: 'testId',
+          foreignField: 'id',
+          as: 'testInfo'
+        }
+      },
+      { $unwind: { path: '$studentInfo', preserveNullAndEmptyArrays: true } },
+      { $unwind: { path: '$questionInfo', preserveNullAndEmptyArrays: true } },
+      { $unwind: { path: '$testInfo', preserveNullAndEmptyArrays: true } },
+      { $sort: { reportedAt: -1 } }
+    ]).toArray();
+
+    // Map to the structure expected by the frontend
+    const formattedReports = reports.map(r => ({
+      id: r._id,
+      studentName: r.studentInfo?.name || r.studentName || 'Unknown Student',
+      studentEmail: r.studentInfo?.email || r.studentEmail || '-',
+      studentPhone: r.studentInfo?.phone || r.studentPhone || '-',
+      testTitle: r.testInfo?.title || r.testTitle || 'Unknown Test',
+      batchSeries: r.testInfo?.batchSeries || r.batchSeries || '-',
+      questionId: r.questionId,
+      questionNumber: r.questionNumber || (r.questionInfo?.orderIndex + 1) || '-',
+      questionEn: r.questionInfo?.questionEn || r.questionEn || '-',
+      questionHi: r.questionInfo?.questionHi || r.questionHi || '-',
+      issue: r.issue,
+      comment: r.comment || '',
+      reportedDate: r.reportedAt,
+      status: r.status || 'pending'
+    }));
+
+    res.json(formattedReports);
+  } catch (error) {
+    console.error('Error fetching reported questions:', error);
+    res.status(500).json({ error: 'Failed to fetch reported questions' });
+  }
+});
+
+app.patch('/api/admin/reported-questions/:id', adminMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const query = { _id: ObjectId.isValid(id) ? new ObjectId(id) : id };
+    const result = await db.collection('reportedQuestions').updateOne(
+      query,
+      { $set: { status, updatedAt: new Date() } }
+    );
+    if (result.matchedCount === 0) return res.status(404).json({ error: 'Report not found' });
+    res.json({ success: true, message: 'Report status updated' });
+  } catch (error) {
+    console.error('Error updating report status:', error);
+    res.status(500).json({ error: 'Failed to update report status' });
   }
 });
 

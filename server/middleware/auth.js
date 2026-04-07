@@ -27,7 +27,7 @@ export function generateAdminToken(admin) {
     isAdmin: true
   };
 
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '24h' });
+  return jwt.sign(payload, JWT_SECRET, { expiresIn: '18h' });
 }
 
 export function verifyAccessToken(token) {

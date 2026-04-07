@@ -91,7 +91,26 @@ const MainLayout: React.FC<{ isLoggedIn: boolean; children: React.ReactNode }> =
 };
 
 const App: React.FC = () => {
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => localStorage.getItem('isAdminAuthenticated') === 'true');
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => {
+    const isAuth = localStorage.getItem('isAdminAuthenticated') === 'true';
+    if (!isAuth) return false;
+    
+    // Validate session duration (18 hours)
+    const loginTime = localStorage.getItem('adminLoginTimestamp');
+    if (loginTime) {
+      const elapsed = Date.now() - parseInt(loginTime, 10);
+      if (elapsed > 18 * 60 * 60 * 1000) {
+        // Session expired - clear all admin keys
+        localStorage.removeItem('isAdminAuthenticated');
+        localStorage.removeItem('adminId');
+        localStorage.removeItem('adminName');
+        localStorage.removeItem('adminToken');
+        localStorage.removeItem('adminLoginTimestamp');
+        return false;
+      }
+    }
+    return true;
+  });
   const { isAuthenticated: isStudentLoggedIn, isLoading, checkAuth, setAuth: setIsStudentLoggedIn } = useAuthStore();
 
   useEffect(() => {
@@ -99,6 +118,31 @@ const App: React.FC = () => {
   }, [checkAuth]);
 
   const [showSplash, setShowSplash] = useState(false);
+
+  // Proactive Admin Session Monitor
+  useEffect(() => {
+    if (!isAdminLoggedIn) return;
+
+    const checkSession = () => {
+      const loginTime = localStorage.getItem('adminLoginTimestamp');
+      if (loginTime) {
+        const elapsed = Date.now() - parseInt(loginTime, 10);
+        if (elapsed > 18 * 60 * 60 * 1000) {
+          localStorage.removeItem('isAdminAuthenticated');
+          localStorage.removeItem('adminId');
+          localStorage.removeItem('adminName');
+          localStorage.removeItem('adminToken');
+          localStorage.removeItem('adminLoginTimestamp');
+          setIsAdminLoggedIn(false);
+          window.location.href = '#/admin-login';
+        }
+      }
+    };
+
+    // Check every minute
+    const interval = setInterval(checkSession, 60000);
+    return () => clearInterval(interval);
+  }, [isAdminLoggedIn]);
 
   const handleSplashComplete = useCallback(() => {
     setShowSplash(false);
