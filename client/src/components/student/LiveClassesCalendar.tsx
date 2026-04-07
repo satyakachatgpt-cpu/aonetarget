@@ -16,6 +16,7 @@ interface LiveClass {
   batchId?: string;
   scheduledDate?: string;
   scheduledTime?: string;
+  streamStatus?: string;
 }
 
 interface Props {

@@ -6,6 +6,7 @@ import {
   coursesAPI,
   questionsAPI,
   invalidateCache,
+  reportedQuestionsAPI,
 } from "../../services/apiClient";
 import QuestionPaperRenderer from "./QuestionPaperRenderer";
 import { InlineMath } from "react-katex";
@@ -1093,62 +1094,24 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   };
 
   const loadReportedQuestions = async () => {
-    // Mock data for Reported Questions that matches pixel UI design
-    const mockData = [
-      {
-        id: 1,
-        studentName: "Vishal Yadav",
-        studentPhone: "7015540188",
-        studentEmail: "vishalyad300@gmail.com",
-        testTitle: "SSC TEST-7 MARCH",
-        batchSeries: "Nuggets Batch Test Series - 07 March",
-        questionNumber: 18,
-        questionEn:
-          "If a mirror is placed on the line MN, then which of the answer figures is the right image of the given figure?",
-        questionHi:
-          "यदि एक दर्पण को MN रेखा पर रखा जाए तो दी गई उत्तर आकृतियों में से कौन-सी आकृति प्रश्न आकृति की सही प्रतिबिम्ब होगी?",
-        questionFigureText: "Question Figure / प्रश्न आकृति :",
-        answerFiguresText: "Answer Figures / उत्तर आकृतियाँ :",
-        questionImage:
-          "https://images.unsplash.com/photo-1628155930542-3c7a64e2c833?auto=format&fit=crop&q=80&w=150&h=100",
-        issue: "Formatting Issue",
-        issueColor: "#FFEFEF",
-        issueTextColor: "#E84E4E",
-        comment: "",
-        reportedDate: "2023-03-07 12:38:17",
-      },
-      {
-        id: 2,
-        studentName: "Shivaji",
-        studentPhone: "9494402899",
-        studentEmail: "saypsiva@gmail.com",
-        testTitle: "Verb Test-2",
-        batchSeries: "इंग्लिश शुरू से बेंच Test Series",
-        questionNumber: 50,
-        questionEn: "By next year, I ____ my degree.",
-        issue: "Other",
-        issueColor: "#FFEFEF",
-        issueTextColor: "#E84E4E",
-        comment: "",
-        reportedDate: "2023-03-05 17:58:40",
-      },
-      {
-        id: 3,
-        studentName: "Akshar Verma",
-        studentPhone: "9097945866",
-        studentEmail: "rupaanand2008@gmail.com",
-        testTitle: "Verb Test-2",
-        batchSeries: "इंग्लिश शुरू से बेंच Test Series",
-        questionNumber: 45,
-        questionEn: "He ____ not agree with me.",
-        issue: "Wrong Question",
-        issueColor: "#FFEFEF",
-        issueTextColor: "#E84E4E",
-        comment: "",
-        reportedDate: "2023-03-05 17:39:50",
-      },
-    ];
-    setReportedQuestions(mockData);
+    try {
+      const reports = await reportedQuestionsAPI.getAll();
+      setReportedQuestions(reports);
+    } catch (error) {
+      console.error("Error loading reported questions:", error);
+      // Fallback or empty state already handled by setReportedQuestions([]) init
+    }
+  };
+
+  const updateReportStatus = async (reportId: string, status: string) => {
+    try {
+      await reportedQuestionsAPI.updateStatus(reportId, status);
+      await loadReportedQuestions();
+      alert(`Report status updated to ${status}`);
+    } catch (error) {
+      console.error("Error updating report status:", error);
+      alert("Failed to update status");
+    }
   };
 
   const loadData = async () => {
@@ -1213,6 +1176,10 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     const isMainSeries = test.isSeries === true;
 
     return matchesSearch && matchesCourse && matchesStatus && isMainSeries;
+  }).sort((a, b) => {
+    const sortA = parseFloat(String(a.sortBy || "0")) || 0;
+    const sortB = parseFloat(String(b.sortBy || "0")) || 0;
+    return sortB - sortA;
   });
 
   const totalPages = Math.ceil(filteredTests.length / itemsPerPage);
@@ -1888,10 +1855,76 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     const totalReported = filteredReported.length;
     const totalReportedPages = Math.ceil(totalReported / reportedPageSize);
     const reportedStartIndex = (reportedCurrentPage - 1) * reportedPageSize;
-    const reportedEndIndex = Math.min(reportedStartIndex + reportedPageSize, totalReported);
-    const paginatedReported = filteredReported.slice(reportedStartIndex, reportedEndIndex);
+    const reportedEndIndex = Math.min(
+      reportedStartIndex + reportedPageSize,
+      totalReported
+    );
+    const paginatedReported = filteredReported.slice(
+      reportedStartIndex,
+      reportedEndIndex
+    );
     const reportedShowingStart = totalReported === 0 ? 0 : reportedStartIndex + 1;
 
+    const tableRows = paginatedReported.length === 0
+      ? [(
+        <tr key="empty">
+          <td colSpan={9} className="px-8 py-20 text-center">
+            <p className="text-gray-400 font-medium">No reported questions found</p>
+          </td>
+        </tr>
+      )]
+      : paginatedReported.map((rq: any, idx: number) => {
+        const issueClass = rq.status === "resolved"
+          ? "bg-green-50 text-green-600"
+          : "bg-red-50 text-red-600";
+        return (
+          <tr key={String(rq.id || idx)} className="hover:bg-gray-50/50 transition-colors group">
+            <td className="px-4 py-8 text-center align-top border-b border-gray-50/50">
+              <input type="checkbox" className="w-4 h-4 rounded border-gray-300 mt-1" />
+            </td>
+            <td className="px-4 py-8 text-[14px] font-bold text-gray-600 align-top border-b border-gray-50/50 text-center">
+              {reportedStartIndex + idx + 1}
+            </td>
+            <td className="px-4 py-8 align-top border-b border-gray-50/50 overflow-hidden">
+              <p className="text-[14px] font-bold text-gray-800 leading-tight mb-0.5 truncate">{rq.studentName}</p>
+              <p className="text-[12px] font-medium text-gray-500 mb-0.5 truncate">{rq.studentPhone}</p>
+              <p className="text-[12px] font-medium text-gray-400 truncate">{rq.studentEmail}</p>
+            </td>
+            <td className="px-4 py-8 align-top border-b border-gray-50/50 overflow-hidden">
+              <p className="text-[14px] font-bold text-gray-800 uppercase tracking-tight leading-tight mb-1 line-clamp-2">{rq.testTitle}</p>
+              <p className="text-[12px] font-medium text-gray-400 leading-tight line-clamp-2">{rq.batchSeries}</p>
+            </td>
+            <td className="px-4 py-8 align-top border-b border-gray-50/50 overflow-hidden">
+              <p className="text-[14px] font-bold text-gray-800 leading-relaxed line-clamp-3 pr-4">
+                {rq.questionNumber ? `${rq.questionNumber}. ` : ""}{rq.questionEn}
+              </p>
+              {rq.questionHi && (
+                <p className="text-[14px] font-medium text-gray-600 leading-relaxed line-clamp-3 pr-4">{rq.questionHi}</p>
+              )}
+            </td>
+            <td className="px-4 py-8 align-top text-center border-b border-gray-50/50">
+              <span className={"px-3 py-1.5 rounded-full text-[11px] font-bold inline-block shadow-sm whitespace-nowrap " + issueClass}>
+                {rq.issue}
+              </span>
+            </td>
+            <td className="px-4 py-8 align-top text-center border-b border-gray-50/50">
+              {rq.comment
+                ? <button onClick={() => alert("Comment: " + rq.comment)} title={rq.comment} className="p-2 bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"><span className="material-symbols-outlined text-[18px]">comment</span></button>
+                : <span className="text-gray-300 text-xs">&#8212;</span>
+              }
+            </td>
+            <td className="px-4 py-8 align-top text-center border-b border-gray-50/50 text-gray-500 text-[12px] whitespace-nowrap">
+              {new Date(rq.reportedDate).toLocaleString()}
+            </td>
+            <td className="px-4 py-8 align-top text-center border-b border-gray-50/50">
+              {rq.status !== "resolved"
+                ? <button onClick={() => updateReportStatus(rq.id, "resolved")} className="h-9 px-4 bg-black text-white rounded-xl text-[12px] font-bold hover:bg-gray-800 transition-colors shadow-sm">Resolve</button>
+                : <span className="text-green-600 flex items-center justify-center gap-1 text-[12px] font-bold"><span className="material-symbols-outlined text-[16px]">check_circle</span>Resolved</span>
+              }
+            </td>
+          </tr>
+        );
+      });
 
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
@@ -2002,184 +2035,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {paginatedReported.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="px-8 py-20 text-center">
-                      <p className="text-gray-400 font-medium">
-                        No reported questions found
-                      </p>
-                    </td>
-                  </tr>
-                ) : (
-                  paginatedReported.map((rq, idx) => (
-                    <tr
-                      key={rq.id}
-                      className="hover:bg-gray-50/50 transition-colors group"
-                    >
-                      <td className="px-4 py-8 text-center align-top border-b border-gray-50/50">
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 rounded border-gray-300 mt-1"
-                        />
-                      </td>
-                      <td className="px-4 py-8 text-[14px] font-bold text-gray-600 align-top border-b border-gray-50/50 text-center">
-                        {reportedStartIndex + idx + 1}
-                      </td>
-                      <td className="px-4 py-8 align-top border-b border-gray-50/50 overflow-hidden">
-                        <div className="max-w-full">
-                          <p className="text-[14px] font-bold text-gray-800 leading-tight mb-0.5 truncate">
-                            {rq.studentName}
-                          </p>
-                          <p className="text-[12px] font-medium text-gray-500 mb-0.5 truncate">
-                            {rq.studentPhone}
-                          </p>
-                          <p className="text-[12px] font-medium text-gray-400 truncate">
-                            {rq.studentEmail}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-8 align-top border-b border-gray-50/50 overflow-hidden">
-                        <div className="max-w-full">
-                          <p className="text-[14px] font-bold text-gray-800 uppercase tracking-tight leading-tight mb-1 line-clamp-2">
-                            {rq.testTitle}
-                          </p>
-                          <p className="text-[12px] font-medium text-gray-400 leading-tight line-clamp-2">
-                            {rq.batchSeries}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-8 align-top border-b border-gray-50/50 overflow-hidden">
-                        <div className="space-y-4 pr-4">
-                          <div className="space-y-1">
-                            <p className="text-[14px] font-bold text-gray-800 leading-relaxed line-clamp-3">
-                              {rq.questionNumber}. {rq.questionEn}
-                            </p>
-                            {rq.questionHi && (
-                              <p className="text-[14px] font-medium text-gray-600 leading-relaxed line-clamp-3">
-                                {rq.questionHi}
-                              </p>
-                            )}
-                          </div>
-
-                          {rq.questionImage && (
-                            <div className="space-y-3 pt-2">
-                              {rq.questionFigureText && (
-                                <p className="text-[13px] font-bold text-gray-600">
-                                  {rq.questionFigureText}
-                                </p>
-                              )}
-                              <div className="border border-gray-100 rounded-xl overflow-hidden shadow-sm inline-block bg-white p-2">
-                                <img
-                                  src={rq.questionImage}
-                                  alt="Figure"
-                                  className="max-w-[150px] h-auto block"
-                                />
-                              </div>
-                              {rq.answerFiguresText && (
-                                <div className="space-y-3">
-                                  <div className="h-[1px] w-full bg-gray-100 my-2" />
-                                  <p className="text-[13px] font-bold text-gray-600">
-                                    {rq.answerFiguresText}
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-8 align-top text-center border-b border-gray-50/50">
-                        <span
-                          className="px-3 py-1.5 rounded-full text-[11px] font-bold inline-block shadow-sm whitespace-nowrap"
-                          style={{
-                            backgroundColor: rq.issueColor,
-                            color: rq.issueTextColor,
-                          }}
-                        >
-                          {rq.issue}
-                        </span>
-                      </td>
-                      <td className="px-4 py-8 align-top text-center border-b border-gray-50/50 overflow-hidden">
-                        <p className="text-[13px] text-gray-500 italic line-clamp-2">
-                          {rq.comment || "-"}
-                        </p>
-                      </td>
-                      <td className="px-4 py-8 align-top border-b border-gray-50/50">
-                        <div className="whitespace-nowrap">
-                          <p className="text-[14px] font-bold text-gray-700">
-                            {rq.reportedDate.split(" ")[0]}
-                          </p>
-                          <p className="text-[12px] font-medium text-gray-400">
-                            {rq.reportedDate.split(" ")[1]}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-8 align-top text-center border-b border-gray-50/50">
-                        <div className="relative inline-block action-menu-container" onMouseDown={(e) => e.stopPropagation()} onTouchStart={(e) => e.stopPropagation()}>
-                          <button
-                            onClick={() =>
-                              setActiveActionMenuId(
-                                activeActionMenuId === rq.id ? null : rq.id,
-                              )
-                            }
-                            className={`flex items-center justify-center gap-1.5 px-3 py-1.5 border rounded-lg text-[13px] font-bold transition-all shadow-sm group ${activeActionMenuId === rq.id
-                              ? "bg-blue-50 border-blue-200 text-blue-700"
-                              : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"
-                              }`}
-                          >
-                            Actions
-                            <span
-                              className={`material-symbols-outlined text-[18px] transition-transform duration-200 ${activeActionMenuId === rq.id
-                                ? "rotate-180 text-blue-500"
-                                : "text-gray-400 group-hover:text-gray-600 font-normal"
-                                }`}
-                            >
-                              expand_more
-                            </span>
-                          </button>
-
-                          {activeActionMenuId === rq.id && (
-                            <div
-                              className={`absolute right-0 w-[140px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[100] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 ${filteredReported.length > 3
-                                ? idx >= filteredReported.length - 2
-                                  ? "bottom-full mb-1"
-                                  : "top-full mt-1"
-                                : idx >= filteredReported.length - 1
-                                  ? "bottom-full mb-1"
-                                  : "top-full mt-1"
-                                }`}
-                            >
-                              <button className="w-full px-4 py-1.5 flex items-center gap-3 text-left hover:bg-blue-50/50 transition-colors group">
-                                <span className="material-symbols-outlined text-[18px] text-blue-400 group-hover:text-blue-500">
-                                  edit
-                                </span>
-                                <span className="text-[13px] font-bold text-gray-700 group-hover:text-blue-700">
-                                  Edit
-                                </span>
-                              </button>
-                              <button className="w-full px-4 py-1.5 flex items-center gap-3 text-left hover:bg-blue-50/50 transition-colors group">
-                                <span className="material-symbols-outlined text-[18px] text-blue-400 group-hover:text-blue-500">
-                                  check_circle
-                                </span>
-                                <span className="text-[13px] font-bold text-gray-700 group-hover:text-blue-700">
-                                  Resolve
-                                </span>
-                              </button>
-                              <div className="h-[1px] bg-gray-50 my-1 mx-2"></div>
-                              <button className="w-full px-4 py-1.5 flex items-center gap-3 text-left hover:bg-red-50/50 transition-colors group">
-                                <span className="material-symbols-outlined text-[18px] text-red-400 group-hover:text-red-500">
-                                  delete
-                                </span>
-                                <span className="text-[13px] font-bold text-red-600">
-                                  Delete
-                                </span>
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                {tableRows}
               </tbody>
             </table>
           </div>
@@ -2204,7 +2060,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 </span>
               </div>
               <span className="text-[13px] font-medium text-gray-400 italic">
-                Showing {reportedShowingStart} to {reportedEndIndex} of {totalReported} entries
+                Showing {reportedShowingStart} to {reportedEndIndex} of{" "}
+                {totalReported} entries
               </span>
             </div>
 
@@ -2222,8 +2079,15 @@ const Tests: React.FC<Props> = ({ showToast }) => {
               </button>
               <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
               <button
-                onClick={() => setReportedCurrentPage((p) => Math.min(totalReportedPages, p + 1))}
-                disabled={reportedCurrentPage === totalReportedPages || totalReportedPages === 0}
+                onClick={() =>
+                  setReportedCurrentPage((p) =>
+                    Math.min(totalReportedPages, p + 1)
+                  )
+                }
+                disabled={
+                  reportedCurrentPage === totalReportedPages ||
+                  totalReportedPages === 0
+                }
                 className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
               >
                 Next
@@ -2678,6 +2542,10 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           ? t.published !== false
                           : t.published === false);
                       return matchesSearch && matchesStatus;
+                    }).sort((a, b) => {
+                      const sortA = parseFloat(String((a as any).sortBy || "0")) || 0;
+                      const sortB = parseFloat(String((b as any).sortBy || "0")) || 0;
+                      return sortB - sortA;
                     });
 
                   if (filtered.length === 0) {
@@ -3300,19 +3168,19 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       {
         key: "default",
         label: "Default",
-        image: "/attach-assist/thumb-default.jpeg",
+        image: "/attach-assist/default.jpg",
         download: "/attach-assist/format-default.docx"
       },
       {
         key: "format1",
         label: "Format 1",
-        image: "/attach-assist/thumb-format1.jpeg",
+        image: "/attach-assist/format1.jpg",
         download: "/attach-assist/format-1.docx"
       },
       {
         key: "format2",
         label: "Format 2",
-        image: "/attach-assist/thumb-format2.jpeg",
+        image: "/attach-assist/format2.jpg",
         download: "/attach-assist/format-2.docx"
       }
     ];
@@ -3328,10 +3196,12 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 Select Test Series *
               </label>
               <CustomDropdown
-                options={courses.map((c) => ({
-                  value: c.id || (c as any)._id,
-                  label: c.name || c.title || "",
-                }))}
+                options={tests
+                  .filter((t: any) => t.isSeries === true)
+                  .map((t: any) => ({
+                    value: t.id || (t as any)._id,
+                    label: t.name || t.title || "",
+                  }))}
                 value={bulkUploadData.testSeries}
                 onChange={(val: any) =>
                   setBulkUploadData({
@@ -3361,8 +3231,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           ? (t.course as any)._id || (t.course as any).id
                           : t.course));
                     return (
-                      !bulkUploadData.testSeries ||
-                      testSeriesId === bulkUploadData.testSeries
+                      (!bulkUploadData.testSeries ||
+                        testSeriesId === bulkUploadData.testSeries) &&
+                      t.isSeries !== true
                     );
                   })
                   .map((t) => ({
@@ -3404,7 +3275,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                         ? "border-black shadow-md"
                         : "border-gray-200 hover:border-gray-300 opacity-70 hover:opacity-100 bg-gray-50"
                         }`}
-                      style={{ width: "135px", height: "140px" }}
+                      style={{ width: "145px", height: "180px" }}
                     >
                       <div className="flex-1 bg-white flex items-center justify-center p-2 relative">
                         <img src={fmt.image} alt={fmt.label} className="w-full h-full object-contain" />
@@ -4608,10 +4479,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         onClose={handleCloseModal}
         onSubmit={handleSubmit}
         editingTest={editingTest}
-        courses={[
-          ...courses.map((c) => ({ ...c, id: c.id || c._id })),
-          ...tests.filter((t) => t.isSeries).map((t) => ({ ...t, id: t.id })),
-        ]}
+        courses={courses.map((c) => ({ ...c, id: c.id || c._id }))}
         defaultCourseId={
           viewingTestSeries?.id || (viewingTestSeries as any)?._id
         }
@@ -4679,23 +4547,12 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             showToast(err.message || "Failed to save test", "error");
           }
         }}
-        subjects={[
-          { value: "Physics", label: "Physics" },
-          { value: "Chemistry", label: "Chemistry" },
-          { value: "Mathematics", label: "Mathematics" },
-          { value: "Biology", label: "Biology" },
-          { value: "English", label: "English" },
-          { value: "General Knowledge", label: "General Knowledge" },
-        ]}
-        testSeriesOptions={[
-          ...courses.map((c) => ({
-            value: c.id,
-            label: `Cat: ${c.name || c.title || ""}`,
-          })),
-          ...tests
-            .filter((t) => t.isSeries)
-            .map((t) => ({ value: t.id, label: `Series: ${t.name || ""}` })),
-        ]}
+        testSeriesOptions={tests
+          .filter((t: any) => t.isSeries === true)
+          .map((t: any) => ({
+            value: t.id || (t as any)._id,
+            label: t.name || t.title || "",
+          }))}
         defaultTestSeries={
           viewingTestSeries
             ? [viewingTestSeries.id || (viewingTestSeries as any)._id]
