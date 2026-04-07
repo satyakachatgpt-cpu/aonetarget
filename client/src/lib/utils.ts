@@ -66,9 +66,6 @@ export const toYouTubeEmbed = (url: string): string => {
   return url;
 };
 
-  return `https://www.youtube.com/embed/${id}?autoplay=1&rel=0`;
-};
-
 /**
  * Detects if a YouTube URL is a LIVE stream (not a normal video).
  * Live URLs contain /live/ or youtube.com/live
