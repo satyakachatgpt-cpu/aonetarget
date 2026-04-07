@@ -81,3 +81,26 @@ export const getYouTubeThumbnail = (url: string): string => {
   const id = extractYouTubeId(url);
   return id ? `https://img.youtube.com/vi/${id}/hqdefault.jpg` : "";
 };
+
+/**
+ * Returns a consistent gradient and initial for a given title.
+ * Used for placeholders when an image is missing or loading.
+ * @param text The text to get an initial from (e.g. course title)
+ * @param gradients An array of gradient class strings
+ */
+export const getGradientPlaceholder = (text: string | undefined | null, gradients: string[]) => {
+  const safeText = text || 'Course';
+  const initial = safeText.trim().charAt(0).toUpperCase();
+
+  // Simple hash to pick a consistent gradient from the array
+  let hash = 0;
+  for (let i = 0; i < safeText.length; i++) {
+    hash = safeText.charCodeAt(i) + ((hash << 5) - hash);
+  }
+
+  const index = Math.abs(hash) % (gradients.length || 1);
+  return {
+    gradient: gradients[index] || 'from-gray-400 to-gray-600',
+    initial
+  };
+};
