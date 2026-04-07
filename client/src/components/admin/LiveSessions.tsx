@@ -37,6 +37,7 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
     const filterDropdownRef = React.useRef<HTMLDivElement>(null);
     const [editingSession, setEditingSession] = useState<LiveSessionReal | null>(null);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
+    const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
 
     const tabs = ['Courses', 'Live & Upcoming', 'Forum', 'Content'];
 
@@ -47,6 +48,25 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
 
     useEffect(() => { fetchData(); }, []);
 
+    // ⏱ Auto-promote upcoming → live every 60 seconds
+    useEffect(() => {
+        const interval = setInterval(async () => {
+            const now = new Date();
+            const toPromote = sessions.filter(s => {
+                if (s.status === 'live' || s.status === 'ended') return false;
+                if (!s.scheduledTime) return false;
+                const scheduled = new Date(s.scheduledTime.replace(' ', 'T'));
+                return !isNaN(scheduled.getTime()) && scheduled <= now;
+            });
+            if (toPromote.length === 0) return;
+            await Promise.all(toPromote.map(s =>
+                liveVideosAPI.update(s.id, { ...s, status: 'live' }).catch(() => null)
+            ));
+            if (toPromote.length > 0) fetchData();
+        }, 60000);
+        return () => clearInterval(interval);
+    }, [sessions]);
+
     const fetchData = async () => {
         setLoading(true);
         try {
@@ -55,26 +75,26 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                 coursesAPI.getAll(),
                 subjectsAPI.getAll()
             ]);
-            
+
             const sessionsData = Array.isArray(sessionsDataRaw) ? sessionsDataRaw : (sessionsDataRaw?.data || []);
             const normalizedCourses = Array.isArray(coursesData) ? coursesData : (coursesData?.data || []);
             const normalizedSubjects = Array.isArray(subjectsData) ? subjectsData : (subjectsData?.data || []);
-            
+
             setCourses(normalizedCourses);
             setSubjects(normalizedSubjects);
 
             const enriched = sessionsData.map((session: any) => {
                 const course = normalizedCourses.find((c: any) => (c.id === session.courseId || c._id === session.courseId));
-                
+
                 let sTime = session.scheduledTime || '';
-                
+
                 // If it's old format 'YYYY-MM-DD HH:MM', convert to 'YYYY-MM-DDTHH:MM' for HTML inputs
                 if (sTime.includes(' ')) {
                     sTime = sTime.replace(' ', 'T');
                 }
 
-                return { 
-                    ...session, 
+                return {
+                    ...session,
                     id: session.id || session._id || '',
                     courseName: course?.name || course?.title || 'General',
                     scheduledTime: sTime
@@ -93,8 +113,8 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
         if (!confirm(`Are you sure you want to end "${session.title}"?`)) return;
         setActionLoading(session.id);
         try {
-            await liveVideosAPI.update(session.id, { 
-                ...session, 
+            await liveVideosAPI.update(session.id, {
+                ...session,
                 status: 'ended',
                 endTime: new Date().toISOString()
             });
@@ -109,17 +129,19 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
 
     const handleGoLive = async (session: LiveSessionReal) => {
         setActionLoading(session.id);
+        const newStatus = session.status === 'live' ? 'upcoming' : 'live';
         try {
-            await liveVideosAPI.update(session.id, { 
-                ...session, 
-                status: 'live' 
+            await liveVideosAPI.update(session.id, {
+                ...session,
+                status: newStatus
             });
-            setSessions(prev => prev.map(s => s.id === session.id ? { ...s, status: 'live' } : s));
+            setSessions(prev => prev.map(s => s.id === session.id ? { ...s, status: newStatus } : s));
         } catch (error: any) {
-            console.error('Go Live error:', error);
-            alert(error.message || 'Failed to go live. Please try again.');
+            console.error('Status toggle error:', error);
+            alert(error.message || 'Failed to update session status.');
         } finally {
             setActionLoading(null);
+            setOpenDropdownId(null);
         }
     };
 
@@ -134,15 +156,31 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
             alert(error.message || 'Failed to delete session. Please try again.');
         } finally {
             setActionLoading(null);
+            setOpenDropdownId(null);
         }
     };
+
+    const handleDuplicate = async (session: LiveSessionReal) => {
+        setActionLoading(session.id);
+        try {
+            const { id, ...rest } = session as any;
+            await liveVideosAPI.create({ ...rest, title: `${rest.title} (Copy)`, status: 'upcoming' });
+            fetchData();
+        } catch (error: any) {
+            alert(error.message || 'Failed to duplicate session');
+        } finally {
+            setActionLoading(null);
+            setOpenDropdownId(null);
+        }
+    };
+
 
     const handleEditSave = async () => {
         if (!editingSession) return;
         setActionLoading(editingSession.id);
         try {
             const uploadData = { ...editingSession };
-            
+
             // Handle new file uploads
             const fileFields = ['pdf1', 'pdf2', 'studyMaterial'];
             for (const field of fileFields) {
@@ -177,7 +215,7 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
     const handleAddLiveStream = async (data: any) => {
         try {
             const uploadData = { ...data };
-            
+
             // Handle file uploads sequentially
             const fileFields = ['pdf1', 'pdf2', 'studyMaterial'];
             for (const field of fileFields) {
@@ -186,17 +224,32 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                     uploadData[`${field}Url`] = result.url;
                 }
             }
-            
+
             // Remove raw file objects before sending to metadata API
             fileFields.forEach(f => delete uploadData[f]);
 
             // Resolve course name for the new session
             const course = courses.find((c: any) => (c.id === data.courseId || c._id === data.courseId));
-            
+
+            // Mirror streamId → videoUrl so student player can resolve the stream URL
+            if (uploadData.streamId && !uploadData.videoUrl) {
+                uploadData.videoUrl = uploadData.streamId;
+                uploadData.url = uploadData.streamId;
+            }
+
+            // Determine initial status based on scheduled time
+            let initialStatus = 'upcoming';
+            if (uploadData.scheduledTime) {
+                const scheduled = new Date(uploadData.scheduledTime.replace(' ', 'T'));
+                if (!isNaN(scheduled.getTime()) && scheduled <= new Date()) {
+                    initialStatus = 'live';
+                }
+            }
+
             await liveVideosAPI.create({
                 ...uploadData,
                 courseName: course?.name || course?.title || 'General',
-                status: 'upcoming'
+                status: initialStatus
             });
             setShowLiveStreamDrawer(false);
             fetchData();
@@ -211,7 +264,7 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
             const titleMatch = (session?.title || '').toLowerCase().includes(searchTerm.toLowerCase());
             const idMatch = (session?.id || '').toLowerCase().includes(searchTerm.toLowerCase());
             const courseMatch = (session?.courseName || '').toLowerCase().includes(searchTerm.toLowerCase());
-            
+
             const matchesSearch = titleMatch || idMatch || courseMatch;
             const matchesStatus = statusFilter === 'all' || (statusFilter === 'live' ? session.status === 'live' : session.status !== 'live');
             return matchesSearch && matchesStatus;
@@ -267,7 +320,7 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                                 </div>
                             )}
                         </div>
-                        <button 
+                        <button
                             onClick={() => setShowLiveStreamDrawer(true)}
                             className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center hover:bg-gray-900 transition-all shadow-md active:scale-95"
                         >
@@ -288,7 +341,7 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-[#f9fafb] border-b border-[#f1f2f4]">
-                                        {['CONTENT ID', 'TITLE', 'COURSE', 'LIVE ON', 'GO LIVE', 'ACTIONS'].map(h => (
+                                        {['CONTENT ID', 'TITLE', 'COURSE', 'LIVE ON', 'STATUS', 'ACTIONS'].map(h => (
                                             <th key={h} className="px-6 py-4 text-[11px] font-black text-[#9ca3af] uppercase tracking-[0.12em]">{h}</th>
                                         ))}
                                     </tr>
@@ -303,33 +356,74 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                                                 {session.scheduledTime ? session.scheduledTime.replace('T', ' ') : 'TBD'}
                                             </td>
                                             <td className="px-6 py-5">
-                                                <button 
-                                                    onClick={() => session.status !== 'live' && handleGoLive(session)}
-                                                    className={`px-4 py-1.5 rounded-full text-[11px] font-black uppercase tracking-wider transition-all active:scale-95 shadow-sm ${session.status === 'live' ? 'bg-red-100 text-red-600 border border-red-200 animate-pulse' : 'bg-[#dcfce7] hover:bg-[#bbf7d0] text-[#166534]'}`}>
-                                                    {session.status === 'live' ? 'Live Now' : 'Go Live'}
-                                                </button>
+                                                <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${session.status === 'live' ? 'bg-red-100 text-red-600 border border-red-200 animate-pulse' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${session.status === 'live' ? 'bg-red-500' : 'bg-gray-400'}`} />
+                                                    {session.status === 'live' ? 'Live Now' : 'Upcoming'}
+                                                </div>
                                             </td>
-                                            <td className="px-6 py-5">
-                                                <div className="flex items-center gap-2">
-                                                    {/* ✏️ Edit */}
-                                                    <button title="Edit" onClick={() => setEditingSession({ ...session })} disabled={!!actionLoading}
-                                                        className="w-9 h-9 flex items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-all active:scale-90 disabled:opacity-50">
-                                                        <span className="material-symbols-outlined text-[18px]">edit</span>
+                                            <td className="px-6 py-5 relative">
+                                                {/* Single Actions dropdown button */}
+                                                <div className="relative inline-block">
+                                                    <button
+                                                        onClick={() => setOpenDropdownId(openDropdownId === session.id ? null : session.id)}
+                                                        disabled={!!actionLoading}
+                                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-[13px] font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm disabled:opacity-50"
+                                                    >
+                                                        Actions
+                                                        <span className="material-symbols-outlined text-[16px]">expand_more</span>
                                                     </button>
-                                                     {/* ⏹️ End Stream */}
-                                                     {session.status === 'live' && (
-                                                         <button title="End Live Stream" onClick={() => handleEndSession(session)} disabled={!!actionLoading}
-                                                             className="w-9 h-9 flex items-center justify-center rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-all active:scale-90 disabled:opacity-50">
-                                                             <span className="material-symbols-outlined text-[18px]">stop_circle</span>
-                                                         </button>
-                                                     )}
-                                                     {/* 🗑️ Delete */}
-                                                    <button title="Delete" onClick={() => handleDelete(session.id)} disabled={actionLoading === session.id}
-                                                        className="w-9 h-9 flex items-center justify-center rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-all active:scale-90 disabled:opacity-50">
-                                                        {actionLoading === session.id
-                                                            ? <div className="w-4 h-4 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" />
-                                                            : <span className="material-symbols-outlined text-[18px]">delete</span>}
-                                                    </button>
+                                                    {openDropdownId === session.id && (
+                                                        <div className="absolute right-0 top-[calc(100%+4px)] w-[180px] bg-white rounded-xl shadow-xl z-[300] border border-gray-100 py-1 animate-fade-in">
+                                                            {/* Enable / Disable */}
+                                                            <button
+                                                                onClick={() => { handleGoLive(session); setOpenDropdownId(null); }}
+                                                                className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[16px] text-green-600">{session.status === 'live' ? 'pause_circle' : 'play_circle'}</span>
+                                                                {session.status === 'live' ? 'Disable' : 'Enable'}
+                                                            </button>
+                                                            {/* Edit */}
+                                                            <button
+                                                                onClick={() => { setEditingSession({ ...session }); setOpenDropdownId(null); }}
+                                                                className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[16px] text-indigo-600">edit</span>
+                                                                Edit
+                                                            </button>
+                                                            {/* Duplicate */}
+                                                            <button
+                                                                onClick={() => handleDuplicate(session)}
+                                                                disabled={actionLoading === session.id}
+                                                                className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2.5 disabled:opacity-50"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[16px] text-blue-600">content_copy</span>
+                                                                Duplicate
+                                                            </button>
+                                                            {/* End Live Stream */}
+                                                            {session.status === 'live' && (
+                                                                <button
+                                                                    onClick={() => { handleEndSession(session); setOpenDropdownId(null); }}
+                                                                    disabled={actionLoading === session.id}
+                                                                    className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-orange-600 hover:bg-orange-50 flex items-center gap-2.5 disabled:opacity-50"
+                                                                >
+                                                                    <span className="material-symbols-outlined text-[16px]">stop_circle</span>
+                                                                    End Live Stream
+                                                                </button>
+                                                            )}
+                                                            <div className="h-px bg-gray-100 my-1" />
+                                                            {/* Delete */}
+                                                            <button
+                                                                onClick={() => handleDelete(session.id)}
+                                                                disabled={actionLoading === session.id}
+                                                                className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-red-600 hover:bg-red-50 flex items-center gap-2.5 disabled:opacity-50"
+                                                            >
+                                                                {actionLoading === session.id
+                                                                    ? <div className="w-4 h-4 border-2 border-red-300 border-t-red-500 rounded-full animate-spin" />
+                                                                    : <span className="material-symbols-outlined text-[16px]">delete</span>}
+                                                                Delete
+                                                            </button>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -473,7 +567,7 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                                                     const file = editingSession[field];
                                                     // @ts-ignore
                                                     const existingUrl = editingSession[`${field}Url`];
-                                                    
+
                                                     return (
                                                         <div key={field} className="space-y-3">
                                                             <FormLabel label={label} />
@@ -489,7 +583,7 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                                                                         <a href={existingUrl} target="_blank" rel="noreferrer" className="text-[11px] text-blue-600 font-bold mt-1.5 hover:underline decoration-2">View File</a>
                                                                     )}
                                                                 </div>
-                                                                <div 
+                                                                <div
                                                                     onClick={() => {
                                                                         const input = document.createElement('input');
                                                                         input.type = 'file';
@@ -544,8 +638,8 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                     </>
                 )}
             </RightSideDrawer>
-            
-            <LiveStreamDrawer 
+
+            <LiveStreamDrawer
                 isOpen={showLiveStreamDrawer}
                 onClose={() => setShowLiveStreamDrawer(false)}
                 onSubmit={handleAddLiveStream}

@@ -25,7 +25,7 @@ const VideoPlayer: React.FC = () => {
 
     // Hide everything else
     document.body.style.overflow = 'hidden';
-    
+
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('orientationchange', handleResize);
@@ -63,28 +63,28 @@ const VideoPlayer: React.FC = () => {
 
       {/* Video Hub */}
       <div className={`relative flex-1 flex items-center justify-center bg-black ${isLandscape ? 'h-full w-full' : ''}`}>
-      {/* ABSOLUTE GLOBAL EXIT (X) PROTOCOL - TAB-CLOSE & UNBLOCKABLE */}
-      <div 
-        onPointerDown={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          console.log('HARD SCREEN TAB-CLOSE TRIGGERED');
-          window.close();
-          navigate(-1);
-          setTimeout(() => {
-            if (window.location.href.includes('video-player')) {
-              window.location.hash = '/#/my-courses';
-            }
-          }, 50);
-        }}
-        className="absolute top-0 left-0 w-24 h-24 z-[9999999] cursor-pointer group flex items-start justify-start p-8 active:scale-90 transition-all"
-        style={{ touchAction: 'none' }}
-      >
-        <div className="w-10 h-10 bg-white/10 hover:bg-red-600/80 backdrop-blur-3xl border border-white/20 rounded-full text-white flex items-center justify-center shadow-2xl transition-all duration-200">
-          <span className="material-symbols-rounded text-2xl font-bold">close</span>
+        {/* ABSOLUTE GLOBAL EXIT (X) PROTOCOL - TAB-CLOSE & UNBLOCKABLE */}
+        <div
+          onPointerDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('HARD SCREEN TAB-CLOSE TRIGGERED');
+            window.close();
+            navigate(-1);
+            setTimeout(() => {
+              if (window.location.href.includes('video-player')) {
+                window.location.hash = '/#/my-courses';
+              }
+            }, 50);
+          }}
+          className="absolute top-0 left-0 w-24 h-24 z-[9999999] cursor-pointer group flex items-start justify-start p-8 active:scale-90 transition-all"
+          style={{ touchAction: 'none' }}
+        >
+          <div className="w-10 h-10 bg-white/10 hover:bg-red-600/80 backdrop-blur-3xl border border-white/20 rounded-full text-white flex items-center justify-center shadow-2xl transition-all duration-200">
+            <span className="material-symbols-rounded text-2xl font-bold">close</span>
+          </div>
         </div>
-      </div>
-        
+
         <div className={`w-full ${isLandscape ? 'h-full' : 'aspect-video shadow-[0_0_100px_rgba(0,0,0,0.5)]'}`}>
           <SecureVideoPlayer
             src={videoUrl}
@@ -103,7 +103,7 @@ const VideoPlayer: React.FC = () => {
       {!isLandscape && (
         <div className="bg-[#0A0A0A] p-6 text-white rounded-t-[3rem] -mt-10 relative z-10 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] border-t border-white/5 flex-shrink-0 animate-slide-up">
           <div className="w-16 h-1.5 bg-white/10 rounded-full mx-auto mb-8" />
-          
+
           <div className="flex justify-between items-start gap-4 mb-8">
             <div className="flex-1">
               <h2 className="text-2xl font-black leading-tight tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">{video.title}</h2>
@@ -134,16 +134,16 @@ const VideoPlayer: React.FC = () => {
           </div>
 
           <div className="p-5 bg-gradient-to-br from-white/5 to-transparent rounded-[2rem] border border-white/5 backdrop-blur-sm">
-             <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brandBlue to-blue-600 flex items-center justify-center text-white font-black text-sm shadow-lg shadow-brandBlue/20">AT</div>
-                <div className="flex-1">
-                   <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest leading-none">Institute Faculty</p>
-                   <p className="text-base font-bold mt-1.5">Aone Target Team</p>
-                </div>
-                <button className="px-5 py-2.5 bg-white text-black rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">Share</button>
-             </div>
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-brandBlue to-blue-600 flex items-center justify-center text-white font-black text-sm shadow-lg shadow-brandBlue/20">AT</div>
+              <div className="flex-1">
+                <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest leading-none">Institute Faculty</p>
+                <p className="text-base font-bold mt-1.5">Aone Target Team</p>
+              </div>
+              <button className="px-5 py-2.5 bg-white text-black rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">Share</button>
+            </div>
           </div>
-          
+
           <div className="h-12" /> {/* Bottom Spacer */}
         </div>
       )}

@@ -39,12 +39,12 @@ const calculatePriceBreakdown = (course, coupon = null) => {
   const basePrice = parseFloat(course.price) || 0;
   const gstIncluded = course.settings?.gstIncluded || false;
   const gstPercentage = parseFloat(course.settings?.gstPercentage) || 0;
-  
+
   let gstAmount = 0;
   if (gstIncluded && gstPercentage > 0) {
     gstAmount = (basePrice * gstPercentage) / 100;
   }
-  
+
   let discountAmount = 0;
   if (coupon && coupon.status === 'active') {
     // Check minPurchase if exists
@@ -63,9 +63,9 @@ const calculatePriceBreakdown = (course, coupon = null) => {
       }
     }
   }
-  
+
   const totalAmount = Math.max(0, basePrice + gstAmount - discountAmount);
-  
+
   return {
     basePrice,
     gstAmount,
@@ -94,8 +94,8 @@ const __dirname = path.dirname(__filename);
 
 app.use(securityHeaders);
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS 
-    ? process.env.ALLOWED_ORIGINS.split(',') 
+  origin: process.env.ALLOWED_ORIGINS
+    ? process.env.ALLOWED_ORIGINS.split(',')
     : ['http://localhost:5173'],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -210,13 +210,13 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api') || req.path === '/health') {
     // [LOG REMOVED] Synchronous file append was blocking the event loop here.
   }
-  
+
   const isConnected = mongoose.connection.readyState === 1 || mongoose.connection.readyState === 2; // 1 = connected, 2 = connecting
   if (req.path.startsWith('/api') && !isConnected && !req.path.includes('/heartbeat')) {
     console.log(`[DB Pending] Rejecting ${req.path} - Database still connecting...`);
-    return res.status(503).json({ 
+    return res.status(503).json({
       error: 'Database connecting, please retry',
-      connecting: true 
+      connecting: true
     });
   }
   next();
@@ -273,7 +273,7 @@ const connectDB = async () => {
       await db.collection('tests').createIndex({ isSeries: 1 });
       await db.collection('tests').createIndex({ status: 1 });
       await db.collection('pdfs').createIndex({ courseId: 1 });
-      
+
       // Performance optimization indexes
       await db.collection('questions').createIndex({ testId: 1 });
       await db.collection('questions').createIndex({ courseId: 1 });
@@ -286,7 +286,7 @@ const connectDB = async () => {
       await db.collection('banners').createIndex({ isActive: 1 });
       await db.collection('posts').createIndex({ status: 1 });
       console.log('MongoDB indexes ensured');
-      
+
       // Batch Sorting Migration: Convert string values to numbers
       try {
         console.log('Running sortingOrder migration...');
@@ -799,14 +799,14 @@ app.get('/api/courses', async (req, res) => {
           }
         }
       },
-      { 
-        $project: { 
-          videoCount: 0, 
-          description: 0, 
-          longDescription: 0, 
+      {
+        $project: {
+          videoCount: 0,
+          description: 0,
+          longDescription: 0,
           syllabus: 0,
-          curriculum: 0 
-        } 
+          curriculum: 0
+        }
       },
       { $sort: { sortOrder: 1, createdAt: -1 } }
     ];
@@ -845,7 +845,7 @@ app.post('/api/courses', async (req, res) => {
     }
     const course = new Course(courseData);
     await course.save();
-    
+
     // Sync Demo Video
     if (course.demoVideo) {
       await syncDemoVideoWithFreeContent(course, course._id.toString());
@@ -953,29 +953,9 @@ async function findCourse(id) {
 
 // Helper for dynamic stream status calculation
 function calculateStreamStatus(item) {
-  const now = new Date();
-  const startTimeVal = item.startTime || item.publishOn || item.date || item.startDateTime || item.createdAt;
-  const startTime = new Date(startTimeVal);
-  
-  // If manual status is 'ended', always return 'ended'
-  if (item.status === 'ended' || item.status === 'inactive' || item.status === 'completed') {
-    return 'ended';
-  }
-
-  const duration = parseInt(item.duration) || 60; // Default 60 mins if missing
-  const endTimeVal = item.endTime || item.endDateTime;
-  const endTime = endTimeVal ? new Date(endTimeVal) : new Date(startTime.getTime() + duration * 60 * 1000);
-  
-  const joinBeforeMin = parseInt(item.joinBeforeMinutes) || 10;
-  const joinTime = new Date(startTime.getTime() - joinBeforeMin * 60 * 1000);
-
-  if (now < joinTime) {
-    return 'upcoming';
-  } else if (now >= joinTime && now <= endTime) {
-    return 'live';
-  } else {
-    return 'ended';
-  }
+  if (['ended', 'inactive', 'completed'].includes(item.status)) return 'ended';
+  if (item.status === 'live') return 'live';
+  return item.status || 'upcoming';
 }
 
 // Function to find all related IDs by name and/or slug/id for content linking
@@ -1067,7 +1047,7 @@ app.get('/api/courses/:id/videos', async (req, res) => {
     if (adminId) {
       isEnrolled = true;
     } else if (studentId) {
-      const student = await db.collection('students').findOne({ 
+      const student = await db.collection('students').findOne({
         $or: [
           { id: studentId },
           { _id: ObjectId.isValid(studentId) ? new ObjectId(studentId) : null }
@@ -1075,8 +1055,8 @@ app.get('/api/courses/:id/videos', async (req, res) => {
       });
       if (student) {
         const enrolledCourses = student.enrolledCourses || [];
-        isEnrolled = idVariants.some(id => enrolledCourses.includes(id)) || 
-                     (course.price === 0 || course.isFree === true); // Free courses are always "enrolled"
+        isEnrolled = idVariants.some(id => enrolledCourses.includes(id)) ||
+          (course.price === 0 || course.isFree === true); // Free courses are always "enrolled"
       }
     }
 
@@ -1103,7 +1083,7 @@ app.get('/api/courses/:id/videos', async (req, res) => {
     // --- END ENROLLMENT CHECK ---
 
     // Fetch from all relevant batches
-    let allRawVideos = await db.collection('videos').find({ 
+    let allRawVideos = await db.collection('videos').find({
       courseId: { $in: idVariants },
       status: { $nin: ['inactive', 'deleted'] }
     }).sort({ order: 1 }).toArray();
@@ -1159,11 +1139,11 @@ app.get('/api/courses/:id/videos', async (req, res) => {
         const title = normalizeTitle(v.title);
         const url = normalizeUrl(v.youtubeUrl || v.videoUrl || v.url);
         const id = v.id || v._id?.toString();
-        
+
         if (title) seenTitles.add(title);
         if (url) seenUrls.add(url);
         if (id) seenIds.add(id);
-        
+
         uniqueVideos.push(v);
       }
     });
@@ -1174,8 +1154,8 @@ app.get('/api/courses/:id/videos', async (req, res) => {
         const title = normalizeTitle(v.title);
         const url = normalizeUrl(v.youtubeUrl || v.videoUrl || v.url);
         const id = v.id || v._id?.toString();
-        
-        const isDuplicate = 
+
+        const isDuplicate =
           (id && seenIds.has(id)) ||
           (title && seenTitles.has(title)) ||
           (url && seenUrls.has(url));
@@ -1234,7 +1214,7 @@ app.post('/api/courses/import', async (req, res) => {
     const buildIdQuery = (itemId) => {
       const queryList = [{ id: String(itemId) }];
       if (ObjectId.isValid(itemId)) {
-        try { queryList.push({ _id: new ObjectId(itemId) }); } catch (e) {}
+        try { queryList.push({ _id: new ObjectId(itemId) }); } catch (e) { }
       }
       return queryList;
     };
@@ -1294,10 +1274,10 @@ app.post('/api/courses/import', async (req, res) => {
       }
 
       // 4. Process sub-folders recursively
-      const subFolders = await db.collection('folders').find({ 
-        parentId: { $in: [...folderMatchIds, ...folderMatchOids] } 
+      const subFolders = await db.collection('folders').find({
+        parentId: { $in: [...folderMatchIds, ...folderMatchOids] }
       }).toArray();
-      
+
       for (const sub of subFolders) {
         await processFolderRecursively(sub, targetCourseId, action, targetFolderId);
       }
@@ -1436,7 +1416,7 @@ app.put('/api/courses/:id/videos/:videoId', async (req, res) => {
         status: updateData.status || finalUpdate.status || 'upcoming',
         url: updateData.meetingLink || updateData.url || updateData.link || finalUpdate.url
       });
-      
+
       // Preserve end times and other streaming control fields
       if (updateData.endTime) finalUpdate.endTime = updateData.endTime;
       if (updateData.endDateTime) finalUpdate.endDateTime = updateData.endDateTime;
@@ -1483,14 +1463,14 @@ app.post('/api/live-stream/end/:id', async (req, res) => {
         { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
       ].filter(v => v.id || v._id)
     };
-    
+
     // Update all potential collections where the stream might reside
     await Promise.all([
       db.collection('videos').updateOne(query, { $set: update }),
       db.collection('liveVideos').updateOne(query, { $set: update }),
       db.collection('liveClasses').updateOne(query, { $set: update })
     ]);
-    
+
     res.json({ success: true, message: 'Live stream ended successfully' });
   } catch (error) {
     console.error('End live stream error:', error);
@@ -1703,7 +1683,7 @@ app.get('/api/courses/:id/notes', async (req, res) => {
       courseId: { $in: idVariants },
       status: { $nin: ['inactive', 'deleted'] }
     };
-    
+
     // Check both pdfs and notes collections for backward compatibility
     // Sort by sortBy first (new), then order (legacy), then creation date
     const pdfs = await db.collection('pdfs').find(query).sort({ sortBy: 1, order: 1, createdAt: -1 }).toArray();
@@ -1729,11 +1709,11 @@ app.get('/api/courses/:id/notes', async (req, res) => {
         const title = (n.title || '').trim().toLowerCase();
         const url = normalizeUrl(n.fileUrl || n.url);
         const id = n.id || n._id?.toString();
-        
+
         if (title) seenTitles.add(title);
         if (url) seenUrls.add(url);
         if (id) seenIds.add(id);
-        
+
         uniqueNotes.push(n);
       }
     });
@@ -1744,8 +1724,8 @@ app.get('/api/courses/:id/notes', async (req, res) => {
         const title = (n.title || '').trim().toLowerCase();
         const url = normalizeUrl(n.fileUrl || n.url);
         const id = n.id || n._id?.toString();
-        
-        const isDuplicate = 
+
+        const isDuplicate =
           (id && seenIds.has(id)) ||
           (title && seenTitles.has(title)) ||
           (url && seenUrls.has(url));
@@ -1960,17 +1940,17 @@ app.get('/api/courses/:id/live-classes', optionalAuth, async (req, res) => {
 
       return item;
     })
-    .filter(item => {
-      // Visibility Filter: 
-      // - Public streams are visible to everyone
-      // - Private streams are only visible if the student is enrolled (or if they are admin, but this route is for students)
-      if (item.visibility === 'private' && !isEnrolled) {
-        return false;
-      }
-      return true;
-    })
-    .sort((a,b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
-    
+      .filter(item => {
+        // Visibility Filter: 
+        // - Public streams are visible to everyone
+        // - Private streams are only visible if the student is enrolled (or if they are admin, but this route is for students)
+        if (item.visibility === 'private' && !isEnrolled) {
+          return false;
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
+
     res.json(merged);
   } catch (error) {
     console.error('Error fetching live classes:', error);
@@ -2041,7 +2021,7 @@ async function syncDemoVideoWithFreeContent(record, id) {
         instructor: record.instructor || 'Institute Faculty',
         updatedAt: new Date().toISOString()
       };
-      
+
       // Upsert into videos collection based on courseId and "Demo:" prefix
       await db.collection('videos').updateOne(
         { courseId: finalId, title: { $regex: /^Demo:/i } },
@@ -2050,8 +2030,8 @@ async function syncDemoVideoWithFreeContent(record, id) {
       );
       console.log(`[DEMO-SYNC] Synced demo video for ${finalId}`);
     } else if (record.demoVideo === "") {
-        // Explicitly removed
-        await db.collection('videos').deleteMany({ courseId: finalId, title: { $regex: /^Demo:/i } });
+      // Explicitly removed
+      await db.collection('videos').deleteMany({ courseId: finalId, title: { $regex: /^Demo:/i } });
     }
   } catch (err) {
     console.error(`[DEMO-SYNC ERROR] ${finalId}:`, err);
@@ -2083,7 +2063,7 @@ app.post('/api/courses/:id', async (req, res) => {
   try {
     const courseId = req.params.id;
     const courseData = req.body;
-    
+
     if (courseData.settings && typeof courseData.settings.sortingOrder === 'string') {
       courseData.settings.sortingOrder = parseFloat(courseData.settings.sortingOrder) || 9999;
     }
@@ -2147,8 +2127,8 @@ app.put('/api/courses/:id', async (req, res) => {
 
     // Sync Demo Video
     if (finalUpdate.demoVideo !== undefined) {
-        const fullRecord = { ...record, ...finalUpdate };
-        await syncDemoVideoWithFreeContent(fullRecord, record._id.toString());
+      const fullRecord = { ...record, ...finalUpdate };
+      await syncDemoVideoWithFreeContent(fullRecord, record._id.toString());
     }
 
     res.json({ success: true, message: 'Updated successfully', collection: targetCollection });
@@ -2288,16 +2268,16 @@ app.get('/api/students/:id/live-classes', async (req, res) => {
 
       return item;
     })
-    .filter(item => {
-      // Visibility Filter: 
-      // - Students in this route are already checked for enrollment against the courseIdVariants.
-      // - However, we still respect the 'private' visibility flag to ensure consistent behavior.
-      if (item.visibility === 'private' && !allIdVariants.includes(String(item.courseId))) {
-         return false;
-      }
-      return true;
-    })
-    .sort((a, b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
+      .filter(item => {
+        // Visibility Filter: 
+        // - Students in this route are already checked for enrollment against the courseIdVariants.
+        // - However, we still respect the 'private' visibility flag to ensure consistent behavior.
+        if (item.visibility === 'private' && !allIdVariants.includes(String(item.courseId))) {
+          return false;
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
 
     res.json(merged);
   } catch (error) {
@@ -2312,11 +2292,11 @@ app.post('/api/students', async (req, res) => {
     const { email, phone } = req.body;
 
     // Duplicate check
-    const existingStudent = await Student.findOne({ 
+    const existingStudent = await Student.findOne({
       $or: [
         { phone },
         ...(email ? [{ email }] : [])
-      ] 
+      ]
     });
 
     if (existingStudent) {
@@ -2377,9 +2357,9 @@ app.post('/api/students', async (req, res) => {
     res.status(201).json(student);
   } catch (error) {
     console.error('Error creating student (FULL ERROR):', error);
-    res.status(500).json({ 
-      error: error.code === 11000 ? 'Duplicate key error: A student with this phone or email already exists.' : 'Failed to create student', 
-      details: error.message 
+    res.status(500).json({
+      error: error.code === 11000 ? 'Duplicate key error: A student with this phone or email already exists.' : 'Failed to create student',
+      details: error.message
     });
   }
 });
@@ -2444,9 +2424,9 @@ app.put('/api/students/:id', async (req, res) => {
     res.json(student);
   } catch (error) {
     console.error('Error updating student (FULL ERROR):', error);
-    res.status(500).json({ 
-      error: error.code === 11000 ? 'Duplicate key error: A student with this phone or email already exists.' : 'Failed to update student', 
-      details: error.message 
+    res.status(500).json({
+      error: error.code === 11000 ? 'Duplicate key error: A student with this phone or email already exists.' : 'Failed to update student',
+      details: error.message
     });
   }
 });
@@ -2913,7 +2893,7 @@ app.post('/api/admin/login', authLimiter, async (req, res) => {
     }
 
     console.log(`[LOGIN SUCCESS] Admin: ${adminId}, Name: ${admin.name}`);
-    
+
     // Generate secure admin token
     const adminToken = generateAdminToken(admin);
 
@@ -3257,18 +3237,18 @@ app.put('/api/questions/update-all', async (req, res) => {
   try {
     const updates = (req.body && req.body.updates) ? req.body.updates : (Array.isArray(req.body) ? req.body : []);
     console.log(`[Reorder] Processing ${updates.length} updates`);
-    
+
     for (const update of updates) {
       const { id, _id, ...data } = update;
       let query = null;
-      
+
       if (id) {
         query = { id: id };
       } else if (_id) {
         // Use the locally defined ObjectId (from mongoose.Types)
         query = { _id: (ObjectId.isValid(_id.toString())) ? new ObjectId(_id.toString()) : _id };
       }
-      
+
       if (query) {
         await db.collection('questions').updateOne(query, { $set: data });
       }
@@ -4396,8 +4376,8 @@ app.put('/api/videos/update-all', async (req, res) => {
 app.get('/api/live-videos', async (req, res) => {
   try {
     const liveVideos = await db.collection('liveVideos').find({}).toArray();
-    const courseLiveStreams = await db.collection('videos').find({ 
-      contentType: { $in: ['live_stream', 'youtube_zoom'] } 
+    const courseLiveStreams = await db.collection('videos').find({
+      contentType: { $in: ['live_stream', 'youtube_zoom'] }
     }).toArray();
 
     const allSessions = [...liveVideos, ...courseLiveStreams];
@@ -4430,8 +4410,8 @@ app.get('/api/live-videos', async (req, res) => {
         status,
         isLive: status === 'live'
       };
-    }).sort((a,b) => new Date(a.publishOn || a.date || a.createdAt) - new Date(b.publishOn || b.date || b.createdAt));
-    
+    }).sort((a, b) => new Date(a.publishOn || a.date || a.createdAt) - new Date(b.publishOn || b.date || b.createdAt));
+
     res.json(calculated);
 
   } catch (error) {
@@ -4718,12 +4698,12 @@ app.get('/api/packages', async (req, res) => {
           }
         }
       },
-      { 
-        $project: { 
+      {
+        $project: {
           description: 0,
           content: 0,
-          features: 0 
-        } 
+          features: 0
+        }
       },
       { $sort: { sortOrder: 1, createdAt: -1 } }
     ]).toArray();
@@ -4737,7 +4717,7 @@ app.post('/api/packages', async (req, res) => {
   try {
     const result = await db.collection('packages').insertOne(req.body);
     const newPackage = { _id: result.insertedId, ...req.body };
-    
+
     // Sync Demo Video
     if (newPackage.demoVideo) {
       await syncDemoVideoWithFreeContent(newPackage, result.insertedId.toString());
@@ -4792,8 +4772,8 @@ app.put('/api/packages/:id', async (req, res) => {
 
     // Sync Demo Video
     if (finalUpdate.demoVideo !== undefined) {
-        const fullRecord = { ...record, ...finalUpdate };
-        await syncDemoVideoWithFreeContent(fullRecord, record._id.toString());
+      const fullRecord = { ...record, ...finalUpdate };
+      await syncDemoVideoWithFreeContent(fullRecord, record._id.toString());
     }
 
     res.json({ success: true, message: 'Updated successfully', collection: targetCollection });
@@ -5344,11 +5324,11 @@ app.post('/api/notifications/send', async (req, res) => {
 
     const course = await findCourse(batchId);
     let idVariants = [batchId];
-    
+
     if (course) {
       idVariants = await getRelatedCourseIds(course, batchId);
     }
-    
+
     const objectIdVariants = idVariants
       .filter(id => /^[a-fA-F0-9]{24}$/.test(id))
       .map(id => new ObjectId(id));
@@ -5380,10 +5360,10 @@ app.post('/api/notifications/send', async (req, res) => {
     });
 
     const result = await db.collection('notifications').insertMany(notifications);
-    res.status(201).json({ 
-      success: true, 
+    res.status(201).json({
+      success: true,
       message: `${students.length} notifications sent successfully`,
-      count: result.insertedCount 
+      count: result.insertedCount
     });
   } catch (error) {
     console.error('Error sending batch notification:', error);
@@ -5396,10 +5376,10 @@ app.put('/api/notifications/:id', async (req, res) => {
     const id = (req.params.id || '').trim();
     const updateData = { ...req.body };
     delete updateData._id; // Don't update the _id field
-    
+
     let queryId = id;
     if (/^[a-fA-F0-9]{24}$/.test(id)) {
-        queryId = new ObjectId(id);
+      queryId = new ObjectId(id);
     }
 
     const result = await db.collection('notifications').updateOne(
@@ -6295,12 +6275,12 @@ app.get('/api/students/:id/live-classes', async (req, res) => {
     }
 
     const enrolledCourseIds = (student.enrolledCourses || []).map(id => id.toString());
-    
+
     // Get all live videos
     const liveVideos = await db.collection('liveVideos').find({}).toArray();
     // Get all videos with live content types
-    const courseLiveStreams = await db.collection('videos').find({ 
-      contentType: { $in: ['live_stream', 'youtube_zoom'] } 
+    const courseLiveStreams = await db.collection('videos').find({
+      contentType: { $in: ['live_stream', 'youtube_zoom'] }
     }).toArray();
 
     const allSessions = [...liveVideos, ...courseLiveStreams];
@@ -6314,7 +6294,7 @@ app.get('/api/students/:id/live-classes', async (req, res) => {
       // If no courseId, assume it's global (or you can choose to hide it)
       // For now, let's show global ones too, or stick strictly to enrolled if that's preferred.
       // Based on the user request, "only show live classes for batches/courses that the student has actually enrolled in"
-      return false; 
+      return false;
     });
 
     const calculated = filtered.map(item => {
@@ -6343,8 +6323,8 @@ app.get('/api/students/:id/live-classes', async (req, res) => {
         status,
         isLive: status === 'live'
       };
-    }).sort((a,b) => new Date(a.publishOn || a.date || a.createdAt) - new Date(b.publishOn || b.date || b.createdAt));
-    
+    }).sort((a, b) => new Date(a.publishOn || a.date || a.createdAt) - new Date(b.publishOn || b.date || b.createdAt));
+
     res.json(calculated);
   } catch (error) {
     console.error('Error fetching student live classes:', error);
@@ -6934,14 +6914,14 @@ app.get('/api/courses/:courseId/live-classes', async (req, res) => {
       if (!item.id && item._id) {
         item.id = item._id.toString();
       }
-      
+
       // Map 'url' or 'meetingLink' consistently
       if (!item.meetingLink) {
         item.meetingLink = item.url || item.videoUrl || item.link;
       }
-      
+
       return item;
-    }).sort((a,b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
+    }).sort((a, b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
 
     res.json(merged);
   } catch (error) {
@@ -7505,8 +7485,8 @@ app.post('/api/razorpay/create-order', async (req, res) => {
       amount: Math.round(breakdown.totalAmount * 100),
       currency: 'INR',
       receipt: `receipt_${Date.now()}`,
-      notes: { 
-        courseId: course.id || course._id.toString(), 
+      notes: {
+        courseId: course.id || course._id.toString(),
         studentId,
         couponCode: couponCode || '',
         basePrice: breakdown.basePrice,
@@ -7531,12 +7511,12 @@ app.post('/api/razorpay/create-order', async (req, res) => {
       return res.status(500).json({ error: order.error?.description || 'Failed to create Razorpay order' });
     }
 
-    res.json({ 
-      orderId: order.id, 
-      amount: order.amount, 
-      currency: order.currency, 
+    res.json({
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
       keyId,
-      breakdown 
+      breakdown
     });
   } catch (error) {
     console.error('Razorpay order error:', error);
