@@ -8,7 +8,6 @@ interface AddSingleTestDrawerProps {
     onSubmit: (data: any) => void;
     editingTest?: any;
     testSeriesOptions: { value: string; label: string }[];
-    subjects: { value: string; label: string }[];
     defaultTestSeries?: string[];
     showToast?: (m: string, type?: 'success' | 'error') => void;
 }
@@ -19,7 +18,6 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
     onSubmit,
     editingTest,
     testSeriesOptions,
-    subjects,
     defaultTestSeries,
     showToast
 }) => {
@@ -61,7 +59,6 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
         noOfQuestions: '0',
         totalMarks: '',
         totalDuration: '180',
-        subject: '',
         sortingOrder: '0.00',
         enableSectionSelector: false,
         startDate: '2026-03-09T23:11:38',
@@ -109,7 +106,6 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                 noOfQuestions: editingTest.questions?.toString() || '',
                 totalMarks: editingTest.totalMarks?.toString() || '',
                 totalDuration: editingTest.duration?.toString() || '',
-                subject: editingTest.subject || '',
                 sortingOrder: editingTest.sortBy?.toString() || '0.00',
                 enableSectionSelector: editingTest.enableSectionSelector || false,
                 startDate: editingTest.openDate || '2026-03-09T23:11:38',
@@ -154,6 +150,10 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
     };
 
     const theme = uiThemes[formData.uiType] || uiThemes['Default'];
+    
+    // Dynamic section options based on test title
+    const sectionOptions = [{ value: formData.title || 'Draft Test', label: formData.title || 'Draft Test' }];
+
 
     const languages = [
         { value: 'English', label: 'English' },
@@ -181,13 +181,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
         { value: 'Nepali', label: 'Nepali' }
     ];
 
-    const sectionOptions = [
-        { value: 'Physics', label: 'Physics' },
-        { value: 'Chemistry', label: 'Chemistry' },
-        { value: 'Mathematics', label: 'Mathematics' },
-        { value: 'Biology', label: 'Biology' },
-        { value: 'General Knowledge', label: 'General Knowledge' },
-    ];
+
 
     return (
         <RightSideDrawer isOpen={isOpen} onClose={onClose} width="850px">
@@ -286,17 +280,6 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                                     </div>
 
 
-                                    {/* Subject */}
-                                    <div className="space-y-2 col-span-1">
-                                        <label className="text-[13px] font-bold text-[#2d3748]">Subject</label>
-                                        <CustomDropdown
-                                            options={subjects}
-                                            value={formData.subject}
-                                            accentColor="#1a202c"
-                                            onChange={(val: string) => handleInputChange('subject', val)}
-                                            placeholder="--Select Subject--"
-                                        />
-                                    </div>
 
                                     {/* Sorting Order */}
                                     <div className="space-y-2 col-span-1">
@@ -319,11 +302,11 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                                             <thead>
                                                 <tr className="bg-[#f8f9fa] border-b border-gray-100">
                                                     <th className="w-[160px] px-3 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-left">Test Section<span className="text-red-500 ml-0.5">*</span></th>
-                                                    <th className="w-[90px] px-3 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Max Q</th>
+                                                    <th className="w-[90px] px-3 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Max Questions</th>
                                                     <th className="px-3 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-left">Part Title</th>
-                                                    <th className="w-[90px] px-3 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Cutoff</th>
-                                                    <th className="w-[80px] px-2 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Optional</th>
-                                                    <th className="w-[90px] px-2 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Timing</th>
+                                                    <th className="w-[90px] px-3 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Cutoff Score</th>
+                                                    <th className="w-[80px] px-2 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Is Optional</th>
+                                                    <th className="w-[90px] px-2 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Fixed Timing</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-50">
@@ -335,7 +318,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                                                                 value={sec.section}
                                                                 accentColor="#1a202c"
                                                                 onChange={(val: string) => updateSection(sec.id, 'section', val)}
-                                                                placeholder="Select Section"
+                                                                placeholder="Select Test Section"
                                                             />
                                                         </td>
                                                         <td className="px-2 py-3 w-[90px]">
@@ -731,7 +714,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                             </div>
                         )}
 
-                        <div className="mt-auto shrink-0 bg-[#1a202c] py-6 flex items-center justify-center -mx-6 -mb-6 mt-10">
+                        <div className="flex justify-center mt-10 pb-8">
                             <button
                                 onClick={() => {
                                     if (!formData.title) return showToast?.('Test Title is mandatory!', 'error');
@@ -740,7 +723,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                                     
                                     onSubmit({ ...formData, sections });
                                 }}
-                                className="text-white text-[16px] font-bold hover:opacity-90 transition-all outline-none uppercase tracking-[2px]">
+                                className="w-[240px] h-[54px] bg-[#1a202c] text-white text-[15px] font-bold rounded-2xl hover:bg-black transition-all shadow-lg hover:shadow-xl active:scale-[0.98] uppercase tracking-[2px]">
                                 Submit
                             </button>
                         </div>

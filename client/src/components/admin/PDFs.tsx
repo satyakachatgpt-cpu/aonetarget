@@ -8,7 +8,9 @@ import {
   DrawerFooter,
   UploadArea,
   FilePreviewItem,
-  PrimaryButton
+  PrimaryButton,
+  FormLabel,
+  FormSelect
 } from './DrawerSystem';
 
 interface PDF {
@@ -31,7 +33,6 @@ interface Props {
 const PDFs: React.FC<Props> = ({ showToast }) => {
   const [pdfs, setPdfs] = useState<PDF[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddDrawer, setShowAddDrawer] = useState(false);
@@ -44,7 +45,6 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
     sortBy: 1,
     fileUrl: '',
     courseId: '',
-    categoryId: '',
     status: 'active' as 'active' | 'inactive',
     isEbook: true
   });
@@ -56,16 +56,14 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
   const fetchInitialData = async () => {
     try {
       setIsLoading(true);
-      const [pd, cs, cats] = await Promise.all([
+      const [pd, cs] = await Promise.all([
         pdfsAPI.getAll(),
-        coursesAPI.getAll(),
-        categoriesAPI.getAll()
+        coursesAPI.getAll()
       ]);
       // Filter to only show E-Books
       const pdfList = Array.isArray(pd) ? pd : [];
       setPdfs(pdfList.filter(p => p.isEbook !== false)); // Default to true or if explicitly marked
       setCourses(Array.isArray(cs) ? cs : []);
-      setCategories(Array.isArray(cats) ? cats : []);
     } catch (error) {
       console.error('Failed to fetch data:', error);
       showToast('Error loading data', 'error');
@@ -88,7 +86,7 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
 
   const filteredPdfs = pdfs.filter(pdf =>
     pdf.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  ).sort((a, b) => (Number(a.sortBy) || 0) - (Number(b.sortBy) || 0));
 
   // Standardized Pagination Logic
   const totalItems = filteredPdfs.length;
@@ -113,7 +111,6 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
       sortBy: (pdfs.length + 1),
       fileUrl: '',
       courseId: '',
-      categoryId: '',
       status: 'active',
       isEbook: true
     });
@@ -129,8 +126,7 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
       sortBy: pdf.sortBy || 0,
       fileUrl: pdf.fileUrl || '',
       courseId: pdf.courseId || '',
-      categoryId: pdf.categoryId || '',
-      status: pdf.status || 'active',
+      status: pdf.status as 'active' | 'inactive',
       isEbook: true
     });
     setShowAddDrawer(true);
@@ -142,8 +138,8 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
       showToast('Please provide a title or select a file', 'error');
       return;
     }
-    if (!formData.courseId || !formData.categoryId) {
-      showToast('Please select a Course and Subject', 'error');
+    if (!formData.courseId) {
+      showToast('Please select a Course', 'error');
       return;
     }
 
@@ -155,7 +151,10 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
           formData.append('file', selectedFile);
           const res = await fetch('/api/v2/upload/pdf', {
             method: 'POST',
-            headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
+            headers: { 
+              'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+              'x-admin-id': localStorage.getItem('adminId') || '' 
+            },
             body: formData
           });
           if (!res.ok) throw new Error('PDF upload failed');
@@ -285,11 +284,6 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
                                 {courses.find(c => (c._id || c.id) === pdf.courseId)?.title || 'Course: ' + pdf.courseId}
                               </span>
                             )}
-                            {pdf.categoryId && (
-                              <span className="text-[11px] px-2 py-0.5 bg-gray-50 text-gray-400 font-medium rounded border border-gray-100 uppercase tracking-tighter">
-                                {categories.find(c => (c._id || c.id) === pdf.categoryId)?.name || 'Subject: ' + pdf.categoryId}
-                              </span>
-                            )}
                           </div>
                         </div>
                       </td>
@@ -404,37 +398,18 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
             onClose={() => setShowAddDrawer(false)}
           />
           <DrawerBody className="space-y-6 px-8 pt-8 pb-10">
-            {/* Subject and Course Selectors - MATCHING USER REQUEST */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-[13px] font-bold text-gray-700 ml-1">Select Course <span className="text-red-500">*</span></label>
-                <div className="relative group">
-                  <select
-                    value={formData.courseId}
-                    onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
-                    className="w-full h-[52px] px-5 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-500 transition-all appearance-none cursor-pointer"
-                  >
-                    <option value="">Select Course</option>
-                    {courses.map(c => <option key={c._id || c.id} value={c._id || c.id}>{c.title || c.name}</option>)}
-                  </select>
-                  <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-focus-within:text-black">expand_more</span>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[13px] font-bold text-gray-700 ml-1">Select Subject <span className="text-red-500">*</span></label>
-                <div className="relative group">
-                  <select
-                    value={formData.categoryId}
-                    onChange={(e) => setFormData({ ...formData, categoryId: e.target.value })}
-                    className="w-full h-[52px] px-5 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-500 transition-all appearance-none cursor-pointer"
-                  >
-                    <option value="">Select Subject</option>
-                    {categories.map(cat => <option key={cat._id || cat.id} value={cat._id || cat.id}>{cat.name || cat.title}</option>)}
-                  </select>
-                  <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-focus-within:text-black">expand_more</span>
-                </div>
-              </div>
+            {/* Course Selector - Standardized */}
+            <div className="space-y-2">
+              <FormLabel label="Select Course" required />
+              <FormSelect
+                value={formData.courseId}
+                onChange={(val) => setFormData({ ...formData, courseId: val })}
+                placeholder="Select Course"
+                options={courses.map(c => ({
+                  value: c._id || c.id,
+                  label: c.title || c.name || 'Untitled Course'
+                }))}
+              />
             </div>
 
             {/* Selected File Preview - if already selected or editing */}
