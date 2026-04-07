@@ -1293,12 +1293,22 @@ export const LiveStreamDrawer: React.FC<{
                         </div>
 
                         <div className="space-y-2">
-                            <FormLabel label="Stream ID / URL" required />
+                            <FormLabel label="YouTube URL / Stream Link" required />
                             <FormInput
                                 value={formData.streamId}
                                 onChange={(e) => setFormData({ ...formData, streamId: e.target.value })}
-                                placeholder="Enter ID or link"
+                                placeholder="https://www.youtube.com/live/abc123 or watch?v=..."
                             />
+                            {formData.streamId && (
+                                <p className="text-[11px] text-gray-400 ml-1 flex items-center gap-1.5">
+                                    <span className="material-symbols-outlined text-[14px]">
+                                        {formData.streamId.includes('/live/') || formData.streamId.includes('youtube.com/live') ? 'sensors' : 'play_circle'}
+                                    </span>
+                                    {formData.streamId.includes('/live/') || formData.streamId.includes('youtube.com/live')
+                                        ? 'YouTube Live URL detected — will open directly for students'
+                                        : 'Normal video URL detected — will play in custom player'}
+                                </p>
+                            )}
                         </div>
 
                         <div className="space-y-2">

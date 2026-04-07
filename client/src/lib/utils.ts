@@ -38,13 +38,13 @@ export const getPdfUrl = (url: string | undefined | null): string => {
 
 export const extractYouTubeId = (url: string): string | null => {
   if (!url) return null;
-  
+
   // Handle all YouTube URL formats
   const patterns = [
     /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
     /youtube\.com\/watch\?.*v=([^&\n?#]+)/
   ];
-  
+
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match) return match[1];
@@ -54,13 +54,13 @@ export const extractYouTubeId = (url: string): string | null => {
 
 export const toYouTubeEmbed = (url: string): string => {
   if (!url) return '';
-  
+
   // Already an embed URL
   if (url.includes('youtube.com/embed/')) return url;
-  
+
   const id = extractYouTubeId(url);
   if (id) return `https://www.youtube.com/embed/${id}`;
-  
+
   // Return as-is if not YouTube (e.g. Cloudinary video URL)
   return url;
 };
@@ -68,6 +68,17 @@ export const toYouTubeEmbed = (url: string): string => {
 export const isYouTubeUrl = (url: string): boolean => {
   if (!url) return false;
   return url.includes('youtube.com') || url.includes('youtu.be');
+};
+
+/**
+ * Detects if a YouTube URL is a LIVE stream (not a normal video).
+ * Live URLs contain /live/ or youtube.com/live
+ * Example live:   https://www.youtube.com/live/abc123
+ * Example normal: https://www.youtube.com/watch?v=xyz
+ */
+export const isLiveUrl = (url: string): boolean => {
+  if (!url) return false;
+  return url.includes('/live/') || url.includes('youtube.com/live');
 };
 
 export const getYouTubeThumbnail = (url: string): string => {

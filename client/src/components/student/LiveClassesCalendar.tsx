@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { isLiveUrl } from '../../lib/utils';
 
 interface LiveClass {
   id: string;
@@ -16,6 +17,9 @@ interface LiveClass {
   batchId?: string;
   scheduledDate?: string;
   scheduledTime?: string;
+  streamId?: string;
+  videoUrl?: string;
+  url?: string;
 }
 
 interface Props {
@@ -27,15 +31,113 @@ interface Props {
 
 const API_BASE_URL = '/api';
 
+// ─── Countdown Hook ────────────────────────────────────────────────────────────
+function useCountdown(targetDateStr: string | undefined) {
+  const getSecondsLeft = useCallback(() => {
+    if (!targetDateStr) return null;
+    const target = new Date(targetDateStr.replace(' ', 'T'));
+    if (isNaN(target.getTime())) return null;
+    return Math.floor((target.getTime() - Date.now()) / 1000);
+  }, [targetDateStr]);
+
+  const [secondsLeft, setSecondsLeft] = useState<number | null>(getSecondsLeft);
+
+  useEffect(() => {
+    setSecondsLeft(getSecondsLeft());
+    const timer = setInterval(() => {
+      const s = getSecondsLeft();
+      setSecondsLeft(s);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [getSecondsLeft]);
+
+  return secondsLeft;
+}
+
+// ─── Countdown Button (Disabled state for upcoming) ──────────────────────────
+const CountdownBadge: React.FC<{ scheduledTime: string }> = ({ scheduledTime }) => {
+  const secs = useCountdown(scheduledTime);
+  if (secs === null || secs <= 0) return null;
+
+  const FIVE_MINUTES = 5 * 60;
+  const isClose = secs <= FIVE_MINUTES;
+
+  const mm = String(Math.floor(secs / 60)).padStart(2, '0');
+  const ss = String(secs % 60).padStart(2, '0');
+
+  return (
+    <button
+      disabled
+      className="bg-red-200 text-white/80 text-[13px] px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 cursor-not-allowed shadow-none border border-red-50/20"
+    >
+      <span className="material-symbols-rounded text-[18px]">
+        {isClose ? 'timer' : 'videocam'}
+      </span>
+      {isClose ? `${mm}:${ss}` : 'JOIN NOW'}
+    </button>
+  );
+};
+
+// ─── Smart join handler ───────────────────────────────────────────────────────
+function resolveStreamUrl(cls: any): string {
+  return cls.streamId || cls.videoUrl || cls.url || cls.meetingLink || cls.link || '';
+}
+
+function handleSmartJoin(cls: any, onJoinLive?: (cls: any) => void) {
+  const url = resolveStreamUrl(cls);
+  if (!url) return;
+
+  if (isLiveUrl(url)) {
+    // YouTube live stream → open directly in new tab
+    window.open(url, '_blank');
+  } else if (onJoinLive) {
+    // Normal video → delegate to parent (custom player)
+    onJoinLive({ ...cls, url });
+  } else {
+    window.open(url, '_blank');
+  }
+}
+
+// ─── Helper: get effective scheduled time ─────────────────────────────────────
+function getScheduledISO(cls: any): string {
+  if (cls.scheduledTime) return cls.scheduledTime.replace(' ', 'T');
+  if (cls.startTime) return cls.startTime;
+  if (cls.publishOn) return cls.publishOn;
+  return '';
+}
+
+// ─── Helper: compute live status client-side ──────────────────────────────────
+function computeStatus(cls: any): 'live' | 'upcoming' | 'ended' | 'scheduled' {
+  const raw = cls.status as string;
+  if (raw === 'live') return 'live';
+  if (raw === 'ended' || raw === 'completed') return 'ended';
+
+  const isoStr = getScheduledISO(cls);
+  if (!isoStr) return 'upcoming';
+  const scheduled = new Date(isoStr);
+  if (isNaN(scheduled.getTime())) return 'upcoming';
+  if (scheduled <= new Date()) return 'live'; // auto-promote client-side
+  return 'upcoming';
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, onJoinLive }) => {
   const [liveClasses, setLiveClasses] = useState<LiveClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [viewMode, setViewMode] = useState<'calendar' | 'upcoming'>('upcoming');
+  // For auto-refresh of statuses every 30s
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     loadLiveClasses();
   }, [studentId, courseId]);
+
+  // Refresh every 30s so client-side auto-promotion works
+  useEffect(() => {
+    const interval = setInterval(() => setTick(t => t + 1), 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   const loadLiveClasses = async () => {
     try {
@@ -48,8 +150,6 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
       const response = await fetch(url);
       if (response.ok) {
         const data = await response.json();
-        
-        // Client-side filtering as a fallback if API doesn't filter by batch
         let classes = Array.isArray(data) ? data : [];
         if (batchId) {
           classes = classes.filter(c => !c.batchId || c.batchId === batchId);
@@ -70,14 +170,9 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
     const lastDay = new Date(year, month + 1, 0);
     const daysInMonth = lastDay.getDate();
     const startingDay = firstDay.getDay();
-
     const days = [];
-    for (let i = 0; i < startingDay; i++) {
-      days.push(null);
-    }
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push(i);
-    }
+    for (let i = 0; i < startingDay; i++) days.push(null);
+    for (let i = 1; i <= daysInMonth; i++) days.push(i);
     return days;
   };
 
@@ -89,10 +184,8 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
 
   const formatTime = (time: string) => {
     if (!time) return '';
-    // Handle full ISO strings or HH:MM format
     let hStr = '';
     let mStr = '';
-    
     if (time.includes('T')) {
       const date = new Date(time);
       if (isNaN(date.getTime())) return time;
@@ -105,7 +198,6 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
     } else {
       return time;
     }
-
     const h = parseInt(hStr);
     const ampm = h >= 12 ? 'PM' : 'AM';
     const hour = h % 12 || 12;
@@ -115,26 +207,20 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
   const getUpcomingClasses = () => {
     const now = new Date();
     const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    
+
     return liveClasses
       .map(c => {
-        // Normalize properties
         const normalizedDate = c.scheduledDate || c.date || (c.publishOn ? c.publishOn.split('T')[0] : '');
         const normalizedTime = c.scheduledTime || c.startTime || (c.publishOn ? c.publishOn.split('T')[1]?.substring(0, 5) : '');
         return { ...c, date: normalizedDate, startTime: normalizedTime };
       })
       .filter(c => {
-        // Show if date is today or in the future
         const isFutureOrToday = !c.date || c.date >= todayStr;
-        // Don't show cancelled ones
         const isNotCancelled = c.status !== 'cancelled';
-        // Show if it's live or upcoming/scheduled, or if it ended today
         const shouldShowStatus = ['live', 'upcoming', 'scheduled', 'ended', 'completed'].includes(c.status);
-        
         return isFutureOrToday && isNotCancelled && shouldShowStatus;
       })
       .sort((a, b) => {
-        // Sort by date first, then by time
         if (a.date !== b.date) return (a.date || '').localeCompare(b.date || '');
         return (a.startTime || '').localeCompare(b.startTime || '');
       });
@@ -179,47 +265,64 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
               <p className="font-medium">No upcoming classes scheduled</p>
             </div>
           ) : (
-            getUpcomingClasses().map((cls, i) => (
-              <div key={cls.id || i} className="card-premium p-4 rounded-[24px] border border-gray-100 flex gap-4 items-center hover:-translate-y-1 transition-all duration-300 group shadow-sm bg-white hover:shadow-card">
-                <div className={`w-14 h-14 bg-gradient-to-br ${(cls.status === 'ended' || cls.status === 'completed') ? 'from-gray-400 to-gray-500' : 'from-red-500 to-red-600'} rounded-2xl flex items-center justify-center shrink-0 relative shadow-lg ${(cls.status === 'ended' || cls.status === 'completed') ? 'shadow-gray-200' : 'shadow-red-200'}`}>
-                  <span className="material-symbols-rounded text-white text-[28px]">sensors</span>
-                  {cls.status === 'live' && <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse shadow-sm"></span>}
-                </div>
-                
-                <div className="flex-1 min-w-0">
-                  <h4 className="font-bold text-[#1a1c1e] text-[16px] tracking-tight truncate group-hover:text-red-600 transition-colors">{cls.title}</h4>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
-                    <span className="text-[12px] text-gray-500 font-medium flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-[18px]">person</span>
-                      {cls.instructor || 'Instructor'}
-                    </span>
-                    <span className="w-1 h-1 rounded-full bg-gray-300 shrink-0"></span>
-                    <span className="text-[12px] text-gray-500 font-medium flex items-center gap-1.5">
-                      <span className="material-symbols-outlined text-[18px]">schedule</span>
-                      {cls.status === 'live' ? 'Live Now' : (cls.status === 'ended' || cls.status === 'completed' || cls.streamStatus === 'ended') ? 'Ended' : formatTime(cls.startTime) || 'Upcoming'}
-                    </span>
+            getUpcomingClasses().map((cls, i) => {
+              // Compute live status client-side (ticked every 30s)
+              const effectiveStatus = computeStatus(cls);
+              const isLiveNow = effectiveStatus === 'live';
+              const isEnded = effectiveStatus === 'ended';
+              const scheduledISO = getScheduledISO(cls);
+              const streamUrl = resolveStreamUrl(cls);
+
+              return (
+                <div key={cls.id || i} className="card-premium p-4 rounded-[24px] border border-gray-100 flex gap-4 items-center hover:-translate-y-1 transition-all duration-300 group shadow-sm bg-white hover:shadow-card">
+                  <div className={`w-14 h-14 bg-gradient-to-br ${isEnded ? 'from-gray-400 to-gray-500' : isLiveNow ? 'from-red-500 to-red-600' : 'from-orange-400 to-red-500'} rounded-2xl flex items-center justify-center shrink-0 relative shadow-lg`}>
+                    <span className="material-symbols-rounded text-white text-[28px]">sensors</span>
+                    {isLiveNow && (
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse shadow-sm"></span>
+                    )}
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-bold text-[#1a1c1e] text-[16px] tracking-tight truncate group-hover:text-red-600 transition-colors">{cls.title}</h4>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
+                      <span className="text-[12px] text-gray-500 font-medium flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[18px]">person</span>
+                        {cls.instructor || 'Instructor'}
+                      </span>
+                      <span className="w-1 h-1 rounded-full bg-gray-300 shrink-0"></span>
+                      <span className="text-[12px] text-gray-500 font-medium flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[18px]">schedule</span>
+                        {isLiveNow ? 'Live Now' : isEnded ? 'Ended' : formatTime(cls.startTime) || 'Upcoming'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0">
+                    {isEnded ? (
+                      <div className="bg-gray-50 text-gray-400 text-[11px] px-4 py-2.5 rounded-xl font-bold uppercase tracking-widest border border-gray-100">
+                        Ended
+                      </div>
+                    ) : isLiveNow ? (
+                      <button
+                        onClick={() => handleSmartJoin(cls, onJoinLive)}
+                        className="bg-red-600 hover:bg-red-700 text-white text-[13px] px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 active:scale-95 transition-all shadow-lg shadow-red-100"
+                      >
+                        <span className="material-symbols-rounded text-[18px]">
+                          {streamUrl && isLiveUrl(streamUrl) ? 'open_in_new' : 'videocam'}
+                        </span>
+                        JOIN NOW
+                      </button>
+                    ) : scheduledISO ? (
+                      <CountdownBadge scheduledTime={scheduledISO} />
+                    ) : (
+                      <div className="bg-gray-50 text-gray-400 text-[11px] px-4 py-2.5 rounded-xl font-bold uppercase tracking-widest border border-gray-100">
+                        Upcoming
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                <div className="flex shrink-0">
-                  {cls.status === 'live' ? (
-                    <button
-                      onClick={() => onJoinLive && onJoinLive(cls)}
-                      className="bg-red-600 hover:bg-red-700 text-white text-[13px] px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 active:scale-95 transition-all shadow-lg shadow-red-100"
-                    >
-                      <span className="material-symbols-rounded text-[18px]">videocam</span>
-                      Join
-                    </button>
-                  ) : (
-                    <div className={`bg-gray-50 text-gray-400 text-[11px] px-4 py-2.5 rounded-xl font-bold uppercase tracking-widest border border-gray-100`}>
-                      {(cls.status === 'ended' || cls.status === 'completed' || cls.streamStatus === 'ended') ? 'Ended' : 'Upcoming'}
-                    </div>
-                  )}
-                </div>
-
-
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       ) : (
@@ -252,7 +355,6 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
               {getDaysInMonth(currentMonth).map((day, idx) => {
                 const classes = getClassesForDate(day || 0);
                 const isToday = day && new Date().getDate() === day && new Date().getMonth() === currentMonth.getMonth() && new Date().getFullYear() === currentMonth.getFullYear();
-                const hasLive = classes.some(c => c.status === 'live');
                 return (
                   <div
                     key={idx}
@@ -264,12 +366,13 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
                         {classes.map(cls => (
                           <div
                             key={cls.id}
-                            className={`text-[9px] p-1 rounded mt-0.5 truncate ${
-                              cls.status === 'live' ? 'bg-red-100 text-red-700 animate-pulse' :
-                              cls.status === 'completed' ? 'bg-gray-200 text-gray-500' :
+                            className={`text-[9px] p-1 rounded mt-0.5 truncate cursor-pointer ${
+                              computeStatus(cls) === 'live' ? 'bg-red-100 text-red-700 animate-pulse' :
+                              computeStatus(cls) === 'ended' ? 'bg-gray-200 text-gray-500' :
                               'bg-blue-100 text-blue-700'
                             }`}
                             title={`${cls.title} - ${formatTime(cls.startTime)}`}
+                            onClick={() => handleSmartJoin(cls, onJoinLive)}
                           >
                             {formatTime(cls.startTime)}
                           </div>
