@@ -344,7 +344,6 @@ export const uploadAPI = {
     const formData = new FormData();
     formData.append('file', file);
     
-    // Explicitly don't set Content-Type header to let browser handle boundary
     const config = {
       headers: { ...getAdminHeaders() },
       onUploadProgress: options.onUploadProgress
@@ -358,8 +357,7 @@ export const uploadAPI = {
         localStorage.removeItem('adminToken');
         localStorage.removeItem('adminId');
         localStorage.removeItem('isAdminAuthenticated');
-        localStorage.removeItem('adminLoginTimestamp');
-        window.location.href = '#/admin-login';
+        window.location.href = '/admin/login';
         return;
       }
       const errMsg = err.response?.data?.error || 'Image upload failed';
@@ -385,8 +383,7 @@ export const uploadAPI = {
         localStorage.removeItem('adminToken');
         localStorage.removeItem('adminId');
         localStorage.removeItem('isAdminAuthenticated');
-        localStorage.removeItem('adminLoginTimestamp');
-        window.location.href = '#/admin-login';
+        window.location.href = '/admin/login';
         return;
       }
       const errMsg = err.response?.data?.error || 'Video upload failed';
@@ -411,8 +408,7 @@ export const uploadAPI = {
         localStorage.removeItem('adminToken');
         localStorage.removeItem('adminId');
         localStorage.removeItem('isAdminAuthenticated');
-        localStorage.removeItem('adminLoginTimestamp');
-        window.location.href = '#/admin-login';
+        window.location.href = '/admin/login';
         return;
       }
       const errMsg = err.response?.data?.error || 'Document upload failed';

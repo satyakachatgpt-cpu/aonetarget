@@ -100,7 +100,7 @@ const App: React.FC = () => {
     if (loginTime) {
       const elapsed = Date.now() - parseInt(loginTime, 10);
       if (elapsed > 18 * 60 * 60 * 1000) {
-        // Session expired - clear all admin keys
+        // Session expired
         localStorage.removeItem('isAdminAuthenticated');
         localStorage.removeItem('adminId');
         localStorage.removeItem('adminName');
@@ -134,7 +134,6 @@ const App: React.FC = () => {
           localStorage.removeItem('adminToken');
           localStorage.removeItem('adminLoginTimestamp');
           setIsAdminLoggedIn(false);
-          window.location.href = '#/admin-login';
         }
       }
     };

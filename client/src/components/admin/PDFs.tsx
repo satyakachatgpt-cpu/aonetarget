@@ -8,9 +8,7 @@ import {
   DrawerFooter,
   UploadArea,
   FilePreviewItem,
-  PrimaryButton,
-  FormLabel,
-  FormSelect
+  PrimaryButton
 } from './DrawerSystem';
 
 interface PDF {
@@ -153,10 +151,17 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
             method: 'POST',
             headers: { 
               'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
-              'x-admin-id': localStorage.getItem('adminId') || '' 
+              'x-admin-id': localStorage.getItem('adminId') || ''
             },
             body: formData
           });
+
+          if (res.status === 401) {
+            localStorage.clear();
+            window.location.href = '/admin/login';
+            return;
+          }
+
           if (!res.ok) throw new Error('PDF upload failed');
           const data = await res.json();
           finalData.fileUrl = data.url;
@@ -398,18 +403,22 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
             onClose={() => setShowAddDrawer(false)}
           />
           <DrawerBody className="space-y-6 px-8 pt-8 pb-10">
-            {/* Course Selector - Standardized */}
-            <div className="space-y-2">
-              <FormLabel label="Select Course" required />
-              <FormSelect
-                value={formData.courseId}
-                onChange={(val) => setFormData({ ...formData, courseId: val })}
-                placeholder="Select Course"
-                options={courses.map(c => ({
-                  value: c._id || c.id,
-                  label: c.title || c.name || 'Untitled Course'
-                }))}
-              />
+            {/* Subject and Course Selectors - MATCHING USER REQUEST */}
+            <div className="grid grid-cols-1 gap-5">
+              <div className="space-y-2">
+                <label className="text-[13px] font-bold text-gray-700 ml-1">Select Course <span className="text-red-500">*</span></label>
+                <div className="relative group">
+                  <select
+                    value={formData.courseId}
+                    onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
+                    className="w-full h-[52px] px-5 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-500 transition-all appearance-none cursor-pointer"
+                  >
+                    <option value="">Select Course</option>
+                    {courses.map(c => <option key={c._id || c.id} value={c._id || c.id}>{c.title || c.name}</option>)}
+                  </select>
+                  <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-focus-within:text-black">expand_more</span>
+                </div>
+              </div>
             </div>
 
             {/* Selected File Preview - if already selected or editing */}
