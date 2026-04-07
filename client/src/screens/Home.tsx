@@ -27,7 +27,39 @@ interface Banner {
 }
 
 import { CATEGORY_ICONS, CATEGORY_GRADIENTS } from '../constants';
-import { getImageUrl, getPdfUrl } from '../lib/utils';
+import { getImageUrl, getPdfUrl, isLiveUrl } from '../lib/utils';
+
+// ━━━ Shared Live Status Helpers (same as LiveClasses.tsx) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
+  const raw = lc.status as string;
+  if (raw === 'ended' || raw === 'completed') return 'ended';
+  const isoStr = lc.scheduledTime ? lc.scheduledTime.replace(' ', 'T') : (lc.startTime || '');
+  if (!isoStr) return raw === 'live' ? 'live' : 'upcoming';
+  const scheduled = new Date(isoStr);
+  if (isNaN(scheduled.getTime())) return raw === 'live' ? 'live' : 'upcoming';
+  if (scheduled <= new Date()) return 'live';
+  return 'upcoming';
+}
+
+function resolveStreamUrl(lc: any): string {
+  return lc.streamId || lc.videoUrl || lc.url || lc.meetingLink || lc.link || '';
+}
+
+function useHomeLiveCountdown(scheduledTimeStr: string | undefined) {
+  const getSecsLeft = () => {
+    if (!scheduledTimeStr) return null;
+    const t = new Date(scheduledTimeStr.replace(' ', 'T'));
+    if (isNaN(t.getTime())) return null;
+    return Math.floor((t.getTime() - Date.now()) / 1000);
+  };
+  const [secs, setSecs] = React.useState<number | null>(getSecsLeft);
+  React.useEffect(() => {
+    setSecs(getSecsLeft());
+    const id = setInterval(() => setSecs(getSecsLeft()), 1000);
+    return () => clearInterval(id);
+  }, [scheduledTimeStr]);
+  return secs;
+}
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
@@ -90,14 +122,14 @@ const Home: React.FC = () => {
       try {
         const data = await coursesAPI.getAll();
         const coursesList = Array.isArray(data) ? data : [];
-        
+
         // Universal Numeric Sort Fallback
         const sorted = [...coursesList].sort((a, b) => {
           const orderA = a.settings?.sortingOrder ?? 9999;
           const orderB = b.settings?.sortingOrder ?? 9999;
           return Number(orderA) - Number(orderB);
         });
-        
+
         setCourses(sorted);
       } catch (error) {
         console.error('Failed to fetch from MongoDB:', error);
@@ -136,7 +168,7 @@ const Home: React.FC = () => {
         setNewsLoading(true);
         // Try fetching from blogAPI (primary for News section)
         let newsData = await blogAPI.getAll().catch(() => []);
-        
+
         // Fallback or merge with newsAPI if empty
         if (!Array.isArray(newsData) || newsData.length === 0) {
           const alternativeNews = await newsAPI.getAll().catch(() => []);
@@ -396,19 +428,21 @@ const Home: React.FC = () => {
   }, []);
 
   const handleJoinLiveClass = (lc: any) => {
-    const link = lc.meetingLink || lc.url || lc.videoUrl || lc.link;
-    if (link) {
-      // If it's a relative URL, prepend origin or handle accordingly
-      if (link.startsWith('http')) {
-        window.open(link, '_blank');
-      } else {
-        // Internal watch page logic if needed, but usually these are external zoom/youtube links
-        window.open(link, '_blank');
-      }
+    const url = resolveStreamUrl(lc);
+    if (!url) { navigate('/live-classes'); return; }
+    if (isLiveUrl(url)) {
+      window.open(url, '_blank'); // YouTube live → new tab
     } else {
-      navigate('/live-classes');
+      window.open(url, '_blank');
     }
   };
+
+  // Tick every 30s for client-side auto-promotion
+  const [_homeTick, setHomeTick] = React.useState(0);
+  React.useEffect(() => {
+    const id = setInterval(() => setHomeTick(t => t + 1), 30000);
+    return () => clearInterval(id);
+  }, []);
 
   return (
     <div className="flex flex-col bg-surface-100 min-h-screen pb-4 animate-fade-in">
@@ -629,14 +663,33 @@ const Home: React.FC = () => {
             </div>
             <div className="space-y-2.5">
               {liveClasses.slice(0, 4).map((lc: any, i: number) => {
-                const isEnded = lc.status === 'ended' || lc.streamStatus === 'ended';
-                const isUpcoming = lc.status === 'upcoming' || (!lc.status && !lc.isLive);
-                const isLive = lc.status === 'live' || lc.isLive === true;
+                const effectiveStatus = computeEffectiveStatus(lc);
+                const isEnded = effectiveStatus === 'ended';
+                const isLiveNow = effectiveStatus === 'live';
+                const scheduledISO = lc.scheduledTime ? lc.scheduledTime.replace(' ', 'T') : (lc.startTime || '');
+                const streamUrl = resolveStreamUrl(lc);
+
+                // Inline countdown per card
+                const LiveCardCountdown = () => {
+                  const secs = useHomeLiveCountdown(scheduledISO || undefined);
+                  if (secs === null || secs <= 0) return null;
+                  const FIVE = 5 * 60;
+                  if (secs > FIVE) {
+                    const d = new Date(scheduledISO);
+                    return <span>{isNaN(d.getTime()) ? 'Soon' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>;
+                  }
+                  const mm = String(Math.floor(secs / 60)).padStart(2, '0');
+                  const ss = String(secs % 60).padStart(2, '0');
+                  return `${mm}:${ss}`;
+                };
+
+                const countdownValue = <LiveCardCountdown />;
+
                 return (
                   <div key={lc._id || lc.id || i} className="card-premium p-3 rounded-2xl border border-gray-100/50 flex gap-3 items-center hover:-translate-y-0.5 transition-all duration-200 group">
-                    <div className={`w-14 h-14 bg-gradient-to-br ${isEnded ? 'from-gray-400 to-gray-500' : 'from-accent to-accent-600'} rounded-2xl flex items-center justify-center shrink-0 relative shadow-button`}>
+                    <div className={`w-14 h-14 bg-gradient-to-br ${isEnded ? 'from-gray-400 to-gray-500' : isLiveNow ? 'from-accent to-accent-600' : 'from-orange-400 to-red-500'} rounded-2xl flex items-center justify-center shrink-0 relative shadow-button`}>
                       <span className="material-symbols-rounded text-white text-2xl">sensors</span>
-                      {!isEnded && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>}
+                      {isLiveNow && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>}
                     </div>
                     <div className="flex-1 min-w-0">
                       <h4 className="font-medium text-sm text-gray-800 truncate">{lc.title || lc.name || 'Live Class'}</h4>
@@ -648,31 +701,34 @@ const Home: React.FC = () => {
                         <span className="w-1 h-1 rounded-full bg-gray-300"></span>
                         <span className="text-[11px] text-gray-400 flex items-center gap-1">
                           <span className="material-symbols-rounded text-[12px]">schedule</span>
-                          {(() => {
-                            if (isEnded) return 'Ended';
-                            if (isLive) return 'Live Now';
-                            if (lc.scheduledTime && lc.scheduledDate) {
-                              try {
-                                const dtStr = `${lc.scheduledDate}T${lc.scheduledTime}:00`;
-                                const dt = new Date(dtStr);
-                                if (!isNaN(dt.getTime())) {
-                                  return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                                }
-                              } catch (e) { }
-                            }
-                            return lc.scheduledTime || lc.time || 'Upcoming';
-                          })()}
+                          {isEnded ? 'Ended' : isLiveNow ? 'Live Now' : <LiveCardCountdown />}
                         </span>
                       </div>
                     </div>
-                    <button
-                      disabled={isEnded}
-                      onClick={(e) => { e.stopPropagation(); if (!isEnded) handleJoinLiveClass(lc); }}
-                      className={`${isEnded ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'btn-accent'} text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 active:scale-[0.97] transition-all duration-200 shrink-0 shadow-button hover:shadow-lg`}
-                    >
-                      <span className="material-symbols-rounded text-[14px]">{isEnded ? 'event_busy' : 'videocam'}</span>
-                      {isEnded ? 'Ended' : 'Join'}
-                    </button>
+                    {isEnded ? (
+                      <div className="bg-gray-200 text-gray-400 cursor-not-allowed text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 shrink-0">
+                        <span className="material-symbols-rounded text-[14px]">event_busy</span>
+                        Ended
+                      </div>
+                    ) : isLiveNow ? (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleJoinLiveClass(lc); }}
+                        className="btn-accent text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 active:scale-[0.97] transition-all duration-200 shrink-0 shadow-button hover:shadow-lg"
+                      >
+                        <span className="material-symbols-rounded text-[14px]">
+                          {streamUrl && isLiveUrl(streamUrl) ? 'open_in_new' : 'videocam'}
+                        </span>
+                        Join
+                      </button>
+                    ) : (
+                      <button
+                        disabled
+                        className="bg-orange-50 text-orange-500/60 text-xs px-3 py-2.5 rounded-xl border border-orange-100 shrink-0 font-bold flex items-center gap-1.5 whitespace-nowrap cursor-not-allowed"
+                      >
+                        <span className="material-symbols-rounded text-[14px] animate-pulse">timer</span>
+                        {countdownValue || 'Soon'}
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -780,7 +836,7 @@ const Home: React.FC = () => {
               {courses.slice(0, 4).map((course: any, i: number) => {
                 const bgGrad = CATEGORY_GRADIENTS[i % CATEGORY_GRADIENTS.length] || 'from-primary to-primary-600';
                 const hasImage = !!(course.imageUrl || course.thumbnail);
-                
+
                 return (
                   <div
                     key={course._id || course.id || i}
@@ -794,13 +850,13 @@ const Home: React.FC = () => {
                             NEW BATCH
                           </div>
                         )}
-                        <img 
-                          src={getImageUrl(course.imageUrl || course.thumbnail)} 
-                          alt={course.title} 
-                          loading="lazy" 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                        <img
+                          src={getImageUrl(course.imageUrl || course.thumbnail)}
+                          alt={course.title}
+                          loading="lazy"
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         />
-                        
+
                         {/* Name Overlay Gradient */}
                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 rounded-b-xl">
                           <p className="text-white font-bold text-sm leading-tight">
@@ -824,7 +880,7 @@ const Home: React.FC = () => {
                         {/* Decorative circles to emulate a neat banner background */}
                         <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full blur-xl"></div>
                         <div className="absolute -bottom-6 -left-6 w-20 h-20 bg-black/10 rounded-full blur-xl"></div>
-                        
+
                         <div className="flex-1 pr-1 flex flex-col justify-between z-10">
                           <div>
                             <span className="inline-block px-2 py-0.5 bg-white/20 rounded-[6px] text-[10px] text-white font-bold uppercase tracking-wider mb-1.5 backdrop-blur-sm shadow-sm border border-white/10">
@@ -832,7 +888,7 @@ const Home: React.FC = () => {
                             </span>
                             <h4 className="font-bold text-[14px] text-white leading-tight line-clamp-2 shadow-sm">{course.title || course.name}</h4>
                           </div>
-                          
+
                           <div className="flex items-center justify-between mt-1">
                             {(course.price !== undefined && course.price !== null) && (
                               <div className="flex flex-col pb-0.5">
@@ -843,7 +899,7 @@ const Home: React.FC = () => {
                             )}
                           </div>
                         </div>
-                        
+
                         <div className="w-[30%] relative z-10 flex flex-col items-end justify-between">
                           <div className="w-6 h-6 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20">
                             <span className="material-symbols-rounded text-white text-[14px]">school</span>
@@ -896,7 +952,7 @@ const Home: React.FC = () => {
               </div>
               <div className="space-y-3">
                 {displayNews.slice(0, 4).map((news: any, i: number) => (
-                  <div 
+                  <div
                     key={news.id || i}
                     onClick={() => {
                       const id = news.id || news._id || i;
@@ -921,9 +977,9 @@ const Home: React.FC = () => {
                     </div>
                     <div className="w-[100px] h-[70px] rounded-xl overflow-hidden shrink-0 shadow-sm border border-gray-50 bg-white flex items-center justify-center">
                       {news.thumbnail ? (
-                        <img 
-                          src={news.thumbnail} 
-                          alt="News" 
+                        <img
+                          src={news.thumbnail}
+                          alt="News"
                           className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
                           onError={(e) => {
                             (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80';
@@ -940,7 +996,7 @@ const Home: React.FC = () => {
               </div>
               {displayNews.length > 4 && (
                 <div className="mt-4 flex justify-center">
-                  <button 
+                  <button
                     onClick={() => navigate('/news')}
                     className="btn-primary text-xs px-6 py-2.5 rounded-xl flex items-center gap-2 active:scale-[0.97] transition-all duration-200"
                   >
@@ -1070,7 +1126,7 @@ const Home: React.FC = () => {
 
       {showDownloadModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" onClick={() => setShowDownloadModal(false)}>
-          <div 
+          <div
             className="bg-white w-full sm:max-w-md sm:rounded-3xl rounded-t-3xl overflow-hidden shadow-2xl transform transition-all duration-300"
             onClick={(e) => e.stopPropagation()}
           >
@@ -1133,7 +1189,7 @@ const Home: React.FC = () => {
                     <div className="absolute -right-4 -top-4 w-20 h-20 bg-gray-300/20 rounded-full blur-xl group-hover:bg-gray-400/20 transition-all"></div>
                     <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shrink-0 shadow-sm border border-gray-100">
                       <svg className="w-8 h-8" viewBox="0 0 24 24" fill="#000000">
-                        <path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 22 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.1 22C7.79 22.05 6.8 20.68 5.96 19.47C4.25 16.56 2.93 11.3 4.7 7.72C5.57 5.94 7.36 4.86 9.28 4.84C10.56 4.82 11.78 5.72 12.58 5.72C13.39 5.72 14.88 4.62 16.42 4.79C17.08 4.82 18.87 5.06 20.04 6.7C19.93 6.77 17.72 8.04 17.75 10.72C17.77 13.93 20.58 14.97 20.62 14.99C20.59 15.07 20.17 16.54 19.17 18.05L18.71 19.5ZM13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.58 4.35 14.89 5.18C14.22 6 13.07 6.69 11.95 6.61C11.8 5.46 12.39 4.26 13 3.5Z"/>
+                        <path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 22 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.1 22C7.79 22.05 6.8 20.68 5.96 19.47C4.25 16.56 2.93 11.3 4.7 7.72C5.57 5.94 7.36 4.86 9.28 4.84C10.56 4.82 11.78 5.72 12.58 5.72C13.39 5.72 14.88 4.62 16.42 4.79C17.08 4.82 18.87 5.06 20.04 6.7C19.93 6.77 17.72 8.04 17.75 10.72C17.77 13.93 20.58 14.97 20.62 14.99C20.59 15.07 20.17 16.54 19.17 18.05L18.71 19.5ZM13 3.5C13.73 2.67 14.94 2.04 15.94 2C16.07 3.17 15.58 4.35 14.89 5.18C14.22 6 13.07 6.69 11.95 6.61C11.8 5.46 12.39 4.26 13 3.5Z" />
                       </svg>
                     </div>
                     <div className="text-left flex-1 relative z-10">

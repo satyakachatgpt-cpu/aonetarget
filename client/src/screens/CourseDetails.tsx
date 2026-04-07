@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getImageUrl, getVideoUrl, getPdfUrl, getYouTubeThumbnail, getGradientPlaceholder, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
+import { getImageUrl, getVideoUrl, getPdfUrl, getYouTubeThumbnail, getGradientPlaceholder, toYouTubeEmbed, isYouTubeUrl, isLiveUrl } from '../lib/utils';
 import LiveClassesCalendar from '../components/student/LiveClassesCalendar';
 import StudentVideoPlayer from '../components/student/StudentVideoPlayer';
 import { useAuthStore } from '../store/authStore';
@@ -63,8 +63,8 @@ interface Course {
   enrollmentCount?: number;
   notesCount?: number;
   demoVideo?: string;
-  settings?: { showTabs?: boolean; [key: string]: any };
-  content?: { upsell?: { enabled?: boolean; courses: string[] }; [key: string]: any };
+  settings?: { showTabs?: boolean;[key: string]: any };
+  content?: { upsell?: { enabled?: boolean; courses: string[] };[key: string]: any };
 }
 
 interface Progress {
@@ -216,7 +216,16 @@ const CourseDetails: React.FC = () => {
     console.log('Video clicked:', video.title, 'Playable:', isEnrolled || video.isFree || video.isDemo, 'URL:', video.youtubeUrl || video.videoUrl);
     const canPlay = isEnrolled || video.isFree || video.isDemo;
 
-    const url = toYouTubeEmbed(video.youtubeUrl || video.videoUrl || video.url || video.meetingLink || '');
+    // Resolve raw URL first
+    const rawUrl = video.youtubeUrl || video.videoUrl || video.url || video.meetingLink || (video as any).streamId || '';
+
+    // ☀ If it is a YouTube LIVE stream URL → open directly, never use custom player
+    if (rawUrl && isLiveUrl(rawUrl)) {
+      window.open(rawUrl, '_blank');
+      return;
+    }
+
+    const url = toYouTubeEmbed(rawUrl);
     if (canPlay && url) {
       setSelectedVideo({ ...video, url });
       setShowVideoPlayer(true);
@@ -384,8 +393,8 @@ const CourseDetails: React.FC = () => {
           const res = await fetch('/api/courses');
           if (res.ok) {
             const all = await res.json();
-            const recommended = all.filter((c: any) => 
-              course.content?.upsell?.courses.includes(c.title || c.name) && 
+            const recommended = all.filter((c: any) =>
+              course.content?.upsell?.courses.includes(c.title || c.name) &&
               (c.id || c._id) !== (course.id || (course as any)._id)
             );
             setUpsellData(recommended);
@@ -414,35 +423,35 @@ const CourseDetails: React.FC = () => {
 
   const recordedVideos = videos.filter(v => v.contentType === 'video' || v.contentType === 'recorded' || !v.contentType);
   const liveStreams = videos.filter(v => v.contentType === 'live_stream');
-  
+
   const currentFolderId = normalizeId(currentFolder?._id || currentFolder?.id);
 
   const filteredVideos = recordedVideos.filter(v => {
     const vFolderId = normalizeId(v.folderId);
-    return vFolderId === currentFolderId || 
-           (vFolderId && currentFolder?._id && vFolderId === normalizeId(currentFolder._id)) ||
-           (vFolderId && currentFolder?.id && vFolderId === normalizeId(currentFolder.id));
+    return vFolderId === currentFolderId ||
+      (vFolderId && currentFolder?._id && vFolderId === normalizeId(currentFolder._id)) ||
+      (vFolderId && currentFolder?.id && vFolderId === normalizeId(currentFolder.id));
   });
 
   const filteredNotes = notes.filter(n => {
     const nFolderId = normalizeId((n as any).folderId);
     return nFolderId === currentFolderId ||
-           (nFolderId && currentFolder?._id && nFolderId === normalizeId(currentFolder._id)) ||
-           (nFolderId && currentFolder?.id && nFolderId === normalizeId(currentFolder.id));
+      (nFolderId && currentFolder?._id && nFolderId === normalizeId(currentFolder._id)) ||
+      (nFolderId && currentFolder?.id && nFolderId === normalizeId(currentFolder.id));
   });
 
   const filteredTests = tests.filter(t => {
     const tFolderId = normalizeId((t as any).folderId);
     return tFolderId === currentFolderId ||
-           (tFolderId && currentFolder?._id && tFolderId === normalizeId(currentFolder._id)) ||
-           (tFolderId && currentFolder?.id && tFolderId === normalizeId(currentFolder.id));
+      (tFolderId && currentFolder?._id && tFolderId === normalizeId(currentFolder._id)) ||
+      (tFolderId && currentFolder?.id && tFolderId === normalizeId(currentFolder.id));
   });
 
   const filteredFolders = folders.filter(f => {
     const fParentId = normalizeId(f.parentId);
     return fParentId === currentFolderId ||
-           (fParentId && currentFolder?._id && fParentId === normalizeId(currentFolder._id)) ||
-           (fParentId && currentFolder?.id && fParentId === normalizeId(currentFolder.id));
+      (fParentId && currentFolder?._id && fParentId === normalizeId(currentFolder._id)) ||
+      (fParentId && currentFolder?.id && fParentId === normalizeId(currentFolder.id));
   });
 
   const totalVideos = recordedVideos.length;
@@ -671,25 +680,37 @@ const CourseDetails: React.FC = () => {
             </h3>
             <div className="grid grid-cols-2 gap-3">
               {recordedVideos.length > 0 && (
-                <div className="flex items-center gap-2.5 bg-primary-50 rounded-2xl px-3 py-3">
-                  <span className="material-symbols-rounded text-primary-600 text-xl">play_circle</span>
+                <div 
+                  onClick={() => setActiveTab('videos')}
+                  className="flex items-center gap-2.5 bg-primary-50 rounded-2xl px-3 py-3 cursor-pointer hover:bg-primary-100 transition-all active:scale-95 group"
+                >
+                  <span className="material-symbols-rounded text-primary-600 text-xl group-hover:scale-110 transition-transform">play_circle</span>
                   <span className="text-xs font-bold text-gray-700">{recordedVideos.length} Videos</span>
                 </div>
               )}
               {notes.length > 0 && (
-                <div className="flex items-center gap-2.5 bg-orange-50 rounded-2xl px-3 py-3">
-                  <span className="material-symbols-rounded text-orange-500 text-xl">description</span>
+                <div 
+                  onClick={() => setActiveTab('notes')}
+                  className="flex items-center gap-2.5 bg-orange-50 rounded-2xl px-3 py-3 cursor-pointer hover:bg-orange-100 transition-all active:scale-95 group"
+                >
+                  <span className="material-symbols-rounded text-orange-500 text-xl group-hover:scale-110 transition-transform">description</span>
                   <span className="text-xs font-bold text-gray-700">{notes.length} Notes</span>
                 </div>
               )}
               {tests.length > 0 && (
-                <div className="flex items-center gap-2.5 bg-purple-50 rounded-2xl px-3 py-3">
-                  <span className="material-symbols-rounded text-purple-500 text-xl">quiz</span>
+                <div 
+                  onClick={() => setActiveTab('tests')}
+                  className="flex items-center gap-2.5 bg-purple-50 rounded-2xl px-3 py-3 cursor-pointer hover:bg-purple-100 transition-all active:scale-95 group"
+                >
+                  <span className="material-symbols-rounded text-purple-500 text-xl group-hover:scale-110 transition-transform">quiz</span>
                   <span className="text-xs font-bold text-gray-700">{tests.length} Tests</span>
                 </div>
               )}
-              <div className="flex items-center gap-2.5 bg-accent-50 rounded-2xl px-3 py-3">
-                <span className="material-symbols-rounded text-accent-500 text-xl">sensors</span>
+              <div 
+                onClick={() => setActiveTab('live')}
+                className="flex items-center gap-2.5 bg-accent-50 rounded-2xl px-3 py-3 cursor-pointer hover:bg-accent-100 transition-all active:scale-95 group"
+              >
+                <span className="material-symbols-rounded text-accent-500 text-xl group-hover:scale-110 transition-transform">sensors</span>
                 <span className="text-xs font-bold text-gray-700">Live Classes ({liveStreams.length})</span>
               </div>
             </div>
@@ -1065,14 +1086,14 @@ const CourseDetails: React.FC = () => {
             <div className="flex items-center gap-3 mb-5 px-1">
               <div className="w-1.5 h-6 bg-gradient-to-b from-indigo-600 to-indigo-400 rounded-full" />
               <h3 className="font-black text-gray-900 text-sm tracking-tight text-primary-800 flex items-center gap-2">
-                 <span className="material-symbols-rounded text-base">recommend</span>
-                 Recommended for you
+                <span className="material-symbols-rounded text-base">recommend</span>
+                Recommended for you
               </h3>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {upsellData.map((up, i) => (
-                <div 
-                  key={up.id || (up as any)._id} 
+                <div
+                  key={up.id || (up as any)._id}
                   onClick={() => navigate(`/course/${up.id || (up as any)._id}`)}
                   className="card-premium p-4 flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-all hover:border-indigo-100 group animate-fade-in-up shadow-sm bg-white rounded-3xl"
                   style={{ animationDelay: `${i * 100}ms` }}
@@ -1087,8 +1108,8 @@ const CourseDetails: React.FC = () => {
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-extrabold text-gray-900 line-clamp-1 mb-1 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{up.title || up.name}</p>
                     <div className="flex items-center gap-2">
-                       <span className="text-[14px] font-black text-green-600 tracking-tight">₹{up.price || 0}</span>
-                       <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest bg-gray-50 px-2 py-0.5 rounded-full">New Course</span>
+                      <span className="text-[14px] font-black text-green-600 tracking-tight">₹{up.price || 0}</span>
+                      <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest bg-gray-50 px-2 py-0.5 rounded-full">New Course</span>
                     </div>
                   </div>
                   <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-all">
