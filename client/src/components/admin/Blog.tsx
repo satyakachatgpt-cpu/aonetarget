@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { blogAPI } from '../../services/apiClient';
+import { blogAPI, uploadAPI } from '../../services/apiClient';
 import { RightSideDrawer, DrawerHeader, DrawerBody, DrawerFooter } from './DrawerSystem';
 import RichTextEditor from '../shared/RichTextEditor';
 
@@ -150,23 +150,16 @@ const Blog: React.FC<Props> = ({ showToast }) => {
       showToast('Please select a valid image file', 'error');
       return;
     }
-
     setIsUploading(true);
     try {
-      const formDataUpload = new FormData();
-      formDataUpload.append('file', file);
-      const res = await fetch('/api/v2/upload/image', { 
-        method: 'POST', 
-        headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
-        body: formDataUpload 
-      });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
-      setFormData(prev => ({ ...prev, thumbnail: data.url }));
-      showToast('Thumbnail uploaded successfully!');
-    } catch (err) {
+      const data = await uploadAPI.uploadImage(file);
+      if (data && data.url) {
+        setFormData(prev => ({ ...prev, thumbnail: data.url }));
+        showToast('Thumbnail uploaded successfully!');
+      }
+    } catch (err: any) {
       console.error('Upload failed:', err);
-      showToast('Thumbnail upload failed', 'error');
+      showToast(err.message || 'Thumbnail upload failed', 'error');
     } finally {
       setIsUploading(false);
     }

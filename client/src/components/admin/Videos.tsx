@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { videosAPI, coursesAPI } from '../../services/apiClient';
+import { videosAPI, coursesAPI, uploadAPI } from '../../services/apiClient';
 import { getImageUrl, extractYouTubeId, toYouTubeEmbed } from '../../lib/utils';
 
 interface Course {
@@ -149,17 +149,16 @@ const Videos: React.FC<Props> = ({ showToast }) => {
 
       // Handle Thumbnail File Upload
       if (formData.thumbnailFile) {
-        const adminId = localStorage.getItem('adminId');
-        const tFormData = new FormData();
-        tFormData.append('file', formData.thumbnailFile);
-        const res = await fetch('/api/v2/upload/image', {
-          method: 'POST',
-          headers: { 'x-admin-id': adminId || '' },
-          body: tFormData,
-        });
-        if (!res.ok) throw new Error('Thumbnail upload failed');
-        const data = await res.json();
-        finalThumbnail = data.url;
+        try {
+          const data = await uploadAPI.uploadImage(formData.thumbnailFile);
+          if (data && data.url) {
+            finalThumbnail = data.url;
+          }
+        } catch (err: any) {
+          console.error('Thumbnail upload failed:', err);
+          showToast(err.message || 'Thumbnail upload failed', 'error');
+          return;
+        }
       }
 
       const selectedCourse = courses.find(c => c.id === formData.courseId);

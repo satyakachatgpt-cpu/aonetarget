@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { bannersAPI } from '../../services/apiClient';
+import { bannersAPI, uploadAPI } from '../../services/apiClient';
 import { getImageUrl } from '../../lib/utils';
 
 interface Banner {
@@ -446,19 +446,13 @@ const Banners: React.FC<Props> = ({ showToast }) => {
                             if (file) {
                               setIsUploading(true);
                               try {
-                                const formDataUpload = new FormData();
-                                formDataUpload.append('file', file);
-                                const res = await fetch('/api/v2/upload/image', { 
-                                  method: 'POST', 
-                                  headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
-                                  body: formDataUpload 
-                                });
-                                if (!res.ok) throw new Error('Upload failed');
-                                const data = await res.json();
-                                setFormData({ ...formData, imageUrl: data.url });
-                              } catch (err) {
+                                const data = await uploadAPI.uploadImage(file);
+                                if (data && data.url) {
+                                  setFormData({ ...formData, imageUrl: data.url });
+                                }
+                              } catch (err: any) {
                                 console.error('Upload failed:', err);
-                                alert('Upload failed');
+                                alert(err.message || 'Upload failed');
                               } finally {
                                 setIsUploading(false);
                               }

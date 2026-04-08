@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import RichTextEditor from '../shared/RichTextEditor';
-import { coursesAPI, testSeriesAPI, pdfsAPI, testsAPI } from '../../services/apiClient';
+import { coursesAPI, testSeriesAPI, pdfsAPI, testsAPI, uploadAPI } from '../../services/apiClient';
 
 interface AddPostDrawerProps {
     isOpen: boolean;
@@ -101,19 +101,13 @@ const AddPostDrawer: React.FC<AddPostDrawerProps> = ({ isOpen, onClose, courseId
         if (file) {
             setIsUploadingImage(true);
             try {
-                const formData = new FormData();
-                formData.append('file', file);
-                const res = await fetch('/api/v2/upload/image', { 
-                    method: 'POST', 
-                    headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
-                    body: formData 
-                });
-                if (!res.ok) throw new Error('Upload failed');
-                const data = await res.json();
-                setImagePreview(data.url);
-            } catch (error) {
+                const data = await uploadAPI.uploadImage(file);
+                if (data && data.url) {
+                    setImagePreview(data.url);
+                }
+            } catch (error: any) {
                 console.error('Image upload failed:', error);
-                alert('Image upload failed');
+                alert(error.message || 'Image upload failed');
             } finally {
                 setIsUploadingImage(false);
             }
@@ -125,19 +119,13 @@ const AddPostDrawer: React.FC<AddPostDrawerProps> = ({ isOpen, onClose, courseId
         if (file) {
             setIsUploadingVideo(true);
             try {
-                const formData = new FormData();
-                formData.append('file', file);
-                const res = await fetch('/api/v2/upload/video', { 
-                    method: 'POST', 
-                    headers: { 'x-admin-id': localStorage.getItem('adminId') || '' },
-                    body: formData 
-                });
-                if (!res.ok) throw new Error('Upload failed');
-                const data = await res.json();
-                setVideoPreview(data.url);
-            } catch (error) {
+                const data = await uploadAPI.uploadVideo(file);
+                if (data && data.url) {
+                    setVideoPreview(data.url);
+                }
+            } catch (error: any) {
                 console.error('Video upload failed:', error);
-                alert('Video upload failed');
+                alert(error.message || 'Video upload failed');
             } finally {
                 setIsUploadingVideo(false);
             }

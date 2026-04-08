@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import LiveClassesCalendar from '../components/student/LiveClassesCalendar';
 import { liveVideosAPI } from '../services/apiClient';
-import { isLiveUrl } from '../lib/utils';
+import { isLiveUrl, isYouTubeUrl, getEmbedUrl } from '../lib/utils';
 
 // ─── Helper: resolve stream URL ────────────────────────────────────────────────
 function resolveStreamUrl(lc: any): string {
@@ -93,20 +93,28 @@ const LiveClasses: React.FC = () => {
 
   const studentId = student?.id || student?._id || student?.studentId;
 
-  // Smart join: live YouTube URL → new tab, normal video → custom player / fallback open
+  // Smart join: All YouTube videos (live + normal) → custom player, others → new tab
   const smartJoin = useCallback((lc: any) => {
     const url = resolveStreamUrl(lc);
     if (!url) return;
-    if (isLiveUrl(url)) {
-      window.open(url, '_blank');
+    
+    // Check if it's a YouTube URL
+    const isYT = url.includes('youtube.com') || url.includes('youtu.be');
+    
+    if (isYT) {
+      const videoId = lc.id || lc._id || 'live';
+      navigate(`/watch/${videoId}`, {
+        state: {
+          video: {
+            ...lc,
+            title: lc.title || lc.name || 'Live Class',
+            embedUrl: getEmbedUrl(url)
+          }
+        }
+      });
     } else {
-      // Navigate to watch page if possible, otherwise open URL
-      const vid = lc.id || lc._id;
-      if (vid) {
-        window.open(url, '_blank');
-      } else {
-        window.open(url, '_blank');
-      }
+      // Fallback for Zoom, Google Meet, etc.
+      window.open(url, '_blank');
     }
   }, [navigate]);
 
@@ -189,7 +197,7 @@ const LiveClasses: React.FC = () => {
                       className="btn-accent text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 active:scale-[0.97] transition-all duration-200 shrink-0 shadow-button hover:shadow-lg"
                     >
                       <span className="material-symbols-rounded text-[14px]">
-                        {streamUrl && isLiveUrl(streamUrl) ? 'open_in_new' : 'videocam'}
+                        videocam
                       </span>
                       Join
                     </button>

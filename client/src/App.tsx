@@ -176,6 +176,7 @@ const App: React.FC = () => {
             <Route path="/news" element={<AllNews />} />
             <Route path="/news/:id" element={<NewsArticle />} />
             <Route path="/watch/:batchId/:videoId" element={<WatchPage />} />
+            <Route path="/watch/:videoId" element={<WatchPage />} />
 
             <Route path="*" element={
               <MainLayout isLoggedIn={isStudentLoggedIn}>
