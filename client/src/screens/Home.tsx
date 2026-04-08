@@ -27,7 +27,7 @@ interface Banner {
 }
 
 import { CATEGORY_ICONS, CATEGORY_GRADIENTS } from '../constants';
-import { getImageUrl, getPdfUrl, isLiveUrl } from '../lib/utils';
+import { getImageUrl, getPdfUrl, isLiveUrl, getEmbedUrl } from '../lib/utils';
 
 // ━━━ Shared Live Status Helpers (same as LiveClasses.tsx) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
@@ -430,9 +430,23 @@ const Home: React.FC = () => {
   const handleJoinLiveClass = (lc: any) => {
     const url = resolveStreamUrl(lc);
     if (!url) { navigate('/live-classes'); return; }
-    if (isLiveUrl(url)) {
-      window.open(url, '_blank'); // YouTube live → new tab
+    
+    // Check if it's a YouTube URL (Live or Watch)
+    const isYT = url.includes('youtube.com') || url.includes('youtu.be');
+    
+    if (isYT) {
+      const videoId = lc.id || lc._id || 'live';
+      navigate(`/watch/${videoId}`, {
+        state: {
+          video: {
+            ...lc,
+            title: lc.title || lc.name || 'Live Class',
+            embedUrl: getEmbedUrl(url)
+          }
+        }
+      });
     } else {
+      // Fallback for Zoom, Google Meet, etc.
       window.open(url, '_blank');
     }
   };
@@ -716,7 +730,7 @@ const Home: React.FC = () => {
                         className="btn-accent text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 active:scale-[0.97] transition-all duration-200 shrink-0 shadow-button hover:shadow-lg"
                       >
                         <span className="material-symbols-rounded text-[14px]">
-                          {streamUrl && isLiveUrl(streamUrl) ? 'open_in_new' : 'videocam'}
+                          videocam
                         </span>
                         Join
                       </button>

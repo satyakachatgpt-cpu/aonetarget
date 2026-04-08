@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { uploadAPI } from '../../services/apiClient';
 
 interface Props {
   onUpload: (url: string) => void;
@@ -27,20 +28,22 @@ const FileUploadButton: React.FC<Props> = ({
     if (!file) return;
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      const adminId = localStorage.getItem('adminId');
-      const res = await fetch(`/api/v2/upload/${uploadType}`, {
-        method: 'POST',
-        headers: adminId ? { 'x-admin-id': adminId } : {},
-        body: formData
-      });
-      if (!res.ok) throw new Error('Upload failed');
-      const data = await res.json();
-      onUpload(data.url);
-    } catch (error) {
+      setUploading(true);
+      let data;
+      if (uploadType === 'pdf') {
+        data = await uploadAPI.uploadPDF(file);
+      } else if (uploadType === 'video') {
+        data = await uploadAPI.uploadVideo(file);
+      } else {
+        data = await uploadAPI.uploadImage(file);
+      }
+
+      if (data && data.url) {
+        onUpload(data.url);
+      }
+    } catch (error: any) {
       console.error('Upload error:', error);
-      alert('Upload failed. Please try again.');
+      alert(error.message || 'Upload failed. Please try again.');
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = '';

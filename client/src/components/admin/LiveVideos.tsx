@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { liveVideosAPI, coursesAPI } from '../../services/apiClient';
+import { getEmbedUrl } from '../../lib/utils';
 
 interface LiveSession {
   id: string;
@@ -34,6 +36,7 @@ interface Props {
 }
 
 const LiveVideos: React.FC<Props> = ({ showToast }) => {
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState<LiveSession[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
@@ -457,15 +460,29 @@ const LiveVideos: React.FC<Props> = ({ showToast }) => {
                     <h5 className="font-black text-gray-800 text-sm truncate">{session.title}</h5>
                     <p className="text-[10px] text-gray-500 mt-1">{session.courseName} • {session.instructor}</p>
                     <div className="flex gap-2 mt-3">
-                      <a
-                        href={session.streamUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => {
+                          const url = session.streamUrl;
+                          const isYT = url.includes('youtube.com') || url.includes('youtu.be');
+                          if (isYT) {
+                            navigate(`/watch/${session.id || 'live'}`, {
+                              state: {
+                                video: {
+                                  ...session,
+                                  title: session.title,
+                                  embedUrl: getEmbedUrl(url)
+                                }
+                              }
+                            });
+                          } else {
+                            window.open(url, '_blank');
+                          }
+                        }}
                         className="bg-red-600 text-white px-3 py-1.5 rounded-lg text-[10px] font-black flex items-center gap-1"
                       >
                         <span className="material-icons-outlined text-sm">play_arrow</span>
                         Watch Stream
-                      </a>
+                      </button>
                       <button
                         onClick={() => updateStatus(session, 'ended')}
                         className="bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg text-[10px] font-black"

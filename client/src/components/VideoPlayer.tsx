@@ -34,6 +34,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [currentTime, setCurrentTime] = useState(0);
   const [showControls, setShowControls] = useState(true);
   const [isReady, setIsReady] = useState(false);
+  const [hasError, setHasError] = useState(false);
   
   // QUALITY CONTROL STATE
   const [availableQualities, setAvailableQualities] = useState<string[]>([]);
@@ -97,6 +98,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           onError: (e: any) => {
             console.error('YT Player Error:', e.data);
             setIsReady(false);
+            setHasError(true);
           },
           onPlaybackQualityChange: (e: any) => {
              const newQ = e.data;
@@ -412,6 +414,23 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             </div>
          </div>
       </div>
+
+      {/* ERROR FALLBACK */}
+      {hasError && (
+        <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-black/90 p-8 text-center backdrop-blur-md">
+          <span className="material-symbols-rounded text-6xl text-red-600 mb-6 animate-pulse">error</span>
+          <h2 className="text-white text-xl font-black uppercase tracking-widest mb-2">Streaming Error Detected</h2>
+          <p className="text-white/40 text-[10px] font-bold uppercase tracking-widest mb-8 max-w-xs">
+            We are unable to isolate the secure stream. You can try opening it directly in an external player.
+          </p>
+          <button 
+            onClick={() => window.open(src.replace('embed/', 'watch?v='), '_blank')}
+            className="bg-red-600 text-white px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-[0_0_30px_rgba(220,38,38,0.5)] active:scale-95 transition-all"
+          >
+            Open External Player
+          </button>
+        </div>
+      )}
 
       {/* ZERO-DELAY RENDERING - NO LOADING MASKS */}
     </div>

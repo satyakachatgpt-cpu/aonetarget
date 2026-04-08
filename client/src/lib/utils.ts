@@ -42,7 +42,7 @@ export const extractYouTubeId = (url: string): string | null => {
 
   // Handle all YouTube URL formats
   const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/live\/|youtu\.be\/)([^&\n?#]+)/,
     /youtube\.com\/watch\?.*v=([^&\n?#]+)/
   ];
 
@@ -76,6 +76,21 @@ export const isLiveUrl = (url: string): boolean => {
   if (!url) return false;
   return url.includes('/live/') || url.includes('youtube.com/live');
 };
+
+/**
+ * Converts YouTube URL to embed format.
+ * Supports /live/ and watch?v= formats.
+ */
+export function getEmbedUrl(url: string | undefined): string {
+  if (!url) return '';
+  if (url.includes("youtube.com/live/")) {
+    return url.replace("live/", "embed/");
+  }
+  if (url.includes("watch?v=")) {
+    return url.replace("watch?v=", "embed/");
+  }
+  return url;
+}
 
 export const getYouTubeThumbnail = (url: string): string => {
   const id = extractYouTubeId(url);

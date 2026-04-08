@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import VideoPlayer from '../components/VideoPlayer';
 import Playlist from '../components/Playlist';
-import { getVideoUrl, toYouTubeEmbed } from '../lib/utils';
+import { getVideoUrl, toYouTubeEmbed, getEmbedUrl } from '../lib/utils';
 import { curriculumAPI } from '../services/apiClient';
 
 const WatchPage: React.FC = () => {
   const { batchId, videoId } = useParams<{ batchId: string; videoId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   
   const [isLandscape, setIsLandscape] = useState(window.innerWidth > window.innerHeight);
   const [playlist, setPlaylist] = useState<any[]>([]);
@@ -26,7 +27,17 @@ const WatchPage: React.FC = () => {
   // Load Content
   useEffect(() => {
     const loadContent = async () => {
-      if (!batchId) return;
+      // Priority 1: Check if video is passed via state (e.g. from Live Classes)
+      if (location.state?.video) {
+        setCurrentVideo(location.state.video);
+        setLoading(false);
+        return;
+      }
+
+      if (!batchId) {
+        setLoading(false);
+        return;
+      }
       try {
         setLoading(true);
         const response = await fetch(`/api/courses/${batchId}/videos`, {
@@ -93,20 +104,15 @@ const WatchPage: React.FC = () => {
         onPointerDown={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          console.log('HARD TAB-CLOSE TRIGGERED');
-          
-          // PHASE 1: Try closing the tab (if opened in new window)
-          window.close();
-          
-          // PHASE 2: Regular navigation
+          // Navigate back instead of closing the tab
           navigate(-1);
           
-          // PHASE 3: Hard-Fail-safe fallback
+          // Hard-Fail-safe fallback if navigation takes too long or fails
           setTimeout(() => {
             if (window.location.hash.includes('/watch/')) {
               window.location.hash = '/#/my-courses';
             }
-          }, 50);
+          }, 100);
         }}
         className="fixed top-0 left-0 w-24 h-24 z-[9999999] cursor-pointer group flex items-start justify-start p-6 active:scale-90 transition-all"
         style={{ touchAction: 'none' }}
@@ -140,7 +146,7 @@ const WatchPage: React.FC = () => {
         {/* VIDEO PLAYER AREA */}
         <div className={`bg-black flex-shrink-0 relative group ${isLandscape ? 'flex-1 h-full' : 'w-full aspect-video shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-40'}`}>
           <VideoPlayer
-            src={toYouTubeEmbed(currentVideo.youtubeUrl || currentVideo.videoUrl || currentVideo.url || '')}
+            src={getEmbedUrl(currentVideo.youtubeUrl || currentVideo.videoUrl || currentVideo.url || currentVideo.embedUrl || '')}
             title={currentVideo.title}
             onEnded={playNext}
             onClose={() => navigate(-1)}

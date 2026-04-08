@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getPdfUrl } from '../../lib/utils';
-import { pdfsAPI, coursesAPI, categoriesAPI } from '../../services/apiClient';
+import { pdfsAPI, coursesAPI, categoriesAPI, uploadAPI } from '../../services/apiClient';
 import {
   RightSideDrawer,
   DrawerBody,
@@ -145,30 +145,14 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
       let finalData = { ...formData };
       if (selectedFile) {
         try {
-          const formData = new FormData();
-          formData.append('file', selectedFile);
-          const res = await fetch('/api/v2/upload/pdf', {
-            method: 'POST',
-            headers: { 
-              'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
-              'x-admin-id': localStorage.getItem('adminId') || ''
-            },
-            body: formData
-          });
-
-          if (res.status === 401) {
-            localStorage.clear();
-            window.location.href = '/admin/login';
-            return;
+          const data = await uploadAPI.uploadPDF(selectedFile);
+          if (data && data.url) {
+            finalData.fileUrl = data.url;
+            if (!finalData.title) finalData.title = selectedFile.name.split('.')[0];
           }
-
-          if (!res.ok) throw new Error('PDF upload failed');
-          const data = await res.json();
-          finalData.fileUrl = data.url;
-          if (!finalData.title) finalData.title = selectedFile.name.split('.')[0];
-        } catch (error) {
+        } catch (error: any) {
           console.error('PDF upload failed:', error);
-          showToast('Failed to upload PDF file', 'error');
+          showToast(error.message || 'Failed to upload PDF file', 'error');
           return;
         }
       }

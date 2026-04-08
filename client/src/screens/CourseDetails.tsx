@@ -219,12 +219,6 @@ const CourseDetails: React.FC = () => {
     // Resolve raw URL first
     const rawUrl = video.youtubeUrl || video.videoUrl || video.url || video.meetingLink || (video as any).streamId || '';
 
-    // ☀ If it is a YouTube LIVE stream URL → open directly, never use custom player
-    if (rawUrl && isLiveUrl(rawUrl)) {
-      window.open(rawUrl, '_blank');
-      return;
-    }
-
     const url = toYouTubeEmbed(rawUrl);
     if (canPlay && url) {
       setSelectedVideo({ ...video, url });
