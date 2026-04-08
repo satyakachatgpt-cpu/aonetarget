@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import { useAuthStore } from '../store/authStore';
+import { toast } from 'sonner';
 
 interface SettingsProps {
   setAuth?: (auth: boolean) => void;
@@ -22,6 +23,9 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
   });
 
   const [showQualityModal, setShowQualityModal] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordData, setPasswordData] = useState({ current: '', new: '', confirm: '' });
+  const [passwordLoading, setPasswordLoading] = useState(false);
 
 
 
@@ -44,7 +48,7 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
       document.body.classList.remove('modal-open-nav-hide');
       document.body.style.overflow = 'unset';
     };
-  }, [showQualityModal]);
+  }, [showQualityModal, showPasswordModal]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -61,11 +65,56 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
     navigate('/');
   };
 
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordData.current || !passwordData.new || !passwordData.confirm) {
+      toast.error('All fields are required');
+      return;
+    }
+    if (passwordData.new !== passwordData.confirm) {
+      toast.error('New passwords do not match');
+      return;
+    }
+    if (passwordData.new.length < 6) {
+      toast.error('New password must be at least 6 characters');
+      return;
+    }
+
+    try {
+      setPasswordLoading(true);
+      const response = await fetch('/api/students/change-password', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+        },
+        body: JSON.stringify({
+          currentPassword: passwordData.current,
+          newPassword: passwordData.new
+        })
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        toast.success('Password changed successfully');
+        setShowPasswordModal(false);
+        setPasswordData({ current: '', new: '', confirm: '' });
+      } else {
+        toast.error(data.error || 'Failed to change password');
+      }
+    } catch (err) {
+      toast.error('Connection error');
+    } finally {
+      setPasswordLoading(false);
+    }
+  };
+
   const handleAction = (key: string) => {
     if (key === 'privacy') navigate('/privacy');
     if (key === 'terms') navigate('/terms');
     if (key === 'refund') navigate('/refund');
     if (key === 'videoQuality') setShowQualityModal(true);
+    if (key === 'changePassword') setShowPasswordModal(true);
   };
 
   const settingsGroups = [
@@ -89,6 +138,7 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
       title: 'Account',
       items: [
         { key: 'privacy', label: 'Privacy Policy', icon: 'privacy_tip' },
+        { key: 'changePassword', label: 'Change Password', icon: 'lock' },
         { key: 'terms', label: 'Terms of Service', icon: 'description' },
         { key: 'refund', label: 'Refund & Return Policy', icon: 'assignment_return' },
         { key: 'about', label: 'About App', icon: 'info', value: 'v1.0.0' }
@@ -207,6 +257,64 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
             >
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+      {/* Change Password Modal */}
+      {showPasswordModal && (
+        <div className="fixed inset-0 z-[110] flex items-end justify-center p-0 sm:p-4 animate-in fade-in duration-300">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => !passwordLoading && setShowPasswordModal(false)}></div>
+          <div className="relative bg-white w-full max-w-sm rounded-t-[32px] sm:rounded-3xl p-6 pb-8 shadow-2xl animate-in slide-in-from-bottom duration-500 overflow-hidden">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-black text-navy leading-none">Change Password</h3>
+              <button 
+                onClick={() => setShowPasswordModal(false)}
+                className="w-8 h-8 rounded-full bg-surface-100 flex items-center justify-center text-gray-400"
+              >
+                <span className="material-symbols-rounded text-xl">close</span>
+              </button>
+            </div>
+            
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Current Password</label>
+                <input
+                  type="password"
+                  value={passwordData.current}
+                  onChange={(e) => setPasswordData({ ...passwordData, current: e.target.value })}
+                  placeholder="••••••••"
+                  className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">New Password</label>
+                <input
+                  type="password"
+                  value={passwordData.new}
+                  onChange={(e) => setPasswordData({ ...passwordData, new: e.target.value })}
+                  placeholder="Min 6 characters"
+                  className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Confirm New Password</label>
+                <input
+                  type="password"
+                  value={passwordData.confirm}
+                  onChange={(e) => setPasswordData({ ...passwordData, confirm: e.target.value })}
+                  placeholder="••••••••"
+                  className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold"
+                />
+              </div>
+              
+              <button
+                type="submit"
+                disabled={passwordLoading}
+                className="w-full h-14 bg-brandBlue text-white rounded-2xl font-black text-[13px] uppercase tracking-widest shadow-xl shadow-brandBlue/20 active:scale-[0.98] transition-all flex items-center justify-center mt-4"
+              >
+                {passwordLoading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : 'Update Password'}
+              </button>
+            </form>
           </div>
         </div>
       )}

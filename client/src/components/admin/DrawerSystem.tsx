@@ -115,6 +115,30 @@ export const FormInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = 
     />
 );
 
+export const FormPasswordInput: React.FC<React.InputHTMLAttributes<HTMLInputElement>> = (props) => {
+    const [showPassword, setShowPassword] = React.useState(false);
+    
+    return (
+        <div className="relative group/pass">
+            <input
+                {...props}
+                type={showPassword ? 'text' : 'password'}
+                className={`w-full h-[48px] pl-4 pr-12 border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-blue-400 transition-all bg-white placeholder:text-gray-300 ${props.className || ''}`}
+            />
+            <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center text-gray-300 hover:text-blue-500 transition-colors"
+                title={showPassword ? "Hide Password" : "Show Password"}
+            >
+                <span className="material-symbols-outlined text-[20px]">
+                    {showPassword ? 'visibility_off' : 'visibility'}
+                </span>
+            </button>
+        </div>
+    );
+};
+
 export const FormSelect: React.FC<{
     value: string;
     onChange: (value: string) => void;

@@ -5,6 +5,10 @@ const studentSchema = new mongoose.Schema({
     name: { type: String, required: true },
     email: { type: String, unique: true, sparse: true },
     phone: { type: String, required: true, unique: true },
+    password: { type: String }, // Hashed password
+    userId: { type: String, unique: true, sparse: true }, // Custom Legacy ID/Username
+    username: { type: String, unique: true, sparse: true }, // New searchable username
+    highQualification: { type: String },
     status: { type: String, default: 'active' },
     admission: {
         fatherName: { type: String },
@@ -36,6 +40,7 @@ const studentSchema = new mongoose.Schema({
     registrationType: { type: String, default: 'regular' },
     registrationDate: { type: String },
     city: { type: String },
+    state: { type: String },
     dob: { type: String },
     course: { type: String },
     notes: { type: String },
