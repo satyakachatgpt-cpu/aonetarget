@@ -27,15 +27,16 @@ const profileSchema = z.object({
 });
 
 type PhoneFormData = z.infer<typeof phoneSchema>;
-type ProfileFormData = z.infer<typeof profileSchema>;
+type ProfileFormData = z.infer<typeof profileSchema> & { password?: string };
 
 interface StudentLoginProps {
   setAuth: (student: any, accessToken?: string, deviceId?: string) => void;
+  onSuccess?: () => void;
 }
 
-const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth }) => {
+const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   const navigate = useNavigate();
-  const [step, setStep] = useState<'login' | 'otp' | 'signup' | 'profile' | 'category' | 'subcategory'>('login');
+  const [step, setStep] = useState<'login' | 'otp' | 'signup' | 'profile' | 'category' | 'subcategory' | 'forgot-password' | 'reset-otp' | 'new-password' | 'signup-otp'>('login');
 
   const {
     register: loginReg,
@@ -82,6 +83,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth }) => {
   const [resendTimer, setResendTimer] = useState(0);
   const [categories, setCategories] = useState<any[]>([]);
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const [showPassword, setShowPassword] = useState(false);
 
   const fallbackCategories = [
     { id: 'neet', title: 'NEET', isActive: true },
@@ -112,6 +114,11 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth }) => {
 
   const [selectionModal, setSelectionModal] = useState<{ isOpen: boolean, type: 'state' | 'district' | null }>({ isOpen: false, type: null });
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // New States for Password & Forgot Password
+  const [passwordFormData, setPasswordFormData] = useState({ loginId: '', password: '' });
+  const [resetPhone, setResetPhone] = useState('');
+  const [newPasswordData, setNewPasswordData] = useState({ password: '', confirm: '' });
 
   const openSelection = (type: 'state' | 'district') => {
     if (type === 'district' && !selectedState) {
@@ -356,56 +363,366 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth }) => {
     }
   };
 
+
+
+  const handlePasswordLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordFormData.loginId || !passwordFormData.password) {
+      toast.error('Please enter both Login ID and Password');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch('/api/students/login-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(passwordFormData)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        toast.success('Login successful!');
+        setAuth(data.student, data.accessToken, data.deviceId);
+        if (onSuccess) onSuccess();
+        navigate('/student/dashboard');
+      } else {
+        toast.error(data.error || 'Login failed');
+      }
+    } catch (error) {
+      toast.error('Connection error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotStep1 = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetPhone || resetPhone.length !== 10) {
+      toast.error('Please enter a valid 10-digit phone number');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch('/api/students/forgot-password/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: resetPhone })
+      });
+      const data = await response.json();
+      if (response.ok) {
+        toast.success('Reset OTP sent!');
+        setStep('reset-otp');
+        setResendTimer(60);
+      } else {
+        toast.error(data.error || 'Failed to send OTP');
+      }
+    } catch (err) {
+      toast.error('Failed to send OTP');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifyResetOtp = async () => {
+    try {
+      setLoading(true);
+      const otpStr = otp.join('');
+      const response = await fetch('/api/students/forgot-password/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: resetPhone, otp: otpStr })
+      });
+      if (response.ok) {
+        toast.success('OTP verified!');
+        setStep('new-password');
+      } else {
+        const data = await response.json();
+        toast.error(data.error || 'Invalid OTP');
+      }
+    } catch (err) {
+      toast.error('Verification failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const resetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPasswordData.password) {
+      toast.error('Password is required');
+      return;
+    }
+    if (newPasswordData.password !== newPasswordData.confirm) {
+      toast.error('Passwords do not match');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch('/api/students/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: resetPhone, newPassword: newPasswordData.password })
+      });
+      if (response.ok) {
+        toast.success('Password updated! Please login.');
+        setStep('login');
+        setPasswordFormData({ loginId: resetPhone, password: '' });
+      } else {
+        const data = await response.json();
+        toast.error(data.error || 'Failed to reset password');
+      }
+    } catch (err) {
+      toast.error('Reset failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const verifySignupOtp = async () => {
+    try {
+      setLoading(true);
+      const otpStr = otp.join('');
+      const response = await fetch('/api/students/signup/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: currentPhone, otp: otpStr })
+      });
+      if (response.ok) {
+        toast.success('OTP verified!');
+        setStep('profile');
+      } else {
+        const data = await response.json();
+        toast.error(data.error || 'Invalid OTP');
+      }
+    } catch (err) {
+      toast.error('Verification failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const renderLoginStep = () => (
     <div className="flex flex-col items-center justify-center w-full">
       <div className="w-full p-6 sm:p-8">
         <div className="text-center mb-8">
           <div className="w-14 h-14 bg-[#1A237E]/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-rounded text-[#1A237E] text-2xl">phone_android</span>
+            <span className="material-symbols-rounded text-[#1A237E] text-2xl">lock_open</span>
           </div>
           <h2 className="text-xl font-bold text-gray-800">Welcome Back!</h2>
-          <p className="text-sm text-gray-500 mt-1">Login with OTP sent to your phone</p>
+          <p className="text-sm text-gray-500 mt-1">Login with Password</p>
         </div>
 
-        <form onSubmit={handleLoginSubmit(sendLoginOtp)} className="space-y-4">
+        <form onSubmit={handlePasswordLogin} className="space-y-5">
           <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1.5">Phone Number</label>
-            <div className="flex">
-              <div className="flex items-center px-3 bg-gray-100 border border-r-0 border-gray-200 rounded-l-xl text-sm text-gray-600 font-medium">
-                +91
-              </div>
-              <input
-                type="tel"
-                {...loginReg('phone')}
-                placeholder="Enter 10-digit mobile number"
-                maxLength={10}
-                className={`w-full px-4 py-3 border rounded-r-xl focus:outline-none focus:border-[#303F9F] text-sm ${loginErrors.phone ? 'border-red-500' : 'border-gray-200'}`}
-              />
+            <label className="text-xs font-semibold text-gray-600 block mb-1.5">User ID / Email / Mobile Number</label>
+            <input
+              type="text"
+              value={passwordFormData.loginId}
+              onChange={(e) => setPasswordFormData({ ...passwordFormData, loginId: e.target.value })}
+              placeholder="Enter User ID, Email or Mobile"
+              className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#303F9F] focus:bg-white transition-all text-sm font-medium"
+            />
+          </div>
+          <div>
+            <div className="flex justify-between mb-1.5">
+              <label className="text-xs font-semibold text-gray-600">Password</label>
+              <button
+                type="button"
+                onClick={() => setStep('forgot-password')}
+                className="text-xs font-bold text-[#1A237E] hover:underline"
+              >
+                Forgot?
+              </button>
             </div>
-            {loginErrors.phone && (
-              <p className="text-red-500 text-[10px] mt-1 font-bold">{loginErrors.phone.message}</p>
-            )}
+            <div className="relative group/pass">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={passwordFormData.password}
+                onChange={(e) => setPasswordFormData({ ...passwordFormData, password: e.target.value })}
+                placeholder="••••••••"
+                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#303F9F] focus:bg-white transition-all text-sm font-medium pr-12"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1A237E] transition-colors"
+                title={showPassword ? "Hide Password" : "Show Password"}
+              >
+                <span className="material-symbols-rounded text-xl">
+                  {showPassword ? 'visibility_off' : 'visibility'}
+                </span>
+              </button>
+            </div>
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white py-3.5 rounded-xl font-bold text-sm shadow-lg disabled:opacity-50 hover:shadow-xl transition-all"
+            className="w-full h-14 bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white rounded-xl font-black text-sm shadow-xl shadow-blue-900/20 disabled:opacity-50 hover:shadow-2xl transition-all active:scale-[0.98] flex items-center justify-center"
           >
-            {loading ? 'Sending OTP...' : 'Send OTP'}
+            {loading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : 'Login Now'}
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-500 mt-4">
+        <p className="text-center text-sm text-gray-500 mt-6 font-medium">
           Don't have an account?{' '}
           <button
             type="button"
             onClick={() => setStep('signup')}
-            className="text-[#1A237E] font-bold hover:underline"
+            className="text-[#1A237E] font-black hover:underline"
           >
             Sign Up
           </button>
         </p>
+      </div>
+    </div>
+  );
+
+  const renderForgotStep = () => (
+    <div className="flex flex-col items-center justify-center w-full min-h-[400px]">
+      <div className="w-full p-6 sm:p-8">
+        <button onClick={() => setStep('login')} className="flex items-center gap-1 text-[#1A237E] font-bold text-sm mb-6 group">
+          <span className="material-symbols-rounded text-lg transition-transform group-hover:-translate-x-1">arrow_back</span> Back to Login
+        </button>
+        <div className="text-center mb-8">
+          <div className="w-14 h-14 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-rounded text-orange-600 text-2xl">lock_reset</span>
+          </div>
+          <h2 className="text-xl font-bold text-gray-800">Forgot Password</h2>
+          <p className="text-sm text-gray-500 mt-1">Receive an OTP to reset your password</p>
+        </div>
+        <form onSubmit={handleForgotStep1} className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Mobile Number</label>
+            <div className="flex">
+              <div className="flex items-center px-4 bg-gray-100 border border-r-0 border-gray-200 rounded-l-2xl text-sm text-gray-700 font-bold">+91</div>
+              <input
+                type="tel"
+                value={resetPhone}
+                onChange={(e) => setResetPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                placeholder="10-digit number"
+                className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-r-2xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold"
+              />
+            </div>
+          </div>
+          <button type="submit" disabled={loading} className="w-full h-14 bg-[#111] text-white rounded-2xl font-black text-sm shadow-xl shadow-black/10 transition-all hover:bg-black active:scale-[0.98]">
+            {loading ? 'Sending...' : 'Send OTP'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+
+  const renderResetOtpStep = () => (
+    <div className="p-8">
+      <button onClick={() => setStep('forgot-password')} className="flex items-center gap-2 text-gray-400 font-bold text-[12px] mb-8 uppercase tracking-widest group">
+        <span className="material-symbols-rounded text-[18px] group-hover:-translate-x-1 transition-transform">arrow_back</span> Go Back
+      </button>
+      <div className="text-center mb-8">
+        <h2 className="text-2xl font-black text-navy leading-none">Security Check</h2>
+        <p className="text-[12px] text-gray-400 font-bold uppercase tracking-widest mt-2">Enter OTP sent to +91 {resetPhone}</p>
+      </div>
+      <div className="space-y-8">
+        <div className="flex justify-center gap-3">
+          {otp.map((digit, index) => (
+            <input
+              key={index}
+              ref={(el) => { otpRefs.current[index] = el; }}
+              type="text"
+              inputMode="numeric"
+              maxLength={1}
+              value={digit}
+              onChange={(e) => handleOtpChange(index, e.target.value)}
+              onKeyDown={(e) => handleOtpKeyDown(index, e)}
+              className={`w-12 h-16 text-center text-2xl font-black border-2 rounded-2xl focus:outline-none transition-all ${digit ? 'border-brandBlue bg-brandBlue/5 text-brandBlue shadow-lg shadow-brandBlue/10' : 'border-gray-100 focus:border-brandBlue text-gray-400'}`}
+            />
+          ))}
+        </div>
+        <button
+          onClick={verifyResetOtp}
+          disabled={loading || otp.join('').length !== 6}
+          className="w-full h-14 bg-brandBlue text-white rounded-2xl font-black text-[13px] uppercase tracking-widest shadow-xl shadow-brandBlue/20 active:scale-[0.98] transition-all disabled:opacity-50"
+        >
+          {loading ? 'Verifying...' : 'Verify OTP'}
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderNewPasswordStep = () => (
+    <div className="p-8">
+      <div className="text-center mb-8">
+        <h2 className="text-2xl font-black text-navy leading-none">New Password</h2>
+        <p className="text-[12px] text-gray-400 font-bold uppercase tracking-widest mt-2">Create a strong password</p>
+      </div>
+      <form onSubmit={resetPasswordSubmit} className="space-y-6">
+        <div className="space-y-2">
+          <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest pl-1">New Password</label>
+          <input
+            type="password"
+            value={newPasswordData.password}
+            onChange={(e) => setNewPasswordData({ ...newPasswordData, password: e.target.value })}
+            placeholder="••••••••"
+            className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold"
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest pl-1">Confirm Password</label>
+          <input
+            type="password"
+            value={newPasswordData.confirm}
+            onChange={(e) => setNewPasswordData({ ...newPasswordData, confirm: e.target.value })}
+            placeholder="••••••••"
+            className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold"
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={loading}
+          className="w-full h-14 bg-brandBlue text-white rounded-2xl font-black text-[13px] uppercase tracking-widest shadow-xl shadow-brandBlue/20 active:scale-[0.98] transition-all"
+        >
+          {loading ? 'Saving...' : 'Reset Password'}
+        </button>
+      </form>
+    </div>
+  );
+
+  const renderSignupOtpStep = () => (
+    <div className="p-8">
+      <button onClick={() => setStep('signup')} className="flex items-center gap-2 text-gray-400 font-bold text-[12px] mb-8 uppercase tracking-widest group">
+        <span className="material-symbols-rounded text-[18px] group-hover:-translate-x-1 transition-transform">arrow_back</span> Go Back
+      </button>
+      <div className="text-center mb-8">
+        <h2 className="text-2xl font-black text-navy leading-none">OTP Verification</h2>
+        <p className="text-[12px] text-gray-400 font-bold uppercase tracking-widest mt-2">Sent to +91 {currentPhone}</p>
+      </div>
+      <div className="space-y-8">
+        <div className="flex justify-center gap-3">
+          {otp.map((digit, index) => (
+            <input
+              key={index}
+              ref={(el) => { otpRefs.current[index] = el; }}
+              type="text"
+              inputMode="numeric"
+              maxLength={1}
+              value={digit}
+              onChange={(e) => handleOtpChange(index, e.target.value)}
+              onKeyDown={(e) => handleOtpKeyDown(index, e)}
+              className={`w-12 h-16 text-center text-2xl font-black border-2 rounded-2xl focus:outline-none transition-all ${digit ? 'border-[#1A237E] bg-[#1A237E]/5 text-[#1A237E] shadow-lg' : 'border-gray-100 focus:border-[#1A237E] text-gray-400'}`}
+            />
+          ))}
+        </div>
+        <button
+          onClick={verifySignupOtp}
+          disabled={loading || otp.join('').length !== 6}
+          className="w-full h-14 bg-[#1A237E] text-white rounded-2xl font-black text-[13px] uppercase tracking-widest shadow-xl active:scale-[0.98] transition-all disabled:opacity-50"
+        >
+          {loading ? 'Verifying...' : 'Verify OTP'}
+        </button>
       </div>
     </div>
   );
@@ -511,12 +828,27 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth }) => {
             if (!response.ok) throw new Error(resData.error || 'Failed to check phone');
 
             if (resData.exists) {
-              toast.error('You are already registered. Please login with OTP.');
+              toast.error('You are already registered. Please login with password.');
               return;
             }
 
-            setProfileValue('phone', data.phone);
-            setStep('profile');
+            // Send registration OTP
+            const otpRes = await fetch('/api/students/signup/send-otp', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ phone: data.phone })
+            });
+
+            if (otpRes.ok) {
+              toast.success('Registration OTP sent!');
+              setProfileValue('phone', data.phone);
+              setStep('signup-otp');
+              setResendTimer(60);
+              setOtp(['', '', '', '', '', '']);
+            } else {
+              const otpData = await otpRes.json();
+              throw new Error(otpData.error || 'Failed to send OTP');
+            }
           } catch (err: any) {
             toast.error(err.message);
           } finally {
@@ -593,8 +925,9 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth }) => {
           });
           const resData = await response.json();
           if (!response.ok) throw new Error(resData.error || 'Registration failed');
-          toast.success('Registration successful! Please login with OTP.');
+          toast.success('Registration successful! Please login.');
           setStep('login');
+          setPasswordFormData({ loginId: data.phone, password: '' });
         } catch (err: any) {
           toast.error(err.message);
         } finally {
@@ -776,6 +1109,17 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth }) => {
           </div>
 
           <div>
+            <label className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-1">Create Password *</label>
+            <input
+              type="password"
+              {...profileReg('password')}
+              required
+              placeholder="Min 6 characters"
+              className={`w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold`}
+            />
+          </div>
+
+          <div>
             <label className="text-xs font-semibold text-gray-600 block mb-1">Referral Code (Optional)</label>
             <input
               type="text"
@@ -824,6 +1168,10 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth }) => {
             {step === 'otp' && renderOtpStep()}
             {step === 'signup' && renderSignupStep()}
             {step === 'profile' && renderProfileStep()}
+            {step === 'forgot-password' && renderForgotStep()}
+            {step === 'reset-otp' && renderResetOtpStep()}
+            {step === 'new-password' && renderNewPasswordStep()}
+            {step === 'signup-otp' && renderSignupOtpStep()}
           </div>
         </div>
       </div>

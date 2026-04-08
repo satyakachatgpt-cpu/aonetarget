@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import { toast } from 'sonner';
+import { indiaStateDistrictMap } from '../../utils/indiaStates';
 import { studentsAPI, coursesAPI, uploadAPI } from '../../services/apiClient';
 import { getImageUrl, getPdfUrl } from '../../lib/utils';
-import { RightSideDrawer, DrawerHeader, DrawerBody, DrawerFooter, FormInput, FormLabel, FormSelect, PrimaryButton } from './DrawerSystem';
+import { RightSideDrawer, DrawerHeader, DrawerBody, DrawerFooter, FormInput, FormLabel, FormSelect, PrimaryButton, FormPasswordInput } from './DrawerSystem';
 
 interface Student {
   id: string;
@@ -10,15 +13,20 @@ interface Student {
   phone: string;
   dob: string;
   course: string;
+  state?: string;
   city: string;
   registrationDate: string;
   registrationType: string;
   status: 'active' | 'inactive';
   paymentStatus: 'paid' | 'pending' | 'failed';
   notes?: string;
+  userId?: string;
+  highQualification?: string;
   isBanned?: boolean;
   suspiciousActivityCount?: number;
   blockedAt?: string;
+  password?: string;
+  gender?: string;
 
   admission?: {
     fatherName: string;
@@ -48,6 +56,119 @@ interface Student {
   };
 }
 
+// Optimized Internal Component for Student Profile to fix lag and handle toggles locally
+const StudentProfileContent: React.FC<{
+  student: Student;
+  onClose: () => void;
+  getImageUrl: (path: string) => string;
+  getStateFromCity: (city: string) => string;
+}> = React.memo(({ student, onClose, getImageUrl, getStateFromCity }) => {
+  const [showPass, setShowPass] = React.useState(false);
+
+  return (
+    <div className="space-y-6 pb-10">
+      {/* Header Profile Info */}
+      <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm flex items-center gap-5">
+        <div className="w-20 h-20 rounded-2xl bg-[#1a237e]/5 border border-[#1a237e]/10 overflow-hidden flex items-center justify-center">
+          {student.documents?.profilePhoto ? (
+            <img src={getImageUrl(student.documents.profilePhoto)} alt="" className="w-full h-full object-cover" />
+          ) : (
+            <span className="material-symbols-outlined text-[#1a237e] text-[40px]">person</span>
+          )}
+        </div>
+        <div>
+          <h3 className="text-[18px] font-black text-gray-900 leading-tight">{student.name}</h3>
+          <div className="flex items-center gap-2 mt-1.5">
+            <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-black uppercase tracking-wider">{student.id}</span>
+            <span className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase border ${student.status === 'active' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${student.status === 'active' ? 'bg-green-500' : 'bg-red-500'}`} />
+              {student.status}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-1">
+        <div className="bg-white rounded-[32px] border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.03)]">
+          <div className="p-6 space-y-6">
+            <div className="flex items-center gap-3 border-b border-gray-50 pb-4">
+              <span className="material-symbols-outlined text-indigo-600 text-[20px]">badge</span>
+              <h4 className="text-[14px] font-black text-gray-900 uppercase tracking-wider">Identification</h4>
+            </div>
+
+            <div className="grid grid-cols-2 gap-x-8 gap-y-6">
+              {[
+                { label: 'Full Name', value: student.name },
+                { label: 'Email Address', value: student.email },
+                { label: 'Phone Number', value: student.phone },
+                { label: 'State', value: student.state || getStateFromCity(student.city) },
+                { label: 'District / City', value: student.city },
+                { label: 'Qualification', value: student.highQualification },
+                { label: 'Gender', value: student.gender || student.admission?.gender },
+                { label: 'Age / DOB', value: student.dob ? new Date(student.dob).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A' }
+              ].map((item, idx) => (
+                <div key={idx} className="space-y-1">
+                   <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{item.label}</p>
+                   <p className="text-[13px] font-bold text-gray-800 truncate">{item.value || 'N/A'}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Optimized & Compact Password Section */}
+            <div className="pt-4 mt-2">
+              <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex items-center justify-between h-16">
+                <div className="flex-1">
+                   <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Account Password</p>
+                   <p className="text-[14px] font-mono font-black text-indigo-600 tracking-[0.15em]">
+                     {showPass ? (student.password || 'NOT SET') : '••••••••'}
+                   </p>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => setShowPass(!showPass)}
+                    className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-indigo-600 shadow-sm transition-all active:scale-95"
+                    title={showPass ? "Hide Password" : "Show Password"}
+                  >
+                    <span className="material-symbols-outlined text-[20px]">
+                      {showPass ? 'visibility_off' : 'visibility'}
+                    </span>
+                  </button>
+                    
+                  <button 
+                    onClick={() => {
+                      if (student.password) {
+                        navigator.clipboard.writeText(student.password);
+                        toast.success('Password copied!');
+                      } else {
+                        toast.error('No password available to copy');
+                      }
+                    }}
+                    className={`h-10 px-4 rounded-xl flex items-center gap-2 transition-all shadow-sm active:scale-95 ${student.password ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                    title="Copy Password"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">content_copy</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider">Copy</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="pt-4">
+        <button
+          onClick={onClose}
+          className="w-full h-14 bg-gray-900 text-white rounded-2xl font-black text-[12px] uppercase tracking-[0.22em] shadow-lg hover:bg-black transition-all active:scale-95"
+        >
+          Close Detail
+        </button>
+      </div>
+    </div>
+  );
+});
+
 interface Props {
   showToast: (m: string, type?: 'success' | 'error') => void;
   initialStatus?: string;
@@ -69,6 +190,25 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [districtSuggestions, setDistrictSuggestions] = useState<string[]>([]);
+  const [showDistrictSuggestions, setShowDistrictSuggestions] = useState(false);
+  const [stateSuggestions, setStateSuggestions] = useState<string[]>([]);
+  const [showStateSuggestions, setShowStateSuggestions] = useState(false);
+
+  // Get all districts for suggestions
+  const allDistricts = React.useMemo(() => {
+    return Object.values(indiaStateDistrictMap).flat().sort();
+  }, []);
+
+  const getStateFromCity = React.useCallback((cityName: string) => {
+    if (!cityName) return '';
+    for (const [state, districts] of Object.entries(indiaStateDistrictMap)) {
+      if ((districts as string[]).includes(cityName)) {
+        return state;
+      }
+    }
+    return '';
+  }, []);
   const [showViewModal, setShowViewModal] = useState(false);
   const [showFeesModal, setShowFeesModal] = useState(false);
   const [showNotesModal, setShowNotesModal] = useState(false);
@@ -81,17 +221,21 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     email: '',
     phone: '',
     dob: '',
-    course: '',
+    state: '',
     city: '',
+    userId: '',
+    password: '',
+    confirmPassword: '',
+    highQualification: '',
+    gender: 'Male',
     registrationDate: new Date().toISOString().split('T')[0],
     registrationType: 'regular',
     status: 'active' as 'active' | 'inactive',
     paymentStatus: 'pending' as 'paid' | 'pending' | 'failed',
     notes: '',
-    // New Fields
+    // Legacy/Hidden fields kept in state for API compatibility but hidden from simple form
     fatherName: '',
     motherName: '',
-    gender: 'Male',
     alternatePhone: '',
     fullAddress: '',
     previousClass: '',
@@ -162,11 +306,12 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     let filtered = students;
 
     if (searchQuery) {
+      const lowerQuery = searchQuery.toLowerCase();
       filtered = filtered.filter(s =>
-        s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.phone.includes(searchQuery)
+        (s.name ?? '').toLowerCase().includes(lowerQuery) ||
+        (s.id ?? '').toLowerCase().includes(lowerQuery) ||
+        (s.email ?? '').toLowerCase().includes(lowerQuery) ||
+        (s.phone ?? '').includes(searchQuery)
       );
     }
 
@@ -204,7 +349,21 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       console.log('Loading students...');
       const data = await studentsAPI.getAll();
       console.log('Students loaded successfully:', data);
-      setStudents(Array.isArray(data) ? data : []);
+      
+      setStudents(prev => {
+        const passwordMap = new Map();
+        prev.forEach(s => {
+          if (s.password && s.password !== '••••••••') {
+            passwordMap.set(s.id, s.password);
+          }
+        });
+        
+        const newData = Array.isArray(data) ? data : [];
+        return newData.map((s: any) => ({
+          ...s,
+          password: passwordMap.get(s.id) || s.password
+        }));
+      });
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('Failed to load students:', errorMsg, error);
@@ -236,15 +395,78 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       showToast('Alternate phone number must be exactly 10 digits', 'error');
       return false;
     }
-    if (!formData.course) {
-      showToast('Please select a course', 'error');
+    if (!formData.state) {
+      showToast('Please select a state', 'error');
       return false;
     }
-    if (isNaN(Number(formData.totalFees)) || isNaN(Number(formData.paidAmount))) {
-      showToast('Fees must be numeric values', 'error');
+    if (!formData.city) {
+      showToast('Please enter a district/city', 'error');
       return false;
+    }
+    if (!showEditModal) {
+      if (!formData.password) {
+        showToast('Password is required', 'error');
+        return false;
+      }
+      if (formData.password !== formData.confirmPassword) {
+        showToast('Passwords do not match', 'error');
+        return false;
+      }
+    } else {
+      if (formData.password && formData.password !== formData.confirmPassword) {
+        showToast('Passwords do not match', 'error');
+        return false;
+      }
     }
     return true;
+  };
+
+  const formatPayload = (data: typeof formData) => {
+    const payload: any = {
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      dob: data.dob,
+      city: data.city,
+      state: data.state,
+      userId: data.userId,
+      highQualification: data.highQualification,
+      registrationDate: data.registrationDate,
+      registrationType: data.registrationType,
+      status: data.status,
+      paymentStatus: data.paymentStatus,
+      notes: data.notes,
+      admission: {
+        fatherName: data.fatherName,
+        motherName: data.motherName,
+        gender: data.gender,
+        alternatePhone: data.alternatePhone,
+        fullAddress: data.fullAddress,
+        batchTiming: data.batchTiming,
+        admissionDate: data.admissionDate,
+      },
+      academic: {
+        previousClass: data.previousClass,
+        schoolName: data.schoolName,
+        marksPercentage: data.marksPercentage,
+        passingYear: data.passingYear,
+      },
+      fees: {
+        totalFees: data.totalFees,
+        paidAmount: data.paidAmount,
+        remainingAmount: data.remainingAmount,
+      },
+      documents: {
+        aadharCard: data.aadharCard,
+        marksheet: data.marksheet,
+        photo: data.photo,
+        profilePhoto: data.profilePhoto,
+      }
+    };
+    if (data.password) {
+      payload.password = data.password;
+    }
+    return payload;
   };
 
   const handleAddStudent = async (e: React.FormEvent) => {
@@ -253,8 +475,9 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
 
     try {
       setLoading(true);
-      const res = await studentsAPI.create(formData as any);
-      setStudents([res, ...students]);
+      const payload = formatPayload(formData);
+      const res = await studentsAPI.create(payload);
+      setStudents([{ ...res, password: formData.password }, ...students]);
       resetForm();
       setShowAddModal(false);
       showToast(`Student ${formData.name} added successfully`, 'success');
@@ -272,7 +495,15 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
 
     try {
       setLoading(true);
-      await studentsAPI.update(selectedStudent.id, formData as any);
+      const payload = formatPayload(formData);
+      const newPassword = payload.password;
+      
+      await studentsAPI.update(selectedStudent.id, payload);
+      
+      if (newPassword) {
+        setStudents(prev => prev.map(s => s.id === selectedStudent.id ? { ...s, password: newPassword } : s));
+      }
+      
       loadStudents(); // Reload to get structured data correctly
       resetForm();
       setShowEditModal(false);
@@ -347,17 +578,21 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       email: student.email,
       phone: student.phone,
       dob: student.dob,
-      course: student.course,
+      state: student.state || getStateFromCity(student.city) || '',
       city: student.city,
       registrationDate: student.registrationDate,
       registrationType: student.registrationType,
       status: student.status,
       paymentStatus: student.paymentStatus,
       notes: student.notes || '',
-      // New Fields
+      userId: student.userId || student.id,
+      password: '', // Don't pre-fill password for security
+      confirmPassword: '',
+      highQualification: student.highQualification || '',
+      gender: student.admission?.gender || student.gender || 'Male',
+      // Hidden fields
       fatherName: student.admission?.fatherName || '',
       motherName: student.admission?.motherName || '',
-      gender: student.admission?.gender || 'Male',
       alternatePhone: student.admission?.alternatePhone || '',
       fullAddress: student.admission?.fullAddress || '',
       previousClass: student.academic?.previousClass || '',
@@ -394,8 +629,13 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       email: '',
       phone: '',
       dob: '',
-      course: '',
+      state: '',
       city: '',
+      userId: '',
+      password: '',
+      confirmPassword: '',
+      highQualification: '',
+      gender: 'Male',
       registrationDate: new Date().toISOString().split('T')[0],
       registrationType: 'regular',
       status: 'active',
@@ -403,7 +643,6 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       notes: '',
       fatherName: '',
       motherName: '',
-      gender: 'Male',
       alternatePhone: '',
       fullAddress: '',
       previousClass: '',
@@ -645,7 +884,7 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                       </div>
                     </td>
                     <td className="px-6 py-5">
-                      <div className="text-[14px] font-bold text-[#3f51b5] tracking-tight">{s.name}</div>
+                      <div className="text-[14px] font-bold text-[#3f51b5] tracking-tight">{s?.name ?? 'Unknown Student'}</div>
                       <div className="flex items-center gap-2 mt-1">
                         <div className="inline-flex px-1.5 py-0.5 bg-[#e8eaf6] text-[#3f51b5] text-[9px] font-black rounded uppercase tracking-wider">Student</div>
                         {(s.suspiciousActivityCount || 0) > 0 && (
@@ -661,13 +900,13 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                       </div>
                     </td>
                     <td className="px-6 py-5">
-                      <p className="text-[13px] font-medium text-gray-500">{s.id}</p>
+                      <p className="text-[13px] font-medium text-gray-500">{s?.id ?? 'N/A'}</p>
                     </td>
                     <td className="px-6 py-5">
-                      <p className="text-[13px] font-medium text-gray-500">{s.email}</p>
+                      <p className="text-[13px] font-medium text-gray-500">{s?.email ?? 'N/A'}</p>
                     </td>
                     <td className="px-6 py-5">
-                      <p className="text-[13px] font-bold text-gray-600">{s.phone}</p>
+                      <p className="text-[13px] font-bold text-gray-600">{s?.phone ?? 'N/A'}</p>
                     </td>
                     <td className="px-6 py-5 text-right overflow-visible">
                       <div className="relative inline-block text-left">
@@ -802,393 +1041,253 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
           onClose={() => { setShowAddModal(false); setShowEditModal(false); resetForm(); }}
         />
         <DrawerBody className="bg-[#fafafa]">
-          <div className="space-y-8 pb-10">
-            {/* Section: Personal Details */}
-            <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-6">
-              <h4 className="text-[14px] font-black text-[#1a237e] uppercase tracking-widest border-b border-gray-50 pb-4">A. Personal Details</h4>
-              
-              <div className="flex justify-center mb-6">
-                <div className="relative group">
-                  <div className="w-24 h-24 rounded-2xl bg-gray-50 border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden transition-all group-hover:border-blue-400">
-                    {formData.profilePhoto ? (
-                      <img src={getImageUrl(formData.profilePhoto)} alt="Profile" className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="material-symbols-outlined text-gray-300 text-[40px]">person</span>
-                    )}
-                    {uploadingField === 'profilePhoto' && (
-                      <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
-                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                      </div>
-                    )}
-                  </div>
-                  <button 
-                    onClick={() => {
-                      const input = document.createElement('input');
-                      input.type = 'file';
-                      input.accept = 'image/*';
-                      input.onchange = (e: any) => {
-                        const file = e.target.files[0];
-                        if (file) handleFileUpload(file, 'profilePhoto');
-                      };
-                      input.click();
-                    }}
-                    className="absolute -bottom-2 -right-2 w-8 h-8 bg-[#111] text-white rounded-xl flex items-center justify-center shadow-lg hover:bg-blue-600 transition-all"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">upload</span>
-                  </button>
+          <div className="space-y-6 pb-20">
+            {/* Unified Admission Form */}
+            <div className="p-8 bg-white rounded-[32px] border border-gray-100 shadow-sm space-y-8">
+              <div className="flex items-center gap-4 border-b border-gray-50 pb-6">
+                <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center">
+                  <span className="material-symbols-rounded text-indigo-600">person_add</span>
+                </div>
+                <div>
+                  <h4 className="text-[18px] font-black text-gray-900 leading-none">Student Credentials</h4>
+                  <p className="text-[11px] font-bold text-gray-400 mt-1 uppercase tracking-widest">Main Identification Info</p>
                 </div>
               </div>
 
-              <div className="space-y-4">
+              <div className="space-y-6">
                 <div className="space-y-2">
                   <FormLabel label="Full Name" required />
                   <FormInput
-                    placeholder="Enter student's full name"
+                    placeholder="e.g., Rahul Sharma"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <FormLabel label="Father Name" required />
-                    <FormInput
-                      placeholder="Enter father's name"
-                      value={formData.fatherName}
-                      onChange={(e) => setFormData({ ...formData, fatherName: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <FormLabel label="Mother Name" required />
-                    <FormInput
-                      placeholder="Enter mother's name"
-                      value={formData.motherName}
-                      onChange={(e) => setFormData({ ...formData, motherName: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <FormLabel label="Date of Birth" required />
-                    <FormInput
-                      type="date"
-                      value={formData.dob}
-                      onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <FormLabel label="Gender" required />
-                    <FormSelect
-                      value={formData.gender}
-                      onChange={(val) => setFormData({ ...formData, gender: val })}
-                      options={[
-                        { value: 'Male', label: 'Male' },
-                        { value: 'Female', label: 'Female' },
-                        { value: 'Other', label: 'Other' }
-                      ]}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Section: Contact Details */}
-            <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-6">
-              <h4 className="text-[14px] font-black text-[#1a237e] uppercase tracking-widest border-b border-gray-50 pb-4">B. Contact Details</h4>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <FormLabel label="Email Address" required />
-                    <FormInput
-                      type="email"
-                      placeholder="student@example.com"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <FormLabel label="Phone Number" required />
-                    <FormInput
-                      type="tel"
-                      placeholder="10-digit mobile"
-                      value={formData.phone}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/[^0-9]/g, '');
-                        if (val.length <= 10) setFormData({ ...formData, phone: val });
-                      }}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <FormLabel label="Alternate Phone" />
-                    <FormInput
-                      type="tel"
-                      placeholder="10-digit alternate mobile"
-                      value={formData.alternatePhone}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/[^0-9]/g, '');
-                        if (val.length <= 10) setFormData({ ...formData, alternatePhone: val });
-                      }}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <FormLabel label="City" required />
-                    <FormInput
-                      placeholder="Enter city"
-                      value={formData.city}
-                      onChange={(e) => setFormData({ ...formData, city: e.target.value })}
-                    />
-                  </div>
-                </div>
-
                 <div className="space-y-2">
-                  <FormLabel label="Full Address" required />
-                  <textarea
-                    placeholder="Enter full residential address"
-                    value={formData.fullAddress}
-                    onChange={(e) => setFormData({ ...formData, fullAddress: e.target.value })}
-                    className="w-full min-h-[100px] p-4 border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-blue-400 transition-all bg-white placeholder:text-gray-300 resize-none"
+                  <FormLabel label="Email Address" required />
+                  <FormInput
+                    type="email"
+                    placeholder="rahul@example.com"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   />
                 </div>
-              </div>
-            </div>
 
-            {/* Section: Academic Details */}
-            <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-6">
-              <h4 className="text-[14px] font-black text-[#1a237e] uppercase tracking-widest border-b border-gray-50 pb-4">C. Academic Details</h4>
-              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <FormLabel label="Previous Class" />
+                  <FormLabel label="Phone Number" required />
                   <FormInput
-                    placeholder="e.g. 10th / 12th / Grad"
-                    value={formData.previousClass}
-                    onChange={(e) => setFormData({ ...formData, previousClass: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <FormLabel label="School / College Name" />
-                  <FormInput
-                    placeholder="Enter school name"
-                    value={formData.schoolName}
-                    onChange={(e) => setFormData({ ...formData, schoolName: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <FormLabel label="Marks / Percentage" />
-                  <FormInput
-                    placeholder="e.g. 85"
-                    value={formData.marksPercentage}
-                    onChange={(e) => {
-                      const val = e.target.value.replace(/[^0-9.]/g, '');
-                      if (val === '' || (parseFloat(val) <= 100)) {
-                        setFormData({ ...formData, marksPercentage: val });
-                      }
-                    }}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <FormLabel label="Passing Year" />
-                  <FormInput
-                    placeholder="e.g. 2023"
-                    value={formData.passingYear}
+                    type="tel"
+                    placeholder="10-digit mobile"
+                    value={formData.phone}
                     onChange={(e) => {
                       const val = e.target.value.replace(/[^0-9]/g, '');
-                      if (val.length <= 4) {
-                        setFormData({ ...formData, passingYear: val });
-                      }
+                      if (val.length <= 10) setFormData({ ...formData, phone: val });
                     }}
                   />
                 </div>
-              </div>
-            </div>
 
-            {/* Section: Admission Details */}
-            <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-6">
-              <h4 className="text-[14px] font-black text-[#1a237e] uppercase tracking-widest border-b border-gray-50 pb-4">D. Admission Details</h4>
-              <div className="space-y-4">
+                <div className="space-y-2 relative">
+                  <FormLabel label="State" required />
+                  <input
+                    type="text"
+                    placeholder="Enter state (e.g. Haryana)"
+                    value={formData.state}
+                    onChange={(e) => {
+                      const val = e.target.value ?? '';
+                      setFormData({ ...formData, state: val, city: '' });
+                      if (val.trim()) {
+                        const lowVal = val.toLowerCase();
+                        const filtered = Object.keys(indiaStateDistrictMap).filter(s => 
+                          (s ?? '').toLowerCase().includes(lowVal)
+                        ).sort().slice(0, 5);
+                        setStateSuggestions(filtered);
+                        setShowStateSuggestions(filtered.length > 0);
+                      } else {
+                        setShowStateSuggestions(false);
+                      }
+                    }}
+                    onFocus={() => {
+                        if (formData.state.trim()) {
+                            const filtered = Object.keys(indiaStateDistrictMap).filter(s => 
+                              s.toLowerCase().includes(formData.state.toLowerCase())
+                            ).sort().slice(0, 5);
+                            setStateSuggestions(filtered);
+                            setShowStateSuggestions(filtered.length > 0);
+                        }
+                    }}
+                    className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-[14px] font-bold text-gray-700 outline-none focus:border-indigo-500 focus:bg-white transition-all shadow-sm"
+                  />
+                  {showStateSuggestions && (
+                    <div className="absolute z-[70] left-0 right-0 top-[100%] mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                      {stateSuggestions.map((s, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            setFormData({ ...formData, state: s, city: '' });
+                            setShowStateSuggestions(false);
+                          }}
+                          className="w-full px-5 py-3.5 text-left text-[13px] font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition-all border-b border-gray-50 last:border-0"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {showStateSuggestions && <div className="fixed inset-0 z-[65]" onClick={() => setShowStateSuggestions(false)}></div>}
+                </div>
+
+                <div className="space-y-2 relative">
+                  <FormLabel label="District / City" required />
+                  <input
+                    type="text"
+                    disabled={!formData.state || !indiaStateDistrictMap[formData.state]}
+                    placeholder={formData.state && indiaStateDistrictMap[formData.state] ? "Enter district name (e.g. Rohtak)" : "Select valid State first"}
+                    value={formData.city}
+                    onChange={(e) => {
+                      const val = e.target.value ?? '';
+                      setFormData({ ...formData, city: val });
+                      if (val.trim() && formData.state && indiaStateDistrictMap[formData.state]) {
+                        const lowVal = val.toLowerCase();
+                        const filtered = (indiaStateDistrictMap[formData.state] || []).filter(d => 
+                          (d ?? '').toLowerCase().includes(lowVal)
+                        ).slice(0, 5);
+                        setDistrictSuggestions(filtered);
+                        setShowDistrictSuggestions(filtered.length > 0);
+                      } else {
+                        setShowDistrictSuggestions(false);
+                      }
+                    }}
+                    onFocus={() => {
+                        if (formData.city.trim() && formData.state && indiaStateDistrictMap[formData.state]) {
+                            const filtered = (indiaStateDistrictMap[formData.state] || []).filter(d => 
+                              d.toLowerCase().includes(formData.city.toLowerCase())
+                            ).slice(0, 5);
+                            setDistrictSuggestions(filtered);
+                            setShowDistrictSuggestions(filtered.length > 0);
+                        }
+                    }}
+                    className={`w-full px-5 py-3.5 border border-gray-100 rounded-2xl text-[14px] font-bold outline-none transition-all shadow-sm ${
+                      !formData.state || !indiaStateDistrictMap[formData.state]
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                        : 'bg-gray-50 text-gray-700 focus:border-indigo-500 focus:bg-white'
+                    }`}
+                  />
+                  {showDistrictSuggestions && (
+                    <div className="absolute z-[60] left-0 right-0 top-[100%] mt-2 bg-white border border-gray-100 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                      {districtSuggestions.map((d, i) => (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            setFormData({ ...formData, city: d });
+                            setShowDistrictSuggestions(false);
+                          }}
+                          className="w-full px-5 py-3.5 text-left text-[13px] font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition-all border-b border-gray-50 last:border-0"
+                        >
+                          {d}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {showDistrictSuggestions && <div className="fixed inset-0 z-[55]" onClick={() => setShowDistrictSuggestions(false)}></div>}
+                </div>
+
                 <div className="space-y-2">
-                  <FormLabel label="Course" required />
+                  <FormLabel label="Highest Qualification" required />
+                  <FormInput
+                    placeholder="e.g., Graduate, 12th"
+                    value={formData.highQualification}
+                    onChange={(e) => setFormData({ ...formData, highQualification: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <FormLabel label="Gender" required />
                   <FormSelect
-                    value={formData.course}
-                    onChange={(val) => setFormData({ ...formData, course: val })}
+                    value={formData.gender}
+                    onChange={(val) => setFormData({ ...formData, gender: val })}
                     options={[
-                      { value: '', label: 'Select Course' },
-                      ...courses
+                      { value: 'Male', label: 'Male' },
+                      { value: 'Female', label: 'Female' },
+                      { value: 'Other', label: 'Other' }
                     ]}
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <FormLabel label="Batch" required />
-                    <FormSelect
-                      value={formData.batchTiming}
-                      onChange={(val) => setFormData({ ...formData, batchTiming: val })}
-                      options={[
-                        { value: '', label: 'Select Batch' },
-                        { value: 'Morning', label: 'Morning' },
-                        { value: 'Afternoon', label: 'Afternoon' },
-                        { value: 'Evening', label: 'Evening' },
-                        { value: 'Weekend', label: 'Weekend' }
-                      ]}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <FormLabel label="Admission Date" />
-                    <FormInput
-                      type="date"
-                      value={formData.admissionDate}
-                      onChange={(e) => setFormData({ ...formData, admissionDate: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <FormLabel label="Registration Type" />
-                    <FormSelect
-                      value={formData.registrationType}
-                      onChange={(val) => setFormData({ ...formData, registrationType: val })}
-                      options={[
-                        { value: 'regular', label: 'Regular Admission' },
-                        { value: 'bulk', label: 'Bulk Enrollment' },
-                        { value: 'referral', label: 'Referral Program' }
-                      ]}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <FormLabel label="Account Status" />
-                    <FormSelect
-                      value={formData.status}
-                      onChange={(val) => setFormData({ ...formData, status: val as 'active' | 'inactive' })}
-                      options={[
-                        { value: 'active', label: 'Active Account' },
-                        { value: 'inactive', label: 'Blocked / Suspended' }
-                      ]}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Section: Fees Details */}
-            <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-6">
-              <div className="flex justify-between items-center border-b border-gray-50 pb-4">
-                <h4 className="text-[14px] font-black text-[#1a237e] uppercase tracking-widest">E. Fees Details</h4>
-                <div className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[11px] font-black uppercase">Auto Calculating</div>
-              </div>
-              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <FormLabel label="Total Fees (₹)" required />
+                  <FormLabel label="Date of Birth" required />
                   <FormInput
-                    type="number"
-                    placeholder="0"
-                    value={formData.totalFees === 0 ? '' : formData.totalFees}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      const total = val === '' ? 0 : parseFloat(val);
-                      setFormData(prev => ({ 
-                        ...prev, 
-                        totalFees: total,
-                        remainingAmount: total - prev.paidAmount
-                      }));
-                    }}
+                    type="date"
+                    value={formData.dob}
+                    onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
                   />
                 </div>
-                <div className="space-y-2">
-                  <FormLabel label="Paid Amount (₹)" required />
-                  <FormInput
-                    type="number"
-                    placeholder="0"
-                    value={formData.paidAmount === 0 ? '' : formData.paidAmount}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      const paid = val === '' ? 0 : parseFloat(val);
-                      setFormData(prev => ({ 
-                        ...prev, 
-                        paidAmount: paid,
-                        remainingAmount: prev.totalFees - paid
-                      }));
-                    }}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <FormLabel label="Remaining (₹)" />
-                  <div className={`h-[48px] px-4 border rounded-xl flex items-center text-[14px] font-bold ${formData.remainingAmount > 0 ? 'bg-red-50 border-red-100 text-red-600' : 'bg-green-50 border-green-100 text-green-600'}`}>
-                    ₹ {formData.remainingAmount}
-                  </div>
-                </div>
-              </div>
-            </div>
 
-            {/* Section: Documents */}
-            <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-6">
-              <h4 className="text-[14px] font-black text-[#1a237e] uppercase tracking-widest border-b border-gray-50 pb-4">F. Documents Upload</h4>
-              <div className="grid grid-cols-1 gap-4">
-                {[
-                  { id: 'aadharCard', label: 'Aadhar Card (Front/Back)', icon: 'badge' },
-                  { id: 'marksheet', label: 'Marksheet (10th/12th)', icon: 'description' },
-                  { id: 'photo', label: 'Admission Photo', icon: 'image' }
-                ].map(doc => (
-                  <div key={doc.id} className="flex gap-4 p-4 bg-gray-50/50 border border-gray-100 rounded-2xl group transition-all hover:bg-white hover:shadow-md">
-                    <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center border border-gray-100 group-hover:bg-blue-50 group-hover:border-blue-100 transition-all">
-                      <span className="material-symbols-outlined text-gray-400 group-hover:text-blue-500">{doc.icon}</span>
+                <div className="pt-8 border-t border-gray-100 mt-8">
+                  <div className="flex items-center gap-2 mb-6">
+                    <div className="w-1.5 h-4 bg-indigo-600 rounded-full"></div>
+                    <h5 className="text-[12px] font-black text-indigo-900 uppercase tracking-widest">Login Configuration</h5>
+                  </div>
+                  
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <FormLabel label="Student User ID" />
+                      <div className="relative group">
+                          <input
+                            type="text"
+                            readOnly
+                            value={formData.userId || 'AUTO-GENERATED'}
+                            className="w-full px-5 py-3.5 bg-gray-100 border border-gray-100 rounded-2xl text-[14px] font-black text-gray-500 cursor-not-allowed"
+                          />
+                          <span className="material-symbols-rounded absolute right-5 top-1/2 -translate-y-1/2 text-gray-400 text-[20px]">lock</span>
+                      </div>
+                      <p className="text-[10px] text-gray-400 font-bold px-1">Unique identification used for logging into the student portal.</p>
                     </div>
-                    <div className="flex-1">
-                      <p className="text-[13px] font-bold text-gray-700">{doc.label}</p>
-                      {formData[doc.id as keyof typeof formData] ? (
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-[11px] font-bold text-green-600 uppercase tracking-wider flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[14px]">check_circle</span> Uploaded
-                          </span>
-                          <a href={doc.id === 'marksheet' ? getPdfUrl(formData[doc.id as keyof typeof formData] as string) : getImageUrl(formData[doc.id as keyof typeof formData] as string)} target="_blank" className="text-[11px] font-black text-blue-500 uppercase hover:underline">View</a>
+
+                      <div className="space-y-6 bg-indigo-50/30 p-6 rounded-3xl border border-indigo-100/50">
+                        <div className="space-y-2">
+                          <FormLabel label={showEditModal ? "New Password" : "Create Password *"} required={!showEditModal} />
+                          <FormPasswordInput
+                            placeholder={showEditModal ? "Leave blank to keep current" : "••••••••"}
+                            value={formData.password}
+                            onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                          />
                         </div>
-                      ) : (
-                        <p className="text-[11px] font-medium text-gray-400 mt-1 uppercase">Max Size: 5MB • JPG, PNG, PDF</p>
-                      )}
-                    </div>
-                    <div className="flex items-center">
-                      <button 
-                        onClick={() => {
-                          const input = document.createElement('input');
-                          input.type = 'file';
-                          input.accept = 'image/*,application/pdf';
-                          input.onchange = (e: any) => {
-                            const file = e.target.files[0];
-                            if (file) handleFileUpload(file, doc.id);
-                          };
-                          input.click();
-                        }}
-                        disabled={uploadingField === doc.id}
-                        className={`px-4 py-2 rounded-xl text-[12px] font-black tracking-wider uppercase transition-all ${formData[doc.id as keyof typeof formData] ? 'bg-gray-100 text-gray-600 hover:bg-gray-200' : 'bg-[#111] text-white hover:bg-blue-600 shadow-sm'}`}
-                      >
-                        {uploadingField === doc.id ? 'Uploading...' : formData[doc.id as keyof typeof formData] ? 'Change' : 'Upload'}
-                      </button>
-                    </div>
+
+                        <div className="space-y-2">
+                          <FormLabel label={showEditModal ? "Confirm New Password" : "Confirm Password *"} required={!showEditModal} />
+                          <FormPasswordInput
+                            placeholder={showEditModal ? "Leave blank to keep current" : "••••••••"}
+                            value={formData.confirmPassword}
+                            onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                          />
+                        </div>
+                      </div>
                   </div>
-                ))}
+                </div>
               </div>
             </div>
-            
-            {/* Actions */}
-            <div className="flex gap-3 pt-6">
+
+            <div className="flex gap-4 px-2">
               <button
-                type="button"
                 onClick={() => { setShowAddModal(false); setShowEditModal(false); resetForm(); }}
-                className="flex-1 h-[64px] bg-white border border-gray-200 text-gray-700 rounded-[20px] font-bold text-[14px] hover:bg-gray-50 transition-all active:scale-[0.98]"
+                className="flex-1 h-14 rounded-2xl font-black text-[13px] text-gray-400 uppercase tracking-widest hover:bg-gray-100 transition-all active:scale-[0.98]"
               >
                 Cancel
               </button>
               <button
-                type="button"
                 onClick={showEditModal ? handleEditStudent : handleAddStudent}
-                disabled={loading || !!uploadingField}
-                className="flex-[2] h-[64px] bg-[#1a237e] text-white rounded-[20px] font-bold text-[14px] hover:bg-[#151b60] transition-all shadow-xl shadow-navy/20 active:scale-[0.98] flex items-center justify-center gap-2"
+                disabled={loading}
+                className="flex-[2] h-14 bg-gradient-to-r from-indigo-600 to-blue-700 text-white rounded-2xl font-black text-[13px] uppercase tracking-widest shadow-xl shadow-indigo-200 hover:shadow-2xl hover:-translate-y-0.5 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {loading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : (showEditModal ? "Save Admission Update" : "Complete Admission Process")}
+                {loading ? <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div> : (
+                  <>
+                    <span className="material-symbols-rounded text-[18px]">how_to_reg</span>
+                    {showEditModal ? "Update Admission" : "Finalize Admission"}
+                  </>
+                )}
               </button>
             </div>
           </div>
@@ -1226,159 +1325,17 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       </RightSideDrawer>
 
 
-      {/* View Student Drawer */}
+      {/* View Student Drawer - Optimized Sub-component */}
       <RightSideDrawer isOpen={showViewModal} onClose={() => setShowViewModal(false)} width="500px">
         <DrawerHeader title="Student Profile Details" onClose={() => setShowViewModal(false)} />
         <DrawerBody className="bg-gray-50/30">
           {selectedStudent && (
-            <div className="space-y-6 pb-10">
-              {/* Header Profile Info */}
-              <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm flex items-center gap-5">
-                <div className="w-20 h-20 rounded-2xl bg-[#1a237e]/5 border border-[#1a237e]/10 overflow-hidden flex items-center justify-center">
-                  {selectedStudent.documents?.profilePhoto ? (
-                    <img src={getImageUrl(selectedStudent.documents.profilePhoto)} alt="" className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="material-symbols-outlined text-[#1a237e] text-[40px]">person</span>
-                  )}
-                </div>
-                <div>
-                  <h3 className="text-[18px] font-black text-gray-900 leading-tight">{selectedStudent.name}</h3>
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-black uppercase tracking-wider">{selectedStudent.id}</span>
-                    <span className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase border ${selectedStudent.status === 'active' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${selectedStudent.status === 'active' ? 'bg-green-500' : 'bg-red-500'}`} />
-                      {selectedStudent.status}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Grid Layout for details */}
-              <div className="grid grid-cols-1 gap-4">
-                {/* Personal & Contact Section */}
-                <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-5">
-                  <div className="flex items-center gap-2 text-[#1a237e]">
-                    <span className="material-symbols-outlined text-[20px]">contact_page</span>
-                    <h4 className="text-[12px] font-black uppercase tracking-widest">Personal & Contact</h4>
-                  </div>
-                  <div className="grid grid-cols-2 gap-y-4 gap-x-6">
-                    <div>
-                      <FormLabel label="Father's Name" />
-                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.admission?.fatherName || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <FormLabel label="Mother's Name" />
-                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.admission?.motherName || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <FormLabel label="Date of Birth" />
-                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.dob ? new Date(selectedStudent.dob).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}</p>
-                    </div>
-                    <div>
-                      <FormLabel label="Gender" />
-                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.admission?.gender || 'N/A'}</p>
-                    </div>
-                    <div className="col-span-2 border-t border-gray-50 pt-4">
-                      <FormLabel label="Email" />
-                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.email}</p>
-                    </div>
-                    <div>
-                      <FormLabel label="Primary Phone" />
-                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.phone}</p>
-                    </div>
-                    <div>
-                      <FormLabel label="Alt Phone" />
-                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.admission?.alternatePhone || 'N/A'}</p>
-                    </div>
-                    <div className="col-span-2">
-                      <FormLabel label="Address" />
-                      <p className="text-[13px] font-bold text-gray-700 leading-relaxed">{selectedStudent.admission?.fullAddress || 'N/A'}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Academic & Admission Section */}
-                <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-5">
-                  <div className="flex items-center gap-2 text-[#3f51b5]">
-                    <span className="material-symbols-outlined text-[20px]">school</span>
-                    <h4 className="text-[12px] font-black uppercase tracking-widest">Academic & Admission</h4>
-                  </div>
-                  <div className="grid grid-cols-2 gap-y-4 gap-x-6">
-                    <div>
-                      <FormLabel label="Prev Class" />
-                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.academic?.previousClass || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <FormLabel label="Percentage" />
-                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.academic?.marksPercentage || 'N/A'}</p>
-                    </div>
-                    <div className="col-span-2">
-                        <FormLabel label="Course" />
-                        <p className="text-[14px] font-black text-[#1a237e]">{selectedStudent.course}</p>
-                    </div>
-                    <div>
-                      <FormLabel label="Batch" />
-                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.admission?.batchTiming || 'N/A'}</p>
-                    </div>
-                    <div>
-                      <FormLabel label="Admission Date" />
-                      <p className="text-[13px] font-bold text-gray-700">{selectedStudent.admission?.admissionDate ? new Date(selectedStudent.admission.admissionDate).toLocaleDateString('en-IN') : 'N/A'}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Fees & Documents Section */}
-                <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm space-y-5">
-                  <div className="flex items-center gap-2 text-green-600">
-                    <span className="material-symbols-outlined text-[20px]">currency_rupee</span>
-                    <h4 className="text-[12px] font-black uppercase tracking-widest">Fees & Verification</h4>
-                  </div>
-                  
-                  <div className="grid grid-cols-3 gap-4 bg-gray-50 p-4 rounded-2xl">
-                    <div className="text-center">
-                        <p className="text-[9px] font-black text-gray-400 uppercase">Total</p>
-                        <p className="text-[14px] font-black text-gray-900">₹{selectedStudent.fees?.totalFees || 0}</p>
-                    </div>
-                    <div className="text-center border-x border-gray-200">
-                        <p className="text-[9px] font-black text-gray-400 uppercase">Paid</p>
-                        <p className="text-[14px] font-black text-green-600">₹{selectedStudent.fees?.paidAmount || 0}</p>
-                    </div>
-                    <div className="text-center">
-                        <p className="text-[9px] font-black text-gray-400 uppercase">Due</p>
-                        <p className="text-[14px] font-black text-red-600">₹{selectedStudent.fees?.remainingAmount || 0}</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3 pt-2">
-                    <FormLabel label="Verification Documents" />
-                    <div className="grid grid-cols-2 gap-3">
-                        {['aadharCard', 'marksheet', 'photo'].map(doc => (
-                            selectedStudent.documents?.[doc as keyof typeof selectedStudent.documents] ? (
-                                <a 
-                                    key={doc}
-                                    href={selectedStudent.documents?.[doc as keyof typeof selectedStudent.documents] as string}
-                                    target="_blank"
-                                    className="flex items-center gap-2 p-3 bg-white border border-gray-100 rounded-xl hover:border-blue-400 transition-all group"
-                                >
-                                    <span className="material-symbols-outlined text-[18px] text-gray-400 group-hover:text-blue-500">description</span>
-                                    <span className="text-[11px] font-bold text-gray-600 uppercase truncate">{doc.replace(/([A-Z])/g, ' $1')}</span>
-                                </a>
-                            ) : null
-                        ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-6 pb-4">
-                <button
-                  onClick={() => setShowViewModal(false)}
-                  className="flex-1 h-[56px] bg-gray-900 text-white rounded-xl font-bold text-[14px] hover:bg-black transition-all shadow-lg active:scale-95"
-                >
-                  Close Profile
-                </button>
-              </div>
-            </div>
+             <StudentProfileContent 
+                student={selectedStudent} 
+                onClose={() => setShowViewModal(false)} 
+                getImageUrl={getImageUrl} 
+                getStateFromCity={getStateFromCity}
+             />
           )}
         </DrawerBody>
       </RightSideDrawer>

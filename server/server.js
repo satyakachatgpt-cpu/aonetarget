@@ -27,6 +27,7 @@ import compression from 'compression';
 import { publicLimiter, authLimiter, securityHeaders, sanitizeInput } from './middleware/security.js';
 import { sendEmail, templates } from './utils/email.js';
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from 'docx';
+import bcrypt from 'bcrypt';
 
 // Helper to normalize IDs for comparison (handling ObjectId and strings)
 const normalizeId = (id) => {
@@ -2307,15 +2308,26 @@ app.post('/api/students', async (req, res) => {
     // Generate unique student ID
     const studentId = "STU-" + Date.now() + Math.floor(Math.random() * 1000);
 
+    // Hash password if provided
+    let hashedPassword = null;
+    if (req.body.password) {
+      const salt = await bcrypt.genSalt(10);
+      hashedPassword = await bcrypt.hash(req.body.password, salt);
+    }
+
     // Structure data for new schema
     const studentData = {
       id: studentId,
+      userId: (req.body.userId || "").trim() || studentId, // Use provide userId or fallback to auto ID
+      password: hashedPassword,
       name: (req.body.name || "").trim(),
       email: (req.body.email && req.body.email.trim()) ? req.body.email.trim() : null, // Handle empty string as null for sparse unique index
       phone: (req.body.phone || "").trim(),
       dob: req.body.dob,
       city: req.body.city,
+      state: req.body.state,
       course: req.body.course,
+      highQualification: req.body.highQualification,
       status: req.body.status || 'active',
       registrationType: req.body.registrationType || 'regular',
       registrationDate: req.body.registrationDate || new Date().toISOString().split('T')[0],
@@ -2373,8 +2385,11 @@ app.put('/api/students/:id', async (req, res) => {
       name: body.name ? body.name.trim() : body.name,
       email: (body.email && body.email.trim()) ? body.email.trim() : null, // Handle empty string as null
       phone: body.phone ? body.phone.trim() : body.phone,
+      userId: body.userId ? body.userId.trim() : body.userId,
+      highQualification: body.highQualification,
       dob: body.dob,
       city: body.city,
+      state: body.state,
       course: body.course,
       status: body.status,
       registrationType: body.registrationType,
@@ -2408,6 +2423,11 @@ app.put('/api/students/:id', async (req, res) => {
         profilePhoto: body.profilePhoto
       }
     };
+
+    if (body.password) {
+      const salt = await bcrypt.genSalt(10);
+      updateData.password = await bcrypt.hash(body.password, salt);
+    }
 
     const student = await Student.findOneAndUpdate(
       { id: req.params.id },
@@ -5478,6 +5498,7 @@ app.get('/api/dashboard/stats', async (req, res) => {
 // Student Authentication Routes
 // OTP Storage (in-memory with expiry)
 const otpStore = new Map();
+const resetOtpStore = new Map(); // Separate store for password resets
 
 // Send OTP via Karix SMS for login
 const otpLimiter = rateLimit({
@@ -5498,10 +5519,10 @@ app.post('/api/otp/send', otpLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Invalid phone number' });
     }
 
-    // Check if the user is registered before sending OTP
+    // Goal 2: OTP ONLY FOR REGISTRATION
     const student = await Student.findOne({ $or: [{ phone: cleanPhone }, { phone }] });
-    if (!student) {
-      return res.status(404).json({ error: 'Account not found. Please sign up first.' });
+    if (student) {
+      return res.status(400).json({ error: 'User already registered, please login' });
     }
 
     const lastSent = otpStore.get(cleanPhone);
@@ -5544,8 +5565,7 @@ app.post('/api/otp/send', otpLimiter, async (req, res) => {
 
       return res.json({
         success: true,
-        message: 'OTP generated (Dummy - SMS not sent)',
-        otp: otp // Always include OTP in response for now
+        message: 'OTP generated (Dummy - SMS not sent)'
       });
     }
 
@@ -5986,21 +6006,30 @@ app.post('/api/logout', async (req, res) => {
 // Frontend student registration — JWT + Single Device
 app.post('/api/students/register', publicLimiter, async (req, res) => {
   try {
-    const { name, email, phone, class: studentClass, target, address, state, district, whatsAppNumber, alternateNumber, gender, dob } = req.body;
+    const { name, email, phone, username, class: studentClass, target, address, state, district, whatsAppNumber, alternateNumber, gender, dob, password } = req.body;
 
     if (!name || !phone) {
       return res.status(400).json({ error: 'Name and phone are required' });
     }
 
     const cleanPhone = phone.replace(/\D/g, '');
+
+    // Goal 3: OTP Verification
+    const stored = otpStore.get(cleanPhone);
+    if (!stored || !stored.verified) {
+      return res.status(400).json({ error: 'Please verify your phone number with OTP first' });
+    }
+
     const cleanWA = whatsAppNumber ? whatsAppNumber.replace(/\D/g, '') : '';
     const cleanAlt = alternateNumber ? alternateNumber.replace(/\D/g, '') : '';
     const normalizedEmail = email ? email.toLowerCase().trim() : '';
 
+    // Goal 3: Prevent duplicates (Email, Phone, Username)
     const existingStudent = await Student.findOne({
       $or: [
         { phone: cleanPhone },
-        ...(normalizedEmail ? [{ email: normalizedEmail }] : [])
+        ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+        ...(username ? [{ userId: username }, { username: username }] : [])
       ]
     });
 
@@ -6008,15 +6037,27 @@ app.post('/api/students/register', publicLimiter, async (req, res) => {
       if (normalizedEmail && existingStudent.email === normalizedEmail) {
         return res.status(400).json({ error: 'This email address is already registered.' });
       }
+      if (username && (existingStudent.userId === username || existingStudent.username === username)) {
+        return res.status(400).json({ error: 'This username is already taken.' });
+      }
       return res.status(400).json({ error: 'Phone number already registered' });
     }
 
-    const studentId = 'STU-' + Date.now();
+    // Cleanup OTP after successful verification and before creation
+    otpStore.delete(cleanPhone);
+
+    const studentId = username || 'STU-' + Date.now();
+    const salt = password ? await bcrypt.genSalt(10) : null;
+    const hashedPassword = (password && salt) ? await bcrypt.hash(password, salt) : undefined;
+
     const student = new Student({
       id: studentId,
+      userId: studentId, // Map username to userId for backward compatibility
+      username: username || studentId,
       name,
       email: normalizedEmail,
       phone: cleanPhone,
+      password: hashedPassword,
       whatsAppNumber: cleanWA,
       alternateNumber: cleanAlt,
       class: studentClass || '11th',
@@ -6049,8 +6090,235 @@ app.post('/api/students/register', publicLimiter, async (req, res) => {
   }
 });
 
-// Legacy password-based login (kept for compatibility, but passwords are no longer required)
-// Frontend student login should now use /api/otp/send and /api/otp/verify instead.
+// --- PASSWORD RESET & MANAGEMENT ---
+
+// Send OTP for password reset
+app.post('/api/students/forgot-password/send-otp', otpLimiter, async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Phone number is required' });
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    const student = await Student.findOne({ $or: [{ phone: cleanPhone }, { phone }] });
+    
+    if (!student) {
+      return res.status(404).json({ error: 'No account found with this phone number' });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    console.warn(`[RESET_OTP] Generated for ${cleanPhone}: ${otp}`);
+
+    resetOtpStore.set(cleanPhone, {
+      otp,
+      createdAt: Date.now(),
+      attempts: 0
+    });
+
+    // Auto-delete after 5 mins
+    setTimeout(() => {
+      const stored = resetOtpStore.get(cleanPhone);
+      if (stored && stored.otp === otp) resetOtpStore.delete(cleanPhone);
+    }, 5 * 60 * 1000);
+
+    // In a real app, send actual SMS here. For now, returning OTP for development.
+    res.json({ 
+      success: true, 
+      message: 'Reset OTP sent successfully'
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to send reset OTP' });
+  }
+});
+
+// Verify reset OTP
+app.post('/api/students/forgot-password/verify-otp', async (req, res) => {
+  try {
+    const { phone, otp } = req.body;
+    const cleanPhone = phone.replace(/\D/g, '');
+    const stored = resetOtpStore.get(cleanPhone);
+
+    if (!stored || (Date.now() - stored.createdAt > 5 * 60 * 1000)) {
+      return res.status(400).json({ error: 'OTP expired or not found' });
+    }
+
+    if (String(stored.otp) !== String(otp)) {
+      return res.status(400).json({ error: 'Invalid OTP' });
+    }
+
+    // Success - keep it in store but marked as verified for the next step
+    resetOtpStore.set(cleanPhone, { ...stored, verified: true });
+    res.json({ success: true, message: 'OTP verified' });
+  } catch (error) {
+    res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+// Reset password
+app.post('/api/students/reset-password', async (req, res) => {
+  try {
+    const { phone, newPassword } = req.body;
+    const cleanPhone = phone.replace(/\D/g, '');
+    const stored = resetOtpStore.get(cleanPhone);
+
+    if (!stored || !stored.verified) {
+      return res.status(400).json({ error: 'Session expired or not verified' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    await Student.updateOne(
+      { $or: [{ phone: cleanPhone }, { phone }] },
+      { $set: { password: hashedPassword } }
+    );
+
+    resetOtpStore.delete(cleanPhone);
+    res.json({ success: true, message: 'Password reset successful. Please login.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+});
+
+// Change password (authenticated)
+app.post('/api/students/change-password', authMiddleware, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const student = await Student.findOne({ _id: req.user._id || req.user.id });
+
+    if (!student || !student.password) {
+      return res.status(404).json({ error: 'User not found or password not set' });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, student.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: 'Incorrect current password' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    student.password = await bcrypt.hash(newPassword, salt);
+    await student.save();
+
+    res.json({ success: true, message: 'Password changed successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+});
+
+// --- REGISTRATION OTP ---
+
+app.post('/api/students/signup/send-otp', otpLimiter, async (req, res) => {
+  try {
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Phone number is required' });
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    const student = await Student.findOne({ $or: [{ phone: cleanPhone }, { phone }] });
+    
+    if (student) {
+      return res.status(400).json({ error: 'Account already exists. Please login.' });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    console.warn(`[SIGNUP_OTP] Generated for ${cleanPhone}: ${otp}`);
+
+    otpStore.set(cleanPhone, {
+      otp,
+      createdAt: Date.now(),
+      attempts: 0,
+      isSignup: true
+    });
+
+    res.json({ 
+      success: true, 
+      message: 'Signup OTP sent successfully'
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to send signup OTP' });
+  }
+});
+
+app.post('/api/students/signup/verify-otp', async (req, res) => {
+  try {
+    const { phone, otp } = req.body;
+    const cleanPhone = phone.replace(/\D/g, '');
+    const stored = otpStore.get(cleanPhone);
+
+    if (!stored || !stored.isSignup || (Date.now() - stored.createdAt > 5 * 60 * 1000)) {
+      return res.status(400).json({ error: 'OTP expired or not found' });
+    }
+
+    if (String(stored.otp) !== String(otp)) {
+      return res.status(400).json({ error: 'Invalid OTP' });
+    }
+
+    otpStore.set(cleanPhone, { ...stored, verified: true });
+    res.json({ success: true, message: 'OTP verified' });
+  } catch (error) {
+    res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
+app.post('/api/students/login-password', async (req, res) => {
+  try {
+    const { loginId, password } = req.body;
+    if (!loginId || !password) {
+      return res.status(400).json({ error: 'Login ID and Password required' });
+    }
+
+    // Goal 1: MULTI-IDENTIFIER LOGIN
+    let loginQuery = {};
+    if (loginId.includes('@')) {
+      loginQuery = { email: loginId.toLowerCase().trim() };
+    } else if (/^\d+$/.test(loginId)) {
+      loginQuery = { phone: loginId.replace(/\D/g, '') };
+    } else {
+      // Check both username and userId for backward compatibility
+      loginQuery = { $or: [{ username: loginId }, { userId: loginId }] };
+    }
+
+    const student = await Student.findOne(loginQuery);
+
+    if (!student) {
+      return res.status(401).json({ error: 'Student not found with this ID or Mobile Number' });
+    }
+
+    if (!student.password) {
+      return res.status(401).json({ error: 'Password not set for this account. Please contact admin.' });
+    }
+
+    const isMatch = await bcrypt.compare(password, student.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Incorrect password' });
+    }
+
+    if (student.status === 'inactive') {
+      return res.status(403).json({ error: 'Your account is currently inactive. Contact support.' });
+    }
+
+    const deviceId = generateDeviceId();
+    const { accessToken, refreshToken } = await generateTokens(student);
+
+    res.json({
+      success: true,
+      student: {
+        id: student.id,
+        _id: student._id,
+        name: student.name,
+        email: student.email,
+        phone: student.phone,
+        userId: student.userId,
+        status: student.status
+      },
+      accessToken,
+      refreshToken,
+      deviceId
+    });
+  } catch (error) {
+    console.error('Password Login error:', error);
+    res.status(500).json({ error: 'Internal server error during login' });
+  }
+});
+
 app.post('/api/students/login', async (req, res) => {
   try {
     const { phone, password } = req.body;

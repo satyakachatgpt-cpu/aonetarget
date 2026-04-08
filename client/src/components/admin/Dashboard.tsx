@@ -222,7 +222,7 @@ const Dashboard: React.FC<Props> = ({ showToast }) => {
   return (
     <div className="w-full bg-[#fcfcfc] font-sans selection:bg-purple-100 min-h-screen relative p-8">
       {/* Header Section */}
-      <div className="flex justify-between items-center mb-10 relative">
+      <div className={`flex justify-between items-center mb-10 relative ${isFilterOpen ? 'z-[100]' : 'z-10'}`}>
         <div>
           <h1 className="text-[28px] font-bold text-[#111] tracking-tight leading-none mb-2">
             Analytics
@@ -233,33 +233,36 @@ const Dashboard: React.FC<Props> = ({ showToast }) => {
         <div className="relative">
           <button
             onClick={() => setIsFilterOpen(!isFilterOpen)}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-[#e5e7eb] rounded-[10px] text-[14px] font-semibold text-[#1a1a1a] shadow-sm hover:bg-gray-50 transition-all border-opacity-70"
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-[12px] text-[14px] font-bold transition-all border ${isFilterOpen 
+              ? 'bg-[#1a1a1a] border-[#1a1a1a] text-white shadow-lg' 
+              : 'bg-white border-[#e5e7eb] text-[#1a1a1a] shadow-sm hover:bg-gray-50'
+            }`}
           >
-            <span className="material-symbols-outlined text-[19px] font-semibold">tune</span>
+            <span className="material-symbols-outlined text-[19px] font-bold">tune</span>
             Filters
           </button>
 
           {/* Filter Popover */}
           {isFilterOpen && (
-            <div className="absolute right-0 top-[52px] w-[340px] bg-white border border-[#f0f0f2] rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.1)] z-[100] p-6 animate-in fade-in zoom-in duration-200 origin-top-right">
+            <div className="absolute right-0 top-[calc(100%+12px)] w-[360px] bg-white border border-gray-100 rounded-[28px] shadow-[0_30px_60px_-15px_rgba(0,0,0,0.25),0_0_1px_rgba(0,0,0,0.1)] z-[110] p-7 animate-in origin-top-right backdrop-blur-xl bg-white/98">
               <div className="flex justify-between items-center mb-6">
-                <h4 className="text-[17px] font-bold text-[#1a1a1a]">Filters</h4>
-                <button onClick={() => setIsFilterOpen(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
+                <h4 className="text-[18px] font-extrabold text-[#1a1a1a] tracking-tight">Analytics Filters</h4>
+                <button onClick={() => setIsFilterOpen(false)} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition-all">
                   <span className="material-symbols-outlined text-[20px] font-bold">close</span>
                 </button>
               </div>
 
               <div className="space-y-6">
                 <div>
-                  <p className="text-[14px] font-semibold text-[#a1a1a1] mb-3">Filter By</p>
-                  <div className="flex bg-white border border-[#f0f0f2] rounded-[16px] p-1.5 gap-1">
+                  <p className="text-[13px] font-bold text-gray-400 mb-3 uppercase tracking-widest pl-1">Filter By</p>
+                  <div className="flex bg-[#f8f9fa] border border-gray-100 rounded-[20px] p-1.5 gap-1 shadow-inner">
                     {['Daily', 'Weekly', 'Monthly', 'Custom'].map((type) => (
                       <button
                         key={type}
                         onClick={() => setFilterType(type)}
-                        className={`flex-1 py-2 text-[13px] font-semibold rounded-[12px] transition-all ${filterType === type
-                          ? 'bg-[#f2f2f4] text-[#1a1a1a]'
-                          : 'text-[#a1a1a1] hover:text-gray-600'
+                        className={`flex-1 py-2.5 text-[13px] font-bold rounded-[16px] transition-all ${filterType === type
+                          ? 'bg-white text-[#1a1a1a] shadow-md border border-gray-50'
+                          : 'text-[#9ea0a4] hover:text-gray-600'
                           }`}
                       >
                         {type}
@@ -279,10 +282,10 @@ const Dashboard: React.FC<Props> = ({ showToast }) => {
                             filterType === 'Weekly' ? getWeeklyDisplay(selectedDate) :
                               getMonthlyDisplay(selectedDate)
                         }
-                        className="w-full border border-[#f0f0f2] rounded-[16px] py-4 px-5 text-[15px] font-medium text-[#1a1a1a] outline-none cursor-pointer group-hover:bg-gray-50 transition-colors"
+                        className="w-full border border-gray-100 bg-[#fcfcfc] rounded-[20px] py-4.5 px-6 text-[15px] font-bold text-[#1a1a1a] outline-none cursor-pointer transition-all hover:border-indigo-200 hover:bg-white focus:ring-4 focus:ring-indigo-50 shadow-sm"
                       />
-                      <div className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-[#f5f3ff] rounded-lg">
-                        <span className="material-symbols-outlined text-[#6366f1] text-[20px]">calendar_today</span>
+                      <div className="absolute right-5 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center bg-indigo-50 rounded-xl transition-transform group-hover:scale-110">
+                        <span className="material-symbols-outlined text-indigo-600 text-[22px]">calendar_today</span>
                       </div>
                       <input
                         type="date"
@@ -302,10 +305,10 @@ const Dashboard: React.FC<Props> = ({ showToast }) => {
                           type="text"
                           readOnly
                           value={formatDateForDisplay(fromDate)}
-                          className="w-full border border-[#f0f0f2] rounded-[16px] py-4 px-5 text-[15px] font-medium text-[#1a1a1a] outline-none cursor-pointer group-hover:bg-gray-50 transition-colors"
+                          className="w-full border border-gray-100 bg-[#fcfcfc] rounded-[20px] py-4 px-6 text-[15px] font-bold text-[#1a1a1a] outline-none cursor-pointer transition-all hover:border-indigo-200 hover:bg-white shadow-sm"
                         />
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-[#f5f3ff] rounded-lg">
-                          <span className="material-symbols-outlined text-[#6366f1] text-[20px]">calendar_today</span>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-indigo-50 rounded-lg">
+                          <span className="material-symbols-outlined text-indigo-600 text-[20px]">calendar_today</span>
                         </div>
                         <input
                           type="date"
@@ -317,16 +320,16 @@ const Dashboard: React.FC<Props> = ({ showToast }) => {
                       </div>
                     </div>
                     <div>
-                      <p className="text-[14px] font-semibold text-[#a1a1a1] mb-2 pl-1">To Date</p>
+                      <p className="text-[13px] font-bold text-gray-400 mb-2 pl-1 tracking-widest uppercase">To Date</p>
                       <div className="relative group cursor-pointer" onClick={() => (document.getElementById('to-date-picker') as HTMLInputElement)?.showPicker()}>
                         <input
                           type="text"
                           readOnly
                           value={formatDateForDisplay(toDate)}
-                          className="w-full border border-[#f0f0f2] rounded-[16px] py-4 px-5 text-[15px] font-medium text-[#1a1a1a] outline-none cursor-pointer group-hover:bg-gray-50 transition-colors"
+                          className="w-full border border-gray-100 bg-[#fcfcfc] rounded-[20px] py-4 px-6 text-[15px] font-bold text-[#1a1a1a] outline-none cursor-pointer transition-all hover:border-indigo-200 hover:bg-white shadow-sm"
                         />
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-[#f5f3ff] rounded-lg">
-                          <span className="material-symbols-outlined text-[#6366f1] text-[20px]">calendar_today</span>
+                        <div className="absolute right-4 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-indigo-50 rounded-lg">
+                          <span className="material-symbols-outlined text-indigo-600 text-[20px]">calendar_today</span>
                         </div>
                         <input
                           type="date"
@@ -436,7 +439,7 @@ const Dashboard: React.FC<Props> = ({ showToast }) => {
 
             {/* Custom Metric Dropdown */}
             {isDropdownOpen && (
-              <div className="absolute right-0 top-[calc(100%+8px)] w-[180px] bg-white border border-[#f0f0f2] rounded-[16px] shadow-[0_15px_40px_rgba(0,0,0,0.08)] z-[90] overflow-hidden animate-in fade-in zoom-in duration-150 origin-top">
+              <div className="absolute right-0 top-[calc(100%+12px)] w-[200px] bg-white border border-gray-100 rounded-[24px] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.2)] z-[120] overflow-hidden animate-in origin-top backdrop-blur-xl bg-white/98">
                 {['Sales', 'Signups', 'Sales Volume'].map((metric) => (
                   <div
                     key={metric}
@@ -445,12 +448,15 @@ const Dashboard: React.FC<Props> = ({ showToast }) => {
                       setIsDropdownOpen(false);
                       showToast(`Switched view to ${metric}`);
                     }}
-                    className={`px-5 py-3.5 text-[14px] font-semibold cursor-pointer transition-colors ${selectedMetric === metric
+                    className={`px-6 py-4 text-[14px] font-bold cursor-pointer transition-all flex items-center justify-between ${selectedMetric === metric
                       ? 'bg-[#f2f2f4] text-[#1a1a1a]'
                       : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'
                       }`}
                   >
                     {metric}
+                    {selectedMetric === metric && (
+                      <span className="material-symbols-outlined text-[18px]">check_circle</span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -510,16 +516,29 @@ const Dashboard: React.FC<Props> = ({ showToast }) => {
       </div>
 
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         .font-sans {
           font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
-        @keyframes fade-in {
-          from { opacity: 0; transform: scale(0.95) translateY(-10px); }
-          to { opacity: 1; transform: scale(1) translateY(0); }
+        @keyframes pop-in {
+          0% { opacity: 0; transform: scale(0.95) translateY(-10px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
         }
         .animate-in {
-          animation: fade-in 0.2s ease-out forwards;
+          animation: pop-in 0.25s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #e5e7eb;
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #d1d5db;
         }
       `}</style>
     </div >
