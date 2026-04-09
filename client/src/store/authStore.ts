@@ -49,7 +49,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             localStorage.removeItem('studentData');
             localStorage.removeItem('studentSessionToken');
             localStorage.removeItem('accessToken');
-            localStorage.removeItem('deviceId');
             set({ student: null, isAuthenticated: false, isLoading: false, accessToken: null, deviceId: null });
         } else {
             localStorage.setItem('isStudentAuthenticated', 'true');
@@ -92,7 +91,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         localStorage.removeItem('studentData');
         localStorage.removeItem('studentSessionToken');
         localStorage.removeItem('accessToken');
-        localStorage.removeItem('deviceId');
         set({ student: null, isAuthenticated: false, accessToken: null, deviceId: null });
     },
 
