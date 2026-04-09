@@ -108,7 +108,7 @@ const PDFViewerScreen: React.FC = () => {
   }
 
   return (
-    <div className="fixed inset-0 bg-[#f4f7f6] z-[99999] flex flex-col font-outfit select-none overflow-hidden h-screen w-screen">
+    <div className="fixed inset-0 bg-[#f4f7f6] z-[99999] flex flex-col font-outfit select-none overflow-hidden h-[100dvh] w-full">
       {/* Absolute High-Level Header */}
       <div className="bg-white/95 backdrop-blur-md px-6 py-4 flex items-center justify-between border-b border-gray-200 shadow-sm z-[110] shrink-0">
         <button 
