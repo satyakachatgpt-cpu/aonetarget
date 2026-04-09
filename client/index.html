@@ -3,7 +3,7 @@
 
 <head>
     <meta charset="utf-8" />
-    <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
     <meta name="theme-color" content="#1A237E" />
     <title>Aone Target Institute</title>
     <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio"></script>
@@ -26,6 +26,10 @@
             darkMode: "class",
             theme: {
                 extend: {
+                    height: { screen: '100dvh' },
+                    minHeight: { screen: '100dvh' },
+                    width: { screen: '100%' },
+                    minWidth: { screen: '100%' },
                     colors: {
                         primary: { 50: '#E8EAF6', 100: '#C5CAE9', 200: '#9FA8DA', 300: '#7986CB', 400: '#5C6BC0', 500: '#3F51B5', 600: '#303F9F', 700: '#283593', 800: '#1A237E', 900: '#0D1257', DEFAULT: '#1A237E' },
                         accent: { 50: '#FFEBEE', 100: '#FFCDD2', 200: '#EF9A9A', 300: '#E57373', 400: '#EF5350', 500: '#D32F2F', 600: '#C62828', 700: '#B71C1C', DEFAULT: '#D32F2F' },
