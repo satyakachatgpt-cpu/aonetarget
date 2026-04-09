@@ -34,6 +34,19 @@ interface StudentLoginProps {
   onSuccess?: () => void;
 }
 
+const getDeviceId = () => {
+  let deviceId = localStorage.getItem('deviceId');
+  if (!deviceId) {
+    if (window.crypto && window.crypto.randomUUID) {
+      deviceId = window.crypto.randomUUID();
+    } else {
+      deviceId = 'dev_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+    }
+    localStorage.setItem('deviceId', deviceId);
+  }
+  return deviceId;
+};
+
 const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   const navigate = useNavigate();
   const [step, setStep] = useState<'login' | 'otp' | 'signup' | 'profile' | 'category' | 'subcategory' | 'forgot-password' | 'reset-otp' | 'new-password' | 'signup-otp'>('login');
@@ -339,7 +352,8 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone: currentPhone,
-          otp: otpValue
+          otp: otpValue,
+          deviceId: getDeviceId()
         })
       });
 
@@ -377,7 +391,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       const response = await fetch('/api/students/login-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(passwordFormData)
+        body: JSON.stringify({ ...passwordFormData, deviceId: getDeviceId() })
       });
 
       const data = await response.json();
