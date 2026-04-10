@@ -54,6 +54,10 @@ interface Student {
     photo: string;
     profilePhoto: string;
   };
+  deviceId?: string;
+  pendingDeviceId?: string;
+  deviceLocked?: boolean;
+  _id?: string;
 }
 
 // Optimized Internal Component for Student Profile to fix lag and handle toggles locally
@@ -242,6 +246,69 @@ const StudentProfileContent: React.FC<{
                 </div>
               </div>
             </div>
+
+            {/* Device Management Section */}
+            <div className="pt-4 border-t border-gray-100">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="material-symbols-outlined text-indigo-600 text-[20px]">devices</span>
+                <h4 className="text-[14px] font-black text-gray-900 uppercase tracking-wider">Device Security</h4>
+              </div>
+              <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Current Status</p>
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider ${
+                      student.deviceId ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-600'
+                    }`}>
+                      <span className="material-symbols-outlined text-[14px]">
+                        {student.deviceId ? 'lock' : 'lock_open'}
+                      </span>
+                      {student.deviceId ? 'Device Locked' : 'Not Set'}
+                    </span>
+                  </div>
+                  {student.deviceId && (
+                    <button
+                      onClick={() => onResetDevice(student)}
+                      className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-gray-50 hover:text-red-600 transition-colors shadow-sm active:scale-95 flex items-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">device_reset</span>
+                      Reset Device
+                    </button>
+                  )}
+                </div>
+
+                {student.pendingDeviceId && (
+                  <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-xl">
+                    <div className="flex items-start gap-3">
+                      <span className="material-symbols-outlined text-orange-500 mt-0.5">warning</span>
+                      <div>
+                        <h5 className="text-[12px] font-black text-orange-800 uppercase tracking-wider mb-1">New Device Request Pending</h5>
+                        <p className="text-[11px] font-bold text-orange-600 mb-4 opacity-80">
+                          This student is trying to login from a new device. Do you want to allow this device and block the old one?
+                        </p>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => onApproveDevice(student)}
+                            className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-xl text-[11px] font-black uppercase tracking-wider shadow-sm hover:bg-indigo-700 transition-colors active:scale-95 flex items-center justify-center gap-1.5"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                            Approve
+                          </button>
+                          <button
+                            onClick={() => onRejectDevice(student)}
+                            className="flex-1 px-4 py-2 bg-white border border-orange-200 text-orange-700 rounded-xl text-[11px] font-black uppercase tracking-wider shadow-sm hover:bg-orange-100 transition-colors active:scale-95 flex items-center justify-center gap-1.5"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">cancel</span>
+                            Reject
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
@@ -272,6 +339,7 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
   const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [registrationFilter, setRegistrationFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
+  const [deviceFilter, setDeviceFilter] = useState('all');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -416,9 +484,15 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       filtered = filtered.filter(s => s.paymentStatus === paymentFilter);
     }
 
+    if (deviceFilter === 'pending') {
+      filtered = filtered.filter(s => s.pendingDeviceId);
+    } else if (deviceFilter === 'locked') {
+      filtered = filtered.filter(s => s.deviceId && !s.pendingDeviceId);
+    }
+
     setFilteredStudents(filtered);
     setCurrentPage(1); // Reset to page 1 when filters change
-  }, [students, searchQuery, statusFilter, registrationFilter, paymentFilter]);
+  }, [students, searchQuery, statusFilter, registrationFilter, paymentFilter, deviceFilter]);
 
   // Calculate pagination
   const totalItems = filteredStudents.length;
@@ -622,6 +696,72 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       loadStudents();
     } catch (err) {
       showToast('Failed to unblock user', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleApproveDevice = async (student: Student) => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/admin/approve-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: student._id || student.id })
+      });
+      if (res.ok) {
+        showToast(`Device approved for ${student.name}`, 'success');
+        loadStudents();
+      } else {
+        showToast('Failed to approve device', 'error');
+      }
+    } catch (err) {
+      showToast('Error approving device', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRejectDevice = async (student: Student) => {
+    try {
+      setLoading(true);
+      const res = await fetch('/api/admin/reject-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: student._id || student.id })
+      });
+      if (res.ok) {
+        showToast(`Device rejected for ${student.name}`, 'success');
+        loadStudents();
+      } else {
+        showToast('Failed to reject device', 'error');
+      }
+    } catch (err) {
+      showToast('Error rejecting device', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetDevice = async (student: Student) => {
+    if (!confirm(`Are you sure you want to reset device access for ${student.name}? They will be logged out everywhere.`)) {
+      return;
+    }
+    try {
+      setLoading(true);
+      const res = await fetch('/api/admin/reset-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ studentId: student._id || student.id })
+      });
+      if (res.ok) {
+        showToast(`Device reset for ${student.name}`, 'success');
+        loadStudents();
+      } else {
+        showToast('Failed to reset device', 'error');
+      }
+    } catch (err) {
+      showToast('Error resetting device', 'error');
     } finally {
       setLoading(false);
     }
@@ -881,6 +1021,24 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                 ))}
               </div>
             </div>
+            <div>
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest block mb-3">Device Guard</label>
+              <div className="flex gap-2">
+                {[
+                  { id: 'all', label: 'All' },
+                  { id: 'pending', label: 'Pending Requests' },
+                  { id: 'locked', label: 'Locked Accounts' }
+                ].map((f) => (
+                    <button
+                      key={f.id}
+                      onClick={() => setDeviceFilter(f.id)}
+                      className={`px-4 py-2 rounded-lg text-[11px] font-bold uppercase transition-all ${deviceFilter === f.id ? 'bg-[#1A237E] text-white' : 'bg-gray-50 text-gray-500 hover:bg-gray-100'}`}
+                    >
+                      {f.label}
+                    </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -973,6 +1131,18 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                            <div className="inline-flex px-1.5 py-0.5 bg-red-100 text-red-600 text-[9px] font-black rounded uppercase tracking-wider border border-red-200">
                            Banned
                            </div>
+                        )}
+                        {s.deviceId && (
+                          <div className={`inline-flex px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border items-center gap-1 ${
+                            s.pendingDeviceId 
+                            ? 'bg-amber-100 text-amber-700 border-amber-200 animate-pulse' 
+                            : 'bg-indigo-50 text-indigo-600 border-indigo-100'
+                          }`}>
+                            <span className="material-symbols-outlined text-[12px]">
+                              {s.pendingDeviceId ? 'warning' : 'devices'}
+                            </span>
+                            {s.pendingDeviceId ? 'PENDING REQUEST' : 'LOCKED'}
+                          </div>
                         )}
                       </div>
                     </td>
@@ -1412,6 +1582,9 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                 onClose={() => setShowViewModal(false)} 
                 getImageUrl={getImageUrl} 
                 getStateFromCity={getStateFromCity}
+                onApproveDevice={handleApproveDevice}
+                onRejectDevice={handleRejectDevice}
+                onResetDevice={handleResetDevice}
              />
           )}
         </DrawerBody>

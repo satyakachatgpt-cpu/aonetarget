@@ -5330,33 +5330,32 @@ app.post('/api/otp/verify', authLimiter, async (req, res) => {
     }
 
     const crypto = await import('crypto');
-    const deviceId = req.body.deviceId || generateDeviceId();
-    const sessionToken = crypto.randomBytes(32).toString('hex');
-
-    // Check if user had a previous session for security alert
-    const hadPreviousSession = student.activeDeviceId && student.activeDeviceId !== deviceId;
-
-    // 2-Device Limit Logic
-    if (!student.activeSessions) student.activeSessions = [];
-
-    // Remove current device if already exists to update it
-    student.activeSessions = student.activeSessions.filter(s => s.deviceId !== deviceId);
-
-    // Add new session
-    student.activeSessions.push({
-      token: sessionToken,
-      deviceId,
-      lastLoginIP: req.ip || '',
-      createdAt: new Date()
-    });
-
-    // Keep only last 2 sessions
-    if (student.activeSessions.length > 2) {
-      student.activeSessions = student.activeSessions.slice(-2);
+    const incomingDeviceId = req.body.deviceId;
+    
+    if (!incomingDeviceId) {
+      return res.status(400).json({ error: 'Device ID is required for secure login' });
     }
 
+    // STRICT DEVICE LOCK LOGIC
+    if (!student.deviceId) {
+      student.deviceId = incomingDeviceId;
+      student.deviceLocked = true;
+      student.pendingDeviceId = null;
+    } else {
+      if (student.deviceLocked && student.deviceId !== incomingDeviceId) {
+        student.pendingDeviceId = incomingDeviceId;
+        await student.save();
+        return res.status(403).json({ error: 'This account is locked to another device. Please contact admin.' });
+      }
+    }
+
+    const sessionToken = crypto.randomBytes(32).toString('hex');
+    
+    // Check if user had a previous session for security alert
+    const hadPreviousSession = student.activeDeviceId && student.activeDeviceId !== incomingDeviceId;
+
     student.sessionToken = sessionToken; // Legacy support
-    student.activeDeviceId = deviceId;
+    student.activeDeviceId = incomingDeviceId; // Currently active connection
     student.lastLoginIP = req.realIP || req.ip || req.connection?.remoteAddress || '';
     student.failedAttempts = 0; // Reset failed attempts on success
     student.lastLoginAt = new Date();
@@ -5365,7 +5364,7 @@ app.post('/api/otp/verify', authLimiter, async (req, res) => {
     // Fallback to standard token approach
     const secureSessionToken = sessionToken;
 
-    console.log(`[LOGIN_SUCCESS] phone: ${student.phone}, deviceId: ${deviceId}`);
+    console.log(`[LOGIN_SUCCESS] phone: ${student.phone}, deviceId: ${incomingDeviceId}`);
 
     const tokens = generateTokens(student.toObject());
 
@@ -5403,7 +5402,7 @@ app.post('/api/otp/verify', authLimiter, async (req, res) => {
       verified: true,
       student: { ...studentData, sessionToken: secureSessionToken },
       accessToken: tokens.accessToken,
-      deviceId,
+      deviceId: incomingDeviceId,
       sessionToken: secureSessionToken,
       previousSessionRevoked: hadPreviousSession
     });
@@ -5960,7 +5959,25 @@ app.post('/api/students/login-password', async (req, res) => {
       return res.status(403).json({ error: 'Your account is currently inactive. Contact support.' });
     }
 
-    const deviceId = generateDeviceId();
+    const incomingDeviceId = req.body.deviceId;
+    if (!incomingDeviceId) {
+      return res.status(400).json({ error: 'Device ID is required for secure login' });
+    }
+
+    // STRICT DEVICE LOCK LOGIC
+    if (!student.deviceId) {
+      student.deviceId = incomingDeviceId;
+      student.deviceLocked = true;
+      student.pendingDeviceId = null;
+      await student.save();
+    } else {
+      if (student.deviceLocked && student.deviceId !== incomingDeviceId) {
+        student.pendingDeviceId = incomingDeviceId;
+        await student.save();
+        return res.status(403).json({ error: 'This account is locked to another device. Please contact admin.' });
+      }
+    }
+
     const { accessToken, refreshToken } = await generateTokens(student);
 
     res.json({
@@ -5976,7 +5993,7 @@ app.post('/api/students/login-password', async (req, res) => {
       },
       accessToken,
       refreshToken,
-      deviceId
+      deviceId: incomingDeviceId
     });
   } catch (error) {
     console.error('Password Login error:', error);
@@ -7602,6 +7619,66 @@ app.use((err, req, res, next) => {
     });
   }
   next(err);
+});
+
+// Admin Device Management Routes
+app.post('/api/admin/approve-device', async (req, res) => {
+  try {
+    const { studentId } = req.body;
+    const student = await Student.findById(studentId);
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+    
+    if (!student.pendingDeviceId) {
+      return res.status(400).json({ error: 'No pending device request found' });
+    }
+
+    student.deviceId = student.pendingDeviceId;
+    student.deviceLocked = true;
+    student.pendingDeviceId = null;
+    await student.save();
+    
+    res.json({ success: true, message: 'Device approved successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to approve device' });
+  }
+});
+
+app.post('/api/admin/reject-device', async (req, res) => {
+  try {
+    const { studentId } = req.body;
+    const student = await Student.findById(studentId);
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+    
+    student.pendingDeviceId = null;
+    await student.save();
+    
+    res.json({ success: true, message: 'Device request rejected' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reject device' });
+  }
+});
+
+app.post('/api/admin/reset-device', async (req, res) => {
+  try {
+    const { studentId } = req.body;
+    const student = await Student.findById(studentId);
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+    
+    student.deviceId = null;
+    student.pendingDeviceId = null;
+    student.deviceLocked = true;
+    
+    // Also remove any active session traces to force a complete logout mapping.
+    student.activeDeviceId = null;
+    student.sessionToken = null;
+    student.activeSessions = [];
+    
+    await student.save();
+    
+    res.json({ success: true, message: 'Device limit reset successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reset device' });
+  }
 });
 
 async function startServer() {

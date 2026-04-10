@@ -47,6 +47,10 @@ const studentSchema = new mongoose.Schema({
     paymentStatus: { type: String, default: 'pending' },
     enrolledBatch: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
 
+    deviceId: { type: String, default: null },
+    pendingDeviceId: { type: String, default: null },
+    deviceLocked: { type: Boolean, default: true },
+
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
 });

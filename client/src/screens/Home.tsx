@@ -386,37 +386,48 @@ const Home: React.FC = () => {
     if (!container) return;
 
     let animationId: number;
-    let scrollPos = 0;
+    let scrollPos = container.scrollLeft;
     let isInteracting = false;
+    let resumeTimeout: any;
 
     const scroll = () => {
       if (!isInteracting && container) {
         scrollPos += 0.5; // Slow, smooth speed
         // If we've reached the end of the first set of items, reset to start seamlessly
-        if (scrollPos >= container.scrollWidth / 2) {
+        if (container.scrollWidth > 0 && scrollPos >= container.scrollWidth / 2) {
           scrollPos = 0;
         }
         container.scrollLeft = scrollPos;
+      } else if (container) {
+        // Sync positioning when user is manually scrolling
+        scrollPos = container.scrollLeft;
       }
       animationId = requestAnimationFrame(scroll);
     };
 
-    const handleInteractionStart = () => { isInteracting = true; };
+    const handleInteractionStart = () => { 
+      isInteracting = true; 
+      clearTimeout(resumeTimeout);
+    };
+    
     const handleInteractionEnd = () => {
-      isInteracting = false;
-      // sync scrollPos with current scrollLeft when user releases
-      scrollPos = container.scrollLeft;
+      // Delay before resuming to allow native friction/momentum to finish
+      resumeTimeout = setTimeout(() => {
+        isInteracting = false;
+        if (container) scrollPos = container.scrollLeft;
+      }, 1500);
     };
 
     animationId = requestAnimationFrame(scroll);
 
     container.addEventListener('mousedown', handleInteractionStart);
-    container.addEventListener('touchstart', handleInteractionStart);
+    container.addEventListener('touchstart', handleInteractionStart, { passive: true });
     window.addEventListener('mouseup', handleInteractionEnd);
     window.addEventListener('touchend', handleInteractionEnd);
 
     return () => {
       cancelAnimationFrame(animationId);
+      clearTimeout(resumeTimeout);
       container.removeEventListener('mousedown', handleInteractionStart);
       container.removeEventListener('touchstart', handleInteractionStart);
       window.removeEventListener('mouseup', handleInteractionEnd);
@@ -457,7 +468,7 @@ const Home: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex flex-col bg-surface-100 min-h-screen pb-4 animate-fade-in">
+    <div className="flex flex-col bg-surface-100 min-h-screen pb-4 animate-fade-in overflow-x-hidden">
       <header className="sticky top-0 z-40 shadow-lg" style={{ background: '#283593' }}>
         <div className="px-4 py-2 flex items-center justify-between gap-3 min-h-[68px]">
           {isSearching ? (
@@ -492,8 +503,8 @@ const Home: React.FC = () => {
                 <span className="material-symbols-rounded text-white text-[26px]">menu</span>
               </button>
 
-              <div className="flex-1 flex justify-center items-center">
-                <div className="bg-white rounded-[20px] px-4 py-1 shadow-md flex items-center justify-center h-[54px] w-[230px] overflow-hidden mix-blend-normal">
+              <div className="flex-1 flex justify-center items-center px-1">
+                <div className="bg-white rounded-[20px] px-3 py-1 shadow-md flex items-center justify-center h-[50px] w-full max-w-[180px] overflow-hidden mix-blend-normal">
                   <img
                     src={getImageUrl("/attach-assist/alonelogo_1770810181717.jpg")}
                     alt="Aone Target"
