@@ -484,6 +484,31 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     } catch { showToast('Failed to end live stream', 'error'); }
   };
 
+  const handleStartLiveStream = async (video: any) => {
+    if (!confirm(`Start live stream "${video.title}" now?`)) return;
+    try {
+      const courseId = normalizeId((selectedCourse as any)?._id || selectedCourse?.id);
+      const videoId = normalizeId((video as any)._id || video.id);
+      const adminToken = localStorage.getItem('adminToken');
+      const response = await fetch(`${API_BASE_URL}/courses/${courseId}/videos/${videoId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ ...video, status: 'active', streamStatus: 'live' })
+      });
+      if (!response.ok) throw new Error('Failed to start live stream');
+      setVideos(prev => prev.map(v =>
+        normalizeId((v as any)._id || v.id) === videoId
+          ? { ...v, streamStatus: 'live', status: 'active' } as any
+          : v
+      ));
+      showToast('Live stream started successfully', 'success');
+      setOpenContentActionMenuId(null);
+    } catch { showToast('Failed to start live stream', 'error'); }
+  };
+
 
   const handleToggleNoteStatus = async (note: Note) => {
     try {
@@ -2398,6 +2423,21 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                   >
                     <span className="material-symbols-outlined text-[20px] text-blue-400">notifications_active</span>
                     <span className="text-[13px] font-bold text-gray-600 group-hover:text-gray-900">Notify Students</span>
+                  </button>
+                )}
+
+                {/* Start Live Now — only when stream is upcoming */}
+                {isLiveStream && isActuallyUpcoming && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleStartLiveStream(item);
+                      setOpenContentActionMenuId(null);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-green-50 transition-colors group"
+                  >
+                    <span className="material-symbols-outlined text-[20px] text-green-500">sensors</span>
+                    <span className="text-[13px] font-bold text-green-600 group-hover:text-green-800">Start Live Now</span>
                   </button>
                 )}
 

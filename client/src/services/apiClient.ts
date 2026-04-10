@@ -92,7 +92,10 @@ export const coursesAPI = {
   create: async (courseData: any) => {
     const response = await fetch(`${API_BASE_URL}/courses`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(courseData),
     });
     if (!response.ok) throw new Error('Failed to create course');
@@ -102,7 +105,10 @@ export const coursesAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/courses/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) {
@@ -113,7 +119,10 @@ export const coursesAPI = {
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/courses/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/courses/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete course');
     invalidateCache('courses');
     return response.json();
@@ -155,7 +164,10 @@ export const usersAPI = {
   create: async (userData: any) => {
     const response = await fetch(`${API_BASE_URL}/users`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(userData),
     });
     if (!response.ok) throw new Error('Failed to create user');
@@ -210,7 +222,10 @@ export const studentsAPI = {
     console.log('Creating student at:', url, 'with data:', studentData);
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(studentData),
     });
 
@@ -232,7 +247,10 @@ export const studentsAPI = {
     const url = `${API_BASE_URL}/students/${id}`;
     const response = await fetch(url, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(studentData),
     });
 
@@ -252,6 +270,7 @@ export const studentsAPI = {
     const url = `${API_BASE_URL}/students/${id}`;
     const response = await fetch(url, {
       method: 'DELETE',
+      headers: { ...getAdminHeaders() }
     });
 
     const contentType = response.headers.get('content-type');
@@ -275,7 +294,10 @@ export const buyersAPI = {
   create: async (buyerData: any) => {
     const response = await fetch(`${API_BASE_URL}/buyers`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(buyerData),
     });
     if (!response.ok) throw new Error('Failed to create buyer');
@@ -285,7 +307,10 @@ export const buyersAPI = {
   update: async (id: string, buyerData: any) => {
     const response = await fetch(`${API_BASE_URL}/buyers/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(buyerData),
     });
     if (!response.ok) throw new Error('Failed to update buyer');
@@ -295,6 +320,7 @@ export const buyersAPI = {
   delete: async (id: string) => {
     const response = await fetch(`${API_BASE_URL}/buyers/${id}`, {
       method: 'DELETE',
+      headers: { ...getAdminHeaders() }
     });
     if (!response.ok) throw new Error('Failed to delete buyer');
     return response.json();
@@ -312,7 +338,10 @@ export const tokensAPI = {
   create: async (tokenData: any) => {
     const response = await fetch(`${API_BASE_URL}/tokens`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(tokenData),
     });
     if (!response.ok) throw new Error('Failed to create token');
@@ -322,7 +351,10 @@ export const tokensAPI = {
   update: async (id: string, tokenData: any) => {
     const response = await fetch(`${API_BASE_URL}/tokens/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(tokenData),
     });
     if (!response.ok) throw new Error('Failed to update token');
@@ -332,6 +364,7 @@ export const tokensAPI = {
   delete: async (id: string) => {
     const response = await fetch(`${API_BASE_URL}/tokens/${id}`, {
       method: 'DELETE',
+      headers: { ...getAdminHeaders() }
     });
     if (!response.ok) throw new Error('Failed to delete token');
     return response.json();
@@ -432,7 +465,10 @@ export const couponsAPI = {
   create: async (couponData: any) => {
     const response = await fetch(`${API_BASE_URL}/coupons`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(couponData),
     });
     if (!response.ok) throw new Error('Failed to create coupon');
@@ -442,7 +478,10 @@ export const couponsAPI = {
   update: async (id: string, couponData: any) => {
     const response = await fetch(`${API_BASE_URL}/coupons/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(couponData),
     });
     if (!response.ok) throw new Error('Failed to update coupon');
@@ -452,6 +491,7 @@ export const couponsAPI = {
   delete: async (id: string) => {
     const response = await fetch(`${API_BASE_URL}/coupons/${id}`, {
       method: 'DELETE',
+      headers: { ...getAdminHeaders() }
     });
     if (!response.ok) throw new Error('Failed to delete coupon');
     return response.json();
@@ -553,7 +593,10 @@ export const storeAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/store`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create product');
@@ -562,14 +605,20 @@ export const storeAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/store/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update product');
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/store/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/store/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete product');
     return response.json();
   }
@@ -585,7 +634,10 @@ export const instituteAPI = {
   update: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/institute`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update institute settings');
@@ -603,7 +655,10 @@ export const questionsAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/questions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create question');
@@ -612,7 +667,10 @@ export const questionsAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/questions/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) {
@@ -622,7 +680,10 @@ export const questionsAPI = {
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/questions/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/questions/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || 'Failed to delete question');
@@ -632,7 +693,10 @@ export const questionsAPI = {
   bulkDelete: async (ids: string[]) => {
     const response = await fetch(`${API_BASE_URL}/questions/bulk-delete`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify({ questionIds: ids })
     });
     if (!response.ok) {
@@ -646,7 +710,10 @@ export const questionsAPI = {
   updateAll: async (updates: any[]) => {
     const response = await fetch(`${API_BASE_URL}/questions/update-all`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify({ updates })
     });
     if (!response.ok) {
@@ -666,7 +733,10 @@ export const testsAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/tests`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create test');
@@ -676,7 +746,10 @@ export const testsAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/tests/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update test');
@@ -684,7 +757,10 @@ export const testsAPI = {
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/tests/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/tests/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete test');
     invalidateCache('tests');
     return response.json();
@@ -699,7 +775,10 @@ export const testsAPI = {
   publish: async (id: string) => {
     const response = await fetch(`${API_BASE_URL}/tests/${id}/publish`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      }
     });
     if (!response.ok) {
        const errorData = await response.json().catch(() => ({}));
@@ -711,7 +790,10 @@ export const testsAPI = {
   duplicate: async (id: string) => {
     const response = await fetch(`${API_BASE_URL}/tests/${id}/duplicate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      }
     });
     if (!response.ok) throw new Error('Failed to duplicate test');
     invalidateCache('tests');
@@ -720,7 +802,10 @@ export const testsAPI = {
   reevaluate: async (id: string) => {
     const response = await fetch(`${API_BASE_URL}/tests/${id}/reevaluate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      }
     });
     if (!response.ok) throw new Error('Failed to recompute results');
     return response.json();
@@ -740,11 +825,14 @@ export const testSeriesAPI = {
   create: async (data: any) => {
     try {
       console.log('Creating test series with data:', data);
-      const response = await fetch(`${API_BASE_URL}/test-series`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
+    const response = await fetch(`${API_BASE_URL}/test-series`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify(data),
+    });
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
@@ -764,7 +852,10 @@ export const testSeriesAPI = {
     try {
       const response = await fetch(`${API_BASE_URL}/test-series/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAdminHeaders()
+        },
         body: JSON.stringify(data),
       });
 
@@ -781,7 +872,10 @@ export const testSeriesAPI = {
   },
   delete: async (id: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/test-series/${id}`, { method: 'DELETE' });
+      const response = await fetch(`${API_BASE_URL}/test-series/${id}`, { 
+        method: 'DELETE',
+        headers: { ...getAdminHeaders() }
+      });
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
@@ -816,7 +910,10 @@ export const subjectiveTestsAPI = {
       console.log('Creating subjective test with data:', data);
       const response = await fetch(`${API_BASE_URL}/subjective-tests`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAdminHeaders()
+        },
         body: JSON.stringify(data),
       });
 
@@ -835,11 +932,14 @@ export const subjectiveTestsAPI = {
   },
   update: async (id: string, data: any) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/subjective-tests/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-      });
+    const response = await fetch(`${API_BASE_URL}/subjective-tests/${id}`, {
+      method: 'PUT',
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify(data),
+    });
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
@@ -853,7 +953,10 @@ export const subjectiveTestsAPI = {
   },
   delete: async (id: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/subjective-tests/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/subjective-tests/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
 
       if (!response.ok) {
         const error = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
@@ -875,7 +978,10 @@ export const videosAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/videos`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create video');
@@ -885,7 +991,10 @@ export const videosAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/videos/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update video');
@@ -893,7 +1002,10 @@ export const videosAPI = {
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/videos/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/videos/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete video');
     invalidateCache('videos');
     return response.json();
@@ -911,7 +1023,10 @@ export const liveVideosAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/live-videos`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create live video');
@@ -921,7 +1036,10 @@ export const liveVideosAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/live-videos/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) {
@@ -932,7 +1050,10 @@ export const liveVideosAPI = {
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/live-videos/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/live-videos/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) {
         const err = await response.json().catch(() => ({ error: 'Failed' }));
         throw new Error(err.error || 'Failed to delete live video');
@@ -952,7 +1073,10 @@ export const pdfsAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/pdfs`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create PDF');
@@ -961,14 +1085,20 @@ export const pdfsAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/pdfs/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update PDF');
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/pdfs/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/pdfs/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete PDF');
     return response.json();
   }
@@ -984,7 +1114,10 @@ export const packagesAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/packages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create package');
@@ -993,7 +1126,10 @@ export const packagesAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/packages/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) {
@@ -1006,7 +1142,10 @@ export const packagesAPI = {
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/packages/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/packages/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete package');
     return response.json();
   }
@@ -1022,7 +1161,10 @@ export const messagesAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/messages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create message');
@@ -1031,14 +1173,20 @@ export const messagesAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/messages/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update message');
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/messages/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/messages/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete message');
     return response.json();
   }
@@ -1054,7 +1202,10 @@ export const blogAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/blog`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create blog post');
@@ -1063,14 +1214,20 @@ export const blogAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/blog/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update blog post');
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/blog/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/blog/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete blog post');
     return response.json();
   }
@@ -1086,7 +1243,10 @@ export const settingsAPI = {
   update: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/settings`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update settings');
@@ -1102,7 +1262,10 @@ export const bannersAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/banners`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create banner');
@@ -1112,7 +1275,10 @@ export const bannersAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/banners/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update banner');
@@ -1120,7 +1286,10 @@ export const bannersAPI = {
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/banners/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/banners/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete banner');
     invalidateCache('banners');
     return response.json();
@@ -1135,7 +1304,10 @@ export const subjectsAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/subjects`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create subject');
@@ -1144,14 +1316,20 @@ export const subjectsAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/subjects/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update subject');
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/subjects/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/subjects/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete subject');
     return response.json();
   }
@@ -1167,7 +1345,10 @@ export const topicsAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/topics`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create topic');
@@ -1176,14 +1357,20 @@ export const topicsAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/topics/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update topic');
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/topics/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/topics/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete topic');
     return response.json();
   }
@@ -1199,7 +1386,10 @@ export const subcoursesAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/subcourses`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create subcourse');
@@ -1208,14 +1398,20 @@ export const subcoursesAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/subcourses/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update subcourse');
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/subcourses/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/subcourses/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete subcourse');
     return response.json();
   }
@@ -1231,7 +1427,10 @@ export const instructionsAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/instructions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create instruction');
@@ -1240,14 +1439,20 @@ export const instructionsAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/instructions/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update instruction');
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/instructions/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/instructions/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete instruction');
     return response.json();
   }
@@ -1263,7 +1468,10 @@ export const examDocumentsAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/exam-documents`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create exam document');
@@ -1272,14 +1480,20 @@ export const examDocumentsAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/exam-documents/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update exam document');
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/exam-documents/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/exam-documents/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete exam document');
     return response.json();
   }
@@ -1293,7 +1507,10 @@ export const newsAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/news`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create news');
@@ -1303,7 +1520,10 @@ export const newsAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/news/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update news');
@@ -1311,7 +1531,10 @@ export const newsAPI = {
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/news/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/news/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete news');
     invalidateCache('news');
     return response.json();
@@ -1326,7 +1549,10 @@ export const notificationsAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/notifications`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create notification');
@@ -1336,7 +1562,10 @@ export const notificationsAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/notifications/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update notification');
@@ -1344,13 +1573,19 @@ export const notificationsAPI = {
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/notifications/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/notifications/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete notification');
     invalidateCache('notifications');
     return response.json();
   },
   deleteAll: async () => {
-    const response = await fetch(`${API_BASE_URL}/notifications`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/notifications`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete all notifications');
     invalidateCache('notifications');
     return response.json();
@@ -1358,7 +1593,10 @@ export const notificationsAPI = {
   bulkCreate: async (data: any[]) => {
     const response = await fetch(`${API_BASE_URL}/notifications/bulk`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify({ notifications: data }),
     });
     if (!response.ok) throw new Error('Failed to bulk create notifications');
@@ -1368,7 +1606,10 @@ export const notificationsAPI = {
   updateAll: async (data: any[]) => {
     const response = await fetch(`${API_BASE_URL}/notifications/bulk-update`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify({ updates: data }),
     });
     if (!response.ok) throw new Error('Failed to update all notifications');
@@ -1441,7 +1682,10 @@ export const categoriesAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/categories`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create category');
@@ -1451,7 +1695,10 @@ export const categoriesAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/categories/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update category');
@@ -1459,13 +1706,19 @@ export const categoriesAPI = {
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/categories/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/categories/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete category');
     invalidateCache('categories');
     return response.json();
   },
   seed: async () => {
-    const response = await fetch(`${API_BASE_URL}/categories/seed`, { method: 'POST' });
+    const response = await fetch(`${API_BASE_URL}/categories/seed`, { 
+      method: 'POST',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to seed categories');
     invalidateCache('categories');
     invalidateCache('subcategories');
@@ -1482,7 +1735,10 @@ export const subcategoriesAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/subcategories`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create subcategory');
@@ -1492,7 +1748,10 @@ export const subcategoriesAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/subcategories/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update subcategory');
@@ -1500,7 +1759,10 @@ export const subcategoriesAPI = {
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/subcategories/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/subcategories/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
     if (!response.ok) throw new Error('Failed to delete subcategory');
     invalidateCache('subcategories');
     return response.json();

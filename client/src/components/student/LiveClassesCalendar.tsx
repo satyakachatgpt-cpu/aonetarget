@@ -282,25 +282,24 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
               const streamUrl = resolveStreamUrl(cls);
 
               return (
-                <div key={cls.id || i} className="card-premium p-4 rounded-[24px] border border-gray-100 flex flex-col gap-4 hover:-translate-y-1 transition-all duration-300 group shadow-sm bg-white hover:shadow-card">
+                <div key={cls.id || i} className="card-premium p-5 rounded-[2.5rem] border border-gray-100 flex flex-col gap-4 hover:-translate-y-1 transition-all duration-300 group shadow-sm bg-white hover:shadow-xl">
                   <div className="flex gap-4 items-center">
-                    <div className={`w-14 h-14 bg-gradient-to-br ${isEnded ? 'from-gray-400 to-gray-500' : isLiveNow ? 'from-red-500 to-red-600' : 'from-orange-400 to-red-500'} rounded-2xl flex items-center justify-center shrink-0 relative shadow-lg`}>
-                      <span className="material-symbols-rounded text-white text-[28px]">sensors</span>
+                    <div className={`w-14 h-14 bg-gradient-to-br ${isEnded ? 'from-gray-400 to-gray-500' : isLiveNow ? 'from-red-500 to-red-600' : 'from-blue-500 to-blue-600'} rounded-2xl flex items-center justify-center shrink-0 relative shadow-lg`}>
+                      <span className="material-symbols-rounded text-white text-[28px]">{isLiveNow ? 'sensors' : 'calendar_today'}</span>
                       {isLiveNow && (
                         <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse shadow-sm"></span>
                       )}
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-bold text-[#1a1c1e] text-[16px] tracking-tight truncate group-hover:text-red-600 transition-colors">{cls.title}</h4>
-                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
-                        <span className="text-[12px] text-gray-500 font-medium flex items-center gap-1.5">
-                          <span className="material-symbols-outlined text-[18px]">person</span>
+                      <h4 className="font-extrabold text-[#1a1c1e] text-[17px] tracking-tight truncate group-hover:text-primary-600 transition-colors uppercase">{cls.title}</h4>
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
+                        <span className="text-[12px] text-gray-500 font-bold flex items-center gap-1.5">
+                          <span className="material-symbols-rounded text-[18px] text-primary-400">person</span>
                           {cls.instructor || 'Instructor'}
                         </span>
-                        <span className="w-1 h-1 rounded-full bg-gray-300 shrink-0"></span>
-                        <span className="text-[12px] text-gray-500 font-medium flex items-center gap-1.5">
-                          <span className="material-symbols-outlined text-[18px]">schedule</span>
+                        <span className="text-[12px] text-gray-500 font-black flex items-center gap-1.5">
+                          <span className="material-symbols-rounded text-[18px] text-primary-500">schedule</span>
                           {isLiveNow ? 'Live Now' : isEnded ? 'Ended' : formatTime(cls.startTime) || 'Upcoming'}
                         </span>
                       </div>
@@ -310,23 +309,22 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
                       {isEnded ? (
                         <button
                           disabled
-                          className="bg-gray-100 text-gray-400 text-[13px] px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 cursor-not-allowed border border-gray-200"
+                          className="bg-gray-100 text-gray-400 text-[11px] px-6 py-2.5 rounded-xl font-black uppercase tracking-widest cursor-not-allowed border border-gray-200"
                         >
-                          <span className="material-symbols-rounded text-[18px]">event_busy</span>
                           ENDED
                         </button>
                       ) : isLiveNow ? (
                         <button
                           onClick={() => handleSmartJoin(cls, onJoinLive, navigate)}
-                          className="bg-red-600 text-white text-[13px] px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-red-700 transition-all shadow-lg active:scale-[0.97]"
+                          className="bg-red-600 text-white text-[13px] px-7 py-3 rounded-2xl font-black flex items-center gap-2 hover:bg-black transition-all shadow-lg active:scale-[0.97] uppercase tracking-widest"
                         >
-                          <span className="material-symbols-rounded text-[18px]">videocam</span>
-                          JOIN NOW
+                          <span className="material-symbols-rounded text-xl">videocam</span>
+                          JOIN
                         </button>
                       ) : scheduledISO ? (
                         <CountdownBadge scheduledTime={scheduledISO} />
                       ) : (
-                        <div className="bg-gray-50 text-gray-400 text-[11px] px-4 py-2.5 rounded-xl font-bold uppercase tracking-widest border border-gray-100">
+                        <div className="bg-gray-50 text-gray-400 text-[11px] px-5 py-2.5 rounded-xl font-black uppercase tracking-widest border border-gray-100">
                           Upcoming
                         </div>
                       )}
@@ -335,11 +333,11 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
 
                   {/* Attachments for Calendar List View */}
                   {(cls.pdf1 || cls.pdf2 || cls.studyMaterial) && (
-                    <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-50">
+                    <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-100/50">
                       {cls.pdf1 && (
                         <button
                           onClick={() => window.open(cls.pdf1, '_blank')}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-[10px] font-bold hover:bg-red-100 transition-all"
+                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-50 text-red-600 text-[10px] font-black hover:bg-red-100 transition-all uppercase tracking-widest border border-red-100/50"
                         >
                           <span className="material-symbols-rounded text-sm">picture_as_pdf</span>
                           PDF 1
@@ -348,7 +346,7 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
                       {cls.pdf2 && (
                         <button
                           onClick={() => window.open(cls.pdf2, '_blank')}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-[10px] font-bold hover:bg-red-100 transition-all"
+                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-red-50 text-red-600 text-[10px] font-black hover:bg-red-100 transition-all uppercase tracking-widest border border-red-100/50"
                         >
                           <span className="material-symbols-rounded text-sm">picture_as_pdf</span>
                           PDF 2
@@ -357,7 +355,7 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
                       {cls.studyMaterial && (
                         <button
                           onClick={() => window.open(cls.studyMaterial, '_blank')}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-[10px] font-bold hover:bg-blue-100 transition-all"
+                          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-50 text-blue-600 text-[10px] font-black hover:bg-blue-100 transition-all uppercase tracking-widest border border-blue-100/50"
                         >
                           <span className="material-symbols-rounded text-sm">auto_stories</span>
                           Material

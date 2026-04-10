@@ -1954,25 +1954,35 @@ app.get('/api/students/:id', async (req, res) => {
 
 app.get('/api/students/:id/live-classes', async (req, res) => {
   try {
-    let studentQuery = { id: req.params.id };
-    if (mongoose.Types.ObjectId.isValid(req.params.id)) {
-      studentQuery = { $or: [{ id: req.params.id }, { _id: req.params.id }] };
+    let studentId = req.params.id;
+    let studentQuery = { id: studentId };
+    if (mongoose.Types.ObjectId.isValid(studentId)) {
+      studentQuery = { $or: [{ id: studentId }, { _id: studentId }] };
     }
     const student = await Student.findOne(studentQuery).lean();
     if (!student) return res.status(404).json({ error: 'Student not found' });
 
-    // Step 4: Fetch primarily from enrolled courses/batches
+    // Step 4: Fetch strictly from enrollment records
+    // This is the source of truth for what a student has "purchased"
     const enrollmentRecords = await db.collection('enrollments').find({
-      studentId: req.params.id
+      $or: [
+        { studentId: studentId },
+        { studentId: student._id?.toString() }
+      ]
     }).project({ courseId: 1, batchId: 1 }).toArray();
+
+    if (enrollmentRecords.length === 0 && (!student.enrolledCourses || student.enrolledCourses.length === 0)) {
+       return res.json([]); // No purchases -> No live classes
+    }
 
     const enrolledCourseIds = new Set([
       ...(student.enrolledCourses || []),
       ...enrollmentRecords.map(e => e.courseId)
     ].filter(Boolean));
 
-    const studentBatchIds = new Set(enrollmentRecords.map(e => e.batchId).filter(Boolean));
+    const studentBatchIds = new Set(enrollmentRecords.map(e => e.batchId).filter(Boolean).map(String));
 
+    // Get all variants (ID, _id, etc) for all enrolled courses to ensure matching
     let allIdVariants = [];
     for (const enrolledId of enrolledCourseIds) {
       const variants = await getCourseIdVariants(enrolledId);
@@ -1980,50 +1990,52 @@ app.get('/api/students/:id/live-classes', async (req, res) => {
     }
     allIdVariants = [...new Set(allIdVariants)];
 
-    const query = { courseId: { $in: allIdVariants } };
+    const query = { 
+      courseId: { $in: allIdVariants }
+    };
 
-    // Step 4: Fetch from 3 collections but prioritize liveVideos
+    // Step 4: Fetch from 3 collections (liveVideos is source of truth)
     const [c1, c2, c3] = await Promise.all([
       db.collection('liveVideos').find(query).toArray(),
       db.collection('liveClasses').find(query).toArray(),
       db.collection('videos').find({ ...query, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).toArray()
     ]);
 
-    // Step 8: Deduplication Logic using a Map
+    // Step 8: Deduplication & Strict Batch Filtering
     const dedupeMap = new Map();
 
     const processItem = (item) => {
       const streamId = (item.id || item.streamId || item._id)?.toString();
       if (!streamId) return;
 
-      // Deduplicate: If already present, only overwrite if coming from liveVideos (Source of Truth)
-      // or if it's the first time we see this ID.
-      // We process liveVideos (c1) LAST in the array below to ensure it wins.
-      
-      // Step 6: Status must ONLY come from database
-      item.status = calculateStreamStatus(item);
-
-      // Step 5: Strict Filtering Rule
-      // - If stream has a batchId, student MUST be in that batch
-      // - If stream has no batchId, it's course-wide (visible to all of that course)
+      // STRICT BATCH FILTERING:
+      // If a stream has a batchId assigned, only students in that batch see it.
+      // If it doesn't have a batchId, it's course-wide.
       if (item.batchId && !studentBatchIds.has(String(item.batchId))) {
         return;
       }
 
-      // Step 7: Attachments visibility (pdf1Url etc used in sync, let's map them to common names for UI)
+      // Step 6: Dynamic Status
+      item.status = calculateStreamStatus(item);
+
+      // Step 7: Consolidate Attachments visibility
       if (!item.pdf1 && item.pdf1Url) item.pdf1 = item.pdf1Url;
       if (!item.pdf2 && item.pdf2Url) item.pdf2 = item.pdf2Url;
       if (!item.studyMaterial && item.studyMaterialUrl) item.studyMaterial = item.studyMaterialUrl;
 
+      // Deduplicate: liveVideos (c1) wins because it's processed last
       dedupeMap.set(streamId, item);
     };
 
-    // Ordering: c3 (videos), c2 (liveClasses), c1 (liveVideos) 
-    // This way liveVideos overwrites if there are duplicates (Priority 1)
+    // c3 (videos) -> c2 (liveClasses) -> c1 (liveVideos) 
     [...c3, ...c2, ...c1].forEach(processItem); 
 
     const finalStreams = Array.from(dedupeMap.values())
-      .sort((a, b) => new Date(a.scheduledTime || a.startTime || a.publishOn || 0) - new Date(b.scheduledTime || b.startTime || b.publishOn || 0));
+      .sort((a, b) => {
+        const timeA = new Date(a.scheduledTime || a.startTime || a.publishOn || a.date || 0).getTime();
+        const timeB = new Date(b.scheduledTime || b.startTime || b.publishOn || b.date || 0).getTime();
+        return timeA - timeB;
+      });
 
     res.json(finalStreams);
   } catch (error) {

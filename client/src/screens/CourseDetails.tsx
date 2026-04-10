@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getImageUrl, getVideoUrl, getPdfUrl, getYouTubeThumbnail, getGradientPlaceholder, toYouTubeEmbed, isYouTubeUrl, isLiveUrl } from '../lib/utils';
-import LiveClassesCalendar from '../components/student/LiveClassesCalendar';
 import StudentVideoPlayer from '../components/student/StudentVideoPlayer';
 import { useAuthStore } from '../store/authStore';
 import { useUIStore } from '../store/uiStore';
@@ -34,6 +33,10 @@ interface Video {
   streamStatus?: string;
   isLive?: boolean;
   isDemo?: boolean;
+  pdf1?: string;
+  pdf2?: string;
+  studyMaterial?: string;
+  scheduledAt?: string;
 }
 
 interface Note {
@@ -633,34 +636,6 @@ const CourseDetails: React.FC = () => {
         </div>
       </div>
 
-      {course.settings?.showTabs !== false && (
-        <div className="sticky top-0 z-20 glass shadow-card mt-4 border-b border-surface-200">
-          <div className="flex px-2">
-            {tabConfig.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`flex-1 py-3.5 text-xs font-bold transition-all duration-200 flex items-center justify-center gap-1.5 relative ${activeTab === tab.key
-                  ? 'text-primary-600'
-                  : 'text-gray-400 hover:text-gray-600'
-                  }`}
-              >
-                <span className="material-symbols-rounded text-base">{tab.icon}</span>
-                <span>{tab.label}</span>
-                {tab.key === 'live' && (
-                  <span className="relative flex h-2 w-2 ml-0.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-accent-500 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-accent-500"></span>
-                  </span>
-                )}
-                {activeTab === tab.key && (
-                  <div className="absolute bottom-0 left-2 right-2 h-[3px] bg-gradient-to-r from-primary-600 to-primary-400 rounded-full" />
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       <main className="p-4 origin-top transition-transform duration-200 space-y-4">
 
@@ -1021,43 +996,58 @@ const CourseDetails: React.FC = () => {
                     </h3>
                     <div className="space-y-4">
                       {liveStreams.filter(live => computeEffectiveStatus(live) === 'live').map((live, idx) => {
-                        const isLiveNow = live.status === 'live' || live.streamStatus === 'live' || live.isLive === true;
-                        const isPast = live.status === 'ended' || live.streamStatus === 'ended';
                         const thumbUrl = getImageUrl(live.thumbnail) || getYouTubeThumbnail(live.youtubeUrl || '') || `https://picsum.photos/400/225?sig=${live.id || live._id || idx}`;
 
                         return (
                           <div
                             key={live.id || live._id}
                             onClick={() => handleVideoClick(live)}
-                            className="card-premium overflow-hidden cursor-pointer group hover:border-accent-100 transition-all active:scale-[0.98] animate-fade-in-up"
-                            style={{ animationDelay: `${idx * 100}ms` }}
+                            className="card-premium p-4 rounded-[2.5rem] border-2 border-red-100 bg-red-50/20 shadow-xl shadow-red-500/5 group relative overflow-hidden active:scale-[0.98] transition-all"
                           >
-                            <div className="flex gap-4 p-4">
-                              <div className="relative w-32 h-20 rounded-2xl overflow-hidden flex-shrink-0 shadow-lg">
-                                <img
-                                  src={thumbUrl}
-                                  className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                                  onError={(e) => { e.currentTarget.src = `https://picsum.photos/400/225?sig=${live.id || live._id || idx}`; }}
-                                />
-                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-2xl">
-                                    <span className="material-symbols-rounded text-accent-500">play_arrow</span>
-                                  </div>
-                                </div>
-                                <div className="absolute top-2 left-2 px-2 py-0.5 bg-red-600 text-white text-[8px] font-black rounded-full shadow-sm animate-pulse tracking-widest uppercase">LIVE</div>
+                             <div className="absolute -top-12 -right-12 w-24 h-24 bg-red-500/5 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+                             <div className="flex gap-4 items-center relative z-10">
+                              <div className="w-16 h-16 bg-gradient-to-br from-red-500 to-red-600 rounded-3xl flex items-center justify-center shrink-0 shadow-lg shadow-red-500/20 relative">
+                                <span className="material-symbols-rounded text-white text-3xl">sensors</span>
+                                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>
                               </div>
-                              <div className="flex-1 min-w-0 py-1">
-                                <div className="flex items-center gap-2 mb-1.5">
-                                  <div className="w-1.5 h-1.5 bg-accent-500 rounded-full" />
-                                  <span className="text-[10px] font-black text-accent-500 tracking-widest uppercase opacity-70">Interactive Session</span>
-                                </div>
-                                <h4 className="font-black text-gray-900 text-sm leading-tight line-clamp-2">{live.title}</h4>
-                                <p className="text-[10px] text-gray-400 font-bold mt-2 uppercase tracking-widest flex items-center gap-2">
-                                  <span className="material-symbols-rounded text-sm">person</span>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-extrabold text-lg text-gray-900 truncate mb-1 uppercase tracking-tight">{live.title}</h4>
+                                <span className="text-sm text-gray-500 font-bold flex items-center gap-1.5">
+                                  <span className="material-symbols-rounded text-lg text-red-500">person</span>
                                   {live.instructor || 'Lead Instructor'}
-                                </p>
+                                </span>
                               </div>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); handleVideoClick(live); }}
+                                className="bg-red-600 text-white text-xs px-6 py-2.5 rounded-xl font-black flex items-center gap-2 hover:bg-black transition-all shadow-lg active:scale-[0.97] uppercase tracking-widest"
+                              >
+                                <span className="material-symbols-rounded text-lg">videocam</span>
+                                JOIN
+                              </button>
                             </div>
+
+                            {(live.pdf1 || live.pdf2 || live.studyMaterial) && (
+                              <div className="flex flex-wrap gap-2 pt-4 mt-1 border-t border-red-100/50 relative z-10">
+                                {live.pdf1 && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(live.pdf1))}&title=${encodeURIComponent('PDF 1')}`, '_blank'); }}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-red-600 text-[10px] font-black border border-red-100 uppercase tracking-widest shadow-sm"
+                                  >
+                                    <span className="material-symbols-rounded text-base">picture_as_pdf</span>
+                                    PDF 1
+                                  </button>
+                                )}
+                                {live.studyMaterial && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(live.studyMaterial))}&title=${encodeURIComponent('Study Material')}`, '_blank'); }}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-indigo-600 text-[10px] font-black border border-indigo-100 uppercase tracking-widest shadow-sm"
+                                  >
+                                    <span className="material-symbols-rounded text-base">auto_stories</span>
+                                    Material
+                                  </button>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -1072,44 +1062,67 @@ const CourseDetails: React.FC = () => {
                       Upcoming Live Classes
                     </h3>
                     {liveStreams.filter(live => computeEffectiveStatus(live) === 'upcoming').map((live, idx) => {
-                      const thumbUrl = getImageUrl(live.thumbnail) || getYouTubeThumbnail(live.youtubeUrl || '') || `https://picsum.photos/400/225?sig=${live.id || live._id || idx}`;
-                      const scheduledTime = live.scheduledTime || live.startTime || live.publishOn;
+                      const scheduledTime = live.scheduledTime || live.startTime || live.publishOn || live.scheduledAt;
+                      
+                      const displayTime = (() => {
+                        if (!scheduledTime) return '';
+                        const d = new Date(String(scheduledTime).replace(' ', 'T'));
+                        if (isNaN(d.getTime())) return '';
+                        return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                      })();
+
                       return (
                         <div
                           key={live.id || live._id}
-                          className="card-premium overflow-hidden animate-fade-in-up"
+                          className="card-premium p-5 rounded-[2.2rem] border border-gray-100 bg-white shadow-card flex flex-col gap-4 group"
                           style={{ animationDelay: `${idx * 80}ms` }}
                         >
-                          <div className="flex gap-4 p-4">
-                            <div className="relative w-32 h-20 rounded-2xl overflow-hidden flex-shrink-0 shadow-lg">
-                              <img
-                                src={thumbUrl}
-                                className="w-full h-full object-cover opacity-70"
-                                onError={(e) => { e.currentTarget.src = `https://picsum.photos/400/225?sig=${live.id || live._id || idx}`; }}
-                              />
-                              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                                <span className="material-symbols-rounded text-white/60 text-3xl">hourglass_empty</span>
-                              </div>
-                              <div className="absolute top-2 left-2 px-2 py-0.5 bg-blue-600 text-white text-[8px] font-black rounded-full tracking-widest uppercase">UPCOMING</div>
+                          <div className="flex gap-4 items-center">
+                            <div className="w-14 h-14 bg-blue-50 rounded-[1.2rem] flex items-center justify-center shrink-0 border border-blue-100">
+                              <span className="material-symbols-rounded text-blue-500 text-2xl">calendar_today</span>
                             </div>
-                            <div className="flex-1 min-w-0 py-1">
-                              <div className="flex items-center gap-2 mb-1.5">
-                                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
-                                <span className="text-[10px] font-black text-blue-500 tracking-widest uppercase opacity-70">Scheduled Session</span>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-extrabold text-gray-900 text-sm uppercase tracking-tight line-clamp-1">{live.title}</h4>
+                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
+                                <span className="text-[11px] text-gray-400 font-bold flex items-center gap-1.5">
+                                  <span className="material-symbols-rounded text-[16px] text-blue-400">person</span>
+                                  {live.instructor || 'Lead Instructor'}
+                                </span>
+                                {displayTime && (
+                                  <span className="text-[11px] text-gray-500 font-extrabold flex items-center gap-1.5">
+                                    <span className="material-symbols-rounded text-[16px] text-blue-500">schedule</span>
+                                    {displayTime}
+                                  </span>
+                                )}
                               </div>
-                              <h4 className="font-black text-gray-900 text-sm leading-tight line-clamp-2">{live.title}</h4>
-                              {scheduledTime && (
-                                <p className="text-[10px] text-gray-400 font-bold mt-1.5 flex items-center gap-1.5">
-                                  <span className="material-symbols-rounded text-xs">event</span>
-                                  {new Date(scheduledTime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
-                                </p>
-                              )}
-                              <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase tracking-widest flex items-center gap-1.5">
-                                <span className="material-symbols-rounded text-xs">person</span>
-                                {live.instructor || 'Lead Instructor'}
-                              </p>
+                            </div>
+                            <div className="shrink-0 bg-blue-50 text-blue-600 text-[9px] px-3.5 py-2 rounded-xl font-black uppercase tracking-widest border border-blue-100">
+                              Upcoming
                             </div>
                           </div>
+
+                          {(live.pdf1 || live.studyMaterial) && (
+                            <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-50">
+                               {live.pdf1 && (
+                                <button
+                                  onClick={() => window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(live.pdf1))}&title=${encodeURIComponent('PDF 1')}`, '_blank')}
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-[9px] font-black uppercase tracking-widest border border-red-100/50"
+                                >
+                                  <span className="material-symbols-rounded text-[14px]">picture_as_pdf</span>
+                                  PDF
+                                </button>
+                               )}
+                               {live.studyMaterial && (
+                                <button
+                                  onClick={() => window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(live.studyMaterial))}&title=${encodeURIComponent('Study Material')}`, '_blank')}
+                                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-widest border border-indigo-100/50"
+                                >
+                                  <span className="material-symbols-rounded text-[14px]">auto_stories</span>
+                                  Note
+                                </button>
+                               )}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1125,18 +1138,6 @@ const CourseDetails: React.FC = () => {
                   </div>
                 )}
 
-                <div className="card-premium p-4 mt-4">
-                  <h3 className="font-black text-gray-800 text-xs uppercase tracking-[0.2em] flex items-center gap-2 mb-6 px-1 border-b border-surface-100 pb-4">
-                    <span className="material-symbols-rounded text-sm text-primary-500">calendar_month</span>
-                    Live Classes Calendar
-                  </h3>
-                  <LiveClassesCalendar
-                    studentId={studentId}
-                    courseId={id}
-                    batchId={student?.enrolledBatch || student?.batchId}
-                    onJoinLive={handleVideoClick}
-                  />
-                </div>
               </>
             )}
           </div>
