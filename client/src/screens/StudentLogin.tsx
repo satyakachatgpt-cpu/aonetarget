@@ -85,7 +85,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       alternateNumber: '',
       gender: '',
       dob: '',
-      class: '11th',
+      class: '',
       target: '',
       referralCode: ''
     }
