@@ -162,7 +162,7 @@ const PurchaseSuccess: React.FC = () => {
           <div className="space-y-3">
             {courseId && (
               <button
-                onClick={() => navigate(`/study/${courseId}`)}
+                onClick={() => navigate(`/course/${courseId}`)}
                 className="w-full bg-[#1A237E] text-white py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 active:scale-95 transition-transform shadow-lg"
               >
                 <span className="material-symbols-rounded text-lg">play_circle</span>

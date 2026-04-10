@@ -58,6 +58,26 @@ function useHomeLiveCountdown(scheduledTimeStr: string | undefined) {
   return secs;
 }
 
+const HomeLiveCountdownDisplay = ({ scheduledTimeStr }: { scheduledTimeStr: string }) => {
+  const secs = useHomeLiveCountdown(scheduledTimeStr);
+  if (secs === null || secs <= 0) return <span>Upcoming</span>;
+  
+  if (secs < 60) {
+    return <span className="text-orange-500 animate-pulse">Starting soon</span>;
+  }
+  
+  if (secs < 3600) {
+    const mm = Math.floor(secs / 60);
+    const ss = String(secs % 60).padStart(2, '0');
+    return <span>Starts in {mm}:{ss}</span>;
+  }
+  
+  const hh = Math.floor(secs / 3600);
+  const mm = String(Math.floor((secs % 3600) / 60)).padStart(2, '0');
+  const ss = String(secs % 60).padStart(2, '0');
+  return <span>Starts in {hh}:{mm}:{ss}</span>;
+};
+
 const Home: React.FC = () => {
   const navigate = useNavigate();
   const { student, isAuthenticated, unreadNotificationsCount } = useAuthStore();
@@ -763,43 +783,65 @@ const Home: React.FC = () => {
                     </div>
                     <button onClick={() => navigate('/live-classes')} className="text-[11px] font-black text-blue-600 uppercase tracking-widest hover:underline">View All</button>
                   </div>
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {upcoming.slice(0, 3).map((lc: any, i: number) => {
-                      const scheduledISO = lc.scheduledTime ? lc.scheduledTime.replace(' ', 'T') : (lc.startTime || '');
-                      const LiveCardCountdown = () => {
-                        const secs = useHomeLiveCountdown(scheduledISO || undefined);
-                        if (secs === null || secs <= 0) return <span>Upcoming</span>;
-                        const mm = String(Math.floor(secs / 60)).padStart(2, '0');
-                        const ss = String(secs % 60).padStart(2, '0');
-                        return <span>Starts in {mm}:{ss}</span>;
-                      };
+                      const rawScheduled = lc.scheduledAt || lc.scheduledTime || lc.startTime || '';
+                      const scheduledISO = rawScheduled ? rawScheduled.replace(' ', 'T') : '';
 
                       return (
-                        <div key={lc._id || lc.id || i} className="card-premium p-3.5 rounded-2xl border border-gray-100 bg-white flex flex-col gap-3 hover:-translate-y-0.5 transition-all duration-200">
-                          <div className="flex gap-4 items-center">
-                            <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center shrink-0 border border-gray-100">
-                              <span className="material-symbols-rounded text-gray-400 text-xl">calendar_today</span>
+                        <div key={lc._id || lc.id || i} className="card-premium p-4 rounded-[2rem] border border-gray-100 bg-white flex flex-col gap-4 hover:-translate-y-1 transition-all duration-300 shadow-sm hover:shadow-xl group">
+                           <div className="flex gap-4 items-center">
+                            <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center shrink-0 border border-blue-100 group-hover:bg-blue-100 transition-colors">
+                              <span className="material-symbols-rounded text-blue-500 text-2xl">calendar_today</span>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-bold text-sm text-gray-800 truncate mb-1">{lc.title || lc.name || 'Live Class'}</h4>
-                              <div className="flex items-center gap-3">
-                                <span className="text-[11px] text-gray-400 font-bold flex items-center gap-1.5">
-                                  <span className="material-symbols-rounded text-[14px]">person</span>
-                                  {lc.teacherName || lc.instructor}
+                              <h4 className="font-bold text-[16px] text-gray-900 truncate mb-1 group-hover:text-blue-600 transition-colors uppercase tracking-tight">{lc.title || lc.name}</h4>
+                              <div className="flex items-center flex-wrap gap-x-4 gap-y-1">
+                                <span className="text-[12px] text-gray-500 font-bold flex items-center gap-1.5">
+                                  <span className="material-symbols-rounded text-[16px] text-blue-400">person</span>
+                                  {lc.teacherName || lc.instructor || 'Instructor'}
                                 </span>
-                                <span className="w-1 h-1 rounded-full bg-gray-200"></span>
-                                <span className="text-[11px] text-blue-500 font-black uppercase tracking-widest">
-                                  <LiveCardCountdown />
+                                <span className="text-[12px] text-blue-500 font-black uppercase tracking-widest">
+                                  <HomeLiveCountdownDisplay scheduledTimeStr={scheduledISO} />
                                 </span>
                               </div>
                             </div>
-                            <div className="bg-blue-50 text-blue-600 text-[10px] px-3 py-1.5 rounded-lg font-black uppercase tracking-widest border border-blue-100">
-                              Scheduled
+                            <div className="hidden sm:block">
+                              <div className="bg-blue-50 text-blue-600 text-[10px] px-4 py-2 rounded-xl font-black uppercase tracking-widest border border-blue-100">
+                                Scheduled
+                              </div>
                             </div>
                           </div>
-                          {(lc.pdf1 || lc.pdf2) && (
-                            <div className="flex gap-2 pt-2 border-t border-gray-50">
-                               {lc.pdf1 && <div className="text-[9px] font-bold text-gray-400 flex items-center gap-1"><span className="material-symbols-rounded text-[12px]">description</span> PDF Attached</div>}
+
+                          {(lc.pdf1 || lc.pdf2 || lc.studyMaterial) && (
+                            <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-50">
+                              {lc.pdf1 && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.pdf1))}&title=${encodeURIComponent('PDF 1')}`, '_blank'); }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-[10px] font-black border border-red-100 hover:bg-red-100 transition-all uppercase tracking-widest"
+                                >
+                                  <span className="material-symbols-rounded text-[16px]">picture_as_pdf</span>
+                                  PDF 1
+                                </button>
+                              )}
+                              {lc.pdf2 && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.pdf2))}&title=${encodeURIComponent('PDF 2')}`, '_blank'); }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-[10px] font-black border border-red-100 hover:bg-red-100 transition-all uppercase tracking-widest"
+                                >
+                                  <span className="material-symbols-rounded text-[16px]">picture_as_pdf</span>
+                                  PDF 2
+                                </button>
+                              )}
+                              {lc.studyMaterial && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.studyMaterial))}&title=${encodeURIComponent('Study Material')}`, '_blank'); }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-[10px] font-black border border-indigo-100 hover:bg-indigo-100 transition-all uppercase tracking-widest"
+                                >
+                                  <span className="material-symbols-rounded text-[16px]">auto_stories</span>
+                                  Material
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
