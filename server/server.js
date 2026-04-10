@@ -7622,7 +7622,7 @@ app.use((err, req, res, next) => {
 });
 
 // Admin Device Management Routes
-app.post('/api/admin/approve-device', async (req, res) => {
+app.post('/api/admin/approve-device', adminMiddleware, async (req, res) => {
   try {
     const { studentId } = req.body;
     const student = await Student.findById(studentId);
@@ -7643,7 +7643,7 @@ app.post('/api/admin/approve-device', async (req, res) => {
   }
 });
 
-app.post('/api/admin/reject-device', async (req, res) => {
+app.post('/api/admin/reject-device', adminMiddleware, async (req, res) => {
   try {
     const { studentId } = req.body;
     const student = await Student.findById(studentId);
@@ -7658,7 +7658,7 @@ app.post('/api/admin/reject-device', async (req, res) => {
   }
 });
 
-app.post('/api/admin/reset-device', async (req, res) => {
+app.post('/api/admin/reset-device', adminMiddleware, async (req, res) => {
   try {
     const { studentId } = req.body;
     const student = await Student.findById(studentId);

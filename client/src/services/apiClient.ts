@@ -261,6 +261,54 @@ export const studentsAPI = {
 
     if (!response.ok) throw new Error(`Failed to delete student (${response.status})`);
     return response.json();
+  },
+
+  approveDevice: async (studentId: string) => {
+    const response = await fetch(`${API_BASE_URL}/admin/approve-device`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify({ studentId })
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to approve device');
+    }
+    return response.json();
+  },
+
+  rejectDevice: async (studentId: string) => {
+    const response = await fetch(`${API_BASE_URL}/admin/reject-device`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify({ studentId })
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to reject device');
+    }
+    return response.json();
+  },
+
+  resetDevice: async (studentId: string) => {
+    const response = await fetch(`${API_BASE_URL}/admin/reset-device`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify({ studentId })
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to reset device');
+    }
+    return response.json();
   }
 };
 

@@ -66,7 +66,18 @@ const StudentProfileContent: React.FC<{
   onClose: () => void;
   getImageUrl: (path: string) => string;
   getStateFromCity: (city: string) => string;
-}> = React.memo(({ student, onClose, getImageUrl, getStateFromCity }) => {
+  onApproveDevice: (student: Student) => void;
+  onRejectDevice: (student: Student) => void;
+  onResetDevice: (student: Student) => void;
+}> = React.memo(({ 
+  student, 
+  onClose, 
+  getImageUrl, 
+  getStateFromCity,
+  onApproveDevice,
+  onRejectDevice,
+  onResetDevice
+}) => {
   const [isResetting, setIsResetting] = React.useState(false);
   const [newPass, setNewPass] = React.useState('');
   const [confirmPass, setConfirmPass] = React.useState('');
@@ -704,19 +715,11 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
   const handleApproveDevice = async (student: Student) => {
     try {
       setLoading(true);
-      const res = await fetch('/api/admin/approve-device', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: student._id || student.id })
-      });
-      if (res.ok) {
-        showToast(`Device approved for ${student.name}`, 'success');
-        loadStudents();
-      } else {
-        showToast('Failed to approve device', 'error');
-      }
-    } catch (err) {
-      showToast('Error approving device', 'error');
+      await studentsAPI.approveDevice(student._id || student.id);
+      showToast(`Device approved for ${student.name}`, 'success');
+      loadStudents();
+    } catch (err: any) {
+      showToast(err.message || 'Error approving device', 'error');
     } finally {
       setLoading(false);
     }
@@ -725,19 +728,11 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
   const handleRejectDevice = async (student: Student) => {
     try {
       setLoading(true);
-      const res = await fetch('/api/admin/reject-device', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: student._id || student.id })
-      });
-      if (res.ok) {
-        showToast(`Device rejected for ${student.name}`, 'success');
-        loadStudents();
-      } else {
-        showToast('Failed to reject device', 'error');
-      }
-    } catch (err) {
-      showToast('Error rejecting device', 'error');
+      await studentsAPI.rejectDevice(student._id || student.id);
+      showToast(`Device rejected for ${student.name}`, 'success');
+      loadStudents();
+    } catch (err: any) {
+      showToast(err.message || 'Error rejecting device', 'error');
     } finally {
       setLoading(false);
     }
@@ -749,19 +744,11 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     }
     try {
       setLoading(true);
-      const res = await fetch('/api/admin/reset-device', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ studentId: student._id || student.id })
-      });
-      if (res.ok) {
-        showToast(`Device reset for ${student.name}`, 'success');
-        loadStudents();
-      } else {
-        showToast('Failed to reset device', 'error');
-      }
-    } catch (err) {
-      showToast('Error resetting device', 'error');
+      await studentsAPI.resetDevice(student._id || student.id);
+      showToast(`Device reset for ${student.name}`, 'success');
+      loadStudents();
+    } catch (err: any) {
+      showToast(err.message || 'Error resetting device', 'error');
     } finally {
       setLoading(false);
     }
