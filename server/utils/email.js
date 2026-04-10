@@ -136,5 +136,23 @@ export const templates = {
         <p>Best Regards,<br>Security Team, Aone Target</p>
       </div>
     `
+  }),
+  passwordReset: (name, resetUrl) => ({
+    subject: 'Password Reset Request - Aone Target Institute',
+    html: `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #ddd; padding: 20px; border-radius: 10px; border-top: 5px solid #1A237E;">
+        <h2 style="color: #1A237E; text-align: center;">Reset Your Password</h2>
+        <p>Hello ${name},</p>
+        <p>We received a request to reset your password for your Aone Target account. Click the button below to choose a new password:</p>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${resetUrl}" style="background-color: #1A237E; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Reset Password</a>
+        </div>
+        <p>This link will expire in 1 hour for security reasons.</p>
+        <p>If you did not request a password reset, you can safely ignore this email. Your password will remain unchanged.</p>
+        <p style="font-size: 12px; color: #777;">If the button doesn't work, copy and paste this link into your browser:<br>${resetUrl}</p>
+        <br>
+        <p>Best Regards,<br>Team Aone Target</p>
+      </div>
+    `
   })
 };

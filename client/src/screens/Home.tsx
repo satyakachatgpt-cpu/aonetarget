@@ -31,15 +31,12 @@ import { getImageUrl, getPdfUrl, isLiveUrl, getEmbedUrl } from '../lib/utils';
 
 // ━━━ Shared Live Status Helpers (same as LiveClasses.tsx) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
-  const raw = lc.status as string;
-  if (raw === 'ended' || raw === 'completed') return 'ended';
-  const isoStr = lc.scheduledTime ? lc.scheduledTime.replace(' ', 'T') : (lc.startTime || '');
-  if (!isoStr) return raw === 'live' ? 'live' : 'upcoming';
-  const scheduled = new Date(isoStr);
-  if (isNaN(scheduled.getTime())) return raw === 'live' ? 'live' : 'upcoming';
-  if (scheduled <= new Date()) return 'live';
+  const raw = (lc.streamStatus || lc.status || 'upcoming').toLowerCase();
+  if (['ended', 'completed', 'inactive'].includes(raw)) return 'ended';
+  if (raw === 'live') return 'live';
   return 'upcoming';
 }
+
 
 function resolveStreamUrl(lc: any): string {
   return lc.streamId || lc.videoUrl || lc.url || lc.meetingLink || lc.link || '';
@@ -428,6 +425,7 @@ const Home: React.FC = () => {
   }, []);
 
   const handleJoinLiveClass = (lc: any) => {
+    if (computeEffectiveStatus(lc) !== 'live') return;
     const url = resolveStreamUrl(lc);
     if (!url) { navigate('/live-classes'); return; }
     
@@ -660,96 +658,148 @@ const Home: React.FC = () => {
           )}
         </section>
 
-        {liveClasses.length > 0 && (
-          <section className="animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-            <div className="flex justify-between items-center mb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-1.5 h-7 bg-gradient-to-b from-accent to-accent-600 rounded-full shadow-sm"></div>
-                <div>
-                  <h2 className="section-title">Live Classes</h2>
-                  <p className="section-subtitle">Join upcoming sessions</p>
-                </div>
-              </div>
-              <button onClick={() => navigate('/live-classes')} className="btn-primary text-xs px-4 py-1.5 flex items-center gap-1 hover:gap-2 transition-all duration-200 active:scale-[0.97]">
-                View All
-                <span className="material-symbols-rounded text-sm">arrow_forward</span>
-              </button>
-            </div>
-            <div className="space-y-2.5">
-              {liveClasses.slice(0, 4).map((lc: any, i: number) => {
-                const effectiveStatus = computeEffectiveStatus(lc);
-                const isEnded = effectiveStatus === 'ended';
-                const isLiveNow = effectiveStatus === 'live';
-                const scheduledISO = lc.scheduledTime ? lc.scheduledTime.replace(' ', 'T') : (lc.startTime || '');
-                const streamUrl = resolveStreamUrl(lc);
 
-                // Inline countdown per card
-                const LiveCardCountdown = () => {
-                  const secs = useHomeLiveCountdown(scheduledISO || undefined);
-                  if (secs === null || secs <= 0) return null;
-                  const FIVE = 5 * 60;
-                  if (secs > FIVE) {
-                    const d = new Date(scheduledISO);
-                    return <span>{isNaN(d.getTime()) ? 'Soon' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>;
-                  }
-                  const mm = String(Math.floor(secs / 60)).padStart(2, '0');
-                  const ss = String(secs % 60).padStart(2, '0');
-                  return `${mm}:${ss}`;
-                };
+        {liveClasses.length > 0 && (() => {
+          const ongoing = liveClasses.filter(lc => computeEffectiveStatus(lc) === 'live');
+          const upcoming = liveClasses.filter(lc => computeEffectiveStatus(lc) === 'upcoming');
+          
+          if (ongoing.length === 0 && upcoming.length === 0) return null;
 
-                const countdownValue = <LiveCardCountdown />;
-
-                return (
-                  <div key={lc._id || lc.id || i} className="card-premium p-3 rounded-2xl border border-gray-100/50 flex gap-3 items-center hover:-translate-y-0.5 transition-all duration-200 group">
-                    <div className={`w-14 h-14 bg-gradient-to-br ${isEnded ? 'from-gray-400 to-gray-500' : isLiveNow ? 'from-accent to-accent-600' : 'from-orange-400 to-red-500'} rounded-2xl flex items-center justify-center shrink-0 relative shadow-button`}>
-                      <span className="material-symbols-rounded text-white text-2xl">sensors</span>
-                      {isLiveNow && <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-sm text-gray-800 truncate">{lc.title || lc.name || 'Live Class'}</h4>
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <span className="text-[11px] text-gray-400 flex items-center gap-1">
-                          <span className="material-symbols-rounded text-[12px]">person</span>
-                          {lc.teacherName || lc.instructor || 'Instructor'}
-                        </span>
-                        <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                        <span className="text-[11px] text-gray-400 flex items-center gap-1">
-                          <span className="material-symbols-rounded text-[12px]">schedule</span>
-                          {isEnded ? 'Ended' : isLiveNow ? 'Live Now' : <LiveCardCountdown />}
-                        </span>
+          return (
+            <div className="space-y-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
+              {/* ONGOINING LIVE SESSIONS */}
+              {ongoing.length > 0 && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-2 h-8 bg-red-600 rounded-full shadow-[0_0_12px_rgba(220,38,38,0.4)] animate-pulse"></div>
+                      <div>
+                        <h2 className="text-[17px] font-black text-gray-900 uppercase tracking-tight">Ongoing Live Session</h2>
+                        <p className="text-[11px] text-red-500 font-bold uppercase tracking-widest flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-ping"></span>
+                          Live Now
+                        </p>
                       </div>
                     </div>
-                    {isEnded ? (
-                      <div className="bg-gray-200 text-gray-400 cursor-not-allowed text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 shrink-0">
-                        <span className="material-symbols-rounded text-[14px]">event_busy</span>
-                        Ended
-                      </div>
-                    ) : isLiveNow ? (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleJoinLiveClass(lc); }}
-                        className="btn-accent text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 active:scale-[0.97] transition-all duration-200 shrink-0 shadow-button hover:shadow-lg"
-                      >
-                        <span className="material-symbols-rounded text-[14px]">
-                          videocam
-                        </span>
-                        Join
-                      </button>
-                    ) : (
-                      <button
-                        disabled
-                        className="bg-orange-50 text-orange-500/60 text-xs px-3 py-2.5 rounded-xl border border-orange-100 shrink-0 font-bold flex items-center gap-1.5 whitespace-nowrap cursor-not-allowed"
-                      >
-                        <span className="material-symbols-rounded text-[14px] animate-pulse">timer</span>
-                        {countdownValue || 'Soon'}
-                      </button>
-                    )}
                   </div>
-                );
-              })}
+                  <div className="space-y-3">
+                    {ongoing.slice(0, 2).map((lc: any, i: number) => {
+                      return (
+                        <div key={lc._id || lc.id || i} className="card-premium p-4 rounded-[2rem] border-2 border-red-100 bg-red-50/30 flex flex-col gap-3 shadow-xl shadow-red-500/5 relative overflow-hidden group">
+                           <div className="absolute -top-12 -right-12 w-24 h-24 bg-red-500/5 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
+                           <div className="flex gap-4 items-center relative z-10">
+                            <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-red-600 rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-red-500/20 relative">
+                              <span className="material-symbols-rounded text-white text-2xl">sensors</span>
+                              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-bold text-base text-gray-900 truncate mb-1">{lc.title || lc.name || 'Live Class'}</h4>
+                              <div className="flex items-center gap-3">
+                                <span className="text-[12px] text-gray-500 font-bold flex items-center gap-1.5">
+                                  <span className="material-symbols-rounded text-[16px] text-red-400">person</span>
+                                  {lc.teacherName || lc.instructor || 'Instructor'}
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleJoinLiveClass(lc); }}
+                              className="bg-red-600 text-white text-[13px] px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-red-700 transition-all shadow-lg shadow-red-600/20 active:scale-[0.97]"
+                            >
+                              <span className="material-symbols-rounded text-[18px]">videocam</span>
+                              JOIN
+                            </button>
+                          </div>
+                          
+                          {(lc.pdf1 || lc.pdf2 || lc.studyMaterial) && (
+                            <div className="flex flex-wrap gap-2 pt-3 border-t border-red-100/50 relative z-10">
+                              {lc.pdf1 && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.pdf1))}&title=${encodeURIComponent('PDF 1')}`, '_blank'); }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 text-red-600 text-[10px] font-bold border border-red-100 hover:bg-white transition-all shadow-sm"
+                                >
+                                  <span className="material-symbols-rounded text-sm">picture_as_pdf</span>
+                                  PDF 1
+                                </button>
+                              )}
+                              {lc.studyMaterial && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.studyMaterial))}&title=${encodeURIComponent('Study Material')}`, '_blank'); }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 text-blue-600 text-[10px] font-bold border border-blue-100 hover:bg-white transition-all shadow-sm"
+                                >
+                                  <span className="material-symbols-rounded text-sm">auto_stories</span>
+                                  Material
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
 
+              {/* UPCOMING SESSIONS */}
+              {upcoming.length > 0 && (
+                <section>
+                  <div className="flex justify-between items-center mb-4">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-1.5 h-7 bg-gradient-to-b from-blue-500 to-blue-700 rounded-full shadow-sm"></div>
+                      <div>
+                        <h2 className="text-[17px] font-black text-gray-900 uppercase tracking-tight">Scheduled Sessions</h2>
+                        <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest">Upcoming Classes</p>
+                      </div>
+                    </div>
+                    <button onClick={() => navigate('/live-classes')} className="text-[11px] font-black text-blue-600 uppercase tracking-widest hover:underline">View All</button>
+                  </div>
+                  <div className="space-y-3">
+                    {upcoming.slice(0, 3).map((lc: any, i: number) => {
+                      const scheduledISO = lc.scheduledTime ? lc.scheduledTime.replace(' ', 'T') : (lc.startTime || '');
+                      const LiveCardCountdown = () => {
+                        const secs = useHomeLiveCountdown(scheduledISO || undefined);
+                        if (secs === null || secs <= 0) return <span>Upcoming</span>;
+                        const mm = String(Math.floor(secs / 60)).padStart(2, '0');
+                        const ss = String(secs % 60).padStart(2, '0');
+                        return <span>Starts in {mm}:{ss}</span>;
+                      };
+
+                      return (
+                        <div key={lc._id || lc.id || i} className="card-premium p-3.5 rounded-2xl border border-gray-100 bg-white flex flex-col gap-3 hover:-translate-y-0.5 transition-all duration-200">
+                          <div className="flex gap-4 items-center">
+                            <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center shrink-0 border border-gray-100">
+                              <span className="material-symbols-rounded text-gray-400 text-xl">calendar_today</span>
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <h4 className="font-bold text-sm text-gray-800 truncate mb-1">{lc.title || lc.name || 'Live Class'}</h4>
+                              <div className="flex items-center gap-3">
+                                <span className="text-[11px] text-gray-400 font-bold flex items-center gap-1.5">
+                                  <span className="material-symbols-rounded text-[14px]">person</span>
+                                  {lc.teacherName || lc.instructor}
+                                </span>
+                                <span className="w-1 h-1 rounded-full bg-gray-200"></span>
+                                <span className="text-[11px] text-blue-500 font-black uppercase tracking-widest">
+                                  <LiveCardCountdown />
+                                </span>
+                              </div>
+                            </div>
+                            <div className="bg-blue-50 text-blue-600 text-[10px] px-3 py-1.5 rounded-lg font-black uppercase tracking-widest border border-blue-100">
+                              Scheduled
+                            </div>
+                          </div>
+                          {(lc.pdf1 || lc.pdf2) && (
+                            <div className="flex gap-2 pt-2 border-t border-gray-50">
+                               {lc.pdf1 && <div className="text-[9px] font-bold text-gray-400 flex items-center gap-1"><span className="material-symbols-rounded text-[12px]">description</span> PDF Attached</div>}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
             </div>
-          </section>
-        )}
+          );
+        })()}
 
         {testSeries.length > 0 && (
           <section className="animate-fade-in-up" style={{ animationDelay: '0.25s' }}>

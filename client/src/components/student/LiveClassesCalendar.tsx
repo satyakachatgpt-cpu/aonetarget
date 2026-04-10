@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { isLiveUrl } from '../../lib/utils';
 
 interface LiveClass {
@@ -20,7 +21,11 @@ interface LiveClass {
   streamId?: string;
   videoUrl?: string;
   url?: string;
+  pdf1?: string;
+  pdf2?: string;
+  studyMaterial?: string;
 }
+
 
 interface Props {
   studentId: string;
@@ -73,7 +78,7 @@ const CountdownBadge: React.FC<{ scheduledTime: string }> = ({ scheduledTime }) 
       <span className="material-symbols-rounded text-[18px]">
         {isClose ? 'timer' : 'videocam'}
       </span>
-      {isClose ? `${mm}:${ss}` : 'JOIN NOW'}
+      {isClose ? `${mm}:${ss}` : 'UPCOMING'}
     </button>
   );
 };
@@ -83,15 +88,26 @@ function resolveStreamUrl(cls: any): string {
   return cls.streamId || cls.videoUrl || cls.url || cls.meetingLink || cls.link || '';
 }
 
-function handleSmartJoin(cls: any, onJoinLive?: (cls: any) => void) {
+function handleSmartJoin(cls: any, onJoinLive?: (cls: any) => void, navigate?: any) {
+  if (computeStatus(cls) !== 'live') return;
   const url = resolveStreamUrl(cls);
   if (!url) return;
 
-  if (isLiveUrl(url)) {
-    // YouTube live stream → open directly in new tab
-    window.open(url, '_blank');
+  const isYT = url.includes('youtube.com') || url.includes('youtu.be');
+
+  if (isYT && navigate) {
+    const videoId = cls.id || cls._id || 'live';
+    navigate(`/watch/${videoId}`, {
+      state: {
+        streamUrl: url,
+        title: cls.title,
+        id: videoId,
+        platform: 'youtube',
+        isLive: true
+      }
+    });
   } else if (onJoinLive) {
-    // Normal video → delegate to parent (custom player)
+    // Normal video or other player → delegate to parent
     onJoinLive({ ...cls, url });
   } else {
     window.open(url, '_blank');
@@ -108,20 +124,16 @@ function getScheduledISO(cls: any): string {
 
 // ─── Helper: compute live status client-side ──────────────────────────────────
 function computeStatus(cls: any): 'live' | 'upcoming' | 'ended' | 'scheduled' {
-  const raw = cls.status as string;
+  const raw = (cls.streamStatus || cls.status || 'upcoming').toLowerCase();
+  if (['ended', 'completed', 'inactive'].includes(raw)) return 'ended';
   if (raw === 'live') return 'live';
-  if (raw === 'ended' || raw === 'completed') return 'ended';
-
-  const isoStr = getScheduledISO(cls);
-  if (!isoStr) return 'upcoming';
-  const scheduled = new Date(isoStr);
-  if (isNaN(scheduled.getTime())) return 'upcoming';
-  if (scheduled <= new Date()) return 'live'; // auto-promote client-side
   return 'upcoming';
 }
 
+
 // ─── Main Component ───────────────────────────────────────────────────────────
 const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, onJoinLive }) => {
+  const navigate = useNavigate();
   const [liveClasses, setLiveClasses] = useState<LiveClass[]>([]);
   const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -133,11 +145,7 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
     loadLiveClasses();
   }, [studentId, courseId]);
 
-  // Refresh every 30s so client-side auto-promotion works
-  useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 30000);
-    return () => clearInterval(interval);
-  }, []);
+
 
   const loadLiveClasses = async () => {
     try {
@@ -274,54 +282,92 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
               const streamUrl = resolveStreamUrl(cls);
 
               return (
-                <div key={cls.id || i} className="card-premium p-4 rounded-[24px] border border-gray-100 flex gap-4 items-center hover:-translate-y-1 transition-all duration-300 group shadow-sm bg-white hover:shadow-card">
-                  <div className={`w-14 h-14 bg-gradient-to-br ${isEnded ? 'from-gray-400 to-gray-500' : isLiveNow ? 'from-red-500 to-red-600' : 'from-orange-400 to-red-500'} rounded-2xl flex items-center justify-center shrink-0 relative shadow-lg`}>
-                    <span className="material-symbols-rounded text-white text-[28px]">sensors</span>
-                    {isLiveNow && (
-                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse shadow-sm"></span>
-                    )}
-                  </div>
+                <div key={cls.id || i} className="card-premium p-4 rounded-[24px] border border-gray-100 flex flex-col gap-4 hover:-translate-y-1 transition-all duration-300 group shadow-sm bg-white hover:shadow-card">
+                  <div className="flex gap-4 items-center">
+                    <div className={`w-14 h-14 bg-gradient-to-br ${isEnded ? 'from-gray-400 to-gray-500' : isLiveNow ? 'from-red-500 to-red-600' : 'from-orange-400 to-red-500'} rounded-2xl flex items-center justify-center shrink-0 relative shadow-lg`}>
+                      <span className="material-symbols-rounded text-white text-[28px]">sensors</span>
+                      {isLiveNow && (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse shadow-sm"></span>
+                      )}
+                    </div>
 
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-bold text-[#1a1c1e] text-[16px] tracking-tight truncate group-hover:text-red-600 transition-colors">{cls.title}</h4>
-                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
-                      <span className="text-[12px] text-gray-500 font-medium flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-[18px]">person</span>
-                        {cls.instructor || 'Instructor'}
-                      </span>
-                      <span className="w-1 h-1 rounded-full bg-gray-300 shrink-0"></span>
-                      <span className="text-[12px] text-gray-500 font-medium flex items-center gap-1.5">
-                        <span className="material-symbols-outlined text-[18px]">schedule</span>
-                        {isLiveNow ? 'Live Now' : isEnded ? 'Ended' : formatTime(cls.startTime) || 'Upcoming'}
-                      </span>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-bold text-[#1a1c1e] text-[16px] tracking-tight truncate group-hover:text-red-600 transition-colors">{cls.title}</h4>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5">
+                        <span className="text-[12px] text-gray-500 font-medium flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-[18px]">person</span>
+                          {cls.instructor || 'Instructor'}
+                        </span>
+                        <span className="w-1 h-1 rounded-full bg-gray-300 shrink-0"></span>
+                        <span className="text-[12px] text-gray-500 font-medium flex items-center gap-1.5">
+                          <span className="material-symbols-outlined text-[18px]">schedule</span>
+                          {isLiveNow ? 'Live Now' : isEnded ? 'Ended' : formatTime(cls.startTime) || 'Upcoming'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex shrink-0">
+                      {isEnded ? (
+                        <button
+                          disabled
+                          className="bg-gray-100 text-gray-400 text-[13px] px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 cursor-not-allowed border border-gray-200"
+                        >
+                          <span className="material-symbols-rounded text-[18px]">event_busy</span>
+                          ENDED
+                        </button>
+                      ) : isLiveNow ? (
+                        <button
+                          onClick={() => handleSmartJoin(cls, onJoinLive, navigate)}
+                          className="bg-red-600 text-white text-[13px] px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-red-700 transition-all shadow-lg active:scale-[0.97]"
+                        >
+                          <span className="material-symbols-rounded text-[18px]">videocam</span>
+                          JOIN NOW
+                        </button>
+                      ) : scheduledISO ? (
+                        <CountdownBadge scheduledTime={scheduledISO} />
+                      ) : (
+                        <div className="bg-gray-50 text-gray-400 text-[11px] px-4 py-2.5 rounded-xl font-bold uppercase tracking-widest border border-gray-100">
+                          Upcoming
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  <div className="flex shrink-0">
-                    {isEnded ? (
-                      <div className="bg-gray-50 text-gray-400 text-[11px] px-4 py-2.5 rounded-xl font-bold uppercase tracking-widest border border-gray-100">
-                        Ended
-                      </div>
-                    ) : isLiveNow ? (
-                      <button
-                        onClick={() => handleSmartJoin(cls, onJoinLive)}
-                        className="bg-red-600 hover:bg-red-700 text-white text-[13px] px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 active:scale-95 transition-all shadow-lg shadow-red-100"
-                      >
-                        <span className="material-symbols-rounded text-[18px]">
-                          {streamUrl && isLiveUrl(streamUrl) ? 'open_in_new' : 'videocam'}
-                        </span>
-                        JOIN NOW
-                      </button>
-                    ) : scheduledISO ? (
-                      <CountdownBadge scheduledTime={scheduledISO} />
-                    ) : (
-                      <div className="bg-gray-50 text-gray-400 text-[11px] px-4 py-2.5 rounded-xl font-bold uppercase tracking-widest border border-gray-100">
-                        Upcoming
-                      </div>
-                    )}
-                  </div>
+                  {/* Attachments for Calendar List View */}
+                  {(cls.pdf1 || cls.pdf2 || cls.studyMaterial) && (
+                    <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-50">
+                      {cls.pdf1 && (
+                        <button
+                          onClick={() => window.open(cls.pdf1, '_blank')}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-[10px] font-bold hover:bg-red-100 transition-all"
+                        >
+                          <span className="material-symbols-rounded text-sm">picture_as_pdf</span>
+                          PDF 1
+                        </button>
+                      )}
+                      {cls.pdf2 && (
+                        <button
+                          onClick={() => window.open(cls.pdf2, '_blank')}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-[10px] font-bold hover:bg-red-100 transition-all"
+                        >
+                          <span className="material-symbols-rounded text-sm">picture_as_pdf</span>
+                          PDF 2
+                        </button>
+                      )}
+                      {cls.studyMaterial && (
+                        <button
+                          onClick={() => window.open(cls.studyMaterial, '_blank')}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-[10px] font-bold hover:bg-blue-100 transition-all"
+                        >
+                          <span className="material-symbols-rounded text-sm">auto_stories</span>
+                          Material
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
+
             })
           )}
         </div>
@@ -372,7 +418,7 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
                               'bg-blue-100 text-blue-700'
                             }`}
                             title={`${cls.title} - ${formatTime(cls.startTime)}`}
-                            onClick={() => handleSmartJoin(cls, onJoinLive)}
+                            onClick={() => handleSmartJoin(cls, onJoinLive, navigate)}
                           >
                             {formatTime(cls.startTime)}
                           </div>

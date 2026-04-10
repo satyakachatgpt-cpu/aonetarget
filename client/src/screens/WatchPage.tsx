@@ -5,6 +5,13 @@ import Playlist from '../components/Playlist';
 import { getVideoUrl, toYouTubeEmbed, getEmbedUrl } from '../lib/utils';
 import { curriculumAPI } from '../services/apiClient';
 
+function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
+  const raw = (lc.streamStatus || lc.status || 'upcoming').toLowerCase();
+  if (['ended', 'completed', 'inactive'].includes(raw)) return 'ended';
+  if (raw === 'live') return 'live';
+  return 'upcoming';
+}
+
 const WatchPage: React.FC = () => {
   const { batchId, videoId } = useParams<{ batchId: string; videoId: string }>();
   const navigate = useNavigate();
@@ -96,6 +103,33 @@ const WatchPage: React.FC = () => {
 
   if (!currentVideo) return null;
 
+  const isUpcomingStream = currentVideo.contentType === 'live_stream' && computeEffectiveStatus(currentVideo) !== 'live';
+
+  if (isUpcomingStream) {
+    return (
+      <div className="h-[100dvh] bg-[#000000] flex flex-col items-center justify-center overflow-hidden font-outfit relative">
+        <div 
+          onPointerDown={(e) => {
+            e.preventDefault(); e.stopPropagation();
+            const state = window.history.state;
+            if (state && state.idx > 0) navigate(-1);
+            else navigate('/live-classes', { replace: true });
+          }}
+          className="fixed top-0 left-0 w-24 h-24 z-[9999999] cursor-pointer group flex items-start justify-start p-6 active:scale-90 transition-all"
+        >
+          <div className="w-10 h-10 bg-white/10 hover:bg-red-600/80 backdrop-blur-3xl border border-white/20 rounded-full text-white flex items-center justify-center shadow-2xl transition-all duration-200">
+            <span className="material-symbols-rounded text-2xl font-bold">close</span>
+          </div>
+        </div>
+        <div className="relative w-24 h-24 mb-6 bg-white/5 rounded-full flex items-center justify-center">
+           <span className="material-symbols-rounded text-5xl text-white/40">hourglass_empty</span>
+        </div>
+        <h2 className="text-white text-xl font-black uppercase tracking-widest mb-2 text-center max-w-sm">{currentVideo.title}</h2>
+        <p className="text-white/40 text-xs font-bold uppercase tracking-[0.2em] text-center max-w-xs">This live session has not started yet. Please wait for the instructor to begin.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="h-[100dvh] bg-[#000000] flex flex-col overflow-hidden font-outfit relative">
       
@@ -105,14 +139,12 @@ const WatchPage: React.FC = () => {
           e.preventDefault();
           e.stopPropagation();
           // Navigate back instead of closing the tab
-          navigate(-1);
-          
-          // Hard-Fail-safe fallback if navigation takes too long or fails
-          setTimeout(() => {
-            if (window.location.hash.includes('/watch/')) {
-              window.location.hash = '/#/my-courses';
-            }
-          }, 100);
+          const state = window.history.state;
+          if (state && state.idx > 0) {
+            navigate(-1);
+          } else {
+            navigate('/live-classes', { replace: true });
+          }
         }}
         className="fixed top-0 left-0 w-24 h-24 z-[9999999] cursor-pointer group flex items-start justify-start p-6 active:scale-90 transition-all"
         style={{ touchAction: 'none' }}
@@ -125,7 +157,11 @@ const WatchPage: React.FC = () => {
       {/* HEADER: PORTRAIT ONLY */}
       {!isLandscape && (
         <div className="flex-shrink-0 z-50 bg-[#000000] border-b border-white/5 flex items-center justify-between px-6 py-4">
-          <button onClick={() => navigate(-1)} className="w-10 h-10 flex items-center justify-center rounded-2xl bg-white/5 text-white active:scale-90 transition-all border border-white/10">
+          <button onClick={() => {
+            const state = window.history.state;
+            if (state && state.idx > 0) navigate(-1);
+            else navigate('/live-classes', { replace: true });
+          }} className="w-10 h-10 flex items-center justify-center rounded-2xl bg-white/5 text-white active:scale-90 transition-all border border-white/10">
             <span className="material-symbols-rounded text-xl">arrow_back_ios_new</span>
           </button>
           <div className="flex flex-col items-center">
@@ -149,7 +185,11 @@ const WatchPage: React.FC = () => {
             src={getEmbedUrl(currentVideo.youtubeUrl || currentVideo.videoUrl || currentVideo.url || currentVideo.embedUrl || '')}
             title={currentVideo.title}
             onEnded={playNext}
-            onClose={() => navigate(-1)}
+            onClose={() => {
+              const state = window.history.state;
+              if (state && state.idx > 0) navigate(-1);
+              else navigate('/live-classes', { replace: true });
+            }}
             className="w-full h-full"
           />
         </div>

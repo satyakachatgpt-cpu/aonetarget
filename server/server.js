@@ -15,6 +15,8 @@ import rateLimit from 'express-rate-limit';
 import dns from 'dns';
 import { uploadAPK } from './middleware/upload.middleware.js';
 import uploadV2Routes from './routes/upload.routes.js';
+import authRouter from './routes/auth.routes.js';
+import courseRouter from './routes/course.routes.js';
 dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']); // Enabling hardcoded DNS to correctly resolve Atlas SRV records on some networks
 if (dns.setDefaultResultOrder) dns.setDefaultResultOrder('ipv4first');
 
@@ -24,58 +26,14 @@ import {
   generateSignedUrl, verifySignedUrl
 } from './middleware/auth.js';
 import compression from 'compression';
-import { publicLimiter, authLimiter, securityHeaders, sanitizeInput } from './middleware/security.js';
+import { publicLimiter, authLimiter, securityHeaders, sanitizeInput, bruteForceGate, recordAttempt, GENERIC_AUTH_ERROR } from './middleware/security.js';
 import { sendEmail, templates } from './utils/email.js';
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from 'docx';
 import bcrypt from 'bcrypt';
+import { normalizeId, calculatePriceBreakdown } from './utils/helpers.js';
+import { findCourse, getCourseIdVariants, getRelatedCourseIds } from './services/course.service.js';
 
-// Helper to normalize IDs for comparison (handling ObjectId and strings)
-const normalizeId = (id) => {
-  if (!id) return '';
-  if (typeof id === 'object' && id.toString) return id.toString().trim();
-  return String(id).trim();
-};
-
-const calculatePriceBreakdown = (course, coupon = null) => {
-  const basePrice = parseFloat(course.price) || 0;
-  const gstIncluded = course.settings?.gstIncluded || false;
-  const gstPercentage = parseFloat(course.settings?.gstPercentage) || 0;
-
-  let gstAmount = 0;
-  if (gstIncluded && gstPercentage > 0) {
-    gstAmount = (basePrice * gstPercentage) / 100;
-  }
-
-  let discountAmount = 0;
-  if (coupon && coupon.status === 'active') {
-    // Check minPurchase if exists
-    const minPurchase = parseFloat(coupon.minPurchase || 0);
-    if (basePrice >= minPurchase) {
-      if (coupon.discountType === 'percentage' || coupon.type === 'percentage') {
-        const val = parseFloat(coupon.discountValue || coupon.value || 0);
-        discountAmount = (basePrice * val) / 100;
-        // Check maxDiscount if exists
-        const maxDiscount = parseFloat(coupon.maxDiscount || 0);
-        if (maxDiscount > 0 && discountAmount > maxDiscount) {
-          discountAmount = maxDiscount;
-        }
-      } else {
-        discountAmount = parseFloat(coupon.discountValue || coupon.value || 0);
-      }
-    }
-  }
-
-  const totalAmount = Math.max(0, basePrice + gstAmount - discountAmount);
-
-  return {
-    basePrice,
-    gstAmount,
-    gstPercentage,
-    discountAmount,
-    totalAmount,
-    couponCode: coupon?.code || null
-  };
-};
+// Core identity and pricing helpers moved to ./utils/helpers.js
 
 
 
@@ -129,6 +87,8 @@ app.use('/attached_assets', (req, res, next) => {
 });
 
 app.use('/api', uploadV2Routes);
+app.use('/api', authRouter);
+app.use('/api', courseRouter);
 
 // Routes
 app.get('/api/secure-video/:filename', authMiddleware, async (req, res) => {
@@ -286,6 +246,15 @@ const connectDB = async () => {
       await db.collection('categories').createIndex({ isActive: 1 });
       await db.collection('banners').createIndex({ isActive: 1 });
       await db.collection('posts').createIndex({ status: 1 });
+
+      // 🛡️ Phase 1 Security: Auth Attempts & Refresh Token Indexes
+      await db.collection('auth_attempts').createIndex({ identifier: 1, ip: 1 }, { unique: true });
+      await db.collection('auth_attempts').createIndex({ lockUntil: 1 }, { expireAfterSeconds: 0 }); // Auto-delete after lock expires
+      await db.collection('refresh_tokens').createIndex({ tokenHash: 1 }, { unique: true });
+      await db.collection('refresh_tokens').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }); // Auto-delete expired sessions
+      await db.collection('password_resets').createIndex({ tokenHash: 1 }, { unique: true });
+      await db.collection('password_resets').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
       console.log('MongoDB indexes ensured');
 
       // Batch Sorting Migration: Convert string values to numbers
@@ -731,165 +700,7 @@ app.post('/api/upload/apk', uploadAPK.single('apk'), (req, res) => {
 });
 
 // Routes for Courses
-app.get('/api/courses', async (req, res) => {
-  try {
-    const filter = {};
-    if (req.query.examType) filter.examType = req.query.examType;
-    if (req.query.contentType) filter.contentType = req.query.contentType;
-    if (req.query.subject) filter.subject = req.query.subject;
-    if (req.query.boardType) filter.boardType = req.query.boardType;
-    if (req.query.categoryId) filter.categoryId = req.query.categoryId;
-    if (req.query.subcategoryId) filter.subcategoryId = req.query.subcategoryId;
-    if (req.query.category) {
-      filter.category = { $regex: req.query.category, $options: 'i' };
-    }
-
-    if (req.query.search) {
-      filter.$or = [
-        { name: { $regex: req.query.search, $options: 'i' } },
-        { title: { $regex: req.query.search, $options: 'i' } }
-      ];
-    }
-
-    const limit = parseInt(req.query.limit);
-    const skip = parseInt(req.query.skip);
-    const page = parseInt(req.query.page) || 1;
-
-    let computedSkip = 0;
-    if (!isNaN(skip)) {
-      computedSkip = skip;
-    } else if (!isNaN(limit)) {
-      computedSkip = (page - 1) * limit;
-    }
-
-    let query = Course.find(filter).sort({ 'settings.sortingOrder': 1, createdAt: -1 });
-
-    const aggregation = [
-      { $match: filter },
-      {
-        $lookup: {
-          from: 'videos', // Assuming collection name is lowercase plural
-          let: { cId: '$id', cStrId: { $toString: '$_id' } },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $or: [
-                    { $eq: ['$courseId', '$$cId'] },
-                    { $eq: ['$courseId', '$$cStrId'] }
-                  ]
-                }
-              }
-            },
-            { $count: 'count' }
-          ],
-          as: 'videoCount'
-        }
-      },
-      {
-        $addFields: {
-          id: { $ifNull: ['$id', { $toString: '$_id' }] },
-          lessons: { $ifNull: [{ $arrayElemAt: ['$videoCount.count', 0] }, 0] },
-          videoCount: { $ifNull: [{ $arrayElemAt: ['$videoCount.count', 0] }, 0] },
-          sortOrder: {
-            $cond: {
-              if: { $or: [{ $eq: ['$settings.sortingOrder', 0] }, { $not: ['$settings.sortingOrder'] }] },
-              then: 1000,
-              else: '$settings.sortingOrder'
-            }
-          }
-        }
-      },
-      {
-        $project: {
-          videoCount: 0,
-          description: 0,
-          longDescription: 0,
-          syllabus: 0,
-          curriculum: 0
-        }
-      },
-      { $sort: { sortOrder: 1, createdAt: -1 } }
-    ];
-
-    if (!isNaN(limit) && limit > 0) {
-      const skipCount = computedSkip;
-      const totalCourses = await db.collection('courses').countDocuments(filter);
-      const coursesWithCounts = await db.collection('courses').aggregate([
-        ...aggregation,
-        { $skip: skipCount },
-        { $limit: limit }
-      ]).toArray();
-
-      res.json({
-        courses: coursesWithCounts,
-        total: totalCourses,
-        totalCourses,
-        currentPage: page,
-        totalPages: Math.ceil(totalCourses / limit)
-      });
-    } else {
-      const coursesWithCounts = await db.collection('courses').aggregate(aggregation).toArray();
-      res.json(coursesWithCounts);
-    }
-  } catch (error) {
-    console.error('Error fetching courses:', error);
-    res.status(500).json({ error: 'Failed to fetch courses' });
-  }
-});
-
-app.post('/api/courses', async (req, res) => {
-  try {
-    const courseData = req.body;
-    if (courseData.settings && typeof courseData.settings.sortingOrder === 'string') {
-      courseData.settings.sortingOrder = parseFloat(courseData.settings.sortingOrder) || 9999;
-    }
-    const course = new Course(courseData);
-    await course.save();
-
-    // Sync Demo Video
-    if (course.demoVideo) {
-      await syncDemoVideoWithFreeContent(course, course._id.toString());
-    }
-
-    res.status(201).json(course);
-  } catch (error) {
-    console.error('Create course error:', error);
-    res.status(500).json({ error: 'Failed to create course: ' + error.message });
-  }
-});
-
-app.put('/api/courses', async (req, res) => {
-  try {
-    const { updates } = req.body;
-    if (!Array.isArray(updates)) return res.status(400).json({ error: 'Updates must be an array' });
-
-    for (const update of updates) {
-      const { id, ...data } = update;
-      const { _id, ...updateData } = data;
-      let filter = { id: id };
-      if (ObjectId.isValid(id)) filter = { _id: new ObjectId(id) };
-      await db.collection('courses').updateOne(
-        filter,
-        { $set: { ...updateData, updatedAt: new Date().toISOString() } }
-      );
-    }
-    res.json({ success: true, message: `Updated ${updates.length} courses` });
-  } catch (error) {
-    console.error('Bulk update error:', error);
-    res.status(500).json({ error: 'Failed to bulk update courses' });
-  }
-});
-
-// DELETE ALL courses
-app.delete('/api/courses', async (req, res) => {
-  try {
-    const result = await db.collection('courses').deleteMany({});
-    res.json({ success: true, message: `Deleted ${result.deletedCount} courses` });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to delete all courses' });
-  }
-});
+// Course & Package routes moved to ./routes/course.routes.js
 
 // Bulk create courses
 app.post('/api/courses/bulk', async (req, res) => {
@@ -920,113 +731,7 @@ app.get('/api/instructors', async (req, res) => {
 });
 
 // Routes for Course Videos
-// Helper to find a course by any ID (custom or ObjectId)
-async function findCourse(id) {
-  if (!id) return null;
-  const collections = ['courses', 'packages', 'testSeries', 'test-series', 'subcourses', 'tests', 'test_series'];
-
-  for (const colName of collections) {
-    try {
-      // Try custom id or slug first
-      let item = await db.collection(colName).findOne({
-        $or: [
-          { id: id },
-          { slug: id }
-        ]
-      });
-
-      // Try _id as string or ObjectId
-      if (!item) {
-        item = await db.collection(colName).findOne({ _id: id });
-      }
-      if (!item && ObjectId.isValid(id)) {
-        item = await db.collection(colName).findOne({ _id: new ObjectId(id) });
-      }
-
-      if (item) return item;
-    } catch (e) {
-      console.warn(`Search in ${colName} failed:`, e.message);
-    }
-  }
-
-  return null;
-}
-
-// Helper for dynamic stream status calculation
-function calculateStreamStatus(item) {
-  if (['ended', 'inactive', 'completed'].includes(item.status)) return 'ended';
-  if (item.status === 'live') return 'live';
-  return item.status || 'upcoming';
-}
-
-// Function to find all related IDs by name and/or slug/id for content linking
-async function getCourseIdVariants(courseId) {
-  if (!courseId) return [];
-  const course = await findCourse(courseId);
-  return getRelatedCourseIds(course, String(courseId));
-}
-
-async function getRelatedCourseIds(course, originalId) {
-  if (!course) return [originalId].filter(Boolean);
-
-  const relatedIds = new Set([
-    String(course.id || ''),
-    String(course._id || ''),
-    originalId
-  ].filter(Boolean));
-
-  // 1. If this is a package, include its child courses
-  if (course.courses && Array.isArray(course.courses)) {
-    course.courses.forEach(id => relatedIds.add(String(id)));
-  }
-
-  // 2. Identify if this course belongs to any packages
-  try {
-    const currentId = String(course.id || course._id || originalId);
-    const parentPackages = await db.collection('packages').find({
-      $or: [
-        { courses: currentId },
-        { courses: { $elemMatch: { $eq: currentId } } },
-        { courses: { $in: [currentId] } }
-      ]
-    }).project({ _id: 1, id: 1 }).toArray();
-
-    parentPackages.forEach(pkg => {
-      if (pkg._id) relatedIds.add(pkg._id.toString());
-      if (pkg.id) relatedIds.add(pkg.id.toString());
-    });
-  } catch (e) {
-    console.warn('Failed to find parent packages:', e.message);
-  }
-
-  // 3. Also check names or titles for cross-collection linking
-  const names = [course.name, course.title].filter(Boolean);
-  if (names.length > 0) {
-    const allPossibleCollections = ['courses', 'packages', 'subcourses', 'testSeries', 'test-series', 'test_series'];
-    for (const col of allPossibleCollections) {
-      try {
-        const escapedNames = names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-        const matchedItems = await db.collection(col).find({
-          $or: [
-            { name: { $in: names } },
-            { title: { $in: names } },
-            { name: { $regex: new RegExp("^" + escapedNames[0] + "$", "i") } },
-            { title: { $regex: new RegExp("^" + escapedNames[0] + "$", "i") } }
-          ],
-          status: { $nin: ['inactive', 'deleted'] },
-          isPublished: { $ne: false }
-        }).project({ _id: 1, id: 1 }).toArray();
-
-        matchedItems.forEach(item => {
-          if (item._id) relatedIds.add(item._id.toString());
-          if (item.id) relatedIds.add(item.id.toString());
-        });
-      } catch (e) { }
-    }
-  }
-
-  return Array.from(relatedIds);
-}
+// Course identity helpers moved to ./services/course.service.js
 
 // Alias for getRelatedCourseIds used in some parts of the code
 
@@ -1372,13 +1077,20 @@ app.post('/api/courses/:id/videos', async (req, res) => {
     }
     delete video.instructor;
 
-    const result = await db.collection('videos').insertOne(video);
-    res.status(201).json({ _id: result.insertedId, ...video });
+    if (isLiveStream) {
+      // Use central sync helper for live streams
+      const syncResult = await syncLiveStream(null, video, 'create');
+      res.status(201).json({ _id: syncResult._id, ...video });
+    } else {
+      const result = await db.collection('videos').insertOne(video);
+      res.status(201).json({ _id: result.insertedId, ...video });
+    }
   } catch (error) {
     console.error('Video save error:', error);
     res.status(500).json({ error: 'Failed to add video' });
   }
 });
+
 
 app.put('/api/courses/:id/videos/:videoId', async (req, res) => {
   try {
@@ -1435,27 +1147,33 @@ app.put('/api/courses/:id/videos/:videoId', async (req, res) => {
       }
     }
 
-    const result = await db.collection('videos').updateOne(
-      query,
-      { $set: { ...finalUpdate, updatedAt: new Date().toISOString() } }
-    );
-    if (result.matchedCount === 0) return res.status(404).json({ error: 'Video not found' });
-    res.json({ success: true, message: isLiveStream ? 'Live stream updated' : 'Video updated' });
+    if (isLiveStream) {
+      // Use central sync helper for live streams
+      await syncLiveStream(videoId, finalUpdate, 'update');
+      res.json({ success: true, message: 'Live stream updated and synced' });
+    } else {
+      const result = await db.collection('videos').updateOne(
+        query,
+        { $set: { ...finalUpdate, updatedAt: new Date().toISOString() } }
+      );
+      if (result.matchedCount === 0) return res.status(404).json({ error: 'Video not found' });
+      res.json({ success: true, message: 'Video updated' });
+    }
   } catch (error) {
     console.error('Video update error:', error);
     res.status(500).json({ error: 'Failed to update video' });
   }
 });
 
-app.post('/api/live-stream/end/:id', async (req, res) => {
+
+app.post('/api/live-stream/start/:id', async (req, res) => {
   try {
     const id = req.params.id;
     const update = {
-      status: 'ended',
-      streamStatus: 'ended',
-      isLive: false,
-      endedAt: new Date().toISOString(),
-      endTime: new Date().toISOString() // Compatibility with getCalculatedLiveStatus
+      status: 'live',
+      streamStatus: 'live',
+      isLive: true,
+      startedAt: new Date().toISOString()
     };
 
     const query = {
@@ -1465,20 +1183,42 @@ app.post('/api/live-stream/end/:id', async (req, res) => {
       ].filter(v => v.id || v._id)
     };
 
-    // Update all potential collections where the stream might reside
-    await Promise.all([
-      db.collection('videos').updateOne(query, { $set: update }),
-      db.collection('liveVideos').updateOne(query, { $set: update }),
-      db.collection('liveClasses').updateOne(query, { $set: update })
-    ]);
+    // Use central sync helper
+    await syncLiveStream(id, update, 'update');
+    res.json({ success: true, message: 'Live stream started successfully' });
+  } catch (error) {
+    console.error('Start live stream error:', error);
+    res.status(500).json({ error: 'Failed to start live stream' });
+  }
+});
 
+
+app.post('/api/live-stream/end/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const update = {
+      status: 'ended',
+      streamStatus: 'ended',
+      isLive: false,
+      endedAt: new Date().toISOString(),
+      endTime: new Date().toISOString() // Compatibility with legacy getCalculatedLiveStatus if any remains
+    };
+
+    const query = {
+      $or: [
+        { id: id },
+        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
+      ].filter(v => v.id || v._id)
+    };
+
+    // Use central sync helper
+    await syncLiveStream(id, update, 'update');
     res.json({ success: true, message: 'Live stream ended successfully' });
   } catch (error) {
     console.error('End live stream error:', error);
     res.status(500).json({ error: 'Failed to end live stream' });
   }
 });
-
 app.delete('/api/courses/:id/videos/:videoId', async (req, res) => {
   try {
     const course = await findCourse(req.params.id);
@@ -1495,19 +1235,41 @@ app.delete('/api/courses/:id/videos/:videoId', async (req, res) => {
       query.courseId = { $in: [course.id, course._id.toString(), req.params.id] };
     }
 
-    const result = await db.collection('videos').deleteOne(query);
-    if (result.deletedCount === 0) return res.status(404).json({ error: 'Video not found' });
-    res.json({ success: true, message: 'Video deleted' });
+    // Check if this is a live stream by looking it up first (Zero Breaking: safe delete)
+    const video = await db.collection('videos').findOne(query);
+    const isLiveStream = video && (video.contentType === 'live_stream' || video.type === 'live' || video.platform);
+
+    if (isLiveStream) {
+      await syncLiveStream(videoId, null, 'delete');
+      res.json({ success: true, message: 'Live stream deleted across all collections' });
+    } else {
+      const result = await db.collection('videos').deleteOne(query);
+      if (result.deletedCount === 0) return res.status(404).json({ error: 'Video not found' });
+      res.json({ success: true, message: 'Video deleted' });
+    }
   } catch (error) {
+    console.error('Delete video error:', error);
     res.status(500).json({ error: 'Failed to delete video' });
   }
 });
 
+
+
 // Generic routes for Videos
 app.get('/api/videos', async (req, res) => {
   try {
-    const isFree = req.query.isFree === 'true';
-    const query = isFree ? { isFree: true } : {};
+    const { courseId, isFree } = req.query;
+    const query = {};
+    if (courseId) query.courseId = courseId;
+    if (isFree === 'true') {
+      query.$or = [
+        { isFree: true },
+        { isFree: 'true' },
+        { isFree: 1 },
+        { price: 0 },
+        { price: '0' }
+      ];
+    }
     const videos = await db.collection('videos').find(query).toArray();
     res.json(videos);
   } catch (error) {
@@ -1525,10 +1287,11 @@ app.put('/api/videos/:id', async (req, res) => {
       ].filter(v => v.id || v._id)
     };
     const { _id, ...updateData } = req.body;
-    await db.collection('videos').updateOne(query, { $set: updateData });
-    res.json({ success: true });
+    const result = await db.collection('videos').updateOne(query, { $set: updateData });
+    if (result.matchedCount === 0) return res.status(404).json({ error: 'Video not found' });
+    res.json({ success: true, message: 'Video updated' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed' });
+    res.status(500).json({ error: 'Failed to update video' });
   }
 });
 
@@ -1541,10 +1304,11 @@ app.delete('/api/videos/:id', async (req, res) => {
         { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
       ].filter(v => v.id || v._id)
     };
-    await db.collection('videos').deleteOne(query);
-    res.json({ success: true });
+    const result = await db.collection('videos').deleteOne(query);
+    if (result.deletedCount === 0) return res.status(404).json({ error: 'Video not found' });
+    res.json({ success: true, message: 'Video deleted' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed' });
+    res.status(500).json({ error: 'Failed to delete video' });
   }
 });
 
@@ -1591,12 +1355,15 @@ app.delete('/api/notes/:id', async (req, res) => {
 // Generic routes for PDFs
 app.get('/api/pdfs', async (req, res) => {
   try {
-    const isFree = req.query.isFree === 'true';
-    const query = isFree ? { isFree: true } : {};
+    const { courseId, isFree } = req.query;
+    const query = {};
+    if (courseId) query.courseId = courseId;
+    if (isFree === 'true') query.isFree = true;
+    
     const pdfs = await db.collection('pdfs').find(query).sort({ sortBy: 1 }).toArray();
     res.json(pdfs);
   } catch (error) {
-    res.status(500).json({ error: 'Failed' });
+    res.status(500).json({ error: 'Failed to fetch PDFs' });
   }
 });
 
@@ -1626,10 +1393,11 @@ app.delete('/api/pdfs/:id', async (req, res) => {
         { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
       ].filter(v => v.id || v._id)
     };
-    await db.collection('pdfs').deleteOne(query);
-    res.json({ success: true });
+    const result = await db.collection('pdfs').deleteOne(query);
+    if (result.deletedCount === 0) return res.status(404).json({ error: 'PDF not found' });
+    res.json({ success: true, message: 'PDF deleted' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed' });
+    res.status(500).json({ error: 'Failed to delete PDF' });
   }
 });
 
@@ -1643,11 +1411,14 @@ app.delete('/api/tests/:id', async (req, res) => {
       { _id: id },
       { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
     ].filter(v => v.id !== null && v.id !== undefined || v._id !== null && v._id !== undefined);
+    
     const query = { $or: orConditions };
-    await db.collection('tests').deleteOne(query);
-    res.json({ success: true });
+    const result = await db.collection('tests').deleteOne(query);
+    
+    if (result.deletedCount === 0) return res.status(404).json({ error: 'Test not found' });
+    res.json({ success: true, message: 'Test deleted' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed' });
+    res.status(500).json({ error: 'Failed to delete test' });
   }
 });
 
@@ -1660,10 +1431,18 @@ app.put('/api/tests/:id', async (req, res) => {
       { _id: id },
       { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
     ].filter(v => v.id !== null && v.id !== undefined || v._id !== null && v._id !== undefined);
+    
     const query = { $or: orConditions };
     const { _id, ...updateData } = req.body;
-    await db.collection('tests').updateOne(query, { $set: updateData }, { upsert: true });
-    res.json({ success: true });
+    
+    // Merge: Added updatedAt and kept upsert logic while improving response
+    const result = await db.collection('tests').updateOne(
+      query, 
+      { $set: { ...updateData, updatedAt: new Date().toISOString() } }, 
+      { upsert: true }
+    );
+    
+    res.json({ success: true, message: result.upsertedCount > 0 ? 'Test created' : 'Test updated' });
   } catch (error) {
     console.error('Error updating test:', error);
     res.status(500).json({ error: 'Failed to update test' });
@@ -1871,11 +1650,117 @@ app.get('/api/courses/:id/tests', async (req, res) => {
   }
 });
 
+
+/**
+ * Consolidated helper to calculate live stream status.
+ * Strict manual control: Status is only 'live' if the admin explicitly started it.
+ */
+export const calculateStreamStatus = (item) => {
+  // Use streamStatus as primary lifecycle source, fall back to status for legacy.
+  const lifecycleStatus = (item.streamStatus || item.status || 'upcoming').toLowerCase();
+  
+  if (['ended', 'inactive', 'completed', 'disable', 'finished'].includes(lifecycleStatus)) {
+    return 'ended';
+  }
+  
+  if (lifecycleStatus === 'live') {
+    return 'live';
+  }
+  
+  return 'upcoming';
+};
+
+/**
+ * NEW: Centralized Sync Helper for Live Streams
+ * Ensures liveVideos (Primary), videos, and liveClasses are kept in sync.
+ */
+async function syncLiveStream(id, data, operation = 'update') {
+  console.log(`[SYNC_LIVE_STREAM] ${operation.toUpperCase()} id=${id}`, data);
+  try {
+    const query = {
+      $or: [
+        { id: id },
+        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
+      ].filter(f => f.id || f._id)
+    };
+
+    if (operation === 'delete') {
+      await Promise.all([
+        db.collection('liveVideos').deleteOne(query),
+        db.collection('videos').deleteOne(query),
+        db.collection('liveClasses').deleteOne(query)
+      ]);
+      return { success: true };
+    }
+
+    // Standardize mapping for consistency
+    const syncData = { ...data };
+    
+    // Standardization of metadata (Step 7)
+    if (data.url || data.streamId || data.link || data.videoUrl) {
+      syncData.url = data.url || data.streamId || data.link || data.videoUrl;
+    }
+    
+    // Force Correct Classification
+    syncData.contentType = 'live_stream';
+    syncData.type = 'live';
+    
+    // Visibility vs Lifecycle Split
+    // status = active/inactive (Enabled/Disabled)
+    // streamStatus = upcoming/live/ended (Lifecycle)
+    if (!syncData.status || syncData.status === 'upcoming' || syncData.status === 'live' || syncData.status === 'ended') {
+      // If the incoming status looks like a lifecycle status, move it to streamStatus
+      // and ensure visibility is 'active' (enabled)
+      if (!syncData.streamStatus) syncData.streamStatus = syncData.status || 'upcoming';
+      syncData.status = 'active'; 
+    }
+
+    if (data.pdf1Url) syncData.pdf1 = data.pdf1Url;
+    if (data.pdf1) syncData.pdf1Url = data.pdf1;
+    if (data.pdf2Url) syncData.pdf2 = data.pdf2Url;
+    if (data.pdf2) syncData.pdf2Url = data.pdf2;
+    if (data.studyMaterialUrl) syncData.studyMaterial = data.studyMaterialUrl;
+    if (data.studyMaterial) syncData.studyMaterialUrl = data.studyMaterial;
+
+    syncData.updatedAt = new Date().toISOString();
+
+    if (operation === 'create') {
+      const result = await db.collection('liveVideos').insertOne(syncData);
+      const insertedId = result.insertedId;
+      const copyData = { ...syncData, _id: insertedId };
+      
+      // Sync to other collections
+      await Promise.all([
+        db.collection('videos').insertOne(copyData).catch(e => console.error('Sync create to videos failed:', e)),
+        db.collection('liveClasses').insertOne(copyData).catch(e => console.error('Sync create to liveClasses failed:', e))
+      ]);
+      return { success: true, _id: insertedId };
+    } else {
+      // Primary: Update Source of Truth
+      const result = await db.collection('liveVideos').updateOne(query, { $set: syncData });
+      
+      // Secondary: Propagate
+      await Promise.all([
+        db.collection('videos').updateMany(query, { $set: syncData }).catch(e => console.error('Sync update to videos failed:', e)),
+        db.collection('liveClasses').updateMany(query, { $set: syncData }).catch(e => console.error('Sync update to liveClasses failed:', e))
+      ]);
+      
+      return { success: true, matched: result.matchedCount };
+    }
+  } catch (error) {
+    console.error(`[SYNC_ERROR] operation=${operation}:`, error);
+    throw error;
+  }
+}
+
+
 app.get('/api/courses/:id/live-classes', optionalAuth, async (req, res) => {
   try {
     const courseId = req.params.id;
     const course = await findCourse(courseId);
     const idVariants = await getRelatedCourseIds(course, courseId);
+    
+    // Limits: 90 days ago
     const ninetyDaysAgo = new Date();
     ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
     const dateLimit = ninetyDaysAgo.toISOString().split('T')[0];
@@ -1895,18 +1780,10 @@ app.get('/api/courses/:id/live-classes', optionalAuth, async (req, res) => {
       ]
     };
 
-    const projection = {
-      title: 1, name: 1, teacherName: 1, instructor: 1,
-      scheduledTime: 1, scheduledDate: 1, publishOn: 1,
-      date: 1, createdAt: 1, endTime: 1, endDateTime: 1,
-      joinBeforeMinutes: 1, status: 1, meetingLink: 1,
-      url: 1, videoUrl: 1, link: 1, id: 1, visibility: 1
-    };
-
     const [c1, c2, c3] = await Promise.all([
-      db.collection('liveVideos').find(query).project(projection).toArray(),
-      db.collection('liveClasses').find(query).project(projection).toArray(),
-      db.collection('videos').find({ ...query, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).project(projection).toArray()
+      db.collection('liveVideos').find(query).toArray(),
+      db.collection('liveClasses').find(query).toArray(),
+      db.collection('videos').find({ ...query, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).toArray()
     ]);
 
     // Check enrollment for private streams if student is logged in
@@ -1921,43 +1798,46 @@ app.get('/api/courses/:id/live-classes', optionalAuth, async (req, res) => {
       isEnrolled = !!enrollment;
     }
 
-    const merged = [...c1, ...c2, ...c3].map(item => {
-      // Dynamic Status Calculation using helper
-      item.status = calculateStreamStatus(item);
+    // Deduplication Map (Step 8)
+    const dedupeMap = new Map();
+    const processItem = (item) => {
+       const streamId = (item.id || item.streamId || item._id)?.toString();
+       if (!streamId) return;
 
-      // Ensure date/startTime properties exist for the calendar view if they are missing
-      if (!item.date && (item.publishOn || item.startTime)) {
-        const d = new Date(item.publishOn || item.startTime);
-        if (!isNaN(d.getTime())) {
-          item.date = d.toISOString().split('T')[0];
-          item.startTimeString = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-        }
-      }
+       // If duplicate, source-of-truth wins
+       if (dedupeMap.has(streamId) && !item.platform) return;
 
-      // Map 'url' or 'meetingLink' consistently
-      if (!item.meetingLink) {
-        item.meetingLink = item.url || item.videoUrl || item.link;
-      }
+       item.status = calculateStreamStatus(item);
 
-      return item;
-    })
+       // Standardization of metadata (Step 7)
+       if (!item.meetingLink) {
+         item.meetingLink = item.url || item.videoUrl || item.link;
+       }
+       if (!item.pdf1 && item.pdf1Url) item.pdf1 = item.pdf1Url;
+       if (!item.pdf2 && item.pdf2Url) item.pdf2 = item.pdf2Url;
+       if (!item.studyMaterial && item.studyMaterialUrl) item.studyMaterial = item.studyMaterialUrl;
+
+       dedupeMap.set(streamId, item);
+    };
+
+    // Prioritize c1 (liveVideos)
+    [...c3, ...c2, ...c1].forEach(processItem);
+
+    const merged = Array.from(dedupeMap.values())
       .filter(item => {
         // Visibility Filter: 
-        // - Public streams are visible to everyone
-        // - Private streams are only visible if the student is enrolled (or if they are admin, but this route is for students)
-        if (item.visibility === 'private' && !isEnrolled) {
-          return false;
-        }
+        if (item.visibility === 'private' && !isEnrolled) return false;
         return true;
       })
-      .sort((a, b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
+      .sort((a, b) => new Date(a.date || a.publishOn || a.createdAt || 0) - new Date(b.date || b.publishOn || b.createdAt || 0));
 
     res.json(merged);
   } catch (error) {
-    console.error('Error fetching live classes:', error);
+    console.error('Error fetching course live classes:', error);
     res.status(500).json({ error: 'Failed to fetch live classes' });
   }
 });
+
 
 // Routes for Course Posts
 app.get('/api/courses/:id/posts', async (req, res) => {
@@ -2005,155 +1885,7 @@ app.delete('/api/courses/:id/posts/:postId', async (req, res) => {
   }
 });
 
-// Helper to sync Demo Video with Free Content
-async function syncDemoVideoWithFreeContent(record, id) {
-  try {
-    const demoUrl = record.demoVideo || record.imageUrl; // fallback if needed
-    const finalId = id || record.id || record._id?.toString();
-    if (!finalId) return;
-
-    if (record.demoVideo) {
-      const videoData = {
-        title: `Demo: ${record.name || record.title || 'Course'}`,
-        url: record.demoVideo,
-        courseId: finalId,
-        isFree: true,
-        category: record.category || 'General',
-        instructor: record.instructor || 'Institute Faculty',
-        updatedAt: new Date().toISOString()
-      };
-
-      // Upsert into videos collection based on courseId and "Demo:" prefix
-      await db.collection('videos').updateOne(
-        { courseId: finalId, title: { $regex: /^Demo:/i } },
-        { $set: videoData },
-        { upsert: true }
-      );
-      console.log(`[DEMO-SYNC] Synced demo video for ${finalId}`);
-    } else if (record.demoVideo === "") {
-      // Explicitly removed
-      await db.collection('videos').deleteMany({ courseId: finalId, title: { $regex: /^Demo:/i } });
-    }
-  } catch (err) {
-    console.error(`[DEMO-SYNC ERROR] ${finalId}:`, err);
-  }
-}
-
-// Generic Course Routes (Correctly placed at the end)
-app.get('/api/courses/:id', async (req, res) => {
-  try {
-    console.log(`GET /api/courses/${req.params.id} - Aggressive lookup...`);
-    const course = await findCourse(req.params.id);
-
-    if (course) {
-      const relatedIds = await getRelatedCourseIds(course, req.params.id);
-      res.json({
-        ...course,
-        id: course.id || course._id.toString(),
-        relatedIds: relatedIds
-      });
-    } else {
-      res.status(404).json({ error: 'Course not found' });
-    }
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch course' });
-  }
-});
-
-app.post('/api/courses/:id', async (req, res) => {
-  try {
-    const courseId = req.params.id;
-    const courseData = req.body;
-
-    if (courseData.settings && typeof courseData.settings.sortingOrder === 'string') {
-      courseData.settings.sortingOrder = parseFloat(courseData.settings.sortingOrder) || 9999;
-    }
-
-    const result = await db.collection('courses').findOneAndUpdate(
-      { $or: [{ id: courseId }, { _id: ObjectId.isValid(courseId) ? new ObjectId(courseId) : null }].filter(f => f._id !== null) },
-      { $set: { ...courseData, updatedAt: new Date().toISOString() } },
-      { returnDocument: 'after' }
-    );
-    res.json(result.value || result);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to update course' });
-  }
-});
-
-app.put('/api/courses/:id', async (req, res) => {
-  try {
-    console.log(`PUT /api/courses/${req.params.id} - Body size: ${JSON.stringify(req.body).length} bytes`);
-    const { _id, ...updateData } = req.body;
-    const id = req.params.id;
-    console.log(`Aggressive PUT lookup for identifier: ${id}`);
-
-    if (updateData.settings && typeof updateData.settings.sortingOrder === 'string') {
-      updateData.settings.sortingOrder = parseFloat(updateData.settings.sortingOrder) || 9999;
-    }
-
-    // Try finding in both collections with all variants
-    let record = await db.collection('courses').findOne({ $or: [{ id: id }, { _id: id }] });
-    if (!record && mongoose.Types.ObjectId.isValid(id)) {
-      record = await db.collection('courses').findOne({ _id: new mongoose.Types.ObjectId(id) });
-    }
-
-    let targetCollection = 'courses';
-    if (!record) {
-      record = await db.collection('packages').findOne({ $or: [{ id: id }, { _id: id }] });
-      if (!record && mongoose.Types.ObjectId.isValid(id)) {
-        record = await db.collection('packages').findOne({ _id: new mongoose.Types.ObjectId(id) });
-      }
-      if (record) targetCollection = 'packages';
-    }
-
-    if (!record) {
-      console.warn(`[UPDATE FAILED] No record found in any collection for: ${id}`);
-      return res.status(404).json({ error: 'Package/Course not found in DB' });
-    }
-
-    console.log(`[TARGET MATCH] Collection: ${targetCollection}, DB _id: ${record._id}`);
-
-    const finalUpdate = { ...updateData, updatedAt: new Date().toISOString() };
-    if (updateData.settings && record.settings) {
-      finalUpdate.settings = { ...record.settings, ...updateData.settings };
-    }
-    if (updateData.content && record.content) {
-      finalUpdate.content = { ...record.content, ...updateData.content };
-    }
-
-    await db.collection(targetCollection).updateOne(
-      { _id: record._id },
-      { $set: finalUpdate }
-    );
-
-    // Sync Demo Video
-    if (finalUpdate.demoVideo !== undefined) {
-      const fullRecord = { ...record, ...finalUpdate };
-      await syncDemoVideoWithFreeContent(fullRecord, record._id.toString());
-    }
-
-    res.json({ success: true, message: 'Updated successfully', collection: targetCollection });
-  } catch (error) {
-    console.error(`Failed to update course ${req.params.id}:`, error);
-    res.status(500).json({ error: 'Failed to update course', details: error.message });
-  }
-});
-
-app.delete('/api/courses/:id', async (req, res) => {
-  try {
-    let filter = { id: req.params.id };
-    if (mongoose.Types.ObjectId.isValid(req.params.id)) filter = { _id: new mongoose.Types.ObjectId(req.params.id) };
-
-    let result = await db.collection('courses').deleteOne(filter);
-    if (result.deletedCount === 0) {
-      result = await db.collection('packages').deleteOne(filter);
-    }
-    if (result.deletedCount === 0) return res.status(404).json({ error: 'Course not found' });
-    res.json({ success: true, message: 'Course/Package deleted' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to delete course' });
-  }
-});
+// Single Course & Package handlers moved to ./routes/course.routes.js
 
 
 // Routes for Students/Users
@@ -2188,8 +1920,15 @@ app.get('/api/students', async (req, res) => {
       fees: 0,
       notes: 0
     }).sort({ _id: -1 }).lean();
+    
+    // Map to include hasPassword and strip password
+    const safeStudents = students.map(s => {
+      const { password, ...safeS } = s;
+      return { ...safeS, hasPassword: !!password };
+    });
+
     console.log('GET /api/students - Optimized Payload - Found', students.length, 'students');
-    res.json(students);
+    res.json(safeStudents);
   } catch (error) {
     console.error('Error fetching students:', error);
     res.status(500).json({ error: 'Failed to fetch students', details: error.message });
@@ -2206,7 +1945,8 @@ app.get('/api/students/:id', async (req, res) => {
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
-    res.json(student);
+    const { password, ...safeStudent } = student;
+    res.json({ ...safeStudent, hasPassword: !!password });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch student' });
   }
@@ -2221,71 +1961,77 @@ app.get('/api/students/:id/live-classes', async (req, res) => {
     const student = await Student.findOne(studentQuery).lean();
     if (!student) return res.status(404).json({ error: 'Student not found' });
 
-    // Get all variants for all enrolled courses from both student object and enrollments collection
+    // Step 4: Fetch primarily from enrolled courses/batches
     const enrollmentRecords = await db.collection('enrollments').find({
       studentId: req.params.id
-    }).project({ courseId: 1 }).toArray();
+    }).project({ courseId: 1, batchId: 1 }).toArray();
 
-    const allEnrolledIds = new Set([
+    const enrolledCourseIds = new Set([
       ...(student.enrolledCourses || []),
       ...enrollmentRecords.map(e => e.courseId)
     ].filter(Boolean));
 
+    const studentBatchIds = new Set(enrollmentRecords.map(e => e.batchId).filter(Boolean));
+
     let allIdVariants = [];
-    for (const enrolledId of allEnrolledIds) {
+    for (const enrolledId of enrolledCourseIds) {
       const variants = await getCourseIdVariants(enrolledId);
       allIdVariants = [...allIdVariants, ...variants];
     }
-
-    // Remove duplicates
     allIdVariants = [...new Set(allIdVariants)];
 
-    const query = {
-      courseId: { $in: allIdVariants }
-    };
+    const query = { courseId: { $in: allIdVariants } };
 
+    // Step 4: Fetch from 3 collections but prioritize liveVideos
     const [c1, c2, c3] = await Promise.all([
       db.collection('liveVideos').find(query).toArray(),
       db.collection('liveClasses').find(query).toArray(),
       db.collection('videos').find({ ...query, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).toArray()
     ]);
 
-    const merged = [...c1, ...c2, ...c3].map(item => {
-      // Use consolidated helper for status
+    // Step 8: Deduplication Logic using a Map
+    const dedupeMap = new Map();
+
+    const processItem = (item) => {
+      const streamId = (item.id || item.streamId || item._id)?.toString();
+      if (!streamId) return;
+
+      // Deduplicate: If already present, only overwrite if coming from liveVideos (Source of Truth)
+      // or if it's the first time we see this ID.
+      // We process liveVideos (c1) LAST in the array below to ensure it wins.
+      
+      // Step 6: Status must ONLY come from database
       item.status = calculateStreamStatus(item);
 
-      // Ensure date/startTime properties exist
-      if (!item.date && (item.publishOn || item.createdAt)) {
-        const d = new Date(item.publishOn || item.createdAt);
-        if (!isNaN(d.getTime())) {
-          item.date = d.toISOString().split('T')[0];
-          item.startTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-        }
+      // Step 5: Strict Filtering Rule
+      // - If stream has a batchId, student MUST be in that batch
+      // - If stream has no batchId, it's course-wide (visible to all of that course)
+      if (item.batchId && !studentBatchIds.has(String(item.batchId))) {
+        return;
       }
 
-      if (!item.meetingLink) {
-        item.meetingLink = item.url || item.videoUrl || item.link;
-      }
+      // Step 7: Attachments visibility (pdf1Url etc used in sync, let's map them to common names for UI)
+      if (!item.pdf1 && item.pdf1Url) item.pdf1 = item.pdf1Url;
+      if (!item.pdf2 && item.pdf2Url) item.pdf2 = item.pdf2Url;
+      if (!item.studyMaterial && item.studyMaterialUrl) item.studyMaterial = item.studyMaterialUrl;
 
-      return item;
-    })
-      .filter(item => {
-        // Visibility Filter: 
-        // - Students in this route are already checked for enrollment against the courseIdVariants.
-        // - However, we still respect the 'private' visibility flag to ensure consistent behavior.
-        if (item.visibility === 'private' && !allIdVariants.includes(String(item.courseId))) {
-          return false;
-        }
-        return true;
-      })
-      .sort((a, b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
+      dedupeMap.set(streamId, item);
+    };
 
-    res.json(merged);
+    // Ordering: c3 (videos), c2 (liveClasses), c1 (liveVideos) 
+    // This way liveVideos overwrites if there are duplicates (Priority 1)
+    [...c3, ...c2, ...c1].forEach(processItem); 
+
+    const finalStreams = Array.from(dedupeMap.values())
+      .sort((a, b) => new Date(a.scheduledTime || a.startTime || a.publishOn || 0) - new Date(b.scheduledTime || b.startTime || b.publishOn || 0));
+
+    res.json(finalStreams);
   } catch (error) {
     console.error('Error fetching student live classes:', error);
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
 
 app.post('/api/students', async (req, res) => {
   try {
@@ -2366,7 +2112,14 @@ app.post('/api/students', async (req, res) => {
     await student.save();
 
     console.log('Student created successfully with ID:', studentId);
-    res.status(201).json(student);
+
+    const studentObj = student.toObject ? student.toObject() : student;
+    const { password, ...safeStudent } = studentObj;
+
+    res.status(201).json({
+      ...safeStudent,
+      hasPassword: !!password
+    });
   } catch (error) {
     console.error('Error creating student (FULL ERROR):', error);
     res.status(500).json({
@@ -2383,7 +2136,7 @@ app.put('/api/students/:id', async (req, res) => {
 
     const updateData = {
       name: body.name ? body.name.trim() : body.name,
-      email: (body.email && body.email.trim()) ? body.email.trim() : null, // Handle empty string as null
+      email: (body.email && body.email.trim()) ? body.email.toLowerCase().trim() : null, // Handle empty string as null
       phone: body.phone ? body.phone.trim() : body.phone,
       userId: body.userId ? body.userId.trim() : body.userId,
       highQualification: body.highQualification,
@@ -2424,6 +2177,16 @@ app.put('/api/students/:id', async (req, res) => {
       }
     };
 
+    if (updateData.email) {
+      const existing = await Student.findOne({
+        email: updateData.email,
+        id: { $ne: req.params.id }
+      });
+      if (existing) {
+        return res.status(400).json({ error: 'This email address is already registered to another student.' });
+      }
+    }
+
     if (body.password) {
       const salt = await bcrypt.genSalt(10);
       updateData.password = await bcrypt.hash(body.password, salt);
@@ -2441,7 +2204,14 @@ app.put('/api/students/:id', async (req, res) => {
     }
 
     console.log('Student updated successfully:', req.params.id);
-    res.json(student);
+
+    const studentObj = student.toObject ? student.toObject() : student;
+    const { password, ...safeStudent } = studentObj;
+
+    res.json({
+      ...safeStudent,
+      hasPassword: !!password
+    });
   } catch (error) {
     console.error('Error updating student (FULL ERROR):', error);
     res.status(500).json({
@@ -2884,51 +2654,7 @@ app.delete('/api/coupons', async (req, res) => {
   }
 });
 
-// Admin Authentication Routes
-app.post('/api/admin/login', authLimiter, async (req, res) => {
-  try {
-    let { adminId, password } = req.body;
-
-    // Trim inputs to avoid whitespace issues
-    adminId = adminId?.trim();
-    password = password?.trim();
-
-    console.log(`[LOGIN ATTEMPT] AdminID: ${adminId}, Time: ${new Date().toISOString()}`);
-
-    if (!adminId || !password) {
-      return res.status(400).json({ error: 'Admin ID and password are required' });
-    }
-
-    const admin = await db.collection('admins').findOne({ adminId });
-
-    if (!admin) {
-      console.warn(`[LOGIN FAILED] Admin not found: ${adminId}`);
-      return res.status(401).json({ error: 'Invalid Admin ID or Password' });
-    }
-
-    // Secure comparison (consider bcrypt in future)
-    if (admin.password !== password) {
-      console.warn(`[LOGIN FAILED] Wrong password for admin: ${adminId}`);
-      return res.status(401).json({ error: 'Invalid Admin ID or Password' });
-    }
-
-    console.log(`[LOGIN SUCCESS] Admin: ${adminId}, Name: ${admin.name}`);
-
-    // Generate secure admin token
-    const adminToken = generateAdminToken(admin);
-
-    res.json({
-      success: true,
-      message: 'Login successful',
-      adminId: admin.adminId,
-      name: admin.name,
-      token: adminToken
-    });
-  } catch (error) {
-    console.error('[LOGIN ERROR]', error);
-    res.status(500).json({ error: 'Login failed due to server error' });
-  }
-});
+// Admin Authentication Routes moved to ./routes/auth.routes.js
 
 app.get('/api/admin/verify', async (req, res) => {
   try {
@@ -2954,9 +2680,7 @@ app.get('/api/admin/verify', async (req, res) => {
   }
 });
 
-// Reports Router
-app.use('/api/admin/reports', reportsRouter);
-app.use('/api', uploadV2Routes);
+// Duplicated mount removed
 
 // Get Dashboard Stats for Admin
 app.get('/api/admin/dashboard-stats', async (req, res) => {
@@ -3808,45 +3532,9 @@ app.post('/api/tests', async (req, res) => {
   }
 });
 
-app.put('/api/tests/:id', async (req, res) => {
-  try {
-    const id = req.params.id;
-    const orConditions = [
-      { id: id },
-      { id: !isNaN(id) ? Number(id) : null },
-      { _id: id }
-    ].filter(v => v.id !== null && v.id !== undefined || v._id !== null && v._id !== undefined);
-    if (mongoose.Types.ObjectId.isValid(id)) orConditions.push({ _id: new mongoose.Types.ObjectId(id) });
 
-    const { _id, ...updateData } = req.body;
-    const result = await db.collection('tests').updateOne(
-      { $or: orConditions },
-      { $set: { ...updateData, updatedAt: new Date().toISOString() } }
-    );
-    if (result.matchedCount === 0) return res.status(404).json({ error: 'Test not found' });
-    res.json({ success: true, message: 'Test updated' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to update test' });
-  }
-});
 
-app.delete('/api/tests/:id', async (req, res) => {
-  try {
-    const id = req.params.id;
-    const orConditions = [
-      { id: id },
-      { id: !isNaN(id) ? Number(id) : null },
-      { _id: id }
-    ].filter(v => v.id !== null && v.id !== undefined || v._id !== null && v._id !== undefined);
-    if (mongoose.Types.ObjectId.isValid(id)) orConditions.push({ _id: new mongoose.Types.ObjectId(id) });
 
-    const result = await db.collection('tests').deleteOne({ $or: orConditions });
-    if (result.deletedCount === 0) return res.status(404).json({ error: 'Test not found' });
-    res.json({ success: true, message: 'Test deleted' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to delete test' });
-  }
-});
 
 app.post('/api/tests/:id/duplicate', async (req, res) => {
   try {
@@ -4285,26 +3973,7 @@ app.put('/api/subjective-tests/update-all', async (req, res) => {
 });
 
 
-app.get('/api/videos', async (req, res) => {
-  try {
-    const { courseId, isFree } = req.query;
-    const query = {};
-    if (courseId) query.courseId = courseId;
-    if (isFree === 'true') {
-      query.$or = [
-        { isFree: true },
-        { isFree: 'true' },
-        { isFree: 1 },
-        { price: 0 },
-        { price: '0' }
-      ];
-    }
-    const videos = await db.collection('videos').find(query).toArray();
-    res.json(videos);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch videos' });
-  }
-});
+
 
 // Redundant specific course video routes removed to ensure consistent behavior with the primary implementation above (line 1054+)
 
@@ -4331,29 +4000,9 @@ app.post('/api/videos', async (req, res) => {
   }
 });
 
-app.put('/api/videos/:id', async (req, res) => {
-  try {
-    const { _id, ...updateData } = req.body;
-    const result = await db.collection('videos').updateOne(
-      { id: req.params.id },
-      { $set: updateData }
-    );
-    if (result.matchedCount === 0) return res.status(404).json({ error: 'Video not found' });
-    res.json({ success: true, message: 'Video updated' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to update video' });
-  }
-});
 
-app.delete('/api/videos/:id', async (req, res) => {
-  try {
-    const result = await db.collection('videos').deleteOne({ id: req.params.id });
-    if (result.deletedCount === 0) return res.status(404).json({ error: 'Video not found' });
-    res.json({ success: true, message: 'Video deleted' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to delete video' });
-  }
-});
+
+
 
 // DELETE ALL videos
 app.delete('/api/videos', async (req, res) => {
@@ -4411,17 +4060,9 @@ app.get('/api/live-videos', async (req, res) => {
       const joinBeforeMin = parseInt(item.joinBeforeMinutes || 10);
       const joinTime = new Date(startTime.getTime() - joinBeforeMin * 60 * 1000);
 
-      // Dynamic Status Calculation
-      let status = item.status || 'upcoming';
-      if (item.status === 'inactive' || item.status === 'ended' || item.status === 'completed') {
-        status = 'ended';
-      } else if (now < joinTime) {
-        status = 'upcoming';
-      } else if (now >= joinTime && now <= endTime) {
-        status = 'live';
-      } else {
-        status = 'ended';
-      }
+      // Dynamic Status Calculation - REDUCED to respect stored status
+      const status = calculateStreamStatus(item);
+
 
       return {
         ...item,
@@ -4441,59 +4082,93 @@ app.get('/api/live-videos', async (req, res) => {
 
 app.post('/api/live-videos', async (req, res) => {
   try {
-    const result = await db.collection('liveVideos').insertOne(req.body);
-    res.status(201).json({ _id: result.insertedId, ...req.body });
+    const result = await syncLiveStream(null, req.body, 'create');
+    res.status(201).json({ success: true, ...result });
   } catch (error) {
+    console.error('Create live video error:', error);
     res.status(500).json({ error: 'Failed to create live video' });
   }
 });
 
+
 app.put('/api/live-videos/:id', async (req, res) => {
   try {
     const { _id, ...updateData } = req.body;
-    const filter = {
-      $or: [
-        { id: req.params.id },
-        { _id: req.params.id },
-        { _id: ObjectId.isValid(req.params.id) ? new ObjectId(req.params.id) : null }
-      ].filter(f => f.id || f._id)
-    };
-    const result = await db.collection('liveVideos').updateOne(filter, { $set: updateData });
-    if (result.matchedCount === 0) return res.status(404).json({ error: 'Live video not found' });
-    res.json({ success: true, message: 'Live video updated' });
+    await syncLiveStream(req.params.id, updateData, 'update');
+    res.json({ success: true, message: 'Live video updated and synced' });
   } catch (error) {
+    console.error('Update live video error:', error);
     res.status(500).json({ error: 'Failed to update live video' });
   }
 });
 
+
 app.delete('/api/live-videos/:id', async (req, res) => {
   try {
-    const filter = {
-      $or: [
-        { id: req.params.id },
-        { _id: req.params.id },
-        { _id: ObjectId.isValid(req.params.id) ? new ObjectId(req.params.id) : null }
-      ].filter(f => f.id || f._id)
-    };
-    const result = await db.collection('liveVideos').deleteOne(filter);
-    if (result.deletedCount === 0) return res.status(404).json({ error: 'Live video not found' });
-    res.json({ success: true, message: 'Live video deleted' });
+    await syncLiveStream(req.params.id, null, 'delete');
+    res.json({ success: true, message: 'Live video deleted across all collections' });
   } catch (error) {
+    console.error('Delete live video error:', error);
     res.status(500).json({ error: 'Failed to delete live video' });
   }
 });
 
-// Routes for PDFs/Notes
-app.get('/api/pdfs', async (req, res) => {
+/**
+ * Step 9: SAFE Migration Utility
+ * Reconciles data inconsistencies between collections without deleting records.
+ */
+app.post('/api/admin/sync-live-streams', adminMiddleware, async (req, res) => {
   try {
-    const { courseId } = req.query;
-    const query = courseId ? { courseId } : {};
-    const pdfs = await db.collection('pdfs').find(query).toArray();
-    res.json(pdfs);
+    console.log('[MIGRATION] Starting safe live stream reconciliation...');
+    const liveVideos = await db.collection('liveVideos').find({}).toArray();
+    const stats = { processed: 0, synced: 0, inconsistencies: [] };
+
+    for (const stream of liveVideos) {
+      stats.processed++;
+      const id = (stream.id || stream._id).toString();
+      const query = {
+        $or: [
+          { id: id },
+          { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
+        ].filter(f => f.id || f._id)
+      };
+
+      // Safe sync to secondary collections
+      const secondaryCollections = ['videos', 'liveClasses'];
+      for (const coll of secondaryCollections) {
+        const existing = await db.collection(coll).findOne(query);
+        if (!existing) {
+          // If missing, safely copy from source of truth
+          const copy = { ...stream };
+          delete copy._id;
+          await db.collection(coll).insertOne({ ...copy, id });
+          stats.synced++;
+        } else {
+          // If exists, only fill missing critical fields (Step 7 alignment)
+          const update = {};
+          const fieldsToSync = ['pdf1Url', 'pdf2Url', 'studyMaterialUrl', 'status', 'batchId', 'courseId', 'scheduledTime', 'title'];
+          fieldsToSync.forEach(f => {
+             if (!existing[f] && stream[f]) update[f] = stream[f];
+          });
+
+          if (Object.keys(update).length > 0) {
+            await db.collection(coll).updateOne({ _id: existing._id }, { $set: update });
+            stats.synced++;
+          }
+        }
+      }
+    }
+
+    res.json({ success: true, stats });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch PDFs' });
+    console.error('[MIGRATION_ERROR]:', error);
+    res.status(500).json({ error: 'Migration failed', details: error.message });
   }
 });
+
+
+
+// Routes for PDFs/Notes
 
 // Get notes/PDFs by course
 app.get('/api/courses/:courseId/notes', async (req, res) => {
@@ -4657,16 +4332,6 @@ app.post('/api/pdfs', async (req, res) => {
 
     // Redundant route removed for consolidation with line 1622
 
-app.delete('/api/pdfs/:id', async (req, res) => {
-  try {
-    const result = await db.collection('pdfs').deleteOne({ id: req.params.id });
-    if (result.deletedCount === 0) return res.status(404).json({ error: 'PDF not found' });
-    res.json({ success: true, message: 'PDF deleted' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to delete PDF' });
-  }
-});
-
 // DELETE ALL pdfs
 app.delete('/api/pdfs', async (req, res) => {
   try {
@@ -4825,7 +4490,7 @@ app.delete('/api/packages/:id', async (req, res) => {
 // Routes for Messages
 app.get('/api/messages', async (req, res) => {
   try {
-    const messages = await db.collection('messages').find({}).toArray();
+    const messages = await db.collection('messages').find({}).sort({ createdAt: -1 }).toArray();
     res.json(messages);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch messages' });
@@ -6319,56 +5984,7 @@ app.post('/api/students/login-password', async (req, res) => {
   }
 });
 
-app.post('/api/students/login', async (req, res) => {
-  try {
-    const { phone, password } = req.body;
-
-    if (!phone) {
-      return res.status(400).json({ error: 'Phone number is required' });
-    }
-
-    const cleanPhone = phone.replace(/\D/g, '');
-    const student = await db.collection('students').findOne({ $or: [{ phone }, { phone: cleanPhone }] });
-
-    if (!student) {
-      return res.status(401).json({ error: 'Account not found. Please register first.' });
-    }
-
-    if (password && student.password && student.password !== password) {
-      // Track failed attempts for legacy password login
-      const newFailedAttempts = (student.failedAttempts || 0) + 1;
-      await db.collection('students').updateOne(
-        { _id: student._id },
-        { $set: { failedAttempts: newFailedAttempts } }
-      );
-
-      if (newFailedAttempts >= 3 && student.email) {
-        const { subject, html } = templates.securityAlert(student.name || 'Student', new Date().toLocaleString(), 'Password Login');
-        sendEmail({ to: student.email, subject, html }).catch(e => console.error('Security alert email error:', e));
-      }
-
-      return res.status(401).json({ error: 'Invalid credentials' });
-    }
-
-    // Reset failed attempts on success
-    if (student.failedAttempts > 0) {
-      await db.collection('students').updateOne(
-        { _id: student._id },
-        { $set: { failedAttempts: 0 } }
-      );
-    }
-
-    const { password: _, ...studentWithoutPassword } = student;
-    res.json({
-      success: true,
-      message: 'Login successful',
-      student: studentWithoutPassword
-    });
-  } catch (error) {
-    console.error('Error logging in student:', error);
-    res.status(500).json({ error: 'Login failed', details: error.message });
-  }
-});
+// Student & Auth security routes moved to ./routes/auth.routes.js
 
 // Single-device session validation for students
 app.post('/api/students/session/validate', async (req, res) => {
@@ -6430,46 +6046,6 @@ app.post('/api/students/check-email', publicLimiter, async (req, res) => {
   } catch (error) {
     console.error('Check email error:', error);
     res.status(500).json({ error: 'Failed to check email' });
-  }
-});
-
-app.get('/api/students/:id', async (req, res) => {
-  try {
-    const student = await db.collection('students').findOne({ id: req.params.id });
-    if (!student) return res.status(404).json({ error: 'Student not found' });
-    res.json(student);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch student' });
-  }
-});
-
-app.put('/api/students/:id', async (req, res) => {
-  try {
-    const { _id, id: bodyId, ...updateData } = req.body;
-
-    // Normalize email if provided
-    if (updateData.email) {
-      updateData.email = updateData.email.toLowerCase().trim();
-
-      // Check for email conflicts (excluding self)
-      const existing = await db.collection('students').findOne({
-        email: updateData.email,
-        id: { $ne: req.params.id }
-      });
-      if (existing) {
-        return res.status(400).json({ error: 'This email address is already registered to another student.' });
-      }
-    }
-
-    const result = await db.collection('students').updateOne(
-      { id: req.params.id },
-      { $set: { ...updateData, updatedAt: new Date() } }
-    );
-    if (result.matchedCount === 0) return res.status(404).json({ error: 'Student not found' });
-    res.json({ success: true, message: 'Profile updated' });
-  } catch (error) {
-    console.error('Update student error:', error);
-    res.status(500).json({ error: 'Failed to update profile' });
   }
 });
 
@@ -6535,70 +6111,8 @@ app.get('/api/students/:id/courses', async (req, res) => {
 });
 
 // Get student-specific live classes (only courses they are enrolled in)
-app.get('/api/students/:id/live-classes', async (req, res) => {
-  try {
-    const student = await db.collection('students').findOne({ id: req.params.id });
-    if (!student) {
-      return res.status(404).json({ error: 'Student not found' });
-    }
+// Note: Duplicate student live-classes route removed in favor of the more comprehensive version at line 1807.
 
-    const enrolledCourseIds = (student.enrolledCourses || []).map(id => id.toString());
-
-    // Get all live videos
-    const liveVideos = await db.collection('liveVideos').find({}).toArray();
-    // Get all videos with live content types
-    const courseLiveStreams = await db.collection('videos').find({
-      contentType: { $in: ['live_stream', 'youtube_zoom'] }
-    }).toArray();
-
-    const allSessions = [...liveVideos, ...courseLiveStreams];
-    const now = new Date();
-
-    const filtered = allSessions.filter(item => {
-      // If courseId is present, check if student is enrolled
-      if (item.courseId) {
-        return enrolledCourseIds.includes(item.courseId.toString());
-      }
-      // If no courseId, assume it's global (or you can choose to hide it)
-      // For now, let's show global ones too, or stick strictly to enrolled if that's preferred.
-      // Based on the user request, "only show live classes for batches/courses that the student has actually enrolled in"
-      return false;
-    });
-
-    const calculated = filtered.map(item => {
-      const startTimeStr = item.publishOn || item.date || item.createdAt;
-      const startTime = startTimeStr ? new Date(startTimeStr) : new Date();
-      const targetEnd = item.endTime || item.endDateTime;
-      const endTime = targetEnd ? new Date(targetEnd) : new Date(startTime.getTime() + 60 * 60 * 1000);
-      const joinBeforeMin = parseInt(item.joinBeforeMinutes || 10);
-      const joinTime = new Date(startTime.getTime() - joinBeforeMin * 60 * 1000);
-
-      let status = item.status || 'upcoming';
-      if (item.status === 'inactive' || item.status === 'ended' || item.status === 'completed') {
-        status = 'ended';
-      } else if (now < joinTime) {
-        status = 'upcoming';
-      } else if (now >= joinTime && now <= endTime) {
-        status = 'live';
-      } else {
-        status = 'ended';
-      }
-
-      return {
-        ...item,
-        _id: item._id,
-        id: (item.id || item._id)?.toString(),
-        status,
-        isLive: status === 'live'
-      };
-    }).sort((a, b) => new Date(a.publishOn || a.date || a.createdAt) - new Date(b.publishOn || b.date || b.createdAt));
-
-    res.json(calculated);
-  } catch (error) {
-    console.error('Error fetching student live classes:', error);
-    res.status(500).json({ error: 'Failed to fetch live classes' });
-  }
-});
 
 // Enroll student in a course
 app.post('/api/students/:id/enroll', async (req, res) => {
@@ -6726,27 +6240,7 @@ app.put('/api/students/:id/courses/:courseId/progress', async (req, res) => {
   }
 });
 
-// Messages Routes for Chat
-app.get('/api/messages', async (req, res) => {
-  try {
-    const messages = await db.collection('messages').find({}).sort({ createdAt: -1 }).toArray();
-    res.json(messages);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch messages' });
-  }
-});
 
-app.post('/api/messages', async (req, res) => {
-  try {
-    const result = await db.collection('messages').insertOne({
-      ...req.body,
-      createdAt: new Date()
-    });
-    res.status(201).json({ _id: result.insertedId, ...req.body });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to send message' });
-  }
-});
 
 // Student Progress Routes
 app.get('/api/students/:id/progress', async (req, res) => {
@@ -7152,24 +6646,6 @@ app.get('/api/courses/:courseId/live-classes', async (req, res) => {
     ]);
 
     const merged = [...c1, ...c2, ...c3].map(item => {
-      const now = new Date();
-      const startTime = new Date(item.publishOn || item.date || item.createdAt);
-      const targetEnd = item.endTime || item.endDateTime;
-      const endTime = targetEnd ? new Date(targetEnd) : new Date(startTime.getTime() + 60 * 60 * 1000); // Default 1 hour
-      const joinBeforeMin = parseInt(item.joinBeforeMinutes) || 10;
-      const joinTime = new Date(startTime.getTime() - joinBeforeMin * 60 * 1000);
-
-      // Dynamic Status Calculation
-      if (item.status === 'inactive' || item.status === 'ended' || item.status === 'completed') {
-        item.status = 'ended';
-      } else if (now < joinTime) {
-        item.status = 'upcoming';
-      } else if (now >= joinTime && now <= endTime) {
-        item.status = 'live';
-      } else {
-        item.status = 'ended';
-      }
-
       // Ensure date/startTime properties exist for the calendar view if they are missing
       if (!item.date && item.publishOn) {
         const d = new Date(item.publishOn);
@@ -7187,6 +6663,9 @@ app.get('/api/courses/:courseId/live-classes', async (req, res) => {
       if (!item.meetingLink) {
         item.meetingLink = item.url || item.videoUrl || item.link;
       }
+
+      // Final Status Verification (strictly manual)
+      item.status = calculateStreamStatus(item);
 
       return item;
     }).sort((a, b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
@@ -7209,116 +6688,7 @@ app.delete('/api/courses/:courseId/live-classes/:id', async (req, res) => {
   }
 });
 
-// Get all live classes for enrolled student courses (Optimized for performance)
-app.get('/api/students/:studentId/live-classes', async (req, res) => {
-  try {
-    const startTimeMetric = Date.now();
-    const enrollments = await db.collection('enrollments').find({ studentId: req.params.studentId }).toArray();
-    const courseIds = [...new Set(enrollments.map(e => e.courseId).filter(Boolean))];
 
-    if (courseIds.length === 0) {
-      return res.json([]);
-    }
-
-    // Single bulk query for all courses to avoid N+1 problem
-    const courses = await db.collection('courses').find({
-      $or: [
-        { id: { $in: courseIds } },
-        { _id: { $in: courseIds.filter(id => /^[a-f\d]{24}$/i.test(id)).map(id => new ObjectId(id)) } }
-      ]
-    }).toArray();
-
-    // Gather all variant IDs and names for unified search
-    const names = [];
-    const expandedIds = new Set(courseIds);
-    courses.forEach(c => {
-      if (c.id) expandedIds.add(String(c.id));
-      if (c._id) expandedIds.add(String(c._id));
-      if (c.name) names.push(c.name);
-      if (c.title) names.push(c.title);
-    });
-
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-    const dateLimit = ninetyDaysAgo.toISOString().split('T')[0];
-
-    const finalQuery = {
-      $and: [
-        {
-          $or: [
-            { courseId: { $in: Array.from(expandedIds) } },
-            { courseName: { $in: names } },
-            { title: { $in: names } }
-          ]
-        },
-        {
-          $or: [
-            { date: { $gte: dateLimit } },
-            { publishOn: { $gte: ninetyDaysAgo.toISOString() } },
-            { createdAt: { $gte: ninetyDaysAgo } },
-            { scheduledDate: { $gte: dateLimit } },
-            { status: 'live' } // Always include currently live classes regardless of date
-          ]
-        }
-      ]
-    };
-
-    const projection = {
-      title: 1, name: 1, teacherName: 1, instructor: 1,
-      scheduledTime: 1, scheduledDate: 1, publishOn: 1,
-      date: 1, createdAt: 1, endTime: 1, endDateTime: 1,
-      joinBeforeMinutes: 1, status: 1, meetingLink: 1,
-      url: 1, videoUrl: 1, link: 1, id: 1
-    };
-
-    const [c1, c2, c3] = await Promise.all([
-      db.collection('liveVideos').find(finalQuery).project(projection).toArray(),
-      db.collection('liveClasses').find(finalQuery).project(projection).toArray(),
-      db.collection('videos').find({ ...finalQuery, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).project(projection).toArray()
-    ]);
-
-    const merged = [...c1, ...c2, ...c3].map(item => {
-      const now = new Date();
-      const startTime = new Date(item.publishOn || item.date || item.createdAt);
-      const targetEnd = item.endTime || item.endDateTime;
-      const endTime = targetEnd ? new Date(targetEnd) : new Date(startTime.getTime() + 60 * 60 * 1000); // Default 1 hour
-      const joinBeforeMin = parseInt(item.joinBeforeMinutes) || 10;
-      const joinTime = new Date(startTime.getTime() - joinBeforeMin * 60 * 1000);
-
-      // Dynamic Status Calculation
-      if (item.status === 'inactive' || item.status === 'ended' || item.status === 'completed') {
-        item.status = 'ended';
-      } else if (now < joinTime) {
-        item.status = 'upcoming';
-      } else if (now >= joinTime && now <= endTime) {
-        item.status = 'live';
-      } else {
-        item.status = 'ended';
-      }
-
-      // Ensure date/startTime properties exist for the calendar view if they are missing
-      if (!item.date && item.publishOn) {
-        const d = new Date(item.publishOn);
-        if (!isNaN(d.getTime())) {
-          item.date = d.toISOString().split('T')[0]; // YYYY-MM-DD
-          item.startTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; // HH:MM
-        }
-      }
-
-      // Map 'url' or 'meetingLink' consistently
-      if (!item.meetingLink) {
-        item.meetingLink = item.url || item.videoUrl || item.link;
-      }
-
-      return item;
-    }).sort((a, b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
-
-    res.json(merged);
-  } catch (error) {
-    console.error('Error fetching student live classes:', error);
-    res.status(500).json({ error: 'Failed to fetch live classes' });
-  }
-});
 
 // Routes for Categories
 app.get('/api/categories', async (req, res) => {

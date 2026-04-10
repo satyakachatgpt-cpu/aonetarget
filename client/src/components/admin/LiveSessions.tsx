@@ -22,9 +22,11 @@ interface LiveSessionReal {
 
 interface Props {
     showHeader?: boolean;
+    courseId?: string;
+    showToast?: (msg: string, type?: 'success' | 'error') => void;
 }
 
-const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
+const LiveSessions: React.FC<Props> = ({ showHeader = true, courseId, showToast }) => {
     const [activeTab, setActiveTab] = useState('Live & Upcoming');
     const [searchTerm, setSearchTerm] = useState('');
     const [entriesPerPage, setEntriesPerPage] = useState(10);
@@ -48,24 +50,6 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
 
     useEffect(() => { fetchData(); }, []);
 
-    // ⏱ Auto-promote upcoming → live every 60 seconds
-    useEffect(() => {
-        const interval = setInterval(async () => {
-            const now = new Date();
-            const toPromote = sessions.filter(s => {
-                if (s.status === 'live' || s.status === 'ended') return false;
-                if (!s.scheduledTime) return false;
-                const scheduled = new Date(s.scheduledTime.replace(' ', 'T'));
-                return !isNaN(scheduled.getTime()) && scheduled <= now;
-            });
-            if (toPromote.length === 0) return;
-            await Promise.all(toPromote.map(s =>
-                liveVideosAPI.update(s.id, { ...s, status: 'live' }).catch(() => null)
-            ));
-            if (toPromote.length > 0) fetchData();
-        }, 60000);
-        return () => clearInterval(interval);
-    }, [sessions]);
 
     const fetchData = async () => {
         setLoading(true);
@@ -100,7 +84,22 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                     scheduledTime: sTime
                 };
             });
-            setSessions(enriched);
+            // Deduplicate based on stable stream identity key first, fallback to title
+            const uniqueEnriched = enriched.reduce((acc: any[], current: any) => {
+                const x = acc.find(item => {
+                    const identityMatch = 
+                        (item.streamId && current.streamId && item.streamId === current.streamId) ||
+                        (item.url && current.url && item.url === current.url) ||
+                        (item._id && current._id && String(item._id) === String(current._id)) ||
+                        (item.id && current.id && String(item.id) === String(current.id));
+                    
+                    return identityMatch || (item.title && current.title && item.title === current.title);
+                });
+                if (!x) return acc.concat([current]);
+                else return acc;
+            }, []);
+
+            setSessions(uniqueEnriched);
         } catch (error) {
             console.error('Failed to fetch data:', error);
             setSessions([]);
@@ -115,13 +114,20 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
         try {
             await liveVideosAPI.update(session.id, {
                 ...session,
-                status: 'ended',
+                status: 'active',       // Keep visible but lifecycle is ended
+                streamStatus: 'ended',  // This is the authoritative lifecycle field
                 endTime: new Date().toISOString()
             });
-            setSessions(prev => prev.map(s => s.id === session.id ? { ...s, status: 'ended' } : s));
+            // Update BOTH fields locally so UI reflects immediately
+            setSessions(prev => prev.map(s => s.id === session.id
+                ? { ...s, status: 'active', streamStatus: 'ended' } as any
+                : s
+            ));
+            if (showToast) showToast('Live stream ended successfully', 'success');
         } catch (error: any) {
             console.error('End session error:', error);
-            alert(error.message || 'Failed to end session. Please try again.');
+            if (showToast) showToast(`Error: ${error.message || 'Failed to end session'}`, 'error');
+            else alert(error.message || 'Failed to end session. Please try again.');
         } finally {
             setActionLoading(null);
         }
@@ -129,21 +135,33 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
 
     const handleGoLive = async (session: LiveSessionReal) => {
         setActionLoading(session.id);
-        const newStatus = session.status === 'live' ? 'upcoming' : 'live';
+        // Use streamStatus as priority for lifecycle state
+        const currentLifecycle = (session as any).streamStatus || session.status;
+        const newLifecycle = currentLifecycle === 'live' ? 'upcoming' : 'live';
+        
         try {
             await liveVideosAPI.update(session.id, {
                 ...session,
-                status: newStatus
+                status: 'active', // Ensure visibility remains enabled
+                streamStatus: newLifecycle,
+                contentType: 'live_stream',
+                type: 'live'
             });
-            setSessions(prev => prev.map(s => s.id === session.id ? { ...s, status: newStatus } : s));
+            setSessions(prev => prev.map(s => 
+                (s.id === session.id) 
+                ? { ...s, streamStatus: newLifecycle, status: 'active' } 
+                : s
+            ));
+            if (showToast) showToast(`Stream is now ${newLifecycle.toUpperCase()}`, 'success');
         } catch (error: any) {
             console.error('Status toggle error:', error);
-            alert(error.message || 'Failed to update session status.');
+            if (showToast) showToast(`Error: ${error.message || 'Failed to update status'}`, 'error');
         } finally {
             setActionLoading(null);
             setOpenDropdownId(null);
         }
     };
+
 
     const handleDelete = async (id: string) => {
         if (!confirm('Are you sure you want to delete this session? This cannot be undone.')) return;
@@ -151,9 +169,11 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
         try {
             await liveVideosAPI.delete(id);
             setSessions(prev => prev.filter(s => s.id !== id));
+            if (showToast) showToast('Session deleted successfully', 'success');
         } catch (error: any) {
             console.error('Delete error:', error);
-            alert(error.message || 'Failed to delete session. Please try again.');
+            if (showToast) showToast(`Error: ${error.message || 'Failed to delete'}`, 'error');
+            else alert(error.message || 'Failed to delete session. Please try again.');
         } finally {
             setActionLoading(null);
             setOpenDropdownId(null);
@@ -165,9 +185,11 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
         try {
             const { id, ...rest } = session as any;
             await liveVideosAPI.create({ ...rest, title: `${rest.title} (Copy)`, status: 'upcoming' });
+            if (showToast) showToast('Session duplicated successfully', 'success');
             fetchData();
         } catch (error: any) {
-            alert(error.message || 'Failed to duplicate session');
+            if (showToast) showToast(`Error: ${error.message || 'Failed to duplicate'}`, 'error');
+            else alert(error.message || 'Failed to duplicate session');
         } finally {
             setActionLoading(null);
             setOpenDropdownId(null);
@@ -188,6 +210,9 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                 if (editingSession[field] instanceof File) {
                     // @ts-ignore
                     const result = await uploadAPI.uploadPDF(editingSession[field]);
+                    if (!result || !result.url) {
+                        throw new Error(`Failed to upload ${field === 'studyMaterial' ? 'Study Material' : 'PDF'}. Please try again.`);
+                    }
                     // @ts-ignore
                     uploadData[`${field}Url`] = result.url;
                 }
@@ -203,10 +228,12 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
             }
 
             await liveVideosAPI.update(editingSession.id, uploadData);
+            if (showToast) showToast('Session updated successfully', 'success');
             await fetchData();
             setEditingSession(null);
         } catch (error: any) {
-            alert(error.message || 'Failed to update session. Please try again.');
+            if (showToast) showToast(`Error: ${error.message || 'Failed to update'}`, 'error');
+            else alert(error.message || 'Failed to update session. Please try again.');
         } finally {
             setActionLoading(null);
         }
@@ -221,6 +248,9 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
             for (const field of fileFields) {
                 if (data[field]) {
                     const result = await uploadAPI.uploadPDF(data[field]);
+                    if (!result || !result.url) {
+                        throw new Error(`Failed to upload ${field === 'studyMaterial' ? 'Study Material' : 'PDF'}. Please try again.`);
+                    }
                     uploadData[`${field}Url`] = result.url;
                 }
             }
@@ -237,25 +267,23 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                 uploadData.url = uploadData.streamId;
             }
 
-            // Determine initial status based on scheduled time
-            let initialStatus = 'upcoming';
-            if (uploadData.scheduledTime) {
-                const scheduled = new Date(uploadData.scheduledTime.replace(' ', 'T'));
-                if (!isNaN(scheduled.getTime()) && scheduled <= new Date()) {
-                    initialStatus = 'live';
-                }
-            }
-
             await liveVideosAPI.create({
                 ...uploadData,
                 courseName: course?.name || course?.title || 'General',
-                status: initialStatus
+                status: 'active', // enabled by default
+                streamStatus: 'upcoming', // initial lifecycle state
+                contentType: 'live_stream',
+                type: 'live'
             });
+            if (showToast) showToast('Session scheduled successfully', 'success');
             setShowLiveStreamDrawer(false);
             fetchData();
-        } catch (error: any) {
-            console.error(error);
-            alert(error.message || 'Failed to schedule live stream');
+        } catch (err: any) {
+            console.error(err);
+            if (showToast) showToast(`Error: ${err.message || 'Failed to schedule'}`, 'error');
+            else alert(`Error: ${err.message || 'Failed to schedule'}`);
+        } finally {
+            setActionLoading(null);
         }
     };
 
@@ -267,9 +295,10 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
 
             const matchesSearch = titleMatch || idMatch || courseMatch;
             const matchesStatus = statusFilter === 'all' || (statusFilter === 'live' ? session.status === 'live' : session.status !== 'live');
-            return matchesSearch && matchesStatus;
+            const matchesCourse = !courseId || session.courseId === courseId;
+            return matchesSearch && matchesStatus && matchesCourse;
         });
-    }, [searchTerm, sessions, statusFilter]);
+    }, [searchTerm, sessions, statusFilter, courseId]);
 
     const totalPages = Math.ceil(filteredSessions.length / entriesPerPage);
     const startIndex = (currentPage - 1) * entriesPerPage;
@@ -330,7 +359,7 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                 </div>
 
                 {/* Table */}
-                <div className="bg-white rounded-[16px] border border-[#f3f4f6] shadow-[0_4px_25px_rgba(0,0,0,0.03)] overflow-hidden">
+                <div className="bg-white rounded-[16px] border border-[#f3f4f6] shadow-[0_4px_25px_rgba(0,0,0,0.03)]">
                     {loading ? (
                         <div className="py-20 flex flex-col items-center justify-center gap-4">
                             <div className="w-10 h-10 border-4 border-gray-100 border-t-black rounded-full animate-spin" />
@@ -341,8 +370,15 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-[#f9fafb] border-b border-[#f1f2f4]">
-                                        {['CONTENT ID', 'TITLE', 'COURSE', 'LIVE ON', 'STATUS', 'ACTIONS'].map(h => (
-                                            <th key={h} className="px-6 py-4 text-[11px] font-black text-[#9ca3af] uppercase tracking-[0.12em]">{h}</th>
+                                        {['CONTENT ID', 'TITLE', 'COURSE', 'LIVE ON', 'STATUS', 'ACTIONS'].map((h, i, arr) => (
+                                            <th 
+                                                key={h} 
+                                                className={`px-6 py-4 text-[11px] font-black text-[#9ca3af] uppercase tracking-[0.12em] ${
+                                                    i === 0 ? 'rounded-tl-[16px]' : i === arr.length - 1 ? 'rounded-tr-[16px]' : ''
+                                                }`}
+                                            >
+                                                {h}
+                                            </th>
                                         ))}
                                     </tr>
                                 </thead>
@@ -356,9 +392,21 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                                                 {session.scheduledTime ? session.scheduledTime.replace('T', ' ') : 'TBD'}
                                             </td>
                                             <td className="px-6 py-5">
-                                                <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${session.status === 'live' ? 'bg-red-100 text-red-600 border border-red-200 animate-pulse' : 'bg-gray-100 text-gray-500 border border-gray-200'}`}>
-                                                    <span className={`w-1.5 h-1.5 rounded-full ${session.status === 'live' ? 'bg-red-500' : 'bg-gray-400'}`} />
-                                                    {session.status === 'live' ? 'Live Now' : 'Upcoming'}
+                                                <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                                    (session as any).streamStatus === 'live'
+                                                        ? 'bg-red-100 text-red-600 border border-red-200 animate-pulse'
+                                                        : (session as any).streamStatus === 'ended'
+                                                            ? 'bg-gray-200 text-gray-400 border border-gray-300'
+                                                            : 'bg-gray-100 text-gray-500 border border-gray-200'
+                                                }`}>
+                                                    <span className={`w-1.5 h-1.5 rounded-full ${
+                                                        (session as any).streamStatus === 'live' ? 'bg-red-500'
+                                                        : (session as any).streamStatus === 'ended' ? 'bg-gray-400'
+                                                        : 'bg-gray-400'
+                                                    }`} />
+                                                    {(session as any).streamStatus === 'live' ? 'Live Now'
+                                                        : (session as any).streamStatus === 'ended' ? 'Ended'
+                                                        : 'Upcoming'}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-5 relative">
@@ -379,9 +427,10 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                                                                 onClick={() => { handleGoLive(session); setOpenDropdownId(null); }}
                                                                 className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
                                                             >
-                                                                <span className="material-symbols-outlined text-[16px] text-green-600">{session.status === 'live' ? 'pause_circle' : 'play_circle'}</span>
-                                                                {session.status === 'live' ? 'Disable' : 'Enable'}
+                                                                <span className="material-symbols-outlined text-[16px] text-green-600">{(session as any).streamStatus === 'live' ? 'pause_circle' : 'sensors'}</span>
+                                                                {(session as any).streamStatus === 'live' ? 'Move to Upcoming' : 'Start Live Stream'}
                                                             </button>
+
                                                             {/* Edit */}
                                                             <button
                                                                 onClick={() => { setEditingSession({ ...session }); setOpenDropdownId(null); }}
@@ -400,7 +449,7 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                                                                 Duplicate
                                                             </button>
                                                             {/* End Live Stream */}
-                                                            {session.status === 'live' && (
+                                                            {(session as any).streamStatus === 'live' && (
                                                                 <button
                                                                     onClick={() => { handleEndSession(session); setOpenDropdownId(null); }}
                                                                     disabled={actionLoading === session.id}
@@ -523,17 +572,19 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                                         </div>
 
                                         {/* Select Batch */}
-                                        <div className="space-y-2">
-                                            <FormLabel label="Select Batch" required />
-                                            <FormSelect
-                                                value={editingSession.courseId}
-                                                onChange={val => setEditingSession({ ...editingSession, courseId: val })}
-                                                options={[
-                                                    { value: '', label: 'Select Batch' },
-                                                    ...courses.map(c => ({ value: c.id || c._id, label: c.name || c.title }))
-                                                ]}
-                                            />
-                                        </div>
+                                        {!courseId && (
+                                            <div className="space-y-2">
+                                                <FormLabel label="Select Batch" required />
+                                                <FormSelect
+                                                    value={editingSession.courseId}
+                                                    onChange={val => setEditingSession({ ...editingSession, courseId: val })}
+                                                    options={[
+                                                        { value: '', label: 'Select Batch' },
+                                                        ...courses.map(c => ({ value: c.id || c._id, label: c.name || c.title }))
+                                                    ]}
+                                                />
+                                            </div>
+                                        )}
 
                                         {/* Status Segmented Toggle */}
                                         <div className="space-y-2">
@@ -645,6 +696,7 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true }) => {
                 onSubmit={handleAddLiveStream}
                 courses={courses}
                 subjects={subjects}
+                fixedCourseId={courseId}
             />
 
             <style>{`.material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 600, 'GRAD' 0, 'opsz' 24; }`}</style>

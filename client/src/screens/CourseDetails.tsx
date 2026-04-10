@@ -21,6 +21,8 @@ interface Video {
   order?: number;
   completed?: boolean;
   publishOn?: string;
+  scheduledTime?: string;
+  startTime?: string;
   contentType?: string;
   endTime?: string;
   joinBeforeMinutes?: number;
@@ -39,6 +41,13 @@ interface Note {
   title: string;
   fileUrl: string;
   fileSize?: string;
+}
+
+function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
+  const raw = (lc.streamStatus || lc.status || 'upcoming').toLowerCase();
+  if (['ended', 'completed', 'inactive'].includes(raw)) return 'ended';
+  if (raw === 'live') return 'live';
+  return 'upcoming';
 }
 
 interface Test {
@@ -213,6 +222,11 @@ const CourseDetails: React.FC = () => {
 
 
   const handleVideoClick = (video: Video) => {
+    // STRICT PLAYABILITY RULE: Upcoming live streams must not open player
+    if (video.contentType === 'live_stream' && computeEffectiveStatus(video) !== 'live') {
+      return;
+    }
+
     console.log('Video clicked:', video.title, 'Playable:', isEnrolled || video.isFree || video.isDemo, 'URL:', video.youtubeUrl || video.videoUrl);
     const canPlay = isEnrolled || video.isFree || video.isDemo;
 
@@ -999,14 +1013,14 @@ const CourseDetails: React.FC = () => {
               </div>
             ) : (
               <>
-                {liveStreams.length > 0 && (
+                {liveStreams.filter(live => computeEffectiveStatus(live) === 'live').length > 0 && (
                   <div className="space-y-4">
                     <h3 className="font-black text-gray-800 text-xs uppercase tracking-[0.2em] flex items-center gap-2 mb-4 px-1">
                       <div className="w-2 h-2 bg-red-600 rounded-full animate-ping" />
                       Ongoing Live Sessions
                     </h3>
                     <div className="space-y-4">
-                      {liveStreams.map((live, idx) => {
+                      {liveStreams.filter(live => computeEffectiveStatus(live) === 'live').map((live, idx) => {
                         const isLiveNow = live.status === 'live' || live.streamStatus === 'live' || live.isLive === true;
                         const isPast = live.status === 'ended' || live.streamStatus === 'ended';
                         const thumbUrl = getImageUrl(live.thumbnail) || getYouTubeThumbnail(live.youtubeUrl || '') || `https://picsum.photos/400/225?sig=${live.id || live._id || idx}`;
@@ -1030,16 +1044,12 @@ const CourseDetails: React.FC = () => {
                                     <span className="material-symbols-rounded text-accent-500">play_arrow</span>
                                   </div>
                                 </div>
-                                <div className={`absolute top-2 left-2 px-2 py-0.5 ${isPast ? 'bg-gray-600' : 'bg-red-600'} text-white text-[8px] font-black rounded-full shadow-sm ${isPast ? '' : 'animate-pulse'} tracking-widest uppercase`}>
-                                  {isPast ? 'ENDED' : 'LIVE'}
-                                </div>
+                                <div className="absolute top-2 left-2 px-2 py-0.5 bg-red-600 text-white text-[8px] font-black rounded-full shadow-sm animate-pulse tracking-widest uppercase">LIVE</div>
                               </div>
                               <div className="flex-1 min-w-0 py-1">
                                 <div className="flex items-center gap-2 mb-1.5">
-                                  <div className={`w-1.5 h-1.5 ${isPast ? 'bg-gray-400' : 'bg-accent-500'} rounded-full`} />
-                                  <span className={`text-[10px] font-black ${isPast ? 'text-gray-500' : 'text-accent-500'} tracking-widest uppercase opacity-70`}>
-                                    {isPast ? 'Completed Session' : 'Interactive Session'}
-                                  </span>
+                                  <div className="w-1.5 h-1.5 bg-accent-500 rounded-full" />
+                                  <span className="text-[10px] font-black text-accent-500 tracking-widest uppercase opacity-70">Interactive Session</span>
                                 </div>
                                 <h4 className="font-black text-gray-900 text-sm leading-tight line-clamp-2">{live.title}</h4>
                                 <p className="text-[10px] text-gray-400 font-bold mt-2 uppercase tracking-widest flex items-center gap-2">
@@ -1047,14 +1057,71 @@ const CourseDetails: React.FC = () => {
                                   {live.instructor || 'Lead Instructor'}
                                 </p>
                               </div>
-                              <div className="self-center">
-                                <span className="material-symbols-rounded text-gray-300 group-hover:text-accent-500 transition-all">chevron_right</span>
-                              </div>
                             </div>
                           </div>
                         );
                       })}
                     </div>
+                  </div>
+                )}
+
+                {liveStreams.filter(live => computeEffectiveStatus(live) === 'upcoming').length > 0 && (
+                  <div className="space-y-3 mt-6">
+                    <h3 className="font-black text-gray-800 text-xs uppercase tracking-[0.2em] flex items-center gap-2 mb-4 px-1">
+                      <span className="material-symbols-rounded text-sm text-primary-500">schedule</span>
+                      Upcoming Live Classes
+                    </h3>
+                    {liveStreams.filter(live => computeEffectiveStatus(live) === 'upcoming').map((live, idx) => {
+                      const thumbUrl = getImageUrl(live.thumbnail) || getYouTubeThumbnail(live.youtubeUrl || '') || `https://picsum.photos/400/225?sig=${live.id || live._id || idx}`;
+                      const scheduledTime = live.scheduledTime || live.startTime || live.publishOn;
+                      return (
+                        <div
+                          key={live.id || live._id}
+                          className="card-premium overflow-hidden animate-fade-in-up"
+                          style={{ animationDelay: `${idx * 80}ms` }}
+                        >
+                          <div className="flex gap-4 p-4">
+                            <div className="relative w-32 h-20 rounded-2xl overflow-hidden flex-shrink-0 shadow-lg">
+                              <img
+                                src={thumbUrl}
+                                className="w-full h-full object-cover opacity-70"
+                                onError={(e) => { e.currentTarget.src = `https://picsum.photos/400/225?sig=${live.id || live._id || idx}`; }}
+                              />
+                              <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                <span className="material-symbols-rounded text-white/60 text-3xl">hourglass_empty</span>
+                              </div>
+                              <div className="absolute top-2 left-2 px-2 py-0.5 bg-blue-600 text-white text-[8px] font-black rounded-full tracking-widest uppercase">UPCOMING</div>
+                            </div>
+                            <div className="flex-1 min-w-0 py-1">
+                              <div className="flex items-center gap-2 mb-1.5">
+                                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full" />
+                                <span className="text-[10px] font-black text-blue-500 tracking-widest uppercase opacity-70">Scheduled Session</span>
+                              </div>
+                              <h4 className="font-black text-gray-900 text-sm leading-tight line-clamp-2">{live.title}</h4>
+                              {scheduledTime && (
+                                <p className="text-[10px] text-gray-400 font-bold mt-1.5 flex items-center gap-1.5">
+                                  <span className="material-symbols-rounded text-xs">event</span>
+                                  {new Date(scheduledTime).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+                                </p>
+                              )}
+                              <p className="text-[10px] text-gray-400 font-bold mt-1 uppercase tracking-widest flex items-center gap-1.5">
+                                <span className="material-symbols-rounded text-xs">person</span>
+                                {live.instructor || 'Lead Instructor'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {liveStreams.filter(live => ['live', 'upcoming'].includes(computeEffectiveStatus(live))).length === 0 && (
+                  <div className="card-premium p-10 text-center animate-fade-in-up">
+                    <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <span className="material-symbols-rounded text-3xl text-gray-300">sensors_off</span>
+                    </div>
+                    <p className="text-gray-400 font-medium text-sm">No live classes scheduled</p>
                   </div>
                 )}
 
