@@ -232,7 +232,7 @@ const StudentProfileContent: React.FC<{
                 { label: 'Gender', value: student.gender || student.admission?.gender },
                 { label: 'WhatsApp', value: student.whatsAppNumber },
                 { label: 'Alternate WhatsApp', value: student.alternateWhatsAppNumber || student.alternateNumber || student.admission?.alternatePhone },
-                { label: 'Address', value: student.admission?.fullAddress || (student as any).address },
+                { label: 'Address', value: student.admission?.fullAddress || (student as any).address || (student as any).fullAddress },
                 { label: 'Class', value: (student as any).class },
                 { label: 'Age / DOB', value: student.dob ? new Date(student.dob).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A' }
               ].map((item, idx) => (
@@ -818,7 +818,7 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       fatherName: student.admission?.fatherName || '',
       motherName: student.admission?.motherName || '',
       alternatePhone: student.admission?.alternatePhone || '',
-      fullAddress: student.admission?.fullAddress || '',
+      fullAddress: student.admission?.fullAddress || (student as any).address || (student as any).fullAddress || '',
       previousClass: student.academic?.previousClass || '',
       schoolName: student.academic?.schoolName || '',
       marksPercentage: student.academic?.marksPercentage || '',

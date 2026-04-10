@@ -5748,8 +5748,10 @@ app.post('/api/students/register', publicLimiter, async (req, res) => {
       whatsAppNumber: cleanWA,
       alternateNumber: cleanAlt,
       class: studentClass || '11th',
-      target: target || 'NEET',
-      address: address || '',
+      admission: {
+        fullAddress: address || '',
+        admissionDate: new Date()
+      },
       state: state || '',
       district: district || '',
       gender: gender || '',
