@@ -22,12 +22,17 @@ const profileSchema = z.object({
   gender: z.string().optional().or(z.literal('')),
   dob: z.string().optional().or(z.literal('')),
   class: z.string().min(1, 'Please select a class'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  confirmPassword: z.string().min(6, 'Confirm your password'),
   target: z.string().optional().or(z.literal('')),
   referralCode: z.string().optional().or(z.literal('')),
+}).refine((data) => data.password === data.confirmPassword, {
+  message: "Passwords don't match",
+  path: ["confirmPassword"],
 });
 
 type PhoneFormData = z.infer<typeof phoneSchema>;
-type ProfileFormData = z.infer<typeof profileSchema> & { password?: string };
+type ProfileFormData = z.infer<typeof profileSchema>;
 
 interface StudentLoginProps {
   setAuth: (student: any, accessToken?: string, deviceId?: string) => void;
@@ -97,6 +102,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   const [categories, setCategories] = useState<any[]>([]);
   const otpRefs = useRef<(HTMLInputElement | null)[]>([]);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const fallbackCategories = [
     { id: 'neet', title: 'NEET', isActive: true },
@@ -429,6 +435,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       if (response.ok) {
         toast.success('Reset OTP sent!');
         setStep('reset-otp');
+        setOtp(['', '', '', '', '', '']);
         setResendTimer(60);
       } else {
         toast.error(data.error || 'Failed to send OTP');
@@ -536,7 +543,12 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
             <input
               type="text"
               value={passwordFormData.loginId}
-              onChange={(e) => setPasswordFormData({ ...passwordFormData, loginId: e.target.value })}
+              onChange={(e) => {
+                let val = e.target.value;
+                // If all digits (phone number), cap at 10
+                if (/^\d*$/.test(val) && val.length > 10) val = val.slice(0, 10);
+                setPasswordFormData({ ...passwordFormData, loginId: val });
+              }}
               placeholder="Enter User ID, Email or Mobile"
               className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#303F9F] focus:bg-white transition-all text-sm font-medium"
             />
@@ -676,23 +688,45 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       <form onSubmit={resetPasswordSubmit} className="space-y-6">
         <div className="space-y-2">
           <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest pl-1">New Password</label>
-          <input
-            type="password"
-            value={newPasswordData.password}
-            onChange={(e) => setNewPasswordData({ ...newPasswordData, password: e.target.value })}
-            placeholder="••••••••"
-            className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold"
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? 'text' : 'password'}
+              value={newPasswordData.password}
+              onChange={(e) => setNewPasswordData({ ...newPasswordData, password: e.target.value })}
+              placeholder="••••••••"
+              className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold pr-12"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1A237E] transition-colors"
+            >
+              <span className="material-symbols-rounded text-xl">
+                {showPassword ? 'visibility_off' : 'visibility'}
+              </span>
+            </button>
+          </div>
         </div>
         <div className="space-y-2">
           <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest pl-1">Confirm Password</label>
-          <input
-            type="password"
-            value={newPasswordData.confirm}
-            onChange={(e) => setNewPasswordData({ ...newPasswordData, confirm: e.target.value })}
-            placeholder="••••••••"
-            className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold"
-          />
+          <div className="relative">
+            <input
+              type={showConfirmPassword ? 'text' : 'password'}
+              value={newPasswordData.confirm}
+              onChange={(e) => setNewPasswordData({ ...newPasswordData, confirm: e.target.value })}
+              placeholder="••••••••"
+              className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold pr-12"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1A237E] transition-colors"
+            >
+              <span className="material-symbols-rounded text-xl">
+                {showConfirmPassword ? 'visibility_off' : 'visibility'}
+              </span>
+            </button>
+          </div>
         </div>
         <button
           type="submit"
@@ -877,9 +911,17 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
               </div>
               <input
                 type="tel"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 {...loginReg('phone')}
                 placeholder="Enter 10-digit number"
                 maxLength={10}
+                onKeyDown={(e) => {
+                  const val = e.currentTarget.value.replace(/\D/g, '');
+                  const allowed = ['Backspace','Delete','ArrowLeft','ArrowRight','Tab','Enter'];
+                  if (!allowed.includes(e.key) && !/^\d$/.test(e.key)) e.preventDefault();
+                  if (/^\d$/.test(e.key) && val.length >= 10) e.preventDefault();
+                }}
                 className={`w-full px-4 py-3 border rounded-r-xl focus:outline-none focus:border-[#303F9F] text-sm ${loginErrors.phone ? 'border-red-500' : 'border-gray-200'}`}
               />
             </div>
@@ -931,19 +973,25 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
       <form onSubmit={handleProfileSubmit(async (data) => {
         setLoading(true);
+        console.log('Profile Submission data:', data);
         try {
           const response = await fetch('/api/students/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
           });
+          console.log('Registration response status:', response.status);
           const resData = await response.json();
+          console.log('Registration response data:', resData);
+          
           if (!response.ok) throw new Error(resData.error || 'Registration failed');
+          
           toast.success('Registration successful! Please login.');
           setStep('login');
           setPasswordFormData({ loginId: data.phone, password: '' });
         } catch (err: any) {
-          toast.error(err.message);
+          console.error('Registration Catch Error:', err);
+          toast.error(err.message || 'An unexpected error occurred during registration');
         } finally {
           setLoading(false);
         }
@@ -1021,9 +1069,17 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
               <label className="text-xs font-semibold text-gray-600 block mb-1">WhatsApp No *</label>
               <input
                 type="tel"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 {...profileReg('whatsAppNumber')}
                 placeholder="10-digit number"
                 maxLength={10}
+                onKeyDown={(e) => {
+                  const val = e.currentTarget.value.replace(/\D/g, '');
+                  const allowed = ['Backspace','Delete','ArrowLeft','ArrowRight','Tab','Enter'];
+                  if (!allowed.includes(e.key) && !/^\d$/.test(e.key)) e.preventDefault();
+                  if (/^\d$/.test(e.key) && val.length >= 10) e.preventDefault();
+                }}
                 className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:border-[#303F9F] text-sm ${profileErrors.whatsAppNumber ? 'border-red-500' : 'border-gray-200'}`}
               />
               {profileErrors.whatsAppNumber && (
@@ -1034,9 +1090,17 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
               <label className="text-xs font-semibold text-gray-600 block mb-1">Alternate No *</label>
               <input
                 type="tel"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 {...profileReg('alternateNumber')}
                 placeholder="10-digit number"
                 maxLength={10}
+                onKeyDown={(e) => {
+                  const val = e.currentTarget.value.replace(/\D/g, '');
+                  const allowed = ['Backspace','Delete','ArrowLeft','ArrowRight','Tab','Enter'];
+                  if (!allowed.includes(e.key) && !/^\d$/.test(e.key)) e.preventDefault();
+                  if (/^\d$/.test(e.key) && val.length >= 10) e.preventDefault();
+                }}
                 className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:border-[#303F9F] text-sm ${profileErrors.alternateNumber ? 'border-red-500' : 'border-gray-200'}`}
               />
               {profileErrors.alternateNumber && (
@@ -1124,13 +1188,54 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
           <div>
             <label className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-1">Create Password *</label>
-            <input
-              type="password"
-              {...profileReg('password')}
-              required
-              placeholder="Min 6 characters"
-              className={`w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold`}
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                {...profileReg('password')}
+                required
+                placeholder="Min 6 characters"
+                className={`w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold pr-12`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1A237E] transition-colors"
+                title={showPassword ? "Hide Password" : "Show Password"}
+              >
+                <span className="material-symbols-rounded text-xl">
+                  {showPassword ? 'visibility_off' : 'visibility'}
+                </span>
+              </button>
+            </div>
+            {profileErrors.password && (
+              <p className="text-red-500 text-[10px] mt-1 font-bold">{profileErrors.password.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-1">Confirm Password *</label>
+            <div className="relative">
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                {...profileReg('confirmPassword')}
+                required
+                placeholder="Re-enter password"
+                className={`w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold pr-12`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1A237E] transition-colors"
+                title={showConfirmPassword ? "Hide Password" : "Show Password"}
+              >
+                <span className="material-symbols-rounded text-xl">
+                  {showConfirmPassword ? 'visibility_off' : 'visibility'}
+                </span>
+              </button>
+            </div>
+            {profileErrors.confirmPassword && (
+              <p className="text-red-500 text-[10px] mt-1 font-bold">{profileErrors.confirmPassword.message}</p>
+            )}
           </div>
 
           <div>

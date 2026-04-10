@@ -21,12 +21,20 @@ interface Student {
   paymentStatus: 'paid' | 'pending' | 'failed';
   notes?: string;
   userId?: string;
-  highQualification?: string;
   isBanned?: boolean;
   suspiciousActivityCount?: number;
   blockedAt?: string;
   hasPassword?: boolean;
   gender?: string;
+  district?: string;
+  whatsAppNumber?: string;
+  alternateWhatsAppNumber?: string;
+  alternateNumber?: string;
+  class?: string;
+  address?: string;
+  highQualification?: string;
+  height?: string;
+  qualification?: string;
 
   admission?: {
     fatherName: string;
@@ -220,9 +228,12 @@ const StudentProfileContent: React.FC<{
                 { label: 'Email Address', value: student.email },
                 { label: 'Phone Number', value: student.phone },
                 { label: 'State', value: student.state || getStateFromCity(student.city) },
-                { label: 'District / City', value: student.city },
-                { label: 'Qualification', value: student.highQualification },
+                { label: 'District', value: student.district || student.city },
                 { label: 'Gender', value: student.gender || student.admission?.gender },
+                { label: 'WhatsApp', value: student.whatsAppNumber },
+                { label: 'Alternate WhatsApp', value: student.alternateWhatsAppNumber || student.alternateNumber || student.admission?.alternatePhone },
+                { label: 'Address', value: student.admission?.fullAddress || (student as any).address },
+                { label: 'Class', value: (student as any).class },
                 { label: 'Age / DOB', value: student.dob ? new Date(student.dob).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A' }
               ].map((item, idx) => (
                 <div key={idx} className="space-y-1">
@@ -400,6 +411,9 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     registrationType: 'regular',
     status: 'active' as 'active' | 'inactive',
     paymentStatus: 'pending' as 'paid' | 'pending' | 'failed',
+    district: '',
+    whatsAppNumber: '',
+    alternateWhatsAppNumber: '',
     notes: '',
     // Legacy/Hidden fields kept in state for API compatibility but hidden from simple form
     fatherName: '',
@@ -592,6 +606,9 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       state: data.state,
       userId: data.userId,
       highQualification: data.highQualification,
+      district: data.district,
+      whatsAppNumber: data.whatsAppNumber,
+      alternateWhatsAppNumber: data.alternateWhatsAppNumber,
       registrationDate: data.registrationDate,
       registrationType: data.registrationType,
       status: data.status,
@@ -793,6 +810,9 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       password: '', // Don't pre-fill password for security
       confirmPassword: '',
       highQualification: student.highQualification || '',
+      district: student.district || '',
+      whatsAppNumber: student.whatsAppNumber || '',
+      alternateWhatsAppNumber: student.alternateWhatsAppNumber || '',
       gender: student.admission?.gender || student.gender || 'Male',
       // Hidden fields
       fatherName: student.admission?.fatherName || '',
@@ -845,6 +865,9 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       status: 'active',
       paymentStatus: 'pending',
       notes: '',
+      district: '',
+      whatsAppNumber: '',
+      alternateWhatsAppNumber: '',
       fatherName: '',
       motherName: '',
       alternatePhone: '',
@@ -1429,11 +1452,12 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                 </div>
 
                 <div className="space-y-2">
-                  <FormLabel label="Highest Qualification" required />
-                  <FormInput
-                    placeholder="e.g., Graduate, 12th"
-                    value={formData.highQualification}
-                    onChange={(e) => setFormData({ ...formData, highQualification: e.target.value })}
+                  <FormLabel label="Full Address" required />
+                  <textarea
+                    placeholder="Enter complete residential address"
+                    value={formData.fullAddress}
+                    onChange={(e) => setFormData({ ...formData, fullAddress: e.target.value })}
+                    className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-[14px] font-bold text-gray-700 outline-none focus:border-indigo-500 focus:bg-white transition-all shadow-sm min-h-[100px] resize-none"
                   />
                 </div>
 
@@ -1457,6 +1481,31 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                     value={formData.dob}
                     onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
                   />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <FormLabel label="WhatsApp No" required />
+                    <FormInput
+                      placeholder="10-digit primary"
+                      value={formData.whatsAppNumber}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9]/g, '');
+                        if (val.length <= 10) setFormData({ ...formData, whatsAppNumber: val });
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <FormLabel label="Alternate No" />
+                    <FormInput
+                      placeholder="10-digit alternate"
+                      value={formData.alternateWhatsAppNumber}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/[^0-9]/g, '');
+                        if (val.length <= 10) setFormData({ ...formData, alternateWhatsAppNumber: val });
+                      }}
+                    />
+                  </div>
                 </div>
 
                 <div className="pt-8 border-t border-gray-100 mt-8">
@@ -1491,9 +1540,9 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                         </div>
 
                         <div className="space-y-2">
-                          <FormLabel label={showEditModal ? "Confirm New Password" : "Confirm Password *"} required={!showEditModal} />
+                          <FormLabel label={showEditModal ? "Confirm Password" : "Confirm Password *"} required={!showEditModal} />
                           <FormPasswordInput
-                            placeholder={showEditModal ? "Leave blank to keep current" : "••••••••"}
+                            placeholder="Re-enter password"
                             value={formData.confirmPassword}
                             onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                           />

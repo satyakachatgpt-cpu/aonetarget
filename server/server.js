@@ -1914,7 +1914,6 @@ app.post('/api/users', async (req, res) => {
 app.get('/api/students', async (req, res) => {
   try {
     const students = await Student.find({}, {
-      admission: 0,
       academic: 0,
       documents: 0,
       fees: 0,
@@ -2077,6 +2076,12 @@ app.post('/api/students', async (req, res) => {
       status: req.body.status || 'active',
       registrationType: req.body.registrationType || 'regular',
       registrationDate: req.body.registrationDate || new Date().toISOString().split('T')[0],
+      district: req.body.district,
+      gender: req.body.gender,
+      whatsAppNumber: req.body.whatsAppNumber,
+      alternateNumber: req.body.alternateNumber,
+      alternateWhatsAppNumber: req.body.alternateWhatsAppNumber || req.body.alternateNumber,
+      class: req.body.class,
       notes: req.body.notes,
       paymentStatus: req.body.paymentStatus || 'pending',
 
@@ -2084,8 +2089,8 @@ app.post('/api/students', async (req, res) => {
         fatherName: (req.body.fatherName || "").trim(),
         motherName: (req.body.motherName || "").trim(),
         gender: req.body.gender,
-        alternatePhone: (req.body.alternatePhone || "").trim(),
-        fullAddress: req.body.fullAddress,
+        alternatePhone: (req.body.alternateNumber || req.body.alternatePhone || "").trim(),
+        fullAddress: req.body.fullAddress || req.body.address,
         batchTiming: req.body.batchTiming,
         admissionDate: req.body.admissionDate || new Date()
       },
@@ -2147,14 +2152,20 @@ app.put('/api/students/:id', async (req, res) => {
       status: body.status,
       registrationType: body.registrationType,
       registrationDate: body.registrationDate,
+      district: body.district,
+      gender: body.gender,
+      whatsAppNumber: body.whatsAppNumber,
+      alternateNumber: body.alternateNumber,
+      alternateWhatsAppNumber: body.alternateWhatsAppNumber || body.alternateNumber,
+      class: body.class,
       notes: body.notes,
       paymentStatus: body.paymentStatus,
       admission: {
         fatherName: body.fatherName ? body.fatherName.trim() : body.fatherName,
         motherName: body.motherName ? body.motherName.trim() : body.motherName,
         gender: body.gender,
-        alternatePhone: body.alternatePhone ? body.alternatePhone.trim() : body.alternatePhone,
-        fullAddress: body.fullAddress,
+        alternatePhone: (body.alternateNumber || body.alternatePhone || "").trim(),
+        fullAddress: body.fullAddress || body.address,
         batchTiming: body.batchTiming,
         admissionDate: body.admissionDate
       },
