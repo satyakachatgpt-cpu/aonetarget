@@ -49,8 +49,8 @@ async function cachedFetch(url: string, ttl = CACHE_TTL): Promise<any> {
           localStorage.removeItem('adminToken');
           localStorage.removeItem('adminId');
           localStorage.removeItem('isAdminAuthenticated');
-          window.location.href = '/admin/login';
-          return;
+          window.location.hash = '#/admin-login';
+          throw new Error('Your session has expired. Please login again.');
         }
       }
     }
@@ -357,8 +357,8 @@ export const uploadAPI = {
         localStorage.removeItem('adminToken');
         localStorage.removeItem('adminId');
         localStorage.removeItem('isAdminAuthenticated');
-        window.location.href = '/admin/login';
-        return;
+        window.location.hash = '#/admin-login';
+        throw new Error('Your session has expired. Please login again.');
       }
       const errMsg = err.response?.data?.error || 'Image upload failed';
       throw new Error(errMsg);
@@ -383,8 +383,8 @@ export const uploadAPI = {
         localStorage.removeItem('adminToken');
         localStorage.removeItem('adminId');
         localStorage.removeItem('isAdminAuthenticated');
-        window.location.href = '/admin/login';
-        return;
+        window.location.hash = '#/admin-login';
+        throw new Error('Your session has expired. Please login again.');
       }
       const errMsg = err.response?.data?.error || 'Video upload failed';
       throw new Error(errMsg);
@@ -408,8 +408,8 @@ export const uploadAPI = {
         localStorage.removeItem('adminToken');
         localStorage.removeItem('adminId');
         localStorage.removeItem('isAdminAuthenticated');
-        window.location.href = '/admin/login';
-        return;
+        window.location.hash = '#/admin-login';
+        throw new Error('Your session has expired. Please login again.');
       }
       const errMsg = err.response?.data?.error || 'Document upload failed';
       throw new Error(errMsg);

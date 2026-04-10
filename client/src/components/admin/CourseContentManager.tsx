@@ -24,6 +24,7 @@ import {
   LiveStreamDrawer,
   WebinarDrawer
 } from './FeatureDrawers';
+import LiveSessions from './LiveSessions';
 import BulkActionsDrawerComponent from './BulkActionsDrawer';
 
 
@@ -459,6 +460,30 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       showToast(newFree ? (video.contentType === 'youtube_zoom' || video.contentType === 'live_stream' ? 'Live stream set to Free' : 'Video set to Free') : (video.contentType === 'youtube_zoom' || video.contentType === 'live_stream' ? 'Live stream set to Locked' : 'Video set to Locked'));
     } catch { showToast('Failed to update'); }
   };
+
+  const handleEndLiveStream = async (video: any) => {
+    if (!confirm(`End live stream "${video.title}"? This will mark it as ended for all students.`)) return;
+    try {
+      const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
+      const videoId = (video as any)._id || video.id;
+      const adminToken = localStorage.getItem('adminToken');
+      await fetch(`${API_BASE_URL}/courses/${courseId}/videos/${videoId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${adminToken}`
+        },
+        body: JSON.stringify({ ...video, status: 'active', streamStatus: 'ended', endTime: new Date().toISOString() })
+      });
+      setVideos(prev => prev.map(v =>
+        ((v as any)._id || v.id) === videoId
+          ? { ...v, streamStatus: 'ended' } as any
+          : v
+      ));
+      showToast('Live stream ended successfully', 'success');
+    } catch { showToast('Failed to end live stream', 'error'); }
+  };
+
 
   const handleToggleNoteStatus = async (note: Note) => {
     try {
@@ -903,12 +928,8 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         parsedLink = `https://www.youtube.com/embed/${youtubeMatch[1]}?controls=0&modestbranding=1&rel=0`;
       }
 
-      // Compute dynamic status based on start time
-      const startTimeMs = new Date(youtubeZoomForm.publishOn).getTime();
-      const currentTimeMs = new Date().getTime();
-      let streamStatus = 'upcoming';
-      if (youtubeZoomForm.streamStatus === 'ended') streamStatus = 'ended';
-      else if (startTimeMs <= currentTimeMs) streamStatus = 'live';
+      // Compute status (strictly manual, no time-based auto-promotion)
+      const streamStatus = youtubeZoomForm.streamStatus || 'upcoming';
 
       const streamData = {
         title: youtubeZoomForm.title,
@@ -1017,6 +1038,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
   const [showLinkDrawer, setShowLinkDrawer] = useState(false);
   const [showBulkActionDrawer, setShowBulkActionDrawer] = useState(false);
   const [selectedContentIds, setSelectedContentIds] = useState<string[]>([]);
+  const [openContentActionMenuId, setOpenContentActionMenuId] = useState<string | null>(null);
 
 
   const [activeLiveStreamTab, setActiveLiveStreamTab] = useState<'basic' | 'advanced'>('basic');
@@ -2150,33 +2172,22 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     const itemId = normalizeId(item._id || item.id);
     const isExpanded = itemId ? expandedFolders.includes(itemId) : false;
     const isActiveUploadFolder = isFolder && currentFolder && normalizeId(currentFolder._id || currentFolder.id) === itemId;
-    const isLiveStream = item.contentType === 'live_stream' || item.contentType === 'youtube_zoom';
+    const isLiveStream = item?.contentType === 'live_stream' || item?.type === 'live' || item?.streamType === 'live' || item?.platform === 'youtube_zoom';
 
     const getCalculatedLiveStatus = (item: any) => {
       if (!isLiveStream) return null;
-
-      // Prioritize manual status set by admin
-      const explicitStatus = (item.streamStatus || item.status || '').toLowerCase();
-      if (explicitStatus === 'ended' || explicitStatus === 'completed' || explicitStatus === 'finished') {
+      // Strictly respect streamStatus for lifecycle, fallback to status only if it looks like a lifecycle status
+      const lifecycleStatus = (item.streamStatus || (['upcoming', 'live', 'ended'].includes(item.status) ? item.status : 'upcoming')).toLowerCase();
+      
+      if (['ended', 'inactive', 'completed', 'finished', 'disable'].includes(lifecycleStatus)) {
         return 'ended';
       }
-
-      const now = new Date();
-
-      // Parse dates safely
-      const parseDate = (d: any) => {
-        if (!d) return null;
-        const date = new Date(d);
-        return isNaN(date.getTime()) ? null : date;
-      };
-
-      const startTime = parseDate(item.publishOn || item.date || item.startDateTime);
-      const endTime = parseDate(item.endTime || item.endDateTime);
-
-      if (endTime && now > endTime) return 'ended';
-      if (startTime && now < startTime) return 'upcoming';
-      return 'live';
+      if (lifecycleStatus === 'live') {
+        return 'live';
+      }
+      return 'upcoming';
     };
+
 
 
     const currentLiveStatus = getCalculatedLiveStatus(item);
@@ -2295,143 +2306,159 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
               </span>
             </div>
             <div className="mt-2.5 px-3 py-0.5 rounded-full text-[10px] font-bold text-gray-500 bg-gray-100 w-fit uppercase tracking-wider">
-              {isNote ? 'PDF' : isTest ? 'Test' : isFolder ? 'Folder' : isLiveStream ? 'Live stream' : isVideo ? 'Video' : 'Content'}
+              {isLiveStream ? 'Live stream' : isNote ? 'PDF' : isTest ? 'Test' : isFolder ? 'Folder' : isVideo ? 'Video' : 'Content'}
             </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex items-center gap-2">
-            {isActuallyLive && (
-              <div title="Event is Live" className="w-[34px] h-[34px] flex items-center justify-center rounded-lg border border-red-100 text-red-500 bg-red-50 cursor-pointer hover:bg-red-100 transition-all">
-                <span className="material-symbols-outlined text-[18px] animate-pulse">sensors</span>
-              </div>
-            )}
-
+          {/* Action Menu Dropdown */}
+          <div className="relative">
             <button
-              title={item.status === 'active' ? 'Unpublish' : 'Publish'}
               onClick={(e) => {
                 e.stopPropagation();
-                if (isFolder) {
-                  const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
-                  fetch(`${API_BASE_URL}/courses/${courseId}/folders/${item._id || item.id}`, {
-                    method: 'PUT',
-                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...item, status: item.status === 'active' ? 'inactive' : 'active' })
-                  }).then(() => { showToast(item.status === 'active' ? 'Folder disabled' : 'Folder enabled'); loadCourseContent(); });
-                }
-                else if (isVideo) handleToggleVideoStatus(item);
-                else if (isNote) handleToggleNoteStatus(item);
-                else if (isTest) handleToggleTestStatus(item);
+                setOpenContentActionMenuId(openContentActionMenuId === itemId ? null : itemId);
               }}
-              className="w-[34px] h-[34px] flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:border-gray-900 transition-all bg-white hover:bg-gray-50 group"
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[12px] font-bold transition-all border ${openContentActionMenuId === itemId ? 'bg-black text-white border-black shadow-lg shadow-black/10' : 'bg-white text-gray-700 border-gray-100 hover:border-gray-300'}`}
             >
-              <div className={`w-[24px] h-[14px] rounded-full relative flex items-center transition-all ${item.status === 'active' ? 'bg-[#1a1c1e]' : 'bg-gray-200'}`}>
-                <div className={`absolute ${item.status === 'active' ? 'right-[2px]' : 'left-[2px]'} w-[10px] h-[10px] bg-white rounded-full shadow-sm`}></div>
-              </div>
+              Actions
+              <span className={`material-symbols-outlined text-[18px] transition-transform duration-300 ${openContentActionMenuId === itemId ? 'rotate-180' : ''}`}>expand_more</span>
             </button>
 
-            {isLiveStream && (
-              <button
-                title="Notify Students"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleSendContentNotification(item);
-                }}
-                className="w-[34px] h-[34px] flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:text-blue-500 hover:border-blue-500 hover:bg-blue-50 transition-all bg-white"
+            {openContentActionMenuId === itemId && (
+              <div
+                className="absolute right-0 top-full mt-2 w-[220px] bg-white rounded-2xl shadow-2xl z-[100] border border-gray-100 py-3 animate-in fade-in zoom-in duration-200 origin-top-right"
+                onClick={(e) => e.stopPropagation()}
               >
-                <span className="material-symbols-outlined text-[18px]">notifications</span>
-              </button>
-            )}
-
-            {isLiveStream && (
-              <button
-                title="End Live Stream"
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  if (!confirm('Are you sure you want to end this live stream?')) return;
-                  try {
-                    const videoId = item._id || item.id;
-                    const res = await fetch(`${API_BASE_URL}/live-stream/end/${videoId}`, {
-                      method: 'POST',
-                      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }
-                    });
-
-                    if (res.ok) {
-                      showToast('Live stream ended successfully', 'success');
-                      loadCourseContent();
-                    } else {
-                      const errData = await res.json();
-                      showToast(errData.error || 'Failed to end live stream', 'error');
+                {/* Status Toggle */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isFolder) {
+                      const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
+                      fetch(`${API_BASE_URL}/courses/${courseId}/folders/${itemId}`, {
+                        method: 'PUT',
+                        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ...item, status: item.status === 'active' ? 'inactive' : 'active' })
+                      }).then(() => { showToast(item.status === 'active' ? 'Folder disabled' : 'Folder enabled'); loadCourseContent(); });
                     }
-                  } catch (err) {
-                    showToast('Failed to end live stream', 'error');
-                  }
-                }}
-                className="w-[34px] h-[34px] flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-500 hover:bg-red-50 transition-all bg-white"
-              >
-                <span className="material-symbols-outlined text-[18px]">stop</span>
-              </button>
+                    else if (isLiveStream || isVideo) handleToggleVideoStatus(item);
+                    else if (isNote) handleToggleNoteStatus(item);
+                    else if (isTest) handleToggleTestStatus(item);
+                    setOpenContentActionMenuId(null);
+                  }}
+                  className="w-full flex items-center justify-between px-4 py-2.5 hover:bg-gray-50 transition-colors group"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className={`material-symbols-outlined text-[20px] ${item.status === 'active' ? 'text-green-500' : 'text-gray-400'}`}>
+                      {item.status === 'active' ? 'visibility' : 'visibility_off'}
+                    </span>
+                    <span className="text-[13px] font-bold text-gray-600 group-hover:text-gray-900">
+                      {item.status === 'active' ? 'Enabled (Visible)' : 'Disabled (Hidden)'}
+                    </span>
+                  </div>
+                  <div className={`w-[24px] h-[14px] rounded-full relative flex items-center transition-all ${item.status === 'active' ? 'bg-green-500' : 'bg-gray-200'}`}>
+                    <div className={`absolute ${item.status === 'active' ? 'right-[2px]' : 'left-[2px]'} w-[10px] h-[10px] bg-white rounded-full shadow-sm`}></div>
+                  </div>
+                </button>
+
+                {/* Free/Paid Toggle */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isFolder) {
+                      const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
+                      fetch(`${API_BASE_URL}/courses/${courseId}/folders/${itemId}`, {
+                        method: 'PUT',
+                        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ ...item, isFree: !item.isFree })
+                      }).then(() => { showToast(!item.isFree ? 'Folder set to Free' : 'Folder set to Locked'); loadCourseContent(); });
+                    }
+                    else if (isVideo) handleToggleVideoFree(item);
+                    else if (isNote) handleToggleNoteFree(item);
+                    else if (isTest) handleToggleTestFree(item);
+                    setOpenContentActionMenuId(null);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors group"
+                >
+                  <span className={`material-symbols-outlined text-[20px] ${item.isFree ? 'text-amber-400' : 'text-gray-400'}`}>
+                    {item.isFree ? 'lock_open' : 'lock'}
+                  </span>
+                  <span className="text-[13px] font-bold text-gray-600 group-hover:text-gray-900">
+                    {item.isFree ? 'Unlock Content' : 'Lock Content'}
+                  </span>
+                </button>
+
+                {isLiveStream && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSendContentNotification(item);
+                      setOpenContentActionMenuId(null);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors group"
+                  >
+                    <span className="material-symbols-outlined text-[20px] text-blue-400">notifications_active</span>
+                    <span className="text-[13px] font-bold text-gray-600 group-hover:text-gray-900">Notify Students</span>
+                  </button>
+                )}
+
+                {/* End Live Stream — only when stream is live */}
+                {isLiveStream && isActuallyLive && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleEndLiveStream(item);
+                      setOpenContentActionMenuId(null);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-orange-50 transition-colors group"
+                  >
+                    <span className="material-symbols-outlined text-[20px] text-orange-500">stop_circle</span>
+                    <span className="text-[13px] font-bold text-orange-600 group-hover:text-orange-800">End Live Stream</span>
+                  </button>
+                )}
+
+                <div className="h-px bg-gray-50 my-2 mx-3"></div>
+
+                {/* Edit Action */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isFolder) handleEditFolder(item);
+                    else if (isVideo) {
+                      if (isLiveStream) handleEditYoutubeZoom(item);
+                      else handleEditVideo(item);
+                    }
+                    else if (isNote) handleEditNote(item);
+                    else if (isTest) handleEditTest(item);
+                    setOpenContentActionMenuId(null);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors group"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-indigo-400">edit_square</span>
+                  <span className="text-[13px] font-bold text-gray-600 group-hover:text-gray-900">Edit Details</span>
+                </button>
+
+                {/* Delete Action */}
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (confirm(`Are you sure you want to delete this ${item.type}?`)) {
+                      if (isFolder) handleDeleteFolder(itemId);
+                      else if (isVideo) {
+                        handleDeleteVideo(itemId);
+                        if (isLiveStream) setTimeout(() => showToast('Live stream deleted successfully', 'success'), 500);
+                      }
+                      else if (isNote) handleDeleteNote(itemId);
+                      else if (isTest) handleDeleteTest(itemId);
+                    }
+                    setOpenContentActionMenuId(null);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 text-red-600 transition-all group"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-red-300 group-hover:text-red-600">delete</span>
+                  <span className="text-[13px] font-bold">Delete</span>
+                </button>
+              </div>
             )}
-
-            <button
-              title={item.isFree ? 'Make Paid' : 'Make Free'}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isFolder) {
-                  const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
-                  fetch(`${API_BASE_URL}/courses/${courseId}/folders/${item._id || item.id}`, {
-                    method: 'PUT',
-                    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ...item, isFree: !item.isFree })
-                  }).then(() => { showToast(!item.isFree ? 'Folder set to Free' : 'Folder set to Locked'); loadCourseContent(); });
-                }
-                else if (isVideo) handleToggleVideoFree(item);
-                else if (isNote) handleToggleNoteFree(item);
-                else if (isTest) handleToggleTestFree(item);
-              }}
-              className={`w-[34px] h-[34px] flex items-center justify-center rounded-lg border transition-all ${!item.isFree ? 'border-gray-200 text-gray-400 hover:text-gray-900 hover:border-gray-900 bg-white hover:bg-gray-50' : 'border-gray-200 text-gray-400 hover:text-gray-900 hover:border-gray-900 bg-white hover:bg-gray-50'}`}
-            >
-              <span className="material-symbols-outlined text-[18px]">
-                {item.isFree ? 'lock_open' : 'lock'}
-              </span>
-            </button>
-
-            <button
-              title="Edit"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (isFolder) handleEditFolder(item);
-                else if (isVideo) {
-                  if (isLiveStream) handleEditYoutubeZoom(item);
-                  else handleEditVideo(item);
-                }
-                else if (isNote) handleEditNote(item);
-                else if (isTest) handleEditTest(item);
-              }}
-              className="w-[34px] h-[34px] flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:text-[#1a1c1e] hover:border-[#1a1c1e] hover:bg-gray-50 transition-all bg-white"
-            >
-              <span className="material-symbols-outlined text-[18px]">edit</span>
-            </button>
-
-            <button
-              title="Delete"
-              onClick={(e) => {
-                e.stopPropagation();
-                const id = item._id || item.id;
-                if (isFolder) handleDeleteFolder(id);
-                else if (isVideo) {
-                  handleDeleteVideo(id);
-                  if (isLiveStream) {
-                    setTimeout(() => showToast('Live stream deleted successfully', 'success'), 500);
-                  }
-                }
-                else if (isNote) handleDeleteNote(id);
-                else if (isTest) handleDeleteTest(id);
-              }}
-              className="w-[34px] h-[34px] flex items-center justify-center rounded-lg border border-gray-200 text-gray-400 hover:text-red-500 hover:border-red-500 hover:bg-red-50 transition-all bg-white"
-            >
-              <span className="material-symbols-outlined text-[18px]">delete_outline</span>
-            </button>
           </div>
         </div>
         {isFolder && isExpanded && renderAccordionTree(itemId, level + 1)}
@@ -2946,8 +2973,8 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
             </div>
 
 
-            <div className="bg-white rounded-[24px] border border-gray-100 overflow-hidden shadow-sm">
-              <div className="p-4 space-y-3">
+            <div className="bg-white rounded-[24px] border border-gray-100 shadow-sm overflow-visible">
+              <div className="p-4 space-y-3 overflow-visible">
                 {finalRenderedItems.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-20 text-center">
                     <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center mb-4">

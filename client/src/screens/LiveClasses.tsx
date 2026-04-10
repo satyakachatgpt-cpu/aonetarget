@@ -12,15 +12,12 @@ function resolveStreamUrl(lc: any): string {
 
 // ─── Helper: compute effective status client-side ──────────────────────────────
 function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
-  const raw = lc.status as string;
-  if (raw === 'ended' || raw === 'completed') return 'ended';
-  const isoStr = lc.scheduledTime ? lc.scheduledTime.replace(' ', 'T') : (lc.startTime || '');
-  if (!isoStr) return raw === 'live' ? 'live' : 'upcoming';
-  const scheduled = new Date(isoStr);
-  if (isNaN(scheduled.getTime())) return raw === 'live' ? 'live' : 'upcoming';
-  if (scheduled <= new Date()) return 'live';
+  const raw = (lc.streamStatus || lc.status || 'upcoming').toLowerCase();
+  if (['ended', 'completed', 'inactive'].includes(raw)) return 'ended';
+  if (raw === 'live') return 'live';
   return 'upcoming';
 }
+
 function useLiveCountdown(scheduledTimeStr: string | undefined) {
   const getSecsLeft = () => {
     if (!scheduledTimeStr) return null;
@@ -39,7 +36,7 @@ function useLiveCountdown(scheduledTimeStr: string | undefined) {
 
 const CountdownText = ({ scheduledTime }: { scheduledTime: string }) => {
   const secs = useLiveCountdown(scheduledTime);
-  if (secs === null || secs <= 0) return <span>Live Now</span>;
+  if (secs === null || secs <= 0) return <span>Scheduled</span>;
   const FIVE = 5 * 60;
   if (secs > FIVE) {
     const d = new Date(scheduledTime);
@@ -85,18 +82,15 @@ const LiveClasses: React.FC = () => {
     if (student) fetchAllLiveClasses();
   }, [student]);
 
-  // Tick every 30s to trigger re-render and auto-promote upcoming → live client-side
-  useEffect(() => {
-    const interval = setInterval(() => setTick(t => t + 1), 30000);
-    return () => clearInterval(interval);
-  }, []);
+
 
   const studentId = student?.id || student?._id || student?.studentId;
 
   // Smart join: All YouTube videos (live + normal) → custom player, others → new tab
   const smartJoin = useCallback((lc: any) => {
+    if (computeEffectiveStatus(lc) !== 'live') return;
     const url = resolveStreamUrl(lc);
-    if (!url) return;
+    if (!url) { navigate('/live-classes'); return; }
     
     // Check if it's a YouTube URL
     const isYT = url.includes('youtube.com') || url.includes('youtu.be');
@@ -142,80 +136,95 @@ const LiveClasses: React.FC = () => {
         </div>
       </header>
 
-      {liveClasses.length > 0 && (
-        <section className="px-4 mt-6 mb-8 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-          <div className="flex justify-between items-center mb-3">
-            <div className="flex items-center gap-2.5">
-              <div className="w-1.5 h-7 bg-gradient-to-b from-accent to-accent-600 rounded-full shadow-sm"></div>
-              <div>
-                <h2 className="section-title">Live Classes</h2>
-                <p className="section-subtitle">Join upcoming sessions</p>
-              </div>
-            </div>
-          </div>
-          <div className="space-y-2.5">
-            {liveClasses.slice(0, 4).map((lc: any, i: number) => {
-              const effectiveStatus = computeEffectiveStatus(lc);
-              const isEnded = effectiveStatus === 'ended';
-              const isLiveNow = effectiveStatus === 'live';
-              const isUpcoming = effectiveStatus === 'upcoming';
-              const streamUrl = resolveStreamUrl(lc);
-              const scheduledISO = lc.scheduledTime ? lc.scheduledTime.replace(' ', 'T') : (lc.startTime || '');
+      {liveClasses.length > 0 && (() => {
+        const ongoing = liveClasses.filter(lc => computeEffectiveStatus(lc) === 'live');
+        const upcoming = liveClasses.filter(lc => computeEffectiveStatus(lc) === 'upcoming');
 
-              return (
-                <div key={lc._id || lc.id || i} className="card-premium p-3 rounded-2xl border border-gray-100/50 flex gap-3 items-center hover:-translate-y-0.5 transition-all duration-200 group">
-                  <div className={`w-12 h-12 bg-gradient-to-br ${isEnded ? 'from-gray-400 to-gray-500' : isLiveNow ? 'from-accent to-accent-600' : 'from-orange-400 to-red-500'} rounded-2xl flex items-center justify-center shrink-0 relative shadow-button`}>
-                    <span className="material-symbols-rounded text-white text-2xl">sensors</span>
-                    {isLiveNow && (
-                      <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="font-medium text-sm text-gray-800 truncate">{lc.title || lc.name || 'Live Class'}</h4>
-                    <div className="flex items-center gap-2 mt-1.5">
-                      <span className="text-[11px] text-gray-400 flex items-center gap-1">
-                        <span className="material-symbols-rounded text-[12px]">person</span>
-                        {lc.teacherName || lc.instructor || 'Instructor'}
-                      </span>
-                      <span className="w-1 h-1 rounded-full bg-gray-300"></span>
-                      <span className="text-[11px] text-gray-400 flex items-center gap-1">
-                        <span className="material-symbols-rounded text-[12px]">schedule</span>
-                        {isEnded ? 'Ended' : isLiveNow ? 'Live Now' : (
-                          scheduledISO ? <CountdownText scheduledTime={scheduledISO} /> : 'Upcoming'
-                        )}
-                      </span>
-                    </div>
-                  </div>
+        if (ongoing.length === 0 && upcoming.length === 0) return null;
 
-                  {isEnded ? (
-                    <div className="bg-gray-100 text-gray-400 text-[10px] px-3 py-2 rounded-xl font-bold uppercase tracking-wider shrink-0">
-                      Ended
-                    </div>
-                  ) : isLiveNow ? (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); smartJoin(lc); }}
-                      className="btn-accent text-xs px-4 py-2.5 rounded-xl flex items-center gap-1.5 active:scale-[0.97] transition-all duration-200 shrink-0 shadow-button hover:shadow-lg"
-                    >
-                      <span className="material-symbols-rounded text-[14px]">
-                        videocam
-                      </span>
-                      Join
-                    </button>
-                  ) : (
-                    <button
-                      disabled
-                      className="bg-orange-50 text-orange-500/60 text-[10px] px-3 py-2.5 rounded-xl border border-orange-100 shrink-0 font-bold flex items-center gap-1.5 cursor-not-allowed whitespace-nowrap"
-                    >
-                      <span className="material-symbols-rounded text-[14px] animate-pulse">timer</span>
-                      <CountdownText scheduledTime={scheduledISO} />
-                    </button>
-                  )}
+        return (
+          <div className="px-4 space-y-6">
+            {ongoing.length > 0 && (
+              <section className="animate-fade-in-up">
+                <div className="flex items-center gap-2.5 mb-4">
+                  <div className="w-2 h-7 bg-red-600 rounded-full animate-pulse shadow-[0_0_10px_rgba(220,38,38,0.3)]"></div>
+                  <div>
+                    <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Live Now</h2>
+                    <p className="text-[10px] text-red-500 font-bold uppercase tracking-widest flex items-center gap-1">
+                      <span className="w-1 h-1 bg-red-500 rounded-full animate-ping"></span>
+                      Ongoing Sessions
+                    </p>
+                  </div>
                 </div>
-              );
-            })}
+                <div className="grid grid-cols-1 gap-3">
+                  {ongoing.map((lc: any, i: number) => (
+                    <div key={lc._id || lc.id || i} className="card-premium p-4 rounded-[2rem] border-2 border-red-50 bg-red-50/20 shadow-xl shadow-red-500/5 group relative overflow-hidden">
+                      <div className="flex gap-4 items-center relative z-10">
+                        <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-red-600 rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-red-500/20">
+                          <span className="material-symbols-rounded text-white text-2xl">sensors</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-bold text-gray-900 truncate mb-1">{lc.title || lc.name}</h4>
+                          <span className="text-xs text-gray-500 font-medium flex items-center gap-1.5">
+                            <span className="material-symbols-rounded text-base text-red-400">person</span>
+                            {lc.teacherName || lc.instructor}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => smartJoin(lc)}
+                          className="bg-red-600 text-white text-xs px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-red-700 transition-all shadow-lg shadow-red-600/20 active:scale-[0.97]"
+                        >
+                          <span className="material-symbols-rounded text-lg">videocam</span>
+                          JOIN
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {upcoming.length > 0 && (
+              <section className="animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
+                <div className="flex items-center gap-2.5 mb-4">
+                  <div className="w-1.5 h-6 bg-blue-600 rounded-full"></div>
+                  <div>
+                    <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Upcoming</h2>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Scheduled Sessions</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                  {upcoming.map((lc: any, i: number) => {
+                    const scheduledISO = lc.scheduledTime ? lc.scheduledTime.replace(' ', 'T') : (lc.startTime || '');
+                    return (
+                      <div key={lc._id || lc.id || i} className="card-premium p-4 rounded-2xl border border-gray-100 bg-white shadow-sm flex items-center gap-4">
+                        <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center shrink-0 border border-gray-100">
+                          <span className="material-symbols-rounded text-gray-400 text-xl">calendar_today</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-bold text-sm text-gray-800 truncate mb-1">{lc.title || lc.name}</h4>
+                          <div className="flex items-center gap-3">
+                            <span className="text-[11px] text-gray-400 font-bold flex items-center gap-1">
+                              <span className="material-symbols-rounded text-sm">person</span>
+                              {lc.teacherName || lc.instructor}
+                            </span>
+                            <span className="text-[11px] text-blue-600 font-black uppercase tracking-widest">
+                               {scheduledISO ? <CountdownText scheduledTime={scheduledISO} /> : 'Soon'}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="bg-blue-50 text-blue-600 text-[9px] px-3 py-1.5 rounded-lg font-black uppercase tracking-widest border border-blue-100">
+                          Scheduled
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
           </div>
-        </section>
-      )}
+        );
+      })()}
 
       <div className="p-4">
         <div className="bg-white rounded-[2rem] p-6 shadow-card border border-gray-100 min-h-[300px]">

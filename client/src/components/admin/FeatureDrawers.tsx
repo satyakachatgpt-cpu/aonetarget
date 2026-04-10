@@ -1217,7 +1217,8 @@ export const LiveStreamDrawer: React.FC<{
     onSubmit: (data: any) => void;
     courses?: any[];
     subjects?: any[];
-}> = ({ isOpen, onClose, onSubmit, courses = [], subjects = [] }) => {
+    fixedCourseId?: string;
+}> = ({ isOpen, onClose, onSubmit, courses = [], subjects = [], fixedCourseId }) => {
     const [formData, setFormData] = useState({
         title: '',
         scheduledTime: '',
@@ -1239,7 +1240,7 @@ export const LiveStreamDrawer: React.FC<{
                 scheduledTime: '',
                 streamSource: 'YouTube',
                 streamId: '',
-                courseId: '',
+                courseId: fixedCourseId || '',
                 pdf1: null,
                 pdf2: null,
                 studyMaterial: null,
@@ -1248,7 +1249,7 @@ export const LiveStreamDrawer: React.FC<{
                 studyMaterialUrl: ''
             });
         }
-    }, [isOpen]);
+    }, [isOpen, fixedCourseId]);
 
     const handleFileChange = (field: string, file: File) => {
         setFormData(prev => ({ ...prev, [field]: file }));
@@ -1311,17 +1312,19 @@ export const LiveStreamDrawer: React.FC<{
                             )}
                         </div>
 
-                        <div className="space-y-2">
-                            <FormLabel label="Select Batch" required />
-                            <FormSelect
-                                value={formData.courseId}
-                                onChange={(val) => setFormData({ ...formData, courseId: val })}
-                                options={[
-                                    { value: '', label: 'Select Batch' },
-                                    ...courses.map(c => ({ value: c.id || c._id, label: c.name || c.title }))
-                                ]}
-                            />
-                        </div>
+                        {!fixedCourseId && (
+                            <div className="space-y-2">
+                                <FormLabel label="Select Batch" required />
+                                <FormSelect
+                                    value={formData.courseId}
+                                    onChange={(val) => setFormData({ ...formData, courseId: val })}
+                                    options={[
+                                        { value: '', label: 'Select Batch' },
+                                        ...courses.map(c => ({ value: c.id || c._id, label: c.name || c.title }))
+                                    ]}
+                                />
+                            </div>
+                        )}
 
                         <div className="pt-2">
                             <h3 className="text-[14px] font-black text-gray-800 uppercase tracking-tight mb-6">Additional Content</h3>

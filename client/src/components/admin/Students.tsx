@@ -25,7 +25,7 @@ interface Student {
   isBanned?: boolean;
   suspiciousActivityCount?: number;
   blockedAt?: string;
-  password?: string;
+  hasPassword?: boolean;
   gender?: string;
 
   admission?: {
@@ -66,14 +66,114 @@ const StudentProfileContent: React.FC<{
   onClose: () => void;
   getImageUrl: (path: string) => string;
   getStateFromCity: (city: string) => string;
-  onApproveDevice: (student: Student) => void;
-  onRejectDevice: (student: Student) => void;
-  onResetDevice: (student: Student) => void;
-}> = React.memo(({ student, onClose, getImageUrl, getStateFromCity, onApproveDevice, onRejectDevice, onResetDevice }) => {
-  const [showPass, setShowPass] = React.useState(false);
+}> = React.memo(({ student, onClose, getImageUrl, getStateFromCity }) => {
+  const [isResetting, setIsResetting] = React.useState(false);
+  const [newPass, setNewPass] = React.useState('');
+  const [confirmPass, setConfirmPass] = React.useState('');
+  const [isSaving, setIsSaving] = React.useState(false);
+
+  const handleResetPassword = async () => {
+    if (!newPass) {
+      toast.error('Please enter a new password');
+      return;
+    }
+    if (newPass !== confirmPass) {
+      toast.error('Passwords do not match');
+      return;
+    }
+    if (newPass.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      await studentsAPI.update(student.id, { password: newPass });
+      toast.success('Password updated successfully');
+      setIsResetting(false);
+      setNewPass('');
+      setConfirmPass('');
+      // We don't necessarily need to reload here as the parent will handle closures/updates
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to reset password');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (isResetting) {
+    return (
+      <div className="space-y-8 pb-10 animate-in fade-in slide-in-from-right-4 duration-300">
+        <div className="p-8 bg-gray-50 rounded-[32px] border border-gray-100 shadow-inner">
+          <div className="flex items-center gap-4 mb-8">
+             <div className="w-12 h-12 bg-gray-900 rounded-2xl flex items-center justify-center text-white shadow-lg">
+                <span className="material-symbols-outlined text-[24px]">lock_reset</span>
+             </div>
+             <div>
+                <h3 className="text-[18px] font-black text-gray-900 uppercase tracking-tight">Set New Password</h3>
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Resetting Access for Student</p>
+             </div>
+          </div>
+
+          <div className="space-y-6">
+            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md">
+               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Student Identifier</p>
+               <div className="w-full h-14 px-4 bg-gray-50 border border-gray-100 rounded-xl flex items-center">
+                  <span className="text-[14px] font-black text-[#1a237e] tracking-wider">{student.userId || student.id}</span>
+               </div>
+            </div>
+
+            <div className="space-y-4 pt-2">
+              <div className="space-y-2">
+                <FormLabel label="NEW PASSWORD" required />
+                <FormPasswordInput 
+                  value={newPass}
+                  onChange={(e) => setNewPass(e.target.value)}
+                  placeholder="Enter secure password"
+                  autoFocus
+                />
+              </div>
+
+              <div className="space-y-2">
+                <FormLabel label="CONFIRM NEW PASSWORD" required />
+                <FormPasswordInput 
+                  value={confirmPass}
+                  onChange={(e) => setConfirmPass(e.target.value)}
+                  placeholder="Re-enter password"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="space-y-3 pt-4">
+          <PrimaryButton 
+            onClick={handleResetPassword}
+            disabled={isSaving}
+            className="rounded-2xl"
+          >
+            {isSaving ? (
+              <div className="flex items-center gap-3">
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span className="uppercase tracking-[0.1em]">Processing...</span>
+              </div>
+            ) : 'CONFIRM RESET'}
+          </PrimaryButton>
+          
+          <button
+            onClick={() => { setIsResetting(false); setNewPass(''); setConfirmPass(''); }}
+            disabled={isSaving}
+            className="w-full h-14 bg-white border-2 border-gray-100 text-gray-400 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:border-gray-300 hover:text-gray-900 transition-all active:scale-95 disabled:opacity-50"
+          >
+            Cancel & Return
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="space-y-6 pb-10 animate-in fade-in slide-in-from-left-4 duration-300">
       {/* Header Profile Info */}
       <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm flex items-center gap-5">
         <div className="w-20 h-20 rounded-2xl bg-[#1a237e]/5 border border-[#1a237e]/10 overflow-hidden flex items-center justify-center">
@@ -121,41 +221,27 @@ const StudentProfileContent: React.FC<{
               ))}
             </div>
 
-            {/* Optimized & Compact Password Section */}
+            {/* Account Security Section */}
             <div className="pt-4 mt-2">
               <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex items-center justify-between h-16">
                 <div className="flex-1">
-                   <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Account Password</p>
-                   <p className="text-[14px] font-mono font-black text-indigo-600 tracking-[0.15em]">
-                     {showPass ? (student.password || 'NOT SET') : '••••••••'}
-                   </p>
+                   <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Password Status</p>
+                   <div className="flex items-center gap-2 mt-1">
+                     <span className={`w-2 h-2 rounded-full ${student.hasPassword ? 'bg-green-500' : 'bg-red-500'}`}></span>
+                     <p className={`text-[12px] font-black uppercase tracking-widest ${student.hasPassword ? 'text-gray-900' : 'text-red-600'}`}>
+                       {student.hasPassword ? 'SECURELY SET' : 'NOT SET'}
+                     </p>
+                   </div>
                 </div>
                 
                 <div className="flex items-center gap-2">
                   <button 
-                    onClick={() => setShowPass(!showPass)}
-                    className="w-10 h-10 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-gray-500 hover:text-indigo-600 shadow-sm transition-all active:scale-95"
-                    title={showPass ? "Hide Password" : "Show Password"}
+                    onClick={() => setIsResetting(true)}
+                    className="h-10 px-4 rounded-xl flex items-center gap-2 bg-gray-900 text-white hover:bg-black transition-all shadow-sm active:scale-95"
+                    title="Edit Profile to Reset Password"
                   >
-                    <span className="material-symbols-outlined text-[20px]">
-                      {showPass ? 'visibility_off' : 'visibility'}
-                    </span>
-                  </button>
-                    
-                  <button 
-                    onClick={() => {
-                      if (student.password) {
-                        navigator.clipboard.writeText(student.password);
-                        toast.success('Password copied!');
-                      } else {
-                        toast.error('No password available to copy');
-                      }
-                    }}
-                    className={`h-10 px-4 rounded-xl flex items-center gap-2 transition-all shadow-sm active:scale-95 ${student.password ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
-                    title="Copy Password"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">content_copy</span>
-                    <span className="text-[10px] font-black uppercase tracking-wider">Copy</span>
+                    <span className="material-symbols-outlined text-[18px]">key</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider">Reset</span>
                   </button>
                 </div>
               </div>
@@ -427,20 +513,7 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       const data = await studentsAPI.getAll();
       console.log('Students loaded successfully:', data);
       
-      setStudents(prev => {
-        const passwordMap = new Map();
-        prev.forEach(s => {
-          if (s.password && s.password !== '••••••••') {
-            passwordMap.set(s.id, s.password);
-          }
-        });
-        
-        const newData = Array.isArray(data) ? data : [];
-        return newData.map((s: any) => ({
-          ...s,
-          password: passwordMap.get(s.id) || s.password
-        }));
-      });
+      setStudents(Array.isArray(data) ? data : []);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       console.error('Failed to load students:', errorMsg, error);
@@ -554,7 +627,7 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       setLoading(true);
       const payload = formatPayload(formData);
       const res = await studentsAPI.create(payload);
-      setStudents([{ ...res, password: formData.password }, ...students]);
+      setStudents([{ ...res, hasPassword: !!formData.password || !!res.hasPassword }, ...students]);
       resetForm();
       setShowAddModal(false);
       showToast(`Student ${formData.name} added successfully`, 'success');
@@ -578,7 +651,8 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       await studentsAPI.update(selectedStudent.id, payload);
       
       if (newPassword) {
-        setStudents(prev => prev.map(s => s.id === selectedStudent.id ? { ...s, password: newPassword } : s));
+        // Mark as set
+        setStudents(prev => prev.map(s => s.id === selectedStudent.id ? { ...s, hasPassword: true } : s));
       }
       
       loadStudents(); // Reload to get structured data correctly
