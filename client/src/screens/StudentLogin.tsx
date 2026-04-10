@@ -433,10 +433,14 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       });
       const data = await response.json();
       if (response.ok) {
-        toast.success('Reset OTP sent!');
+        if (data.otp) {
+          toast.success(`Reset OTP sent! OTP: ${data.otp}`, { duration: 10000 });
+        } else {
+          toast.success('Reset OTP sent!');
+        }
         setStep('reset-otp');
         setOtp(['', '', '', '', '', '']);
-        setResendTimer(60);
+        setResendTimer(30);
       } else {
         toast.error(data.error || 'Failed to send OTP');
       }
@@ -887,14 +891,18 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
               body: JSON.stringify({ phone: data.phone })
             });
 
+            const otpData = await otpRes.json();
             if (otpRes.ok) {
-              toast.success('Registration OTP sent!');
+              if (otpData.otp) {
+                toast.success(`Registration OTP sent! OTP: ${otpData.otp}`, { duration: 10000 });
+              } else {
+                toast.success('Registration OTP sent!');
+              }
               setProfileValue('phone', data.phone);
               setStep('signup-otp');
               setResendTimer(60);
               setOtp(['', '', '', '', '', '']);
             } else {
-              const otpData = await otpRes.json();
               throw new Error(otpData.error || 'Failed to send OTP');
             }
           } catch (err: any) {
