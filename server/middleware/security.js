@@ -26,7 +26,7 @@ export const GENERIC_AUTH_ERROR = 'Invalid credentials';
  */
 export const bruteForceGate = (identifierField = 'phone') => async (req, res, next) => {
   try {
-    const db = mongoose.get(`${process.env.MONGODB_DB_NAME || 'aonetarget'}`).connection.db || mongoose.connection.db;
+    const db = mongoose.connection.db;
     const ip = req.ip || req.connection.remoteAddress;
     const identifier = (req.body[identifierField] || '').toString().toLowerCase().trim();
 

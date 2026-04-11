@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
-import { couponsAPI, coursesAPI, categoriesAPI, testSeriesAPI, pdfsAPI, packagesAPI, uploadAPI } from '../../services/apiClient';
+import { couponsAPI, coursesAPI, categoriesAPI, testSeriesAPI, pdfsAPI, packagesAPI, uploadAPI, subcategoriesAPI } from '../../services/apiClient';
 import RichTextEditor from '../shared/RichTextEditor';
 import { AdminUIContext } from '../../context/AdminUIContext';
 import { getImageUrl, getVideoUrl, extractYouTubeId, toYouTubeEmbed } from '../../lib/utils';
@@ -52,6 +52,11 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
     const [couponSearch, setCouponSearch] = useState('');
     const [categories, setCategories] = useState<any[]>([]);
     const [loadingCategories, setLoadingCategories] = useState(false);
+    const [selectedSubCategoryId, setSelectedSubCategoryId] = useState(courseData?.subcategoryId || '');
+    const [showSubCategories, setShowSubCategories] = useState(false);
+    const [allSubCategories, setAllSubCategories] = useState<any[]>([]);
+    const [loadingSubCategories, setLoadingSubCategories] = useState(false);
+
 
     // Advanced Settings States
     const [easyEmi, setEasyEmi] = useState(false);
@@ -102,6 +107,10 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
 
             if (courseData.categories) {
                 setSelectedCategories(Array.isArray(courseData.categories) ? courseData.categories : [courseData.categories]);
+            }
+
+            if (courseData.subcategoryId) {
+                setSelectedSubCategoryId(courseData.subcategoryId);
             }
 
             if (courseData.validity) {
@@ -210,12 +219,13 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                 setLoadingCategories(true);
 
                 // Fetch coupons, courses, and categories in parallel
-                const [couponsData, coursesData, categoriesData, testSeriesData, pdfsData] = await Promise.all([
+                const [couponsData, coursesData, categoriesData, testSeriesData, pdfsData, subcategoriesData] = await Promise.all([
                     couponsAPI.getAll().catch(() => []),
                     coursesAPI.getAll().catch(() => []),
                     categoriesAPI.getAll().catch(() => []),
                     testSeriesAPI.getAll().catch(() => []),
-                    pdfsAPI.getAll().catch(() => [])
+                    pdfsAPI.getAll().catch(() => []),
+                    subcategoriesAPI.getAll().catch(() => [])
                 ]);
 
                 if (Array.isArray(couponsData)) {
@@ -237,6 +247,10 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
 
                 if (Array.isArray(pdfsData)) {
                     setBooksList(pdfsData);
+                }
+
+                if (Array.isArray(subcategoriesData)) {
+                    setAllSubCategories(subcategoriesData);
                 }
             } catch (error) {
                 console.error('Failed to fetch data:', error);
@@ -294,6 +308,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                 price: price ? parseFloat(price) : 0,
                 originalPrice: originalPrice ? parseFloat(originalPrice) : 0,
                 categories: selectedCategories,
+                subcategoryId: selectedSubCategoryId,
                 validity: {
                     tab: validityTab,
                     unit: validityUnit,
@@ -542,35 +557,83 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                                     </div>
                                 </div>
 
-                                {/* Categories Row */}
-                                <div className="space-y-1.5 mb-8">
-                                    <label className="text-[13px] font-semibold text-gray-700">Categories</label>
-                                    <div className="relative">
-                                        <div onMouseDown={(e) => { e.preventDefault(); setShowCategories(!showCategories); }} className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] transition-all cursor-pointer flex items-center justify-between hover:border-gray-300 bg-white">
-                                            <span className={selectedCategories.length ? 'text-gray-900 font-medium' : 'text-gray-400'}>{selectedCategories.length ? selectedCategories.join(', ') : 'Select Categories'}</span>
-                                            <span className={`material-symbols-outlined text-gray-400 transition-transform ${showCategories ? 'rotate-180' : ''}`}>expand_more</span>
-                                        </div>
-                                         {showCategories && (
-                                            <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-sm shadow-xl z-[100] py-1 animate-in fade-in slide-in-from-top-2 duration-200">
-                                                <div className="max-h-[200px] overflow-y-auto">
-                                                    {(categories.length > 0 ? categories : [{ name: 'Class 10th' }, { name: 'Class 11th' }, { name: 'Class 12th' }, { name: 'NEET Special' }]).map((catObj: any) => {
-                                                        const catName = typeof catObj === 'string' ? catObj : catObj.name || catObj.title;
-                                                        return (
-                                                            <div key={catName} onMouseDown={(e) => {
-                                                                e.preventDefault();
-                                                                const newCats = selectedCategories.includes(catName) ? selectedCategories.filter(c => c !== catName) : [...selectedCategories, catName];
-                                                                setSelectedCategories(newCats);
-                                                                setShowCategories(false);
-                                                            }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-gray-50 flex items-center justify-between ${selectedCategories.includes(catName) ? 'text-black bg-gray-50 font-semibold' : 'text-gray-600'}`}>
-                                                                {catName} {selectedCategories.includes(catName) && <span className="material-symbols-outlined text-[16px]">check</span>}
-                                                            </div>
-                                                        );
-                                                    })}
+                                 {/* Categories Row */}
+                                 <div className="space-y-1.5 mb-8">
+                                     <label className="text-[13px] font-semibold text-gray-700">Categories</label>
+                                     <div className="relative">
+                                         <div onMouseDown={(e) => { e.preventDefault(); setShowCategories(!showCategories); setShowSubCategories(false); }} className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] transition-all cursor-pointer flex items-center justify-between hover:border-gray-300 bg-white">
+                                             <span className={selectedCategories.length ? 'text-gray-900 font-medium' : 'text-gray-400'}>{selectedCategories.length ? selectedCategories.join(', ') : 'Select Categories'}</span>
+                                             <span className={`material-symbols-outlined text-gray-400 transition-transform ${showCategories ? 'rotate-180' : ''}`}>expand_more</span>
+                                         </div>
+                                          {showCategories && (
+                                             <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-sm shadow-xl z-[100] py-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                 <div className="max-h-[200px] overflow-y-auto">
+                                                     {(categories.length > 0 ? categories : [{ name: 'Class 10th' }, { name: 'Class 11th' }, { name: 'Class 12th' }, { name: 'NEET Special' }]).map((catObj: any) => {
+                                                         const catName = typeof catObj === 'string' ? catObj : catObj.name || catObj.title;
+                                                         return (
+                                                             <div key={catName} onMouseDown={(e) => {
+                                                                 e.preventDefault();
+                                                                 // Enforce single selection as requested
+                                                                 setSelectedCategories([catName]);
+                                                                 // Reset sub-category selection when category changes
+                                                                 setSelectedSubCategoryId('');
+                                                                 // Close dropdown after selection
+                                                                 setShowCategories(false);
+                                                             }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-gray-50 flex items-center justify-between ${selectedCategories.includes(catName) ? 'text-black bg-gray-50 font-semibold' : 'text-gray-600'}`}>
+                                                                 {catName} {selectedCategories.includes(catName) && <span className="material-symbols-outlined text-[16px]">check</span>}
+                                                             </div>
+                                                         );
+                                                     })}
+                                                 </div>
+                                             </div>
+                                         )}
+                                     </div>
+                                 </div>
+
+                                {/* Dynamic Sub-Categories Row */}
+                                {selectedCategories.length > 0 && (() => {
+                                    // Find the internal ID (slug) for the selected category
+                                    const selectedCatObj = categories.find(c => selectedCategories.includes(c.name) || selectedCategories.includes(c.title) || selectedCategories.includes(c._id));
+                                    const activeCatId = selectedCatObj?.id || selectedCatObj?._id || '';
+                                    
+                                    const subCats = allSubCategories.filter(s => s.categoryId === activeCatId);
+                                    if (!subCats || subCats.length === 0) return null;
+
+                                    return (
+                                        <div className="space-y-1.5 mb-8 animate-in fade-in slide-in-from-top-2 duration-300">
+                                            <label className="text-[13px] font-semibold text-gray-700">Sub Category (Class/Section)*</label>
+                                            <div className="relative">
+                                                <div onMouseDown={(e) => { 
+                                                    e.preventDefault(); 
+                                                    setShowSubCategories(!showSubCategories);
+                                                    // Close main categories when toggling sub-categories
+                                                    setShowCategories(false);
+                                                }} className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] transition-all cursor-pointer flex items-center justify-between hover:border-gray-300 bg-gray-50/30">
+                                                    <span className={selectedSubCategoryId ? 'text-gray-900 font-bold' : 'text-gray-400'}>
+                                                        {subCats.find(s => s.id === selectedSubCategoryId)?.title || 'Select Subcategory'}
+                                                    </span>
+                                                    <span className={`material-symbols-outlined text-gray-400 transition-transform ${showSubCategories ? 'rotate-180' : ''}`}>expand_more</span>
                                                 </div>
+                                                {showSubCategories && (
+                                                    <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-sm shadow-xl z-[101] py-1">
+                                                        <div className="max-h-[200px] overflow-y-auto">
+                                                            {subCats.map((sub) => (
+                                                                <div key={sub.id} onMouseDown={(e) => {
+                                                                    e.preventDefault();
+                                                                    setSelectedSubCategoryId(sub.id);
+                                                                    setShowSubCategories(false);
+                                                                }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-gray-800 hover:text-white flex items-center justify-between ${selectedSubCategoryId === sub.id ? 'text-black bg-gray-100 font-bold' : 'text-gray-600'}`}>
+                                                                    {sub.title} {selectedSubCategoryId === sub.id && <span className="material-symbols-outlined text-[16px]">check</span>}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
-                                </div>
+                                            <p className="text-[10px] text-gray-400 font-medium">This batch will appear ONLY in the selected subcategory (e.g. Class 10th).</p>
+                                        </div>
+                                    );
+                                })()}
 
                                 {/* Validity */}
                                 <div className="space-y-3">

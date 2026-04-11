@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { coursesAPI, blogAPI, newsAPI, categoriesAPI, bannersAPI, testsAPI, testSeriesAPI, liveVideosAPI, quickLinksAPI } from '../services/apiClient';
 import StudentSidebar from '../components/StudentSidebar';
@@ -98,6 +98,21 @@ const Home: React.FC = () => {
   const [allNews, setAllNews] = useState<any[]>([]);
   const [newsLoading, setNewsLoading] = useState(true);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
+
+  const featuredToDisplay = useMemo(() => {
+    // 1. Get explicitly featured courses
+    const featured = courses.filter((c: any) => c.settings?.isFeatured === true);
+    
+    // 2. If we have 4 or more featured, just show top 4
+    if (featured.length >= 4) return featured.slice(0, 4);
+    
+    // 3. Otherwise, fill up to 4 using other latest batches
+    const featuredIds = new Set(featured.map(c => c._id || c.id));
+    const others = courses.filter(c => !featuredIds.has(c._id || c.id));
+    
+    const combined = [...featured, ...others].slice(0, 4);
+    return combined;
+  }, [courses]);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalling, setIsInstalling] = useState(false);
   const [installSuccess, setInstallSuccess] = useState(false);
@@ -646,8 +661,11 @@ const Home: React.FC = () => {
                 <div
                   key={cat._id || cat.id || i}
                   onClick={() => {
-                    if (cat.id === 'mock-test' || (cat.title && cat.title.toLowerCase().includes('mock test'))) {
+                    const lTitle = (cat.title || '').toLowerCase();
+                    if (cat.id === 'mock-test' || lTitle.includes('mock test')) {
                       navigate('/mock-tests');
+                    } else if (cat.id === 'ebooks' || lTitle.includes('ebook') || lTitle.includes('notes')) {
+                      navigate('/ebook-notes');
                     } else {
                       navigate(`/explore/${cat.id}`);
                     }
@@ -712,30 +730,41 @@ const Home: React.FC = () => {
                         </p>
                       </div>
                     </div>
+                    <button
+                      onClick={() => navigate('/live-classes')}
+                      className="btn-primary text-xs px-4 py-1.5 flex items-center gap-1 hover:gap-2 transition-all duration-200 active:scale-[0.97] bg-red-600 border-red-500 shadow-lg shadow-red-600/20"
+                    >
+                      View All
+                      <span className="material-symbols-rounded text-sm">arrow_forward</span>
+                    </button>
                   </div>
                   <div className="space-y-3">
                     {ongoing.slice(0, 2).map((lc: any, i: number) => {
                       return (
-                        <div key={lc._id || lc.id || i} className="card-premium p-4 rounded-[2rem] border-2 border-red-100 bg-red-50/30 flex flex-col gap-3 shadow-xl shadow-red-500/5 relative overflow-hidden group">
-                           <div className="absolute -top-12 -right-12 w-24 h-24 bg-red-500/5 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
-                           <div className="flex gap-4 items-center relative z-10">
-                            <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-red-600 rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-red-500/20 relative">
-                              <span className="material-symbols-rounded text-white text-2xl">sensors</span>
-                              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>
+                        <div key={lc._id || lc.id || i} className="group relative overflow-hidden p-[1px] rounded-2xl bg-gradient-to-br from-red-100/50 to-transparent shadow-xl transition-all duration-500 hover:shadow-red-500/10 hover:-translate-y-1">
+                           <div className="absolute inset-0 bg-white/80 backdrop-blur-xl rounded-2xl"></div>
+                           <div className="absolute -top-12 -right-12 w-24 h-24 bg-red-500/10 rounded-full blur-3xl group-hover:bg-red-500/20 transition-all duration-700"></div>
+                           
+                           <div className="relative z-10 p-3 flex gap-3 items-center">
+                            <div className="w-12 h-12 bg-gradient-to-tr from-rose-500 to-red-600 rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-rose-500/25 relative overflow-hidden group-hover:scale-110 transition-transform">
+                              <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+                              <span className="material-symbols-rounded text-white text-2xl relative z-10">sensors</span>
+                              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-bold text-base text-gray-900 truncate mb-1">{lc.title || lc.name || 'Live Class'}</h4>
-                              <div className="flex items-center gap-3">
-                                <span className="text-[12px] text-gray-500 font-bold flex items-center gap-1.5">
-                                  <span className="material-symbols-rounded text-[16px] text-red-400">person</span>
-                                  {lc.teacherName || lc.instructor || 'Instructor'}
+                              <h4 className="font-bold text-base text-gray-800 truncate tracking-tight">{lc.title || lc.name || 'Live Class'}</h4>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="flex items-center gap-1.5 bg-rose-500/10 backdrop-blur-md text-rose-600 text-[10px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider border border-rose-200/50 shadow-sm">
+                                   <span className="w-1.5 h-1.5 bg-rose-600 rounded-full"></span>
+                                   LIVE
                                 </span>
                               </div>
                             </div>
                             <button
                               onClick={(e) => { e.stopPropagation(); handleJoinLiveClass(lc); }}
-                              className="bg-red-600 text-white text-[13px] px-6 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-red-700 transition-all shadow-lg shadow-red-600/20 active:scale-[0.97]"
+                              className="relative overflow-hidden bg-gradient-to-r from-red-600 to-rose-600 text-white text-[13px] px-4 py-2 rounded-xl font-black flex items-center gap-1.5 transition-all shadow-lg shadow-red-600/20 active:scale-95 group/btn"
                             >
+                              <div className="absolute inset-0 bg-black opacity-0 group-hover/btn:opacity-10 transition-opacity"></div>
                               <span className="material-symbols-rounded text-[18px]">videocam</span>
                               JOIN
                             </button>
@@ -781,7 +810,13 @@ const Home: React.FC = () => {
                         <p className="text-[11px] text-gray-400 font-bold uppercase tracking-widest">Upcoming Classes</p>
                       </div>
                     </div>
-                    <button onClick={() => navigate('/live-classes')} className="text-[11px] font-black text-blue-600 uppercase tracking-widest hover:underline">View All</button>
+                    <button
+                      onClick={() => navigate('/live-classes')}
+                      className="btn-primary text-xs px-4 py-1.5 flex items-center gap-1 hover:gap-2 transition-all duration-200 active:scale-[0.97] bg-blue-600 border-blue-500 shadow-lg shadow-blue-600/20"
+                    >
+                      View All
+                      <span className="material-symbols-rounded text-sm">arrow_forward</span>
+                    </button>
                   </div>
                   <div className="space-y-4">
                     {upcoming.slice(0, 3).map((lc: any, i: number) => {
@@ -789,27 +824,24 @@ const Home: React.FC = () => {
                       const scheduledISO = rawScheduled ? rawScheduled.replace(' ', 'T') : '';
 
                       return (
-                        <div key={lc._id || lc.id || i} className="card-premium p-4 rounded-[2rem] border border-gray-100 bg-white flex flex-col gap-4 hover:-translate-y-1 transition-all duration-300 shadow-sm hover:shadow-xl group">
-                           <div className="flex gap-4 items-center">
-                            <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center shrink-0 border border-blue-100 group-hover:bg-blue-100 transition-colors">
-                              <span className="material-symbols-rounded text-blue-500 text-2xl">calendar_today</span>
+                        <div key={lc._id || lc.id || i} className="group relative overflow-hidden p-[1px] rounded-2xl bg-gradient-to-br from-indigo-100/50 to-transparent shadow-sm transition-all duration-500 hover:shadow-indigo-500/10 hover:-translate-y-1">
+                           <div className="absolute inset-0 bg-white/70 backdrop-blur-xl rounded-2xl"></div>
+                           
+                           <div className="relative z-10 p-3 flex gap-3 items-center">
+                            <div className="w-12 h-12 bg-indigo-50/80 backdrop-blur-sm rounded-2xl flex items-center justify-center shrink-0 border border-indigo-100 group-hover:bg-indigo-100 transition-colors">
+                              <span className="material-symbols-rounded text-indigo-500 text-2xl">calendar_today</span>
                             </div>
                             <div className="flex-1 min-w-0">
-                              <h4 className="font-bold text-[16px] text-gray-900 truncate mb-1 group-hover:text-blue-600 transition-colors uppercase tracking-tight">{lc.title || lc.name}</h4>
-                              <div className="flex items-center flex-wrap gap-x-4 gap-y-1">
-                                <span className="text-[12px] text-gray-500 font-bold flex items-center gap-1.5">
-                                  <span className="material-symbols-rounded text-[16px] text-blue-400">person</span>
-                                  {lc.teacherName || lc.instructor || 'Instructor'}
-                                </span>
-                                <span className="text-[12px] text-blue-500 font-black uppercase tracking-widest">
+                              <h4 className="font-semibold text-base text-gray-800 truncate tracking-tight group-hover:text-indigo-600 transition-colors">{lc.title || lc.name}</h4>
+                              <div className="flex items-center gap-2 mt-1">
+                                <div className="flex items-center gap-1.5 bg-indigo-500/10 backdrop-blur-md text-indigo-600 text-[10px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider border border-indigo-200/50 shadow-sm">
+                                  <span className="material-symbols-rounded text-[14px]">schedule</span>
                                   <HomeLiveCountdownDisplay scheduledTimeStr={scheduledISO} />
-                                </span>
+                                </div>
                               </div>
                             </div>
-                            <div className="hidden sm:block">
-                              <div className="bg-blue-50 text-blue-600 text-[10px] px-4 py-2 rounded-xl font-black uppercase tracking-widest border border-blue-100">
-                                Scheduled
-                              </div>
+                            <div className="flex shrink-0">
+                               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest opacity-60">Upcoming</span>
                             </div>
                           </div>
 
@@ -950,7 +982,7 @@ const Home: React.FC = () => {
               </button>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              {courses.slice(0, 4).map((course: any, i: number) => {
+              {featuredToDisplay.map((course: any, i: number) => {
                 const bgGrad = CATEGORY_GRADIENTS[i % CATEGORY_GRADIENTS.length] || 'from-primary to-primary-600';
                 const hasImage = !!(course.imageUrl || course.thumbnail);
 
