@@ -125,84 +125,18 @@ const EbookNotes: React.FC = () => {
                   <p className="text-[10px] text-gray-400 mt-1">{item.type === 'ebook' ? `${item.pages || 0} pages` : (item.exam || 'General')}</p>
                   <div className="flex gap-2 mt-3">
                     <button
-                      className="flex-1 bg-teal-600 text-white py-1.5 rounded-lg text-[10px] font-bold flex items-center justify-center gap-1"
-                      onClick={() => item.fileUrl && window.open(getPdfUrl(item.fileUrl), '_blank')}
+                      className="flex-1 bg-teal-600 text-white py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
+                      onClick={() => {
+                        const pdfUrl = getPdfUrl(item.fileUrl);
+                        if (pdfUrl) {
+                          navigate('/pdf-viewer', { state: { pdf: { ...item, fileUrl: pdfUrl }, title: item.title || 'Material' } });
+                        }
+                      }}
                     >
                       <span className="material-symbols-rounded text-sm">visibility</span>
-                      View
+                      View Content
                     </button>
-                    {item.allowDownload && (
-                      <button
-                        onClick={async () => {
-                          if (!student?.id) {
-                            showToast('Please login to download');
-                            return;
-                          }
-                          if (!item.fileUrl) {
-                            showToast('Error: No file URL available to download');
-                            return;
-                          }
-
-                          setDownloadingId(item._id || item.id);
-                          showToast('Downloading...');
-
-                          try {
-                            const resolvedUrl = getPdfUrl(item.fileUrl);
-                            // 1. App Cache
-                            const cache = await caches.open('aone-downloads');
-                            try {
-                              const response = await fetch(resolvedUrl, { mode: 'cors' });
-                              if (response.ok) await cache.put(resolvedUrl, response);
-                              else {
-                                const opaque = await fetch(resolvedUrl, { mode: 'no-cors' });
-                                await cache.put(resolvedUrl, opaque);
-                              }
-                            } catch (e) {
-                              const opaque = await fetch(resolvedUrl, { mode: 'no-cors' });
-                              await cache.put(resolvedUrl, opaque);
-                            }
-
-                            // 2. DB Metadata
-                            const downloadData = {
-                              id: `download_${Date.now()}`,
-                              title: item.title,
-                              type: 'pdf',
-                              fileUrl: item.fileUrl,
-                              size: item.pages ? `${item.pages} pages` : 'N/A',
-                              courseId: 'ebook-general',
-                              courseName: 'Study Materials',
-                              downloadedAt: new Date().toISOString()
-                            };
-
-                            const dbRes = await fetch(`/api/students/${student.id}/downloads`, {
-                              method: 'POST',
-                              headers: { 'Content-Type': 'application/json' },
-                              body: JSON.stringify(downloadData)
-                            });
-
-                            if (dbRes.ok) {
-                              showToast('Successfully downloaded to app library!');
-                            } else {
-                              showToast('Error: Failed to sync metadata.');
-                            }
-                          } catch (error) {
-                            console.error('Download error:', error);
-                            showToast('Error saving file offline.');
-                          } finally {
-                            setDownloadingId(null);
-                          }
-                        }}
-                        className="px-3 bg-gray-100 text-gray-600 py-1.5 rounded-lg flex items-center justify-center hover:bg-gray-200 transition-colors disabled:opacity-50"
-                        title="Save to Offline App Downloads"
-                        disabled={downloadingId === (item._id || item.id)}
-                      >
-                        {downloadingId === (item._id || item.id) ? (
-                          <span className="material-symbols-rounded text-sm animate-spin text-teal-600">progress_activity</span>
-                        ) : (
-                          <span className="material-symbols-rounded text-sm">download</span>
-                        )}
-                      </button>
-                    )}
+                    {/* Download button removed as per requirements */}
                   </div>
                 </div>
               </div>

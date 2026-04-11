@@ -44,6 +44,8 @@ interface Note {
   title: string;
   fileUrl: string;
   fileSize?: string;
+  createdAt?: string;
+  datetime?: string;
 }
 
 function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
@@ -238,10 +240,21 @@ const CourseDetails: React.FC = () => {
 
     const url = toYouTubeEmbed(rawUrl);
     if (canPlay && url) {
-      setSelectedVideo({ ...video, url });
-      setShowVideoPlayer(true);
     } else if (!canPlay) {
-      alert('Please enroll in this course to watch this video.');
+      alert('🔒 Please enroll in this course to watch this video.');
+    }
+  };
+
+  const handleViewNote = (note: any) => {
+    const canPlay = isEnrolled || note.isFree || (course?.price === 0);
+    if (!canPlay) {
+      alert('🔒 Please enroll in this course to view this document.');
+      return;
+    }
+
+    const pdfUrl = getPdfUrl(note.fileUrl || note.url);
+    if (pdfUrl) {
+      navigate('/pdf-viewer', { state: { pdf: { ...note, fileUrl: pdfUrl }, title: note.title || 'Document' } });
     }
   };
 
@@ -865,19 +878,33 @@ const CourseDetails: React.FC = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <h4 className="font-bold text-sm text-gray-800 line-clamp-1">{note.title}</h4>
-                      <p className="text-[11px] text-gray-400 font-medium mt-0.5 flex items-center gap-1">
-                        <span className="material-symbols-rounded text-[10px]">picture_as_pdf</span>
-                        PDF • {note.fileSize || '2.5 MB'}
-                      </p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {(note.createdAt || note.datetime) ? (
+                          <>
+                            <p className="text-[11px] text-gray-400 font-medium flex items-center gap-1">
+                              <span className="material-symbols-rounded text-[10px]">calendar_today</span>
+                              {new Date(note.createdAt || note.datetime || '').toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-')}
+                            </p>
+                            <span className="w-1 h-1 rounded-full bg-gray-300"></span>
+                            <p className="text-[11px] text-gray-400 font-medium flex items-center gap-1">
+                              <span className="material-symbols-rounded text-[10px]">schedule</span>
+                              {new Date(note.createdAt || note.datetime || '').toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                            </p>
+                          </>
+                        ) : (
+                          <p className="text-[11px] text-gray-400 font-medium flex items-center gap-1">
+                            <span className="material-symbols-rounded text-[10px]">picture_as_pdf</span>
+                            PDF Document
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <a
-                      href={getPdfUrl(note.fileUrl)}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      onClick={() => handleViewNote(note)}
                       className="w-10 h-10 bg-primary-50 rounded-xl flex items-center justify-center text-primary-600 active:scale-[0.97] transition-all duration-200 hover:bg-primary-100"
                     >
-                      <span className="material-symbols-rounded text-xl">download</span>
-                    </a>
+                      <span className="material-symbols-rounded text-xl">visibility</span>
+                    </button>
                   </div>
                 ))}
               </div>

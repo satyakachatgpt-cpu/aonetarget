@@ -480,21 +480,6 @@ const FreeContent: React.FC = () => {
                                                     >
                                                         <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,_white_1px,_transparent_1px)] bg-[length:10px_10px]"></div>
                                                         <span className="material-symbols-rounded text-white text-3xl relative z-10">{icon}</span>
-                                                        {(note.allowDownload === true || note.allowDownload === 'true') && (
-                                                            <div className="absolute top-2 right-2">
-                                                                <button
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        handleDownload(note);
-                                                                    }}
-                                                                    className={`w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md transition-all ${downloadingId === (note._id || note.id) ? 'bg-white/40 text-white' : 'bg-white/20 text-white/80 hover:bg-white hover:text-gray-800'}`}
-                                                                >
-                                                                    <span className={`material-symbols-rounded text-md ${downloadingId === (note._id || note.id) ? 'animate-spin' : ''}`}>
-                                                                        {downloadingId === (note._id || note.id) ? 'progress_activity' : 'download'}
-                                                                    </span>
-                                                                </button>
-                                                            </div>
-                                                        )}
                                                     </div>
                                                     <div className="p-3" onClick={() => handlePDFClick(note)}>
                                                         <h3 className="font-bold text-gray-800 text-[10px] line-clamp-2 leading-tight h-7">{note.title}</h3>
@@ -519,28 +504,12 @@ const FreeContent: React.FC = () => {
                                                 >
                                                     <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,_white_1px,_transparent_1px)] bg-[length:10px_10px]"></div>
                                                     <span className="material-symbols-rounded text-white text-3xl relative z-10">description</span>
-                                                    {(doc.allowDownload === true || doc.allowDownload === 'true') && (
-                                                        <div className="absolute top-2 right-2">
-                                                            <button
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDownload(doc);
-                                                                }}
-                                                                className={`w-8 h-8 rounded-full flex items-center justify-center backdrop-blur-md transition-all ${downloadingId === (doc._id || doc.id) ? 'bg-white/40 text-white' : 'bg-white/20 text-white/80 hover:bg-white hover:text-gray-800'}`}
-                                                            >
-                                                                <span className={`material-symbols-rounded text-md ${downloadingId === (doc._id || doc.id) ? 'animate-spin' : ''}`}>
-                                                                    {downloadingId === (doc._id || doc.id) ? 'progress_activity' : 'download'}
-                                                                </span>
-                                                            </button>
-                                                        </div>
-                                                    )}
                                                 </div>
                                                 <div className="p-3" onClick={() => handlePDFClick(doc)}>
                                                     <h3 className="font-bold text-gray-800 text-[10px] line-clamp-2 leading-tight h-7">{doc.title}</h3>
                                                     <div className="flex items-center justify-between mt-2">
                                                         <span className="text-[8px] font-black text-teal-600 uppercase tracking-tighter">{doc.exam || 'Document'}</span>
                                                         <div className="flex gap-2">
-                                                            <span className="material-symbols-rounded text-teal-500 text-sm">download</span>
                                                             <span className="material-symbols-rounded text-gray-300 text-sm">visibility</span>
                                                         </div>
                                                     </div>

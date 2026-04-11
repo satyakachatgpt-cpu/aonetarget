@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import './config/cloudinary.config.js';
+import cloudinary from './config/cloudinary.config.js';
 import express from 'express';
 import cors from 'cors';
 import { fileURLToPath } from "url";
@@ -84,6 +84,88 @@ app.use('/attached_assets', (req, res, next) => {
     return express.static(path.join(__dirname, '../attached_assets'))(req, res, next);
   }
   res.redirect(301, `/attach-assist${req.path}`);
+});
+
+app.get('/api/proxy-resource', async (req, res) => {
+  const { url } = req.query;
+  if (!url) return res.status(400).send('URL is required');
+
+  try {
+    let targetUrl = decodeURIComponent(url);
+    // Normalize and ensure it's a valid URL
+    try {
+      targetUrl = new URL(targetUrl).toString();
+    } catch (e) {
+      console.error(`[PROXY] Invalid URL: ${targetUrl}`);
+    }
+    
+    console.log(`[PROXY] Requesting: ${targetUrl}`);
+    
+    // Check if it's a Cloudinary URL to use Signed URL approach
+    if (targetUrl.includes('res.cloudinary.com')) {
+      try {
+        // Extract public_id and resource_type from URL
+        // Format: .../cloud_name/[resource_type]/[type]/v123456789/[public_id].[ext]
+        const parts = targetUrl.split('/');
+        const uploadIdx = parts.indexOf('upload');
+        
+        if (uploadIdx !== -1) {
+          const resourceType = parts[uploadIdx - 1];
+          const type = parts[uploadIdx];
+          
+          // public_id starts after version (if any)
+          let publicIdWithExt = parts.slice(uploadIdx + 1).join('/');
+          if (publicIdWithExt.startsWith('v')) {
+            const potentialVersion = publicIdWithExt.split('/')[0];
+            if (/^v\d+$/.test(potentialVersion)) {
+              publicIdWithExt = parts.slice(uploadIdx + 2).join('/');
+            }
+          }
+          
+          // Remove extension if present
+          const publicId = publicIdWithExt.replace(/\.[^.]+$/, '');
+          
+          const signedUrl = cloudinary.url(publicId, {
+            resource_type: resourceType,
+            type: type,
+            sign_url: true,
+            secure: true,
+            expires_at: Math.floor(Date.now() / 1000) + 3600 // 1 hour link
+          });
+          
+          console.log(`[PROXY] Redirecting to Signed URL: ${publicId}`);
+          return res.redirect(signedUrl);
+        }
+      } catch (err) {
+        console.warn(`[PROXY] Failed to sign Cloudinary URL: ${err.message}. Falling back to fetch.`);
+      }
+    }
+
+    // Fallback for non-Cloudinary or failed signing: Fetch and Serve
+    const headers = {};
+    if (targetUrl.includes('res.cloudinary.com')) {
+      const auth = Buffer.from(`${process.env.CLOUDINARY_API_KEY}:${process.env.CLOUDINARY_API_SECRET}`).toString('base64');
+      headers['Authorization'] = `Basic ${auth}`;
+    }
+
+    const response = await fetch(targetUrl, { headers });
+    if (!response.ok) {
+      console.error(`[PROXY] Failed: ${response.status} ${response.statusText}`);
+      const errorMessage = response.status === 404 ? 'Document not found' : `Storage error: ${response.statusText}`;
+      return res.status(response.status).send(errorMessage);
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (contentType) res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+
+    const arrayBuffer = await response.arrayBuffer();
+    res.send(Buffer.from(arrayBuffer));
+  } catch (error) {
+    console.error('[PROXY_ERROR]', error);
+    res.status(500).send('Internal Server Error while proxying resource');
+  }
 });
 
 app.use('/api', uploadV2Routes);
