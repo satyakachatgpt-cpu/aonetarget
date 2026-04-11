@@ -232,14 +232,17 @@ const CourseDetails: React.FC = () => {
       return;
     }
 
-    console.log('Video clicked:', video.title, 'Playable:', isEnrolled || video.isFree || video.isDemo, 'URL:', video.youtubeUrl || video.videoUrl);
-    const canPlay = isEnrolled || video.isFree || video.isDemo;
+    const isFirstVideoInRoot = navigationHistory.length === 0 && filteredVideos[0] === video;
+    console.log('Video clicked:', video.title, 'Playable:', isEnrolled || video.isFree || video.isDemo || isFirstVideoInRoot, 'URL:', video.youtubeUrl || video.videoUrl);
+    const canPlay = isEnrolled || video.isFree || video.isDemo || isFirstVideoInRoot;
 
     // Resolve raw URL first
     const rawUrl = video.youtubeUrl || video.videoUrl || video.url || video.meetingLink || (video as any).streamId || '';
 
     const url = toYouTubeEmbed(rawUrl);
     if (canPlay && url) {
+      setSelectedVideo(video);
+      setShowVideoPlayer(true);
     } else if (!canPlay) {
       alert('🔒 Please enroll in this course to watch this video.');
     }
