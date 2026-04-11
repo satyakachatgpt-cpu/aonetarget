@@ -60,7 +60,7 @@ const Batches: React.FC = () => {
             <span className="material-symbols-rounded text-gray-700">arrow_back</span>
           </button>
           <div className="flex-1">
-            <h1 className="text-[17px] font-bold text-gray-900 tracking-tight">All Featured Batches</h1>
+            <h1 className="text-[17px] font-bold text-gray-900 tracking-tight">All Batches</h1>
             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest leading-none">Enroll & Start Learning</p>
           </div>
           <button className="w-10 h-10 rounded-full flex items-center justify-center hover:bg-gray-50 transition-colors">

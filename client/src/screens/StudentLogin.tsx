@@ -334,7 +334,19 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       setResendTimer(30);
       setOtp(['', '', '', '', '', '']);
       if (resData.otp) {
-        toast.success(`OTP for testing: ${resData.otp}`, { duration: 10000 });
+        toast.success(
+          <div className="flex flex-col gap-2 p-1">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-rounded text-blue-600">key</span>
+              <span className="font-bold text-gray-800">Security Code Sent</span>
+            </div>
+            <div className="flex items-center justify-between bg-blue-50 px-4 py-2.5 rounded-xl border border-blue-100">
+              <span className="text-[10px] font-black text-blue-700 uppercase tracking-wider">Login OTP</span>
+              <span className="text-xl font-black text-blue-900 tracking-[0.3em] font-mono">{resData.otp}</span>
+            </div>
+          </div>,
+          { duration: 15000 }
+        );
       } else {
         toast.success('OTP sent successfully');
       }
@@ -434,7 +446,19 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       const data = await response.json();
       if (response.ok) {
         if (data.otp) {
-          toast.success(`Reset OTP sent! OTP: ${data.otp}`, { duration: 10000 });
+          toast.success(
+            <div className="flex flex-col gap-2 p-1">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-rounded text-orange-600">lock_reset</span>
+                <span className="font-bold text-gray-800">Reset Link Ready</span>
+              </div>
+              <div className="flex items-center justify-between bg-orange-50 px-4 py-2.5 rounded-xl border border-orange-100">
+                <span className="text-[10px] font-black text-orange-700 uppercase tracking-wider">Reset OTP</span>
+                <span className="text-xl font-black text-orange-900 tracking-[0.3em] font-mono">{data.otp}</span>
+              </div>
+            </div>,
+            { duration: 15000 }
+          );
         } else {
           toast.success('Reset OTP sent!');
         }
@@ -870,21 +894,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
         <form onSubmit={handleLoginSubmit(async (data) => {
           setLoading(true);
           try {
-            const response = await fetch('/api/students/check-phone', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ phone: data.phone })
-            });
-            const resData = await response.json();
-
-            if (!response.ok) throw new Error(resData.error || 'Failed to check phone');
-
-            if (resData.exists) {
-              toast.error('You are already registered. Please login with password.');
-              return;
-            }
-
-            // Send registration OTP
+            // Directly send registration OTP (backend already checks if user exists)
             const otpRes = await fetch('/api/students/signup/send-otp', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -894,7 +904,19 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
             const otpData = await otpRes.json();
             if (otpRes.ok) {
               if (otpData.otp) {
-                toast.success(`Registration OTP sent! OTP: ${otpData.otp}`, { duration: 10000 });
+                toast.success(
+                  <div className="flex flex-col gap-2 p-1">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-rounded text-[#1A237E]">how_to_reg</span>
+                      <span className="font-bold text-gray-800">Registration OTP Sent!</span>
+                    </div>
+                    <div className="flex items-center justify-between bg-[#1A237E]/5 px-4 py-2.5 rounded-xl border border-[#1A237E]/10">
+                      <span className="text-[10px] font-black text-[#1A237E] uppercase tracking-wider">Your OTP</span>
+                      <span className="text-2xl font-black text-[#1A237E] tracking-[0.2em] font-mono">{otpData.otp}</span>
+                    </div>
+                  </div>,
+                  { duration: 15000 }
+                );
               } else {
                 toast.success('Registration OTP sent!');
               }

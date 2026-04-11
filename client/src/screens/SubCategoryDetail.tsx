@@ -84,7 +84,17 @@ const SubCategoryDetail: React.FC = () => {
         } catch { }
       }
 
-      const matchingCourses = allCourses.filter((c: Course) => c.subcategoryId === subId);
+      // Strict Batch Filtering: Only show courses that match subId AND (guest or student-enrolled)
+      const matchingCourses = allCourses.filter((c: Course) => {
+        const matchesSub = c.subcategoryId === subId;
+        if (!matchesSub) return false;
+        
+        if (studentId) {
+          return enrolledCourseIds.includes(c.id || '') || enrolledCourseIds.includes(c._id || '');
+        }
+        return true; // Guest sees all (explore mode)
+      });
+
       const contentMap: Record<string, { videos: ContentItem[]; tests: ContentItem[] }> = {};
       await Promise.all(matchingCourses.slice(0, 10).map(async (course: Course) => {
         const cId = course.id || course._id;
@@ -109,9 +119,12 @@ const SubCategoryDetail: React.FC = () => {
   };
 
   const getGradient = () => {
-    if (label.includes('NEET')) return 'from-[#303F9F] to-[#1A237E]';
-    if (label.includes('IIT') || label.includes('JEE')) return 'from-[#D32F2F] to-[#B71C1C]';
-    if (label.includes('Nursing')) return 'from-teal-500 to-emerald-600';
+    const l = label.toLowerCase();
+    if (l.includes('neet')) return 'from-[#303F9F] to-[#1A237E]';
+    if (l.includes('iit') || l.includes('jee')) return 'from-[#D32F2F] to-[#B71C1C]';
+    if (l.includes('nursing')) return 'from-teal-500 to-emerald-600';
+    if (l.includes('11') || l.includes('12')) return 'from-indigo-600 to-violet-700';
+    if (l.includes('9') || l.includes('10')) return 'from-[#1A237E] to-[#303F9F]';
     return 'from-[#303F9F] to-[#1A237E]';
   };
 
@@ -151,7 +164,7 @@ const SubCategoryDetail: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="flex flex-col w-full min-h-screen bg-gray-50 pb-20">
       <div className={`bg-gradient-to-br ${getGradient()} relative`}>
         <div className="pt-6 pb-16 px-4">
           <div className="flex items-center gap-3 mb-6">
