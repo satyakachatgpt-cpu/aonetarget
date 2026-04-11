@@ -14,9 +14,9 @@ export const uploadToCloudinary = (buffer, options = {}) => {
       uploadOptions.timeout = 180000; // 3 min timeout
     }
 
-    // Add chunked upload for large PDFs too
-    if (options.resource_type === 'raw') {
-      uploadOptions.timeout = 60000; // 1 min timeout
+    // Add chunked upload / high timeout for large documents
+    if (options.resource_type === 'raw' || options.resource_type === 'auto') {
+      uploadOptions.timeout = 180000; // 3 min timeout for larger docs
     }
 
     const uploadStream = cloudinary.uploader.upload_stream(

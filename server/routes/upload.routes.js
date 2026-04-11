@@ -136,7 +136,7 @@ router.get('/v2/upload/settings', (req, res) => {
     success: true,
     limits: {
       imageMB: process.env.IMAGE_MAX_SIZE_MB || 5,
-      pdfMB: process.env.PDF_MAX_SIZE_MB || 10,
+      pdfMB: process.env.PDF_MAX_SIZE_MB || 50,
       videoMB: process.env.VIDEO_MAX_SIZE_MB || 95
     }
   });

@@ -46,6 +46,7 @@ const StudyDashboard: React.FC = () => {
   const [downloadedIds, setDownloadedIds] = useState<Set<string>>(new Set());
   const [activeSubject, setActiveSubject] = useState('All Subjects');
   const [subjects, setSubjects] = useState<any[]>([]);
+  const [isEnrolled, setIsEnrolled] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -83,6 +84,17 @@ const StudyDashboard: React.FC = () => {
           const dRes = await fetch(`/api/students/${s.id}/downloads`).then(r => r.ok ? r.json() : []);
           if (Array.isArray(dRes)) {
             setDownloadedIds(new Set(dRes.map(d => d.id || d._id)));
+          }
+
+          // Fetch Enrollment Status
+          try {
+            const enrolledRes = await fetch(`/api/students/${s.id}/enrolled/${id}`);
+            if (enrolledRes.ok) {
+              const enrolledData = await enrolledRes.json();
+              setIsEnrolled(enrolledData.enrolled || false);
+            }
+          } catch (e) {
+            console.error('Enrollment check failed:', e);
           }
         }
       } catch (err) {
@@ -182,6 +194,13 @@ const StudyDashboard: React.FC = () => {
   };
 
   const handleView = (item: any, type: 'video' | 'pdf') => {
+    const canAccess = isFreeContent || isEnrolled;
+    
+    if (!canAccess) {
+      showToast('🔒 Please purchase this batch to access this content');
+      return;
+    }
+
     if (type === 'video') {
       navigate('/video-player', { state: { video: item, courseTitle: course?.title || course?.name, courseId: id } });
     } else {
@@ -507,26 +526,16 @@ const StudyDashboard: React.FC = () => {
                             <h4 className="font-bold text-sm">{note.title}</h4>
                             <p className="text-[10px] text-gray-400 mt-0.5">PDF Document</p>
                           </div>
-                          {isFreeContent || downloadedIds.has(note._id || note.id) ? (
+                          <div className="flex gap-2">
                             <button
                               onClick={() => handleView(note, 'pdf')}
-                              className="bg-brandBlue text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all"
+                              className={`bg-brandBlue text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center gap-2 ${!(isFreeContent || isEnrolled) ? 'opacity-80' : ''}`}
                             >
-                              View
+                              {!(isFreeContent || isEnrolled) && <span className="material-symbols-rounded text-sm">lock</span>}
+                              View Content
                             </button>
-                          ) : (
-                            <button
-                              onClick={() => handleDownload(note, 'pdf')}
-                              className="p-2 text-gray-400 group-hover:text-brandBlue group-hover:bg-blue-50 rounded-lg transition-all flex-shrink-0"
-                              title="Add to Downloads"
-                            >
-                              {downloadingId === (note._id || note.id) ? (
-                                <span className="material-symbols-rounded animate-spin">progress_activity</span>
-                              ) : (
-                                <span className="material-symbols-rounded">download</span>
-                              )}
-                            </button>
-                          )}
+                            {/* Download button removed as per requirements */}
+                          </div>
                         </div>
                       ))
                   ) : null}

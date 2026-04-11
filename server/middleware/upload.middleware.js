@@ -5,7 +5,7 @@ const storage = multer.memoryStorage();
 
 // Read limits from .env
 const IMAGE_LIMIT = (parseInt(process.env.IMAGE_MAX_SIZE_MB) || 5) * 1024 * 1024;
-const PDF_LIMIT   = (parseInt(process.env.PDF_MAX_SIZE_MB)   || 10) * 1024 * 1024;
+const PDF_LIMIT   = (parseInt(process.env.PDF_MAX_SIZE_MB)   || 50) * 1024 * 1024;
 const VIDEO_LIMIT = (parseInt(process.env.VIDEO_MAX_SIZE_MB) || 95) * 1024 * 1024;
 
 // 1. uploadImage
