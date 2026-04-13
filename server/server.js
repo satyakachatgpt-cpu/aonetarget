@@ -979,7 +979,34 @@ app.get('/api/courses/:id/videos', async (req, res) => {
       }
     }
 
-    res.json(uniqueVideos);
+    // --- MAPPING AND FALLBACK LOGIC ---
+    const mappedVideos = uniqueVideos.map(v => {
+      const videoUrl = v.youtubeUrl || v.videoUrl || v.url || '';
+      const hasProvider = !!v.provider;
+      
+      let provider = v.provider;
+      if (!hasProvider) {
+        const url = videoUrl.toLowerCase();
+        if (url.includes('youtube.com') || url.includes('youtu.be')) {
+          provider = 'youtube';
+        } else if (url.includes('.m3u8')) {
+          provider = 'hls';
+        } else {
+          provider = 'direct';
+        }
+      }
+
+      return {
+        ...v,
+        provider,
+        // Ensure the player always sees the expected fields
+        youtubeUrl: provider === 'youtube' ? (v.youtubeUrl || videoUrl) : v.youtubeUrl,
+        streamUrl: (provider === 'hls' || provider === 'direct') ? (v.streamUrl || videoUrl) : v.streamUrl,
+        videoUrl: videoUrl // Keep for backward compatibility
+      };
+    });
+
+    res.json(mappedVideos);
 
   } catch (error) {
     console.error('Fetch videos error:', error);
@@ -1148,6 +1175,9 @@ app.post('/api/courses/:id/videos', async (req, res) => {
       } : {}),
       courseId: String(courseId),
       folderId: folderId,
+      provider: videoData.provider || 'youtube',
+      streamUrl: videoData.streamUrl,
+      youtubeUrl: videoData.youtubeUrl,
       createdAt: new Date().toISOString()
     };
     if (isLiveStream) {
@@ -1228,6 +1258,11 @@ app.put('/api/courses/:id/videos/:videoId', async (req, res) => {
         finalUpdate.folderId = String(finalUpdate.folderId);
       }
     }
+
+    // Ensure provider fields are preserved in update
+    if (updateData.provider) finalUpdate.provider = updateData.provider;
+    if (updateData.streamUrl !== undefined) finalUpdate.streamUrl = updateData.streamUrl;
+    if (updateData.youtubeUrl !== undefined) finalUpdate.youtubeUrl = updateData.youtubeUrl;
 
     if (isLiveStream) {
       // Use central sync helper for live streams
