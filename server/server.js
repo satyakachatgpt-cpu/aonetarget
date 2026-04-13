@@ -988,8 +988,8 @@ app.get('/api/courses/:id/videos', async (req, res) => {
   }
 });
 // Import Content Route (copy or move items between courses)
-app.post('/api/courses/import', async (req, res) => {
-  console.log('[AGENT_ROUTER] POST /api/courses/import', req.body);
+app.post('/api/import-course-content', adminMiddleware, async (req, res) => {
+  console.log('[AGENT_ROUTER] POST /api/import-course-content', req.body);
   try {
     const { sourceCourseId, targetCourseId, itemIds, action } = req.body;
     if (!sourceCourseId || !targetCourseId || !itemIds || !Array.isArray(itemIds)) {
