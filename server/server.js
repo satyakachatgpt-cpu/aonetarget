@@ -17,6 +17,7 @@ import { uploadAPK } from './middleware/upload.middleware.js';
 import uploadV2Routes from './routes/upload.routes.js';
 import authRouter from './routes/auth.routes.js';
 import courseRouter from './routes/course.routes.js';
+import sendSMS from './utils/sendSMS.js';
 dns.setServers(['8.8.8.8', '8.8.4.4', '1.1.1.1']); // Enabling hardcoded DNS to correctly resolve Atlas SRV records on some networks
 if (dns.setDefaultResultOrder) dns.setDefaultResultOrder('ipv4first');
 
@@ -5302,64 +5303,15 @@ app.post('/api/otp/send', otpLimiter, async (req, res) => {
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-    const apiKey = process.env.KARIX_API_KEY;
-    const senderId = process.env.KARIX_SENDER_ID;
-    const entityId = process.env.DLT_ENTITY_ID;
-    const templateId = process.env.DLT_TEMPLATE_ID;
+    // SMS sending via PrimeClick
+    const smsResult = await sendSMS(
+      cleanPhone,
+      'Your AoneTarget login OTP is ' + otp + '. Valid for 10 minutes. Do not share.',
+      process.env.DLT_OTP_TEMPLATE_ID
+    );
 
-    const isProduction = process.env.NODE_ENV === 'production';
-    // If any required Karix/DLT config is missing, in production we must fail.
-    // In development, use a safe fallback: log the OTP and return a dev response.
-    // For now, always use development fallback as requested, bypassing Karix.
-    // In production, we would normally check for configuration here.
-    const forceDummy = true;
-    if (forceDummy || !apiKey || !senderId || !entityId || !templateId) {
-      if (isProduction && !forceDummy) {
-        return res.status(500).json({ error: 'SMS service not configured' });
-      }
-
-      console.warn(`Using development OTP fallback for ${cleanPhone}: ${otp}`);
-
-      otpStore.set(cleanPhone, {
-        otp,
-        createdAt: Date.now(),
-        attempts: 0
-      });
-
-      setTimeout(() => {
-        const stored = otpStore.get(cleanPhone);
-        if (stored && stored.otp === otp) {
-          otpStore.delete(cleanPhone);
-        }
-      }, 5 * 60 * 1000);
-
-      return res.json({
-        success: true,
-        message: 'OTP generated (Dummy - SMS not sent)'
-      });
-    }
-
-    const dest = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-    const messageText = `Your OTP for Aone Target is ${otp}. Valid for 5 minutes. Do not share with anyone.`;
-
-    const smsUrl = `https://japi.instaalerts.zone/httpapi/QueryStringReceiver`;
-    const params = new URLSearchParams({
-      ver: '1.0',
-      key: apiKey,
-      dest: dest,
-      send: senderId,
-      text: messageText,
-      dlt_entity_id: entityId,
-      dlt_template_id: templateId
-    });
-
-    const smsResponse = await fetch(`${smsUrl}?${params.toString()}`);
-    const smsResult = await smsResponse.text();
-    console.log('Karix SMS response:', smsResult);
-
-    if (!smsResponse.ok || (smsResult && smsResult.toLowerCase().includes('error'))) {
-      console.error('Karix SMS failed:', smsResult);
-      return res.status(500).json({ error: 'Failed to send SMS. Please try again.' });
+    if (!smsResult.success) {
+      return res.status(500).json({ success: false, message: 'SMS sending failed. Please try again.' });
     }
 
     otpStore.set(cleanPhone, {
@@ -5373,9 +5325,9 @@ app.post('/api/otp/send', otpLimiter, async (req, res) => {
       if (stored && stored.otp === otp) {
         otpStore.delete(cleanPhone);
       }
-    }, 5 * 60 * 1000);
+    }, 10 * 60 * 1000); // Increased to 10 mins as per requirement
 
-    res.json({ success: true, message: 'OTP sent successfully' });
+    res.json({ success: true, message: 'OTP sent to your mobile number' });
   } catch (error) {
     console.error('OTP send error:', error);
     res.status(500).json({ error: 'Failed to send OTP' });
@@ -5877,7 +5829,17 @@ app.post('/api/students/forgot-password/send-otp', otpLimiter, async (req, res) 
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    console.warn(`[RESET_OTP] Generated for ${cleanPhone}: ${otp}`);
+
+    // SMS sending via PrimeClick
+    const smsResult = await sendSMS(
+      cleanPhone,
+      'Your AoneTarget password reset OTP is ' + otp + '. Valid for 10 minutes. Do not share.',
+      process.env.DLT_FORGOT_TEMPLATE_ID
+    );
+
+    if (!smsResult.success) {
+      return res.status(500).json({ success: false, message: 'SMS sending failed. Please try again.' });
+    }
 
     resetOtpStore.set(cleanPhone, {
       otp,
@@ -5885,16 +5847,15 @@ app.post('/api/students/forgot-password/send-otp', otpLimiter, async (req, res) 
       attempts: 0
     });
 
-    // Auto-delete after 5 mins
+    // Auto-delete after 10 mins
     setTimeout(() => {
       const stored = resetOtpStore.get(cleanPhone);
       if (stored && stored.otp === otp) resetOtpStore.delete(cleanPhone);
-    }, 5 * 60 * 1000);
+    }, 10 * 60 * 1000);
 
-    // In a real app, send actual SMS here. For now, returning OTP for development.
     res.json({ 
       success: true, 
-      message: 'Reset OTP sent successfully'
+      message: 'OTP sent to your registered mobile number'
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to send reset OTP' });
@@ -5990,7 +5951,17 @@ app.post('/api/students/signup/send-otp', otpLimiter, async (req, res) => {
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    console.warn(`[SIGNUP_OTP] Generated for ${cleanPhone}: ${otp}`);
+
+    // SMS sending via PrimeClick
+    const smsResult = await sendSMS(
+      cleanPhone,
+      'Your AoneTarget login OTP is ' + otp + '. Valid for 10 minutes. Do not share.',
+      process.env.DLT_OTP_TEMPLATE_ID
+    );
+
+    if (!smsResult.success) {
+      return res.status(500).json({ success: false, message: 'SMS sending failed. Please try again.' });
+    }
 
     otpStore.set(cleanPhone, {
       otp,
@@ -6001,7 +5972,7 @@ app.post('/api/students/signup/send-otp', otpLimiter, async (req, res) => {
 
     res.json({ 
       success: true, 
-      message: 'Signup OTP sent successfully'
+      message: 'OTP sent to your mobile number'
     });
   } catch (error) {
     res.status(500).json({ error: 'Failed to send signup OTP' });
@@ -7318,6 +7289,20 @@ app.post('/api/razorpay/verify', async (req, res) => {
           }
         } catch (e) { }
       }
+      // Send Failure SMS
+      if (studentId && courseId) {
+        try {
+          const student = await db.collection('students').findOne({ id: studentId });
+          const course = await findCourse(courseId);
+          if (student && student.phone && course) {
+            await sendSMS(
+              student.phone,
+              'Your payment of Rs ' + course.price + ' for AoneTarget course has failed. Please try again or contact support.',
+              process.env.DLT_PAYMENT_FAILED_TEMPLATE_ID
+            );
+          }
+        } catch (e) { }
+      }
       return res.status(400).json({ error: 'Payment verification failed - invalid signature' });
     }
 
@@ -7337,6 +7322,20 @@ app.post('/api/razorpay/verify', async (req, res) => {
           if (student && student.email && course) {
             const { subject, html } = templates.paymentFailed(student.name || 'Student', course.name || course.title, course.price, paymentData.error?.description || 'Payment was not captured');
             sendEmail({ to: student.email, subject, html }).catch(e => console.error('Payment failure email error:', e));
+          }
+        } catch (e) { }
+      }
+      // Send Failure SMS
+      if (studentId && courseId) {
+        try {
+          const student = await db.collection('students').findOne({ id: studentId });
+          const course = await findCourse(courseId);
+          if (student && student.phone && course) {
+            await sendSMS(
+              student.phone,
+              'Your payment of Rs ' + course.price + ' for AoneTarget course has failed. Please try again or contact support.',
+              process.env.DLT_PAYMENT_FAILED_TEMPLATE_ID
+            );
           }
         } catch (e) { }
       }
@@ -7423,6 +7422,15 @@ app.post('/api/razorpay/verify', async (req, res) => {
     if (student.email) {
       const { subject, html } = templates.purchase(student.name || 'Student', purchase.courseName, purchase.amount);
       sendEmail({ to: student.email, subject, html }).catch(e => console.error('Payment email error:', e));
+    }
+
+    // Send Payment Success SMS
+    if (student.phone) {
+      await sendSMS(
+        student.phone,
+        'Your payment of Rs ' + purchase.amount + ' for AoneTarget course is successful. Welcome aboard!',
+        process.env.DLT_PAYMENT_SUCCESS_TEMPLATE_ID
+      ).catch(e => console.error('Payment success SMS error:', e));
     }
 
     res.status(201).json({ success: true, purchase });
