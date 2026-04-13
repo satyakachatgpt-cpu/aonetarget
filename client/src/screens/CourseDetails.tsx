@@ -232,14 +232,17 @@ const CourseDetails: React.FC = () => {
       return;
     }
 
-    console.log('Video clicked:', video.title, 'Playable:', isEnrolled || video.isFree || video.isDemo, 'URL:', video.youtubeUrl || video.videoUrl);
-    const canPlay = isEnrolled || video.isFree || video.isDemo;
+    const isFirstVideoInRoot = navigationHistory.length === 0 && filteredVideos[0] === video;
+    console.log('Video clicked:', video.title, 'Playable:', isEnrolled || video.isFree || video.isDemo || isFirstVideoInRoot, 'URL:', video.youtubeUrl || video.videoUrl);
+    const canPlay = isEnrolled || video.isFree || video.isDemo || isFirstVideoInRoot;
 
     // Resolve raw URL first
     const rawUrl = video.youtubeUrl || video.videoUrl || video.url || video.meetingLink || (video as any).streamId || '';
 
     const url = toYouTubeEmbed(rawUrl);
     if (canPlay && url) {
+      setSelectedVideo(video);
+      setShowVideoPlayer(true);
     } else if (!canPlay) {
       alert('🔒 Please enroll in this course to watch this video.');
     }
@@ -1029,25 +1032,31 @@ const CourseDetails: React.FC = () => {
                           <div
                             key={live.id || live._id}
                             onClick={() => handleVideoClick(live)}
-                            className="card-premium p-4 rounded-[2.5rem] border-2 border-red-100 bg-red-50/20 shadow-xl shadow-red-500/5 group relative overflow-hidden active:scale-[0.98] transition-all"
+                            className="group relative overflow-hidden p-[1px] rounded-2xl bg-gradient-to-br from-red-100/50 to-transparent shadow-xl transition-all duration-500 hover:shadow-red-500/10 hover:-translate-y-1 active:scale-95"
                           >
-                             <div className="absolute -top-12 -right-12 w-24 h-24 bg-red-500/5 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700"></div>
-                             <div className="flex gap-4 items-center relative z-10">
-                              <div className="w-16 h-16 bg-gradient-to-br from-red-500 to-red-600 rounded-3xl flex items-center justify-center shrink-0 shadow-lg shadow-red-500/20 relative">
-                                <span className="material-symbols-rounded text-white text-3xl">sensors</span>
-                                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>
+                             <div className="absolute inset-0 bg-white/80 backdrop-blur-xl rounded-2xl"></div>
+                             <div className="absolute -top-12 -right-12 w-24 h-24 bg-red-500/10 rounded-full blur-3xl group-hover:bg-red-500/20 transition-all duration-700"></div>
+                             
+                             <div className="relative z-10 p-3 flex gap-3 items-center">
+                              <div className="w-12 h-12 bg-gradient-to-tr from-rose-500 to-red-600 rounded-2xl flex items-center justify-center shrink-0 shadow-lg shadow-rose-500/25 relative overflow-hidden group-hover:scale-110 transition-transform">
+                                <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+                                <span className="material-symbols-rounded text-white text-2xl relative z-10">sensors</span>
+                                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-white animate-pulse"></span>
                               </div>
                               <div className="flex-1 min-w-0">
-                                <h4 className="font-extrabold text-lg text-gray-900 truncate mb-1 uppercase tracking-tight">{live.title}</h4>
-                                <span className="text-sm text-gray-500 font-bold flex items-center gap-1.5">
-                                  <span className="material-symbols-rounded text-lg text-red-500">person</span>
-                                  {live.instructor || 'Lead Instructor'}
-                                </span>
+                                <h4 className="font-bold text-base text-gray-800 truncate tracking-tight">{live.title}</h4>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className="flex items-center gap-1.5 bg-rose-500/10 backdrop-blur-md text-rose-600 text-[10px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider border border-rose-200/50 shadow-sm">
+                                     <span className="w-1.5 h-1.5 bg-rose-600 rounded-full"></span>
+                                     LIVE
+                                  </span>
+                                </div>
                               </div>
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleVideoClick(live); }}
-                                className="bg-red-600 text-white text-xs px-6 py-2.5 rounded-xl font-black flex items-center gap-2 hover:bg-black transition-all shadow-lg active:scale-[0.97] uppercase tracking-widest"
+                                className="relative overflow-hidden bg-gradient-to-r from-red-600 to-rose-600 text-white text-xs px-4 py-2 rounded-xl font-black flex items-center gap-1.5 transition-all shadow-lg shadow-red-600/20 group/btn"
                               >
+                                <div className="absolute inset-0 bg-black opacity-0 group-hover/btn:opacity-10 transition-opacity"></div>
                                 <span className="material-symbols-rounded text-lg">videocam</span>
                                 JOIN
                               </button>
@@ -1098,35 +1107,31 @@ const CourseDetails: React.FC = () => {
                         return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                       })();
 
-                      return (
-                        <div
-                          key={live.id || live._id}
-                          className="card-premium p-5 rounded-[2.2rem] border border-gray-100 bg-white shadow-card flex flex-col gap-4 group"
-                          style={{ animationDelay: `${idx * 80}ms` }}
-                        >
-                          <div className="flex gap-4 items-center">
-                            <div className="w-14 h-14 bg-blue-50 rounded-[1.2rem] flex items-center justify-center shrink-0 border border-blue-100">
-                              <span className="material-symbols-rounded text-blue-500 text-2xl">calendar_today</span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h4 className="font-extrabold text-gray-900 text-sm uppercase tracking-tight line-clamp-1">{live.title}</h4>
-                              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
-                                <span className="text-[11px] text-gray-400 font-bold flex items-center gap-1.5">
-                                  <span className="material-symbols-rounded text-[16px] text-blue-400">person</span>
-                                  {live.instructor || 'Lead Instructor'}
-                                </span>
-                                {displayTime && (
-                                  <span className="text-[11px] text-gray-500 font-extrabold flex items-center gap-1.5">
-                                    <span className="material-symbols-rounded text-[16px] text-blue-500">schedule</span>
+                        return (
+                          <div
+                            key={live.id || live._id}
+                            className="group relative overflow-hidden p-[1px] rounded-2xl bg-gradient-to-br from-indigo-100/50 to-transparent shadow-sm transition-all duration-500 hover:shadow-indigo-500/10 hover:-translate-y-1"
+                            style={{ animationDelay: `${idx * 80}ms` }}
+                          >
+                            <div className="absolute inset-0 bg-white/70 backdrop-blur-xl rounded-2xl"></div>
+                            
+                            <div className="relative z-10 p-3 flex gap-3 items-center">
+                              <div className="w-12 h-12 bg-indigo-50/80 backdrop-blur-sm rounded-2xl flex items-center justify-center shrink-0 border border-indigo-100 group-hover:bg-indigo-100 transition-colors">
+                                <span className="material-symbols-rounded text-indigo-500 text-2xl">calendar_today</span>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <h4 className="font-semibold text-base text-gray-800 truncate tracking-tight group-hover:text-indigo-600 transition-colors">{live.title}</h4>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <div className="flex items-center gap-1.5 bg-indigo-500/10 backdrop-blur-md text-indigo-600 text-[10px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider border border-indigo-200/50 shadow-sm">
+                                    <span className="material-symbols-rounded text-[14px]">schedule</span>
                                     {displayTime}
-                                  </span>
-                                )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="shrink-0">
+                                 <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest opacity-60">Upcoming</span>
                               </div>
                             </div>
-                            <div className="shrink-0 bg-blue-50 text-blue-600 text-[9px] px-3.5 py-2 rounded-xl font-black uppercase tracking-widest border border-blue-100">
-                              Upcoming
-                            </div>
-                          </div>
 
                           {(live.pdf1 || live.studyMaterial) && (
                             <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-50">

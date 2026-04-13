@@ -24,7 +24,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ isLoggedIn = false }) => {
   ];
 
   return (
-    <nav className="fixed bottom-0 w-full max-w-md z-50">
+    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50">
       <div className="glass rounded-t-[20px] shadow-nav border-t border-white/40 overflow-hidden">
         <div className="flex justify-around items-center py-1 px-1">
           {tabs.map((tab) => {

@@ -980,7 +980,34 @@ app.get('/api/courses/:id/videos', async (req, res) => {
       }
     }
 
-    res.json(uniqueVideos);
+    // --- MAPPING AND FALLBACK LOGIC ---
+    const mappedVideos = uniqueVideos.map(v => {
+      const videoUrl = v.youtubeUrl || v.videoUrl || v.url || '';
+      const hasProvider = !!v.provider;
+      
+      let provider = v.provider;
+      if (!hasProvider) {
+        const url = videoUrl.toLowerCase();
+        if (url.includes('youtube.com') || url.includes('youtu.be')) {
+          provider = 'youtube';
+        } else if (url.includes('.m3u8')) {
+          provider = 'hls';
+        } else {
+          provider = 'direct';
+        }
+      }
+
+      return {
+        ...v,
+        provider,
+        // Ensure the player always sees the expected fields
+        youtubeUrl: provider === 'youtube' ? (v.youtubeUrl || videoUrl) : v.youtubeUrl,
+        streamUrl: (provider === 'hls' || provider === 'direct') ? (v.streamUrl || videoUrl) : v.streamUrl,
+        videoUrl: videoUrl // Keep for backward compatibility
+      };
+    });
+
+    res.json(mappedVideos);
 
   } catch (error) {
     console.error('Fetch videos error:', error);
@@ -1149,6 +1176,9 @@ app.post('/api/courses/:id/videos', async (req, res) => {
       } : {}),
       courseId: String(courseId),
       folderId: folderId,
+      provider: videoData.provider || 'youtube',
+      streamUrl: videoData.streamUrl,
+      youtubeUrl: videoData.youtubeUrl,
       createdAt: new Date().toISOString()
     };
     if (isLiveStream) {
@@ -1229,6 +1259,11 @@ app.put('/api/courses/:id/videos/:videoId', async (req, res) => {
         finalUpdate.folderId = String(finalUpdate.folderId);
       }
     }
+
+    // Ensure provider fields are preserved in update
+    if (updateData.provider) finalUpdate.provider = updateData.provider;
+    if (updateData.streamUrl !== undefined) finalUpdate.streamUrl = updateData.streamUrl;
+    if (updateData.youtubeUrl !== undefined) finalUpdate.youtubeUrl = updateData.youtubeUrl;
 
     if (isLiveStream) {
       // Use central sync helper for live streams
@@ -6909,49 +6944,36 @@ app.post('/api/categories/seed', async (req, res) => {
     await db.collection('categories').insertMany(defaultCategories);
 
     const defaultSubcategories = [
-      { categoryId: 'neet', id: 'neet_class-11_recorded-batch', title: 'Class 11th - Recorded Batch', parentPath: 'Class 11th', icon: 'video_library', color: 'bg-blue-500', order: 1, isActive: true },
-      { categoryId: 'neet', id: 'neet_class-11_live-classroom', title: 'Class 11th - Live Classroom', parentPath: 'Class 11th', icon: 'cast_for_education', color: 'bg-red-500', order: 2, isActive: true },
-      { categoryId: 'neet', id: 'neet_class-11_crash-course', title: 'Class 11th - Crash Course', parentPath: 'Class 11th', icon: 'speed', color: 'bg-orange-500', order: 3, isActive: true },
-      { categoryId: 'neet', id: 'neet_class-11_mock-test', title: 'Class 11th - Mock Test', parentPath: 'Class 11th', icon: 'quiz', color: 'bg-green-500', order: 4, isActive: true },
-      { categoryId: 'neet', id: 'neet_class-12_recorded-batch', title: 'Class 12th - Recorded Batch', parentPath: 'Class 12th', icon: 'video_library', color: 'bg-blue-500', order: 5, isActive: true },
-      { categoryId: 'neet', id: 'neet_class-12_live-classroom', title: 'Class 12th - Live Classroom', parentPath: 'Class 12th', icon: 'cast_for_education', color: 'bg-red-500', order: 6, isActive: true },
-      { categoryId: 'neet', id: 'neet_class-12_crash-course', title: 'Class 12th - Crash Course', parentPath: 'Class 12th', icon: 'speed', color: 'bg-orange-500', order: 7, isActive: true },
-      { categoryId: 'neet', id: 'neet_class-12_mock-test', title: 'Class 12th - Mock Test', parentPath: 'Class 12th', icon: 'quiz', color: 'bg-green-500', order: 8, isActive: true },
-      { categoryId: 'neet', id: 'neet_neet-exam_recorded-batch', title: 'NEET Exams - Recorded Batch', parentPath: 'NEET Exams', icon: 'video_library', color: 'bg-blue-500', order: 9, isActive: true },
-      { categoryId: 'neet', id: 'neet_neet-exam_live-classroom', title: 'NEET Exams - Live Classroom', parentPath: 'NEET Exams', icon: 'cast_for_education', color: 'bg-red-500', order: 10, isActive: true },
-      { categoryId: 'neet', id: 'neet_neet-exam_crash-course', title: 'NEET Exams - Crash Course', parentPath: 'NEET Exams', icon: 'speed', color: 'bg-orange-500', order: 11, isActive: true },
-      { categoryId: 'neet', id: 'neet_neet-exam_mock-test', title: 'NEET Exams - Mock Test', parentPath: 'NEET Exams', icon: 'quiz', color: 'bg-green-500', order: 12, isActive: true },
-      { categoryId: 'iit-jee', id: 'iit-jee_recorded-batch', title: 'Recorded Batch', parentPath: '', icon: 'video_library', color: 'bg-blue-500', order: 1, isActive: true },
-      { categoryId: 'iit-jee', id: 'iit-jee_live-classroom', title: 'Live Classroom', parentPath: '', icon: 'cast_for_education', color: 'bg-red-500', order: 2, isActive: true },
-      { categoryId: 'iit-jee', id: 'iit-jee_crash-course', title: 'Crash Course', parentPath: '', icon: 'speed', color: 'bg-orange-500', order: 3, isActive: true },
-      { categoryId: 'iit-jee', id: 'iit-jee_mock-test', title: 'Mock Test', parentPath: '', icon: 'quiz', color: 'bg-green-500', order: 4, isActive: true },
-      { categoryId: 'nursing', id: 'nursing_bsc-cet-entrance', title: 'BSC CET Entrance', parentPath: '', icon: 'school', color: 'bg-blue-500', description: 'Nursing & Paramedical entrance', order: 1, isActive: true },
-      { categoryId: 'nursing', id: 'nursing_nursing-officer', title: 'Nursing Officer', parentPath: '', icon: 'medical_services', color: 'bg-red-500', description: 'Govt Job Coaching', order: 2, isActive: true },
-      { categoryId: 'nursing', id: 'nursing_anm-mphw', title: 'ANM-MPHW', parentPath: '', icon: 'health_and_safety', color: 'bg-amber-500', description: 'Govt Job Coaching', order: 3, isActive: true },
-      { categoryId: 'nursing', id: 'nursing_gnm', title: 'GNM', parentPath: '', icon: 'medication', color: 'bg-green-500', description: '1st, 2nd, 3rd Year Syllabus', order: 4, isActive: true },
-      { categoryId: 'nursing', id: 'nursing_bsc-nursing', title: 'BSC Nursing Degree', parentPath: '', icon: 'local_pharmacy', color: 'bg-purple-500', description: 'Semester Wise Syllabus', order: 5, isActive: true },
-      { categoryId: 'nursing', id: 'nursing_e-book', title: 'E-Book', parentPath: '', icon: 'auto_stories', color: 'bg-indigo-500', description: 'Study material & notes', order: 6, isActive: true },
-      { categoryId: 'nursing', id: 'nursing_mock-test', title: 'Mock Test', parentPath: '', icon: 'quiz', color: 'bg-teal-500', description: 'Practice tests', order: 7, isActive: true },
-      { categoryId: 'general', id: 'general_cbse_class-9_english', title: 'CBSE Class 9th - English', parentPath: 'CBSE Board > Class 9th', icon: 'translate', color: 'bg-blue-500', order: 1, isActive: true },
-      { categoryId: 'general', id: 'general_cbse_class-9_hindi', title: 'CBSE Class 9th - Hindi', parentPath: 'CBSE Board > Class 9th', icon: 'language', color: 'bg-orange-500', order: 2, isActive: true },
-      { categoryId: 'general', id: 'general_cbse_class-9_social-studies', title: 'CBSE Class 9th - Social Studies', parentPath: 'CBSE Board > Class 9th', icon: 'public', color: 'bg-green-500', order: 3, isActive: true },
-      { categoryId: 'general', id: 'general_cbse_class-9_science', title: 'CBSE Class 9th - Science & Tech', parentPath: 'CBSE Board > Class 9th', icon: 'science', color: 'bg-purple-500', order: 4, isActive: true },
-      { categoryId: 'general', id: 'general_cbse_class-9_maths', title: 'CBSE Class 9th - Mathematics', parentPath: 'CBSE Board > Class 9th', icon: 'calculate', color: 'bg-red-500', order: 5, isActive: true },
-      { categoryId: 'general', id: 'general_cbse_class-10_english', title: 'CBSE Class 10th - English', parentPath: 'CBSE Board > Class 10th', icon: 'translate', color: 'bg-blue-500', order: 6, isActive: true },
-      { categoryId: 'general', id: 'general_cbse_class-10_hindi', title: 'CBSE Class 10th - Hindi', parentPath: 'CBSE Board > Class 10th', icon: 'language', color: 'bg-orange-500', order: 7, isActive: true },
-      { categoryId: 'general', id: 'general_cbse_class-10_social-studies', title: 'CBSE Class 10th - Social Studies', parentPath: 'CBSE Board > Class 10th', icon: 'public', color: 'bg-green-500', order: 8, isActive: true },
-      { categoryId: 'general', id: 'general_cbse_class-10_science', title: 'CBSE Class 10th - Science & Tech', parentPath: 'CBSE Board > Class 10th', icon: 'science', color: 'bg-purple-500', order: 9, isActive: true },
-      { categoryId: 'general', id: 'general_cbse_class-10_maths', title: 'CBSE Class 10th - Mathematics', parentPath: 'CBSE Board > Class 10th', icon: 'calculate', color: 'bg-red-500', order: 10, isActive: true },
-      { categoryId: 'general', id: 'general_hbse_class-9_english', title: 'HBSE Class 9th - English', parentPath: 'HBSE Board > Class 9th', icon: 'translate', color: 'bg-blue-500', order: 11, isActive: true },
-      { categoryId: 'general', id: 'general_hbse_class-9_hindi', title: 'HBSE Class 9th - Hindi', parentPath: 'HBSE Board > Class 9th', icon: 'language', color: 'bg-orange-500', order: 12, isActive: true },
-      { categoryId: 'general', id: 'general_hbse_class-9_social-studies', title: 'HBSE Class 9th - Social Studies', parentPath: 'HBSE Board > Class 9th', icon: 'public', color: 'bg-green-500', order: 13, isActive: true },
-      { categoryId: 'general', id: 'general_hbse_class-9_science', title: 'HBSE Class 9th - Science & Tech', parentPath: 'HBSE Board > Class 9th', icon: 'science', color: 'bg-purple-500', order: 14, isActive: true },
-      { categoryId: 'general', id: 'general_hbse_class-9_maths', title: 'HBSE Class 9th - Mathematics', parentPath: 'HBSE Board > Class 9th', icon: 'calculate', color: 'bg-red-500', order: 15, isActive: true },
-      { categoryId: 'general', id: 'general_hbse_class-10_english', title: 'HBSE Class 10th - English', parentPath: 'HBSE Board > Class 10th', icon: 'translate', color: 'bg-blue-500', order: 16, isActive: true },
-      { categoryId: 'general', id: 'general_hbse_class-10_hindi', title: 'HBSE Class 10th - Hindi', parentPath: 'HBSE Board > Class 10th', icon: 'language', color: 'bg-orange-500', order: 17, isActive: true },
-      { categoryId: 'general', id: 'general_hbse_class-10_social-studies', title: 'HBSE Class 10th - Social Studies', parentPath: 'HBSE Board > Class 10th', icon: 'public', color: 'bg-green-500', order: 18, isActive: true },
-      { categoryId: 'general', id: 'general_hbse_class-10_science', title: 'HBSE Class 10th - Science & Tech', parentPath: 'HBSE Board > Class 10th', icon: 'science', color: 'bg-purple-500', order: 19, isActive: true },
-      { categoryId: 'general', id: 'general_hbse_class-10_maths', title: 'HBSE Class 10th - Mathematics', parentPath: 'HBSE Board > Class 10th', icon: 'calculate', color: 'bg-red-500', order: 20, isActive: true }
+      // NEET Subcategories
+      { categoryId: 'neet', id: 'recorded_batch', title: 'Recorded Batch', icon: 'play_circle', color: 'from-[#303F9F] to-[#1A237E]', order: 1, isActive: true },
+      { categoryId: 'neet', id: 'live_classroom', title: 'Live Classroom', icon: 'cast_for_education', color: 'from-[#D32F2F] to-[#B71C1C]', order: 2, isActive: true },
+      { categoryId: 'neet', id: 'crash_course', title: 'Crash Course', icon: 'bolt', color: 'from-[#E65100] to-[#BF360C]', order: 3, isActive: true },
+      { categoryId: 'neet', id: 'mock_test', title: 'Mock Test', icon: 'quiz', color: 'from-[#2E7D32] to-[#1B5E20]', order: 4, isActive: true },
+
+      // IIT-JEE Subcategories
+      { categoryId: 'iit-jee', id: 'recorded_batch', title: 'Recorded Batch', icon: 'play_circle', color: 'from-[#303F9F] to-[#1A237E]', order: 1, isActive: true },
+      { categoryId: 'iit-jee', id: 'live_classroom', title: 'Live Classroom', icon: 'cast_for_education', color: 'from-[#D32F2F] to-[#B71C1C]', order: 2, isActive: true },
+      { categoryId: 'iit-jee', id: 'crash_course', title: 'Crash Course', icon: 'bolt', color: 'from-[#E65100] to-[#BF360C]', order: 3, isActive: true },
+      { categoryId: 'iit-jee', id: 'mock_test', title: 'Mock Test', icon: 'quiz', color: 'from-[#2E7D32] to-[#1B5E20]', order: 4, isActive: true },
+
+      // 11th-12th Subcategories
+      { categoryId: '11th-12th', id: 'recorded_batch', title: 'Recorded Batch', icon: 'play_circle', color: 'from-[#303F9F] to-[#1A237E]', order: 1, isActive: true },
+      { categoryId: '11th-12th', id: 'live_classroom', title: 'Live Classroom', icon: 'cast_for_education', color: 'from-[#D32F2F] to-[#B71C1C]', order: 2, isActive: true },
+      { categoryId: '11th-12th', id: 'crash_course', title: 'Crash Course', icon: 'bolt', color: 'from-[#E65100] to-[#BF360C]', order: 3, isActive: true },
+      { categoryId: '11th-12th', id: 'mock_test', title: 'Mock Test', icon: 'quiz', color: 'from-[#2E7D32] to-[#1B5E20]', order: 4, isActive: true },
+
+      // 9th-10th (foundation) Subcategories
+      { categoryId: 'foundation', id: 'class-9th', title: 'Class 9th', icon: 'school', color: 'from-indigo-600 to-violet-700', order: 1, isActive: true },
+      { categoryId: 'foundation', id: 'class-10th', title: 'Class 10th', icon: 'school', color: 'from-purple-600 to-fuchsia-700', order: 2, isActive: true },
+
+      // Nursing CET Subcategories
+      { categoryId: 'nursing-cet', id: 'bsc-cet-entrance', title: 'BSc CET Entrance', icon: 'local_hospital', color: 'from-teal-500 to-teal-600', order: 1, isActive: true },
+      { categoryId: 'nursing-cet', id: 'nursing-officer', title: 'Nursing Officer', icon: 'medical_services', color: 'from-emerald-500 to-emerald-600', order: 2, isActive: true },
+      { categoryId: 'nursing-cet', id: 'anm-mphw', title: 'ANM / MPHW', icon: 'emergency', color: 'from-teal-600 to-teal-700', order: 3, isActive: true },
+      { categoryId: 'nursing-cet', id: 'gnm', title: 'GNM', icon: 'school', color: 'from-emerald-600 to-emerald-700', order: 4, isActive: true },
+      { categoryId: 'nursing-cet', id: 'ebooks', title: 'E-Book', icon: 'menu_book', color: 'from-cyan-600 to-cyan-700', order: 5, isActive: true },
+      { categoryId: 'nursing-cet', id: 'bsc-nursing', title: 'BSc Nursing', icon: 'diversity_1', color: 'from-teal-700 to-teal-800', order: 6, isActive: true },
+      { categoryId: 'nursing-cet', id: 'mock-tests', title: 'Mock Test', icon: 'quiz', color: 'from-emerald-700 to-emerald-800', order: 7, isActive: true },
     ];
 
     await db.collection('subcategories').insertMany(defaultSubcategories);

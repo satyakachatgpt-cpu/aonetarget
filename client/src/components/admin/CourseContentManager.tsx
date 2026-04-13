@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getImageUrl, getVideoUrl, getPdfUrl, toYouTubeEmbed } from '../../lib/utils';
 import { createPortal } from 'react-dom';
 import { coursesAPI, categoriesAPI, packagesAPI, uploadAPI, getAdminHeaders } from '../../services/apiClient';
@@ -198,6 +199,8 @@ const getAuthHeaders = () => {
 };
 
 const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onClearInitialCourse, onBack, setActiveView, initialMainTab }) => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [activeMainTab, setActiveMainTab] = useState(initialMainTab || 'Content');
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedCourse, setSelectedCourse] = useState<Course | null>(null);
@@ -360,10 +363,10 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     try {
       const courseId = normalizeId((selectedCourse as any)._id || selectedCourse.id);
       const adminToken = localStorage.getItem('adminToken');
-      
+
       const response = await fetch(`${API_BASE_URL}/notifications/send`, {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${adminToken}`
         },
@@ -392,7 +395,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const adminToken = localStorage.getItem('adminToken');
       await fetch(`${API_BASE_URL}/${endpoint}/${courseId}`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${adminToken}`
         },
@@ -431,7 +434,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const adminToken = localStorage.getItem('adminToken');
       await fetch(`${API_BASE_URL}/courses/${courseId}/videos/${videoId}`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${adminToken}`
         },
@@ -450,7 +453,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const adminToken = localStorage.getItem('adminToken');
       await fetch(`${API_BASE_URL}/courses/${courseId}/videos/${videoId}`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${adminToken}`
         },
@@ -518,7 +521,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const adminToken = localStorage.getItem('adminToken');
       await fetch(`${API_BASE_URL}/courses/${courseId}/notes/${noteId}`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${adminToken}`
         },
@@ -537,7 +540,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const adminToken = localStorage.getItem('adminToken');
       await fetch(`${API_BASE_URL}/courses/${courseId}/notes/${noteId}`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${adminToken}`
         },
@@ -556,7 +559,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const adminToken = localStorage.getItem('adminToken');
       await fetch(`${API_BASE_URL}/courses/${courseId}/tests/${testId}`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${adminToken}`
         },
@@ -575,7 +578,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const adminToken = localStorage.getItem('adminToken');
       await fetch(`${API_BASE_URL}/courses/${courseId}/tests/${testId}`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${adminToken}`
         },
@@ -967,7 +970,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         thumbnail: youtubeZoomForm.image,
         startTime: youtubeZoomForm.publishOn,
         publishOn: youtubeZoomForm.publishOn,
-        
+
         type: 'live',
         contentType: 'live_stream', // Legacy compatibility
         status: 'active',
@@ -985,7 +988,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         slug: youtubeZoomForm.slug,
         seoTitle: youtubeZoomForm.seoTitle,
         seoDescription: youtubeZoomForm.seoDescription,
-        
+
         pdf1: youtubeZoomForm.pdf1,
         pdf2: youtubeZoomForm.pdf2,
         studyMaterial: youtubeZoomForm.studyMaterial,
@@ -994,8 +997,8 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         folderId,
       };
 
-      const endpointUrl = videoId 
-        ? `${API_BASE_URL}/courses/${courseId}/videos/${videoId}` 
+      const endpointUrl = videoId
+        ? `${API_BASE_URL}/courses/${courseId}/videos/${videoId}`
         : `${API_BASE_URL}/courses/${courseId}/videos`;
 
       const response = await fetch(endpointUrl, {
@@ -1869,7 +1872,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
         const response = await fetch(`${API_BASE_URL}/courses/${courseId}/notes`, {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             ...getAdminHeaders()
           },
@@ -2013,7 +2016,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     if (!selectedCourse || !confirm('Delete this folder and all its content?')) return;
     try {
       const fId = normalizeId(folderId);
-      
+
       // Recursive helper to find all nested folder IDs for optimistic state update
       const getNestedFolderIds = (id: string, allFolders: any[]): string[] => {
         let ids = [id];
@@ -2206,7 +2209,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       if (!isLiveStream) return null;
       // Strictly respect streamStatus for lifecycle, fallback to status only if it looks like a lifecycle status
       const lifecycleStatus = (item.streamStatus || (['upcoming', 'live', 'ended'].includes(item.status) ? item.status : 'upcoming')).toLowerCase();
-      
+
       if (['ended', 'inactive', 'completed', 'finished', 'disable'].includes(lifecycleStatus)) {
         return 'ended';
       }
@@ -2234,14 +2237,26 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
               if (link) {
                 const isYoutube = link.includes('youtube.com') || link.includes('youtu.be');
                 if (isYoutube && courseId) {
-                  window.open(`/#/watch/${courseId}/${itemId}`, '_blank');
+                  navigate(`/watch/${courseId}/${itemId}`, {
+                    state: {
+                      fromAdmin: true,
+                      returnTo: location.pathname + location.search + location.hash
+                    }
+                  });
                 } else {
                   window.open(link, '_blank');
                 }
               }
               else showToast('Meeting link not available', 'error');
             } else if (isVideo) {
-              if (courseId) window.open(`/#/watch/${courseId}/${itemId}`, '_blank');
+              if (courseId) {
+                navigate(`/watch/${courseId}/${itemId}`, {
+                  state: {
+                    fromAdmin: true,
+                    returnTo: location.pathname + location.search + location.hash
+                  }
+                });
+              }
             } else if (isNote) {
               const url = item.fileUrl || item.url || item.link;
               if (url) {
@@ -3617,11 +3632,11 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                           <div key={num} className="space-y-2">
                             <label className="block text-[13px] font-bold text-gray-600 tracking-tight uppercase">Attach PDF {num}</label>
                             <div className="flex gap-4">
-                              <input 
-                                type="file" 
+                              <input
+                                type="file"
                                 ref={ref}
-                                className="hidden" 
-                                accept="application/pdf" 
+                                className="hidden"
+                                accept="application/pdf"
                                 onChange={async (e) => {
                                   const file = e.target.files?.[0];
                                   if (!file) return;
@@ -3629,10 +3644,10 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                                     showToast('Uploading PDF...', 'success');
                                     const formData = new FormData();
                                     formData.append('file', file);
-                                    const res = await fetch('/api/v2/upload/pdf', { 
-                                      method: 'POST', 
+                                    const res = await fetch('/api/v2/upload/pdf', {
+                                      method: 'POST',
                                       headers: getAuthHeaders(),
-                                      body: formData 
+                                      body: formData
                                     });
                                     if (!res.ok) throw new Error('Upload failed');
                                     const data = await res.json();
@@ -3658,7 +3673,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                                   </>
                                 )}
                               </div>
-                              <div 
+                              <div
                                 onClick={() => ref.current?.click()}
                                 className="flex-1 border-2 border-dashed border-[#e2e2e2] rounded-[18px] flex flex-col items-center justify-center p-4 hover:bg-gray-50 transition-all cursor-pointer bg-white group text-center"
                               >
@@ -3673,11 +3688,11 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                       <div className="space-y-2">
                         <label className="block text-[13px] font-bold text-gray-600 tracking-tight uppercase">Study Material</label>
                         <div className="flex gap-4">
-                          <input 
-                            type="file" 
+                          <input
+                            type="file"
                             ref={youtubeZoomStudyMaterialRef}
-                            className="hidden" 
-                            accept="*" 
+                            className="hidden"
+                            accept="*"
                             onChange={async (e) => {
                               const file = e.target.files?.[0];
                               if (!file) return;
@@ -3685,10 +3700,10 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                                 showToast('Uploading material...', 'success');
                                 const formData = new FormData();
                                 formData.append('file', file);
-                                const res = await fetch('/api/v2/upload/pdf', { 
-                                  method: 'POST', 
+                                const res = await fetch('/api/v2/upload/pdf', {
+                                  method: 'POST',
                                   headers: getAuthHeaders(),
-                                  body: formData 
+                                  body: formData
                                 });
                                 if (!res.ok) throw new Error('Upload failed');
                                 const data = await res.json();
@@ -3714,7 +3729,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                               </>
                             )}
                           </div>
-                          <div 
+                          <div
                             onClick={() => youtubeZoomStudyMaterialRef.current?.click()}
                             className="flex-1 border-2 border-dashed border-[#e2e2e2] rounded-[18px] flex flex-col items-center justify-center p-4 hover:bg-gray-50 transition-all cursor-pointer bg-white group text-center"
                           >
@@ -3747,7 +3762,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
                         <div className="flex flex-col space-y-2 mt-4 pt-4 border-t border-gray-100">
                           <label className="text-[13px] font-bold text-gray-600 tracking-tight uppercase">Stream Visibility</label>
-                          <select 
+                          <select
                             value={youtubeZoomForm.visibility}
                             onChange={(e) => setYoutubeZoomForm({ ...youtubeZoomForm, visibility: e.target.value as 'public' | 'private' })}
                             className="w-full h-[48px] bg-white border border-gray-200 rounded-[12px] px-4 text-[15px] font-bold outline-none focus:border-gray-400 transition-all cursor-pointer"
