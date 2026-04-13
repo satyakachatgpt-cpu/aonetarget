@@ -261,7 +261,17 @@ const Home: React.FC = () => {
         } else {
           data = [];
         }
-        setLiveClasses(Array.isArray(data) ? data : []);
+        
+        // Sort by scheduled time or creation time descending (Latest first)
+        const sorted = (Array.isArray(data) ? data : []).sort((a: any, b: any) => {
+          const getT = (item: any) => {
+            const date = item.scheduledAt || item.scheduledTime || item.startTime || item.createdAt || item.createdDate || 0;
+            return new Date(date).getTime();
+          };
+          return getT(b) - getT(a);
+        });
+        
+        setLiveClasses(sorted);
       } catch (error) {
         console.error('Failed to fetch live classes:', error);
       }
@@ -739,7 +749,7 @@ const Home: React.FC = () => {
                     </button>
                   </div>
                   <div className="space-y-3">
-                    {ongoing.slice(0, 2).map((lc: any, i: number) => {
+                    {ongoing.slice(0, 4).map((lc: any, i: number) => {
                       return (
                         <div key={lc._id || lc.id || i} className="group relative overflow-hidden p-[1px] rounded-2xl bg-gradient-to-br from-red-100/50 to-transparent shadow-xl transition-all duration-500 hover:shadow-red-500/10 hover:-translate-y-1">
                            <div className="absolute inset-0 bg-white/80 backdrop-blur-xl rounded-2xl"></div>
@@ -819,7 +829,7 @@ const Home: React.FC = () => {
                     </button>
                   </div>
                   <div className="space-y-4">
-                    {upcoming.slice(0, 3).map((lc: any, i: number) => {
+                    {upcoming.slice(0, 4).map((lc: any, i: number) => {
                       const rawScheduled = lc.scheduledAt || lc.scheduledTime || lc.startTime || '';
                       const scheduledISO = rawScheduled ? rawScheduled.replace(' ', 'T') : '';
 

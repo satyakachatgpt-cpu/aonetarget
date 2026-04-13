@@ -16,7 +16,10 @@ const WatchPage: React.FC = () => {
   const { batchId, videoId } = useParams<{ batchId: string; videoId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  
+
+  const isAdmin = (location.state as any)?.fromAdmin || new URLSearchParams(location.search).get('admin') === 'true';
+  const returnTo = (location.state as any)?.returnTo;
+
   const [isLandscape, setIsLandscape] = useState(window.innerWidth > window.innerHeight);
   const [playlist, setPlaylist] = useState<any[]>([]);
   const [currentVideo, setCurrentVideo] = useState<any>(null);
@@ -108,16 +111,16 @@ const WatchPage: React.FC = () => {
           }
         });
         const videos = await response.json();
-        
+
         if (Array.isArray(videos) && videos.length > 0) {
           setPlaylist(videos);
           const targetId = String(videoId || '').toLowerCase();
-          
+
           let current = videos.find((v: any) => {
             const ids = [v._id, v.id, v.videoId].filter(Boolean).map(String);
             return ids.some(id => id.toLowerCase() === targetId);
           });
-          
+
           if (!current && videos.length > 0) current = videos[0];
           setCurrentVideo(current || null);
         }
@@ -147,8 +150,8 @@ const WatchPage: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-[#000000]">
         <div className="relative w-16 h-16 mb-6">
-           <div className="absolute inset-0 border-4 border-white/5 rounded-full" />
-           <div className="absolute inset-0 border-4 border-red-600 rounded-full border-t-transparent animate-spin shadow-[0_0_15px_rgba(220,38,38,0.5)]" />
+          <div className="absolute inset-0 border-4 border-white/5 rounded-full" />
+          <div className="absolute inset-0 border-4 border-red-600 rounded-full border-t-transparent animate-spin shadow-[0_0_15px_rgba(220,38,38,0.5)]" />
         </div>
         <p className="text-white/40 text-[10px] font-black uppercase tracking-[0.4em] animate-pulse italic">Initializing Secure Stream</p>
       </div>
@@ -162,7 +165,7 @@ const WatchPage: React.FC = () => {
   if (isUpcomingStream) {
     return (
       <div className="h-[100dvh] bg-[#000000] flex flex-col items-center justify-center overflow-hidden font-outfit relative">
-        <div 
+        <div
           onPointerDown={(e) => {
             e.preventDefault(); e.stopPropagation();
             const state = window.history.state;
@@ -176,7 +179,7 @@ const WatchPage: React.FC = () => {
           </div>
         </div>
         <div className="relative w-24 h-24 mb-6 bg-white/5 rounded-full flex items-center justify-center">
-           <span className="material-symbols-rounded text-5xl text-white/40">hourglass_empty</span>
+          <span className="material-symbols-rounded text-5xl text-white/40">hourglass_empty</span>
         </div>
         <h2 className="text-white text-xl font-black uppercase tracking-widest mb-2 text-center max-w-sm">{currentVideo.title}</h2>
         <p className="text-white/40 text-xs font-bold uppercase tracking-[0.2em] text-center max-w-xs">This live session has not started yet. Please wait for the instructor to begin.</p>
@@ -195,11 +198,18 @@ const WatchPage: React.FC = () => {
       chatMessages={liveMessages}
       onSendMessage={handleSendLiveMessage}
       onClose={() => {
-        const state = window.history.state;
-        if (state && state.idx > 0) navigate(-1);
-        else navigate('/live-classes', { replace: true });
+        if (returnTo) {
+          navigate(returnTo);
+        } else if (isAdmin) {
+          navigate('/admin/course-content');
+        } else {
+          const state = window.history.state;
+          if (state && state.idx > 0) navigate(-1);
+          else navigate('/live-classes', { replace: true });
+        }
       }}
       courseId={batchId}
+      isAdmin={isAdmin}
     />
   );
 };
