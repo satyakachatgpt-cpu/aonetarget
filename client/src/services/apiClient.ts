@@ -312,6 +312,22 @@ export const studentsAPI = {
       throw new Error(errorData.error || 'Failed to reset device');
     }
     return response.json();
+  },
+
+  banUser: async (userId: string, reason: string) => {
+    const response = await fetch(`${API_BASE_URL}/security-admin/ban-user`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify({ userId, reason })
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to ban user');
+    }
+    return response.json();
   }
 };
 

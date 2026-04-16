@@ -61,6 +61,9 @@ const studentSchema = new mongoose.Schema({
     sessionToken: { type: String, default: null },
     activeDeviceId: { type: String, default: null },
     activeSessions: [{ type: mongoose.Schema.Types.Mixed }],
+    
+    isBanned: { type: Boolean, default: false },
+    banReason: { type: String, default: null },
 
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }

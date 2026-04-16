@@ -66,6 +66,7 @@ interface Student {
   pendingDeviceId?: string;
   deviceLocked?: boolean;
   _id?: string;
+  createdAt?: string;
 }
 
 // Optimized Internal Component for Student Profile to fix lag and handle toggles locally
@@ -230,8 +231,6 @@ const StudentProfileContent: React.FC<{
                 { label: 'State', value: student.state || getStateFromCity(student.city) },
                 { label: 'District', value: student.district || student.city },
                 { label: 'Gender', value: student.gender || student.admission?.gender },
-                { label: 'WhatsApp', value: student.whatsAppNumber },
-                { label: 'Alternate WhatsApp', value: student.alternateWhatsAppNumber || student.alternateNumber || student.admission?.alternatePhone },
                 { label: 'Address', value: student.admission?.fullAddress || (student as any).address || (student as any).fullAddress },
                 { label: 'Class', value: (student as any).class },
                 { label: 'Age / DOB', value: student.dob ? new Date(student.dob).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A' }
@@ -411,9 +410,6 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     registrationType: 'regular',
     status: 'active' as 'active' | 'inactive',
     paymentStatus: 'pending' as 'paid' | 'pending' | 'failed',
-    district: '',
-    whatsAppNumber: '',
-    alternateWhatsAppNumber: '',
     notes: '',
     // Legacy/Hidden fields kept in state for API compatibility but hidden from simple form
     fatherName: '',
@@ -558,16 +554,12 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       showToast('Name should be 3-50 characters (letters only)', 'error');
       return false;
     }
-    if (!emailRegex.test(formData.email)) {
+    if (!formData.email || !emailRegex.test(formData.email)) {
       showToast('Please enter a valid email address', 'error');
       return false;
     }
-    if (!phoneRegex.test(formData.phone)) {
+    if (!formData.phone || !phoneRegex.test(formData.phone)) {
       showToast('Phone number must be exactly 10 digits', 'error');
-      return false;
-    }
-    if (formData.alternatePhone && !phoneRegex.test(formData.alternatePhone)) {
-      showToast('Alternate phone number must be exactly 10 digits', 'error');
       return false;
     }
     if (!formData.state) {
@@ -606,9 +598,6 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       state: data.state,
       userId: data.userId,
       highQualification: data.highQualification,
-      district: data.district,
-      whatsAppNumber: data.whatsAppNumber,
-      alternateWhatsAppNumber: data.alternateWhatsAppNumber,
       registrationDate: data.registrationDate,
       registrationType: data.registrationType,
       status: data.status,
@@ -719,7 +708,13 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
   const handleUnblock = async (student: Student) => {
     try {
       setLoading(true);
-      await studentsAPI.update(student.id, { ...student, status: 'active', blockedAt: undefined });
+      await studentsAPI.update(student.id, { 
+        id: student.id, 
+        status: 'active', 
+        isBanned: false, 
+        banReason: null,
+        blockedAt: undefined 
+      });
       showToast(`${student.name} has been unblocked successfully`, 'success');
       loadStudents();
     } catch (err) {
@@ -776,17 +771,11 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     if (reason === null) return;
     try {
       setLoading(true);
-      const res = await fetch('/api/security-admin/ban-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: student.id, reason })
-      });
-      if (res.ok) {
-        showToast(`${student.name} has been banned`, 'success');
-        loadStudents();
-      }
-    } catch (err) {
-      showToast('Failed to ban user', 'error');
+      await studentsAPI.banUser(student.id, reason);
+      showToast(`${student.name} has been banned`, 'success');
+      loadStudents();
+    } catch (err: any) {
+      showToast(err.message || 'Failed to ban user', 'error');
     } finally {
       setLoading(false);
     }
@@ -810,9 +799,6 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       password: '', // Don't pre-fill password for security
       confirmPassword: '',
       highQualification: student.highQualification || '',
-      district: student.district || '',
-      whatsAppNumber: student.whatsAppNumber || '',
-      alternateWhatsAppNumber: student.alternateWhatsAppNumber || '',
       gender: student.admission?.gender || student.gender || 'Male',
       // Hidden fields
       fatherName: student.admission?.fatherName || '',
@@ -865,9 +851,6 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       status: 'active',
       paymentStatus: 'pending',
       notes: '',
-      district: '',
-      whatsAppNumber: '',
-      alternateWhatsAppNumber: '',
       fatherName: '',
       motherName: '',
       alternatePhone: '',
@@ -934,7 +917,10 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       try {
         await studentsAPI.update(studentId, updated);
         setStudents(students.map(s => s.id === studentId ? updated : s));
-        showToast(`Payment status updated to ${status}`, 'success');
+        if (selectedStudent && selectedStudent.id === studentId) {
+          setSelectedStudent(updated);
+        }
+        showToast(`Payment status updated to ${status.toUpperCase()}`, 'success');
       } catch (error) {
         console.error('Update payment status error:', error);
         showToast('Failed to update payment status', 'error');
@@ -1094,6 +1080,9 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                     MOBILE
                   </div>
                 </th>
+                <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">
+                  PAYMENT
+                </th>
                 <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-right">ACTIONS</th>
               </tr>
             </thead>
@@ -1113,7 +1102,9 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                     <td className="px-6 py-5">
                       <div className="text-[13px] font-medium text-gray-500">
                         {(() => {
-                          const dateStr = (viewMode === 'blocked' && (s as any).blockedAt) ? (s as any).blockedAt : s.registrationDate;
+                          const dateStr = (viewMode === 'blocked' && (s as any).blockedAt) 
+                            ? (s as any).blockedAt 
+                            : (s.registrationDate || s.createdAt);
                           const dateObj = new Date(dateStr);
                           if (!dateStr || isNaN(dateObj.getTime())) {
                             return <span className="text-gray-300 italic">No date set</span>;
@@ -1164,6 +1155,17 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                     </td>
                     <td className="px-6 py-5">
                       <p className="text-[13px] font-bold text-gray-600">{s?.phone ?? 'N/A'}</p>
+                    </td>
+                    <td className="px-6 py-5 text-center">
+                      <span className={`inline-flex px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider ${
+                        s.paymentStatus === 'paid' 
+                          ? 'bg-green-100 text-green-700' 
+                          : s.paymentStatus === 'pending' 
+                            ? 'bg-yellow-100 text-yellow-700' 
+                            : 'bg-red-100 text-red-700'
+                      }`}>
+                        {s.paymentStatus || 'PENDING'}
+                      </span>
                     </td>
                     <td className="px-6 py-5 text-right overflow-visible">
                       <div className="relative inline-block text-left">
@@ -1481,33 +1483,6 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                     value={formData.dob}
                     onChange={(e) => setFormData({ ...formData, dob: e.target.value })}
                   />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <FormLabel label="WhatsApp No" required />
-                    <FormInput
-                      placeholder="10-digit primary"
-                      value={formData.whatsAppNumber}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/[^0-9]/g, '');
-                        if (val.length <= 10) setFormData({ ...formData, whatsAppNumber: val });
-                      }}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <FormLabel label="Alternate No" />
-                    <FormInput
-                      placeholder="10-digit alternate"
-                      value={formData.alternateWhatsAppNumber}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/[^0-9]/g, '');
-                        if (val.length <= 10) setFormData({ ...formData, alternateWhatsAppNumber: val });
-                      }}
-                    />
-                  </div>
-                </div>
-
                 <div className="pt-8 border-t border-gray-100 mt-8">
                   <div className="flex items-center gap-2 mb-6">
                     <div className="w-1.5 h-4 bg-indigo-600 rounded-full"></div>
@@ -1552,6 +1527,7 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                 </div>
               </div>
             </div>
+          </div>
 
             <div className="flex gap-4 px-2">
               <button

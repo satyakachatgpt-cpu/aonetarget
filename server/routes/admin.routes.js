@@ -1,6 +1,7 @@
 import express from 'express';
 import * as adminController from '../controllers/admin.controller.js';
 import { adminMiddleware } from '../middleware/auth.js';
+import { banStudent } from '../controllers/student.controller.js';
 
 const router = express.Router();
 
@@ -11,6 +12,9 @@ const router = express.Router();
 
 // Global Verify (Standard Header Check)
 router.get('/admin/verify', adminController.verifyAdmin);
+
+// Security Dashboard (Direct matches for frontend)
+router.post('/security-admin/ban-user', adminMiddleware, banStudent);
 
 // Dashboard Analytics (No middleware in legacy server.js)
 router.get('/admin/dashboard-stats', adminMiddleware, adminController.getDashboardStats);
