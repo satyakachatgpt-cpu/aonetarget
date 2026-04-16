@@ -10,6 +10,12 @@ export const API_BASE =
 
 // ---------- MEDIA URL HELPERS ----------
 
+export const normalizeId = (id: any): string => {
+  if (!id) return "";
+  if (typeof id === 'object' && id.$oid) return String(id.$oid).toLowerCase();
+  return String(id).trim().toLowerCase();
+};
+
 export const getImageUrl = (url: string | undefined | null): string => {
   if (!url) return "";
   if (url.startsWith("http")) return url;

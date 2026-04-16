@@ -22,6 +22,9 @@ interface LiveSession {
   isRecurring: boolean;
   recurringDays?: string[];
   createdAt: string;
+  recordedLink?: string;
+  contentType?: string;
+  type?: string;
 }
 
 interface Course {

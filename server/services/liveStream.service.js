@@ -9,7 +9,6 @@ const { ObjectId } = mongoose.Types;
  * Ported from server.js (Source of Truth).
  */
 export async function syncLiveStream(id, data, operation = 'update') {
-  console.log(`[SYNC_LIVE_STREAM] ${operation.toUpperCase()} id=${id}`, data);
   try {
     const query = {
       $or: [
