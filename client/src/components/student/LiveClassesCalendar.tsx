@@ -13,7 +13,7 @@ interface LiveClass {
   endTime: string;
   meetingLink: string;
   instructor: string;
-  status: 'scheduled' | 'live' | 'completed' | 'cancelled' | 'upcoming' | 'ended';
+  status: 'scheduled' | 'live' | 'completed' | 'cancelled' | 'upcoming' | 'ended' | 'recorded';
   publishOn?: string;
   batchId?: string;
   scheduledDate?: string;
@@ -123,9 +123,10 @@ function getScheduledISO(cls: any): string {
 }
 
 // ─── Helper: compute live status client-side ──────────────────────────────────
-function computeStatus(cls: any): 'live' | 'upcoming' | 'ended' | 'scheduled' {
+function computeStatus(cls: any): 'live' | 'upcoming' | 'ended' | 'scheduled' | 'recorded' {
   const raw = (cls.streamStatus || cls.status || 'upcoming').toLowerCase();
   if (['ended', 'completed', 'inactive'].includes(raw)) return 'ended';
+  if (raw === 'recorded') return 'recorded';
   if (raw === 'live') return 'live';
   return 'upcoming';
 }
@@ -225,7 +226,7 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
       .filter(c => {
         const isFutureOrToday = !c.date || c.date >= todayStr;
         const isNotCancelled = c.status !== 'cancelled';
-        const shouldShowStatus = ['live', 'upcoming', 'scheduled', 'ended', 'completed'].includes(c.status);
+        const shouldShowStatus = ['live', 'upcoming', 'scheduled', 'ended', 'completed', 'recorded'].includes(c.status);
         return isFutureOrToday && isNotCancelled && shouldShowStatus;
       })
       .sort((a, b) => {
@@ -277,6 +278,7 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
               // Compute live status client-side (ticked every 30s)
               const effectiveStatus = computeStatus(cls);
               const isLiveNow = effectiveStatus === 'live';
+              const isRecorded = effectiveStatus === 'recorded';
               const isEnded = effectiveStatus === 'ended';
               const scheduledISO = getScheduledISO(cls);
               const streamUrl = resolveStreamUrl(cls);
@@ -284,8 +286,8 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
               return (
                 <div key={cls.id || i} className="card-premium p-5 rounded-[2.5rem] border border-gray-100 flex flex-col gap-4 hover:-translate-y-1 transition-all duration-300 group shadow-sm bg-white hover:shadow-xl">
                   <div className="flex gap-4 items-center">
-                    <div className={`w-14 h-14 bg-gradient-to-br ${isEnded ? 'from-gray-400 to-gray-500' : isLiveNow ? 'from-red-500 to-red-600' : 'from-blue-500 to-blue-600'} rounded-2xl flex items-center justify-center shrink-0 relative shadow-lg`}>
-                      <span className="material-symbols-rounded text-white text-[28px]">{isLiveNow ? 'sensors' : 'calendar_today'}</span>
+                    <div className={`w-14 h-14 bg-gradient-to-br ${isEnded ? 'from-gray-400 to-gray-500' : isRecorded ? 'from-blue-500 to-blue-600' : isLiveNow ? 'from-red-500 to-red-600' : 'from-blue-500 to-blue-600'} rounded-2xl flex items-center justify-center shrink-0 relative shadow-lg`}>
+                      <span className="material-symbols-rounded text-white text-[28px]">{isLiveNow ? 'sensors' : isRecorded ? 'play_circle' : 'calendar_today'}</span>
                       {isLiveNow && (
                         <span className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white animate-pulse shadow-sm"></span>
                       )}
@@ -300,13 +302,20 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
                         </span>
                         <span className="text-[12px] text-gray-500 font-black flex items-center gap-1.5">
                           <span className="material-symbols-rounded text-[18px] text-primary-500">schedule</span>
-                          {isLiveNow ? 'Live Now' : isEnded ? 'Ended' : formatTime(cls.startTime) || 'Upcoming'}
+                          {isLiveNow ? 'Live Now' : isRecorded ? 'Recorded' : isEnded ? 'Ended' : formatTime(cls.startTime) || 'Upcoming'}
                         </span>
                       </div>
                     </div>
 
                     <div className="flex shrink-0">
-                      {isEnded ? (
+                      {isRecorded ? (
+                        <button
+                          onClick={() => handleSmartJoin(cls, onJoinLive, navigate)}
+                          className="bg-blue-600 text-white text-[11px] px-5 py-2.5 rounded-xl font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-[0.97]"
+                        >
+                          WATCH RECORDING
+                        </button>
+                      ) : isEnded ? (
                         <button
                           disabled
                           className="bg-gray-100 text-gray-400 text-[11px] px-6 py-2.5 rounded-xl font-black uppercase tracking-widest cursor-not-allowed border border-gray-200"

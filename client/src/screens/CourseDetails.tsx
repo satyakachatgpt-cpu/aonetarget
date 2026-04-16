@@ -18,9 +18,9 @@ interface Note {
   datetime?: string;
 }
 
-function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
+function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' | 'recorded' {
   const raw = (lc.streamStatus || lc.status || 'upcoming').toLowerCase();
-  if (['ended', 'completed', 'inactive'].includes(raw)) return 'ended';
+  if (['ended', 'completed', 'inactive', 'recorded'].includes(raw)) return 'ended';
   if (raw === 'live') return 'live';
   return 'upcoming';
 }
@@ -449,7 +449,7 @@ const CourseDetails: React.FC = () => {
   const currentFolder = navigationHistory.length > 0 ? navigationHistory[navigationHistory.length - 1] : null;
 
   const recordedVideos = videos.filter(v => v.contentType === 'video' || v.contentType === 'recorded' || !v.contentType);
-  const liveStreams = videos.filter(v => v.contentType === 'live_stream');
+  const liveStreams = videos.filter(v => v.contentType === 'live_stream' || v.contentType === 'youtube_zoom');
 
   const currentFolderId = normalizeId(currentFolder?._id || currentFolder?.id);
 

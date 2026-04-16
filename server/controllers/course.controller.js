@@ -327,7 +327,7 @@ export const getStudentCourseTests = async (req, res) => {
     }
 
     const tests = await db.collection('tests').find(query).toArray();
-    console.log(`GET /api/courses/${req.params.id}/tests - Found ${tests.length} tests (filtered for course and attached series)`);
+
     res.json(tests);
   } catch (error) {
     console.error('Error fetching course tests:', error);
