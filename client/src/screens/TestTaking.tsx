@@ -501,10 +501,10 @@ const TestTaking: React.FC = () => {
 
             <div className="space-y-3">
               {[
-                { key: 'A', value: currentQuestion.optionA || currentQuestion.displayOptions?.[0]?.text, image: currentQuestion.optionAImage },
-                { key: 'B', value: currentQuestion.optionB || currentQuestion.displayOptions?.[1]?.text, image: currentQuestion.optionBImage },
-                { key: 'C', value: currentQuestion.optionC || currentQuestion.displayOptions?.[2]?.text, image: currentQuestion.optionCImage },
-                { key: 'D', value: currentQuestion.optionD || currentQuestion.displayOptions?.[3]?.text, image: currentQuestion.optionDImage },
+                { key: 'A', value: currentQuestion.optionA || currentQuestion.displayOptions?.[0]?.text, image: currentQuestion.optionAImage || currentQuestion.displayOptions?.[0]?.image },
+                { key: 'B', value: currentQuestion.optionB || currentQuestion.displayOptions?.[1]?.text, image: currentQuestion.optionBImage || currentQuestion.displayOptions?.[1]?.image },
+                { key: 'C', value: currentQuestion.optionC || currentQuestion.displayOptions?.[2]?.text, image: currentQuestion.optionCImage || currentQuestion.displayOptions?.[2]?.image },
+                { key: 'D', value: currentQuestion.optionD || currentQuestion.displayOptions?.[3]?.text, image: currentQuestion.optionDImage || currentQuestion.displayOptions?.[3]?.image },
               ].map(opt => {
                 if (!opt.value && !opt.image) return null;
                 const isSelected = answers[currentQuestion.id] === opt.key;
