@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
-import { coursesAPI } from '../../../services/apiClient';
+import { coursesAPI, getAdminHeaders } from '../../../services/apiClient';
 
 interface SaleRecord {
   id: string;
@@ -70,9 +70,7 @@ const SalesReport: React.FC<Props> = ({ showToast }) => {
       query.append('limit', itemsPerPage.toString());
 
       const res = await fetch(`/api/admin/reports/sales?${query.toString()}`, {
-          headers: {
-              'x-admin-id': localStorage.getItem('adminId') || 'admin'
-          }
+          headers: getAdminHeaders()
       });
       const data = await res.json();
       setSales(data.sales || []);

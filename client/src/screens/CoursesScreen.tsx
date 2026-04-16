@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { coursesAPI } from '../services/apiClient';
+import { coursesAPI, getAuthHeaders } from '../services/apiClient';
 import { getImageUrl } from '../lib/utils';
 
 interface Course {
@@ -52,7 +52,7 @@ const CoursesScreen: React.FC = () => {
     try {
       const [allCourses, enrolledCoursesRes] = await Promise.all([
         coursesAPI.getAll(),
-        student?.id ? fetch(`/api/students/${student.id}/courses`).then(r => r.json()) : Promise.resolve([])
+        student?.id ? fetch(`/api/students/${student.id}/courses`, { headers: getAuthHeaders() }).then(r => r.json()) : Promise.resolve([])
       ]);
       
       const enrolled = Array.isArray(enrolledCoursesRes) ? enrolledCoursesRes : [];

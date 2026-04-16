@@ -53,10 +53,14 @@ const studentSchema = new mongoose.Schema({
     notes: { type: String },
     paymentStatus: { type: String, default: 'pending' },
     enrolledBatch: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
+    enrolledCourses: [{ type: String }],
 
     deviceId: { type: String, default: null },
     pendingDeviceId: { type: String, default: null },
     deviceLocked: { type: Boolean, default: true },
+    sessionToken: { type: String, default: null },
+    activeDeviceId: { type: String, default: null },
+    activeSessions: [{ type: mongoose.Schema.Types.Mixed }],
 
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }

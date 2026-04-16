@@ -1,6 +1,0 @@
-@echo off
-echo Stopping existing Node.exe processes...
-taskkill /F /IM node.exe
-echo Starting server...
-npm run dev
-pause

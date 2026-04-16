@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getImageUrl } from '../lib/utils';
+import { getAuthHeaders } from '../services/apiClient';
 
 declare global {
   interface Window {
@@ -175,7 +176,7 @@ const Checkout: React.FC = () => {
     try {
       const res = await fetch('/api/coupons/validate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ code: couponCode, courseId: course.id || course._id || id })
       });
       const data = await res.json();
@@ -219,7 +220,7 @@ const Checkout: React.FC = () => {
     try {
       const orderRes = await fetch('/api/razorpay/create-order', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           courseId: course?.id || course?._id || id,
           studentId: student.id,
@@ -240,7 +241,7 @@ const Checkout: React.FC = () => {
           try {
             const verifyRes = await fetch('/api/razorpay/verify', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
               body: JSON.stringify({
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
@@ -301,7 +302,7 @@ const Checkout: React.FC = () => {
     try {
       const res = await fetch('/api/purchases', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           studentId: student.id,
           courseId: course?.id || course?._id || id,

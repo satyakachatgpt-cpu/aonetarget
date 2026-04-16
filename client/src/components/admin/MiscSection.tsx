@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   coursesAPI, subjectsAPI, topicsAPI, subcoursesAPI, 
-  instructionsAPI, examDocumentsAPI, newsAPI, notificationsAPI 
+  instructionsAPI, examDocumentsAPI, newsAPI, notificationsAPI, getAdminHeaders
 } from '../../services/apiClient';
 
 interface Props {
@@ -51,7 +51,7 @@ const MiscSection: React.FC<Props> = ({ showToast }) => {
   const loadStudentsAndCourses = async () => {
     try {
       const [studentsRes, coursesRes] = await Promise.all([
-        fetch('/api/students').then(r => r.json()),
+        fetch('/api/students', { headers: getAdminHeaders() }).then(r => r.json()),
         coursesAPI.getAll()
       ]);
       setStudents(Array.isArray(studentsRes) ? studentsRes : []);

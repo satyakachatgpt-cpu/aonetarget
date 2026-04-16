@@ -35,7 +35,7 @@ type PhoneFormData = z.infer<typeof phoneSchema>;
 type ProfileFormData = z.infer<typeof profileSchema>;
 
 interface StudentLoginProps {
-  setAuth: (student: any, accessToken?: string, deviceId?: string) => void;
+  setAuth: (student: any, accessToken?: string, deviceId?: string, refreshToken?: string) => void;
   onSuccess?: () => void;
 }
 
@@ -318,7 +318,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       const response = await fetch('/api/otp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: data.phone })
+        body: JSON.stringify({ phone: data.phone, purpose: 'login' })
       });
       const resData = await response.json();
       if (!response.ok) {
@@ -378,7 +378,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'OTP verification failed');
 
-      setAuth(data.student, data.accessToken, data.deviceId);
+      setAuth(data.student, data.accessToken, data.deviceId, data.refreshToken);
       toast.success('Login successful!');
       navigate('/');
     } catch (err: any) {
@@ -416,9 +416,9 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
       if (response.ok) {
         toast.success('Login successful!');
-        setAuth(data.student, data.accessToken, data.deviceId);
+        setAuth(data.student, data.accessToken, data.deviceId, data.refreshToken);
         if (onSuccess) onSuccess();
-        navigate('/student/dashboard');
+        navigate('/student-dashboard');
       } else {
         toast.error(data.error || 'Login failed');
       }

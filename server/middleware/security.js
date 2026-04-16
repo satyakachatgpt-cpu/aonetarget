@@ -113,7 +113,19 @@ export const securityHeaders = (req, res, next) => {
   next();
 };
 
-// Input Sanitization (Placeholder)
+// 🛡️ Safe Input Sanitization
+// Strips potentially dangerous script tags from string fields without breaking rich text/HTML
 export const sanitizeInput = (req, res, next) => {
+  if (req.body) {
+    Object.keys(req.body).forEach(key => {
+      if (typeof req.body[key] === 'string') {
+        req.body[key] = req.body[key]
+          .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "")
+          .replace(/on\w+="[^"]*"/gim, "")
+          .replace(/on\w+='[^']*'/gim, "")
+          .replace(/javascript:[^"']*/gim, "");
+      }
+    });
+  }
   next();
 };

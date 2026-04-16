@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Hls from 'hls.js';
+import { useDispatch } from 'react-redux';
+import { updateProgress, setPlaybackSpeed as setReduxSpeed } from '../../store/slices/playerSlice';
 import { getImageUrl, extractYouTubeId, isYouTubeUrl, toYouTubeEmbed } from '../../lib/utils';
+import { useAuthStore } from '../../store/authStore';
+import { getAuthHeaders } from '../../services/apiClient';
 
 declare global {
   interface Window {
@@ -26,6 +30,7 @@ interface StudentVideoPlayerProps {
   provider?: 'youtube' | 'hls' | 'direct';
   streamUrl?: string;
   youtubeUrl?: string;
+  onNext?: () => void;
 }
 
 const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
@@ -45,7 +50,10 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   provider: propProvider,
   streamUrl,
   youtubeUrl,
+  onNext,
 }) => {
+  const dispatch = useDispatch();
+  const { student } = useAuthStore();
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -60,6 +68,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const [showSettingsMenu, setShowSettingsMenu] = useState(false);
   const [settingsView, setSettingsView] = useState<'main' | 'quality' | 'speed'>('main');
   const [showChat, setShowChat] = useState(false);
+  const [autoNextEnabled, setAutoNextEnabled] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [viewport, setViewport] = useState({ 
     width: typeof window !== 'undefined' ? window.innerWidth : 0, 
@@ -102,6 +111,72 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
       clearTimeout(timeoutId);
     };
   }, [isAdmin]);
+
+  // LOAD PLAYER SETTINGS
+  useEffect(() => {
+    const savedSpeed = localStorage.getItem('player_speed');
+    if (savedSpeed) {
+      const speed = parseFloat(savedSpeed);
+      setPlaybackSpeed(speed);
+      dispatch(setReduxSpeed(speed));
+    }
+  }, [dispatch]);
+
+  // PROGRESS LOGIC
+  const saveProgress = useCallback((time: number, total: number) => {
+    if (!propVideoId || isLive) return;
+    
+    // Save to local storage
+    const progressData = JSON.parse(localStorage.getItem('player_progress') || '{}');
+    progressData[propVideoId] = { 
+      videoId: propVideoId,
+      timestamp: time, 
+      duration: total, 
+      updated: Date.now(),
+      title,
+      courseId,
+      thumbnail: thumbnail || null
+    };
+    localStorage.setItem('player_progress', JSON.stringify(progressData));
+    
+    // Save to Redux
+    dispatch(updateProgress({ videoId: propVideoId, timestamp: time, duration: total }));
+
+    // Sync to Backend (Safe mode - zero break)
+    const syncToBackend = async () => {
+      const studentId = student?.id || (student as any)?._id;
+      if (!studentId) return;
+
+      try {
+        await fetch('/api/progress/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+          body: JSON.stringify({
+            userId: studentId,
+            courseId: courseId,
+            videoId: propVideoId,
+            progress: time,
+            duration: total,
+            title,
+            thumbnail
+          })
+        });
+      } catch (err) {
+        console.warn('[Sync] Backend progress save failed:', err);
+      }
+    };
+    syncToBackend();
+  }, [propVideoId, isLive, dispatch, title, courseId, thumbnail, student]);
+
+  const getSavedProgress = useCallback(() => {
+    if (!propVideoId) return 0;
+    const progressData = JSON.parse(localStorage.getItem('player_progress') || '{}');
+    const saved = progressData[propVideoId];
+    if (saved && saved.timestamp > 10 && saved.timestamp < (saved.duration - 10)) {
+      return saved.timestamp;
+    }
+    return 0;
+  }, [propVideoId]);
 
   const isPhysicalLandscape = viewport.width > viewport.height;
   const isMobile = viewport.width < 1024;
@@ -157,8 +232,20 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
             onReady: (e: any) => {
               playerRef.current = e.target;
               setIsReady(true);
-              setDuration(e.target.getDuration());
+              const total = e.target.getDuration();
+              setDuration(total);
               setAvailableQualities(e.target.getAvailableQualityLevels() || []);
+              
+              // RESUME PLAYBACK
+              const resumeTime = getSavedProgress();
+              if (resumeTime > 0) {
+                e.target.seekTo(resumeTime, true);
+              }
+              
+              // Apply saved speed
+              const savedSpeed = localStorage.getItem('player_speed');
+              if (savedSpeed) e.target.setPlaybackRate(parseFloat(savedSpeed));
+
               e.target.playVideo();
             },
             onStateChange: (e: any) => {
@@ -168,7 +255,14 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                  setAvailableQualities(e.target.getAvailableQualityLevels() || []);
                  setDuration(e.target.getDuration());
               }
-              else if (s === 2) setIsPlaying(false);
+              else if (s === 2) {
+                setIsPlaying(false);
+                saveProgress(e.target.getCurrentTime(), e.target.getDuration());
+              }
+              else if (s === 0) { // ENDED
+                saveProgress(e.target.getDuration(), e.target.getDuration());
+                if (autoNextEnabled && onNext) onNext();
+              }
             },
             onError: (e: any) => {
               console.error("[Player] YouTube Loading Error:", e.data);
@@ -221,6 +315,11 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
         hls.attachMedia(videoRef.current);
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           setIsReady(true);
+          // Resume logic for HLS
+          const resumeTime = getSavedProgress();
+          if (resumeTime > 0 && videoRef.current) {
+            videoRef.current.currentTime = resumeTime;
+          }
         });
         hls.on(Hls.Events.ERROR, (event, data) => {
           if (data.fatal) {
@@ -245,6 +344,11 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
     } else if (isDirect) {
       videoRef.current.src = getImageUrl(activeSrc);
       setIsReady(true);
+      // Resume logic for Direct
+      const resumeTime = getSavedProgress();
+      if (resumeTime > 0 && videoRef.current) {
+        videoRef.current.currentTime = resumeTime;
+      }
     }
 
     return () => {
@@ -255,19 +359,34 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
     };
   }, [activeSrc, isHls, isDirect, isYoutube]);
 
-  // PROGRESS TICK
+  // PROGRESS TICK & AUTO-SAVE
   useEffect(() => {
+    let saveTimeout: any;
     if (isPlaying) {
       intervalRef.current = setInterval(() => {
+        let time = 0;
+        let total = duration;
         if (isYoutube && playerRef.current?.getCurrentTime) {
-          setCurrentTime(playerRef.current.getCurrentTime());
+          time = playerRef.current.getCurrentTime();
+          total = playerRef.current.getDuration() || duration;
         } else if ((isHls || isDirect) && videoRef.current) {
-          setCurrentTime(videoRef.current.currentTime);
+          time = videoRef.current.currentTime;
+          total = videoRef.current.duration || duration;
+        }
+        setCurrentTime(time);
+        
+        // Auto-save every 10 seconds
+        if (Math.floor(time) % 10 === 0) {
+          saveProgress(time, total);
         }
       }, 500);
-    } else { clearInterval(intervalRef.current); }
+    } else { 
+      clearInterval(intervalRef.current);
+      // Save on pause
+      if (currentTime > 0) saveProgress(currentTime, duration);
+    }
     return () => clearInterval(intervalRef.current);
-  }, [isPlaying, isYoutube]);
+  }, [isPlaying, isYoutube, saveProgress, currentTime, duration]);
 
   const handleUserActivity = useCallback(() => {
     setShowControls(true);
@@ -331,6 +450,8 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
 
   const handleSpeedChange = (speed: number) => {
     setPlaybackSpeed(speed);
+    localStorage.setItem('player_speed', speed.toString());
+    dispatch(setReduxSpeed(speed));
     if (isYoutube && playerRef.current) {
       playerRef.current.setPlaybackRate(speed);
     } else if (videoRef.current) {
@@ -338,6 +459,45 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
     }
     setShowSettingsMenu(false);
   };
+
+  // KEYBOARD CONTROLS
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in chat
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+
+      switch (e.code) {
+        case 'Space':
+          e.preventDefault();
+          togglePlay();
+          break;
+        case 'ArrowLeft':
+          e.preventDefault();
+          skip(-10);
+          break;
+        case 'ArrowRight':
+          e.preventDefault();
+          skip(10);
+          break;
+        case 'KeyM':
+          e.preventDefault();
+          const nextMute = !isMuted;
+          setIsMuted(nextMute);
+          if (isYoutube && playerRef.current) {
+            if (nextMute) playerRef.current.mute();
+            else playerRef.current.unMute();
+          } else if (videoRef.current) {
+            videoRef.current.muted = nextMute;
+          }
+          break;
+        default:
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isPlaying, isMuted, togglePlay]);
 
   const formatTime = (s: number) => {
     const min = Math.floor(s / 60);

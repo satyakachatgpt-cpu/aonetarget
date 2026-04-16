@@ -1,11 +1,21 @@
 import express from 'express';
 import mongoose from 'mongoose';
+import { verifyAccessToken } from '../../middleware/auth.js';
 
 const router = express.Router();
 
 // Admin Auth Middleware
 const adminAuth = async (req, res, next) => {
     try {
+        const authHeader = req.headers.authorization;
+        if (authHeader?.startsWith('Bearer ')) {
+            const decoded = verifyAccessToken(authHeader.slice(7));
+            if (decoded?.isAdmin || decoded?.role === 'admin') {
+                req.admin = decoded;
+                return next();
+            }
+        }
+
         const adminId = req.headers['x-admin-id'];
         if (!adminId) {
             return res.status(401).json({ error: 'Unauthorized' });

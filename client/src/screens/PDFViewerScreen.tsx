@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import mammoth from 'mammoth';
+import DOMPurify from 'dompurify';
 import { getPdfUrl } from '../lib/utils';
 
 const PDFViewerScreen: React.FC = () => {
@@ -162,7 +163,7 @@ const PDFViewerScreen: React.FC = () => {
           <div className="w-full max-w-4xl mx-auto bg-white shadow-xl lg:shadow-[0_20px_50px_rgba(0,0,0,0.06)] rounded-sm p-4 md:p-20 mb-24 h-fit animate-slide-up overflow-x-hidden">
             <div 
               className="prose prose-slate max-w-none text-gray-800 leading-relaxed font-outfit docx-content-area break-words"
-              dangerouslySetInnerHTML={{ __html: docxContent || '' }} 
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(docxContent || '') }} 
             />
             <style dangerouslySetInnerHTML={{ __html: `
               .docx-content-area { width: 100%; word-break: break-word; }

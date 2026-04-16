@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { clearStudentSession } from '../services/apiClient';
 
 interface AuthState {
     student: any;
@@ -7,7 +8,7 @@ interface AuthState {
     unreadNotificationsCount: number;
     accessToken: string | null;
     deviceId: string | null;
-    setAuth: (student: any, accessToken?: string, deviceId?: string) => void;
+    setAuth: (student: any, accessToken?: string, deviceId?: string, refreshToken?: string) => void;
     clearAuth: () => void;
     checkAuth: () => Promise<void>;
     setUnreadCount: (count: number) => void;
@@ -43,12 +44,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     ..._cached,
     unreadNotificationsCount: 0,
 
-    setAuth: (student, accessToken?: string, deviceId?: string) => {
+    setAuth: (student, accessToken?: string, deviceId?: string, refreshToken?: string) => {
         if (!student) {
-            localStorage.removeItem('isStudentAuthenticated');
-            localStorage.removeItem('studentData');
-            localStorage.removeItem('studentSessionToken');
-            localStorage.removeItem('accessToken');
+            clearStudentSession();
             set({ student: null, isAuthenticated: false, isLoading: false, accessToken: null, deviceId: null });
         } else {
             localStorage.setItem('isStudentAuthenticated', 'true');
@@ -58,6 +56,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             }
             if (accessToken) {
                 localStorage.setItem('accessToken', accessToken);
+            }
+            if (refreshToken) {
+                localStorage.setItem('refreshToken', refreshToken);
             }
             if (deviceId) {
                 localStorage.setItem('deviceId', deviceId);
@@ -82,15 +83,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (tokenRefreshTimeout) clearTimeout(tokenRefreshTimeout);
         try {
             const token = localStorage.getItem('accessToken');
-            await fetch('/api/logout', {
+            await fetch('/api/auth/logout', {
                 method: 'POST',
-                headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                },
+                body: JSON.stringify({ refreshToken: localStorage.getItem('refreshToken') || undefined })
             });
         } catch (e) { }
-        localStorage.removeItem('isStudentAuthenticated');
-        localStorage.removeItem('studentData');
-        localStorage.removeItem('studentSessionToken');
-        localStorage.removeItem('accessToken');
+        clearStudentSession();
         set({ student: null, isAuthenticated: false, accessToken: null, deviceId: null });
     },
 
@@ -119,11 +122,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                         return get().checkAuth();
                     }
                 }
-                localStorage.removeItem('isStudentAuthenticated');
-                localStorage.removeItem('studentData');
-                localStorage.removeItem('studentSessionToken');
-                localStorage.removeItem('accessToken');
-                set({ student: null, isAuthenticated: false, isLoading: false });
+                clearStudentSession();
+                set({ student: null, isAuthenticated: false, isLoading: false, accessToken: null });
             } else {
                 set((s) => ({ ...s, isLoading: false }));
             }
@@ -136,12 +136,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         try {
             const response = await fetch('/api/auth/refresh', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refreshToken: localStorage.getItem('refreshToken') || undefined })
             });
 
             if (response.ok) {
                 const data = await response.json();
                 localStorage.setItem('accessToken', data.accessToken);
+                if (data.refreshToken) {
+                    localStorage.setItem('refreshToken', data.refreshToken);
+                }
                 set({ accessToken: data.accessToken });
                 scheduleTokenRefresh({ getState: get });
                 return true;

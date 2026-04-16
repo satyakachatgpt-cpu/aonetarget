@@ -1,4 +1,6 @@
 import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 
 // Using memoryStorage for streaming directly to Cloudinary
 const storage = multer.memoryStorage();
@@ -59,8 +61,28 @@ export const uploadVideo = multer({
   limits: { fileSize: VIDEO_LIMIT }
 });
 
-// 4. uploadAPK (Legacy Support - rare but kept for compatibility)
-export const uploadAPK = multer({
-  storage: storage,
-  limits: { fileSize: IMAGE_LIMIT } 
+// 4. uploadAPK (Standardized Disk Storage for larger files)
+const apkStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = 'uploads/apks/';
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+export const apkUpload = multer({
+  storage: apkStorage,
+  limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
+});
+
+// 5. excelUpload (Standalone Memory Storage for parsing)
+export const excelUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 }
 });

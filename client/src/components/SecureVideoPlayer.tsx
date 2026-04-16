@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { extractYouTubeId, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
+import { getAuthHeaders } from '../services/apiClient';
 
 interface SecureVideoPlayerProps {
   src: string;
@@ -79,7 +80,7 @@ const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
 
     fetch(`/api/students/${studentId}/watch-history`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify({
         videoId,
         title: title || '',

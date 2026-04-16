@@ -3,7 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import StudentVideoPlayer from '../components/student/StudentVideoPlayer';
 import Playlist from '../components/Playlist';
 import { getVideoUrl, toYouTubeEmbed, getEmbedUrl } from '../lib/utils';
-import { curriculumAPI } from '../services/apiClient';
+import { getAuthHeaders } from '../services/apiClient';
 
 function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
   const raw = (lc.streamStatus || lc.status || 'upcoming').toLowerCase();
@@ -69,7 +69,7 @@ const WatchPage: React.FC = () => {
       const vid = currentVideo.id || currentVideo._id;
       const res = await fetch(`/api/live-chat/${vid}/messages`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           senderId: student.id || student._id,
           senderName: student.name || 'Student',
@@ -105,10 +105,7 @@ const WatchPage: React.FC = () => {
       try {
         setLoading(true);
         const response = await fetch(`/api/courses/${batchId}/videos`, {
-          headers: {
-            'x-admin-id': localStorage.getItem('adminId') || '',
-            'Authorization': `Bearer ${localStorage.getItem('adminToken')}`
-          }
+          headers: getAuthHeaders()
         });
         const videos = await response.json();
 

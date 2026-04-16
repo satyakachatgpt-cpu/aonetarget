@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { coursesAPI } from '../services/apiClient';
 import { getImageUrl } from '../lib/utils';
+import { Course } from '../types';
 
 const categoryGradients: string[] = [
   'from-[#1A237E] to-[#303F9F]',
@@ -14,7 +15,7 @@ const categoryGradients: string[] = [
 
 const Batches: React.FC = () => {
   const navigate = useNavigate();
-  const [courses, setCourses] = useState<any[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -131,10 +132,10 @@ const Batches: React.FC = () => {
                             {batchName}
                           </h4>
                           <div className="flex items-center justify-between">
-                             <span className="text-[16px] font-black text-yellow-400 drop-shadow-md">
+                             <span className="text-[16px] font-black text-white drop-shadow-md">
                                {course.price === 0 || !course.price ? 'Free' : `₹${course.price}`}
                              </span>
-                             <button className="bg-yellow-400 text-black text-[9px] font-black px-3 py-1.5 rounded-full shadow-lg uppercase">
+                             <button className="bg-white text-black text-[9px] font-black px-4 py-2 rounded-xl shadow-lg uppercase tracking-wider active:scale-95 transition-all">
                                Join
                              </button>
                           </div>
@@ -168,10 +169,10 @@ const Batches: React.FC = () => {
                       </div>
                       
                       <div className="relative z-10 flex items-center justify-between">
-                         <span className="text-[17px] font-black text-yellow-400 drop-shadow-sm">
+                         <span className="text-[17px] font-black text-white drop-shadow-sm">
                            {course.price === 0 || !course.price ? 'Free' : `₹${course.price}`}
                          </span>
-                         <button className="bg-yellow-400 text-black text-[9px] font-black px-3 py-1.5 rounded-full shadow-lg transition-transform active:scale-95 uppercase">
+                         <button className="bg-white text-black text-[9px] font-black px-4 py-2 rounded-xl shadow-lg transition-all active:scale-95 uppercase tracking-wider">
                            Join
                          </button>
                       </div>

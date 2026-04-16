@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import StudentSidebar from '../components/StudentSidebar';
-import { testsAPI, testSeriesAPI, coursesAPI } from '../services/apiClient';
+import { testsAPI, testSeriesAPI, coursesAPI, getAuthHeaders } from '../services/apiClient';
 import { getImageUrl, getVideoUrl, getPdfUrl, getYouTubeThumbnail, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
 
 const FreeContent: React.FC = () => {
@@ -159,7 +159,7 @@ const FreeContent: React.FC = () => {
             if (student) {
                 await fetch(`/api/students/${student.id}/downloads`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                     body: JSON.stringify({
                         id: item.id || item._id,
                         title: item.title || item.name,

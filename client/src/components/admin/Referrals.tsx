@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getAdminHeaders } from '../../services/apiClient';
 
 interface ReferralRecord {
   _id?: string;
@@ -44,9 +45,9 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
   const loadData = async () => {
     try {
       const [referralsRes, settingsRes, studentsRes] = await Promise.all([
-        fetch('/api/admin/referrals'),
-        fetch('/api/admin/referral-settings'),
-        fetch('/api/students')
+        fetch('/api/admin/referrals', { headers: getAdminHeaders() }),
+        fetch('/api/admin/referral-settings', { headers: getAdminHeaders() }),
+        fetch('/api/students', { headers: getAdminHeaders() })
       ]);
       const referralsData = await referralsRes.json();
       const settingsData = await settingsRes.json();
@@ -73,7 +74,7 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
     try {
       const res = await fetch('/api/admin/referral-settings', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
         body: JSON.stringify(settings)
       });
       if (res.ok) {
@@ -92,7 +93,7 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
     try {
       const res = await fetch('/api/admin/referrals/update-status', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
         body: JSON.stringify({ referralCode, referredStudentId, status: newStatus })
       });
       if (res.ok) {

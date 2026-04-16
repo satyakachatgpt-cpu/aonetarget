@@ -6,9 +6,11 @@ import {
   deleteAllCourses,
   getCourseById,
   updateCourse,
-  deleteCourse
+  deleteCourse,
+  getStudentCourseTests
 } from '../controllers/course.controller.js';
 import { adminMiddleware } from '../middleware/auth.js';
+import { publicLimiter } from '../middleware/security.js';
 
 const router = express.Router();
 
@@ -16,7 +18,7 @@ const router = express.Router();
  * @route GET /api/courses
  * @desc Get all courses with filters/pagination
  */
-router.get('/courses', getCourses);
+router.get('/courses', publicLimiter, getCourses);
 
 /**
  * @route POST /api/courses
@@ -35,6 +37,16 @@ router.put('/courses', adminMiddleware, bulkUpdateCourses);
  * @desc Delete all courses (Admin only - Destructive)
  */
 router.delete('/courses', adminMiddleware, deleteAllCourses);
+
+/**
+ * @route GET /api/courses/:id/tests
+ * @desc Get tests for a course — STUDENT-FACING version.
+ * Uses rich filtering: related ID variants, isSeries exclusion, status filter,
+ * and attached test-series resolution.
+ * Must be registered BEFORE GET /courses/:id to avoid route shadowing.
+ * NOT interchangeable with /api/courses/:courseId/tests (admin panel).
+ */
+router.get('/courses/:id/tests', getStudentCourseTests);
 
 /**
  * @route GET /api/courses/:id

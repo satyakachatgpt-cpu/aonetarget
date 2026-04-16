@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import { getImageUrl, getVideoUrl, getYouTubeThumbnail, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
+import { getAuthHeaders } from '../services/apiClient';
 
 const WatchHistory: React.FC = () => {
   const navigate = useNavigate();
@@ -24,7 +25,7 @@ const WatchHistory: React.FC = () => {
 
   const fetchWatchHistory = async (studentId: string) => {
     try {
-      const response = await fetch(`/api/students/${studentId}/watch-history`);
+      const response = await fetch(`/api/students/${studentId}/watch-history`, { headers: getAuthHeaders() });
       const data = await response.json();
       setHistory(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -60,7 +61,7 @@ const WatchHistory: React.FC = () => {
     if (!student?.id) return;
     setClearing(true);
     try {
-      await fetch(`/api/students/${student.id}/watch-history`, { method: 'DELETE' });
+      await fetch(`/api/students/${student.id}/watch-history`, { method: 'DELETE', headers: getAuthHeaders() });
       setHistory([]);
     } catch (e) {
       console.error('Clear failed:', e);

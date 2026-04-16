@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getImageUrl } from '@/lib/utils';
-import { reportedQuestionsAPI } from '../services/apiClient';
+import { getAuthHeaders, reportedQuestionsAPI } from '../services/apiClient';
 
 type QuestionStatus = 'unanswered' | 'answered' | 'flagged' | 'flagged-answered';
 
@@ -180,7 +180,7 @@ const TestTaking: React.FC = () => {
     try {
       const res = await fetch(`/api/tests/${testId}/submit`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           studentId: student?.id || 'anonymous',
           answers,

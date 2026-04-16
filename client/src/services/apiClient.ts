@@ -1,5 +1,7 @@
 import axios from 'axios';
+
 const API_BASE_URL = '/api';
+
 if (typeof window !== 'undefined') {
   console.log('Hostname:', window.location.hostname);
   console.log('Port:', window.location.port);
@@ -13,22 +15,93 @@ const CACHE_TTL = 30000;
 export function getAdminHeaders(): Record<string, string> {
   const adminToken = localStorage.getItem('adminToken');
   if (adminToken) {
-    return { 'Authorization': `Bearer ${adminToken}` };
-  }
-  const adminId = localStorage.getItem('adminId');
-  if (adminId) {
-    // Fallback for transition period if token is missing
-    return { 'x-admin-id': adminId };
-  }
-  const token = localStorage.getItem('token') || 
-                localStorage.getItem('accessToken') || '';
-  if (token) {
-    return { 'Authorization': `Bearer ${token}` };
+    return { 'Authorization': `Bearer ${adminToken}`, 'x-admin-id': localStorage.getItem('adminId') || '' };
   }
   return {};
 }
 
+export function getAuthHeaders(): Record<string, string> {
+  const studentToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+  if (studentToken) {
+    return { 'Authorization': `Bearer ${studentToken}` };
+  }
+  return {};
+}
 
+export const clearAdminSession = () => {
+  localStorage.removeItem('adminToken');
+  localStorage.removeItem('adminId');
+  localStorage.removeItem('adminName');
+  localStorage.removeItem('isAdminAuthenticated');
+  localStorage.removeItem('adminLoginTimestamp');
+  // Attempt cookie clear for subdomains if needed
+  document.cookie = "accessToken=; Path=/api; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+};
+
+export const clearStudentSession = () => {
+  localStorage.removeItem('isStudentAuthenticated');
+  localStorage.removeItem('studentData');
+  localStorage.removeItem('studentSessionToken');
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('refreshToken');
+  localStorage.removeItem('deviceId');
+  localStorage.removeItem('token');
+  // Attempt cookie clear
+  document.cookie = "accessToken=; Path=/api; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+  document.cookie = "refreshToken=; Path=/api/auth/refresh; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+};
+
+const handleUnauthorized = async (response: Response | { status: number; data?: any }, url: string) => {
+  const status = 'status' in response ? response.status : (response as any).response?.status;
+  
+  if (status === 401) {
+    let data: any = {};
+    try {
+      if ('json' in response && typeof response.json === 'function') {
+        data = await response.clone().json().catch(() => ({}));
+      } else if ('data' in response) {
+        data = response.data;
+      }
+    } catch (e) { /* ignore parse errors */ }
+
+    const isTokenError = data.code === 'TOKEN_EXPIRED' || data.code === 'INVALID_TOKEN' || data.code === 'NO_AUTH';
+    const isAdminPath = url.includes('/admin/') || url.includes('/v2/upload') || url.includes('/courses/import') || url.includes('/v1/apk') || url.includes('/dashboard/stats');
+
+    if (isTokenError || status === 401) {
+      if (isAdminPath && (localStorage.getItem('adminToken') || localStorage.getItem('isAdminAuthenticated'))) {
+        clearAdminSession();
+        if (window.location.hash !== '#/admin-login') window.location.hash = '#/admin-login';
+        throw new Error(data.error || 'Admin session expired. Please login again.');
+      } else if (localStorage.getItem('accessToken') || localStorage.getItem('isStudentAuthenticated')) {
+        clearStudentSession();
+        if (window.location.hash !== '#/student-login' && window.location.hash !== '#/login') {
+          window.location.hash = '#/student-login';
+        }
+        throw new Error(data.error || 'Session expired. Please login again.');
+      }
+    }
+  }
+};
+
+/**
+ * Standard Authenticated Request Wrapper
+ * Reduces boilerplate for 401 handling and JSON parsing
+ */
+async function apiRequest(url: string, options: RequestInit = {}) {
+  const response = await fetch(url, options);
+  await handleUnauthorized(response, url);
+  
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || errorData.details || `API error (${response.status})`);
+  }
+  
+  const contentType = response.headers.get('content-type');
+  if (contentType && contentType.includes('application/json')) {
+    return response.json();
+  }
+  return response;
+}
 
 async function cachedFetch(url: string, ttl = CACHE_TTL): Promise<any> {
   const now = Date.now();
@@ -41,19 +114,8 @@ async function cachedFetch(url: string, ttl = CACHE_TTL): Promise<any> {
     return pendingRequests[url];
   }
 
-  const promise = fetch(url, { headers: getAdminHeaders() }).then(async (response) => {
-    if (response.status === 401) {
-      const data = await response.json().catch(() => ({}));
-      if (data.code === 'TOKEN_EXPIRED' || data.code === 'INVALID_TOKEN' || data.code === 'NO_AUTH') {
-        if (localStorage.getItem('adminToken') || localStorage.getItem('isAdminAuthenticated')) {
-          localStorage.removeItem('adminToken');
-          localStorage.removeItem('adminId');
-          localStorage.removeItem('isAdminAuthenticated');
-          window.location.hash = '#/admin-login';
-          throw new Error('Your session has expired. Please login again.');
-        }
-      }
-    }
+  const promise = fetch(url, { headers: getAuthHeaders() }).then(async (response) => {
+    await handleUnauthorized(response, url);
 
     if (!response.ok) throw new Error(`Failed to fetch ${url}`);
     const data = await response.json();
@@ -90,17 +152,13 @@ export const coursesAPI = {
   },
 
   create: async (courseData: any) => {
-    const response = await fetch(`${API_BASE_URL}/courses`, {
+    const data = await apiRequest(`${API_BASE_URL}/courses`, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        ...getAdminHeaders()
-      },
+      headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
       body: JSON.stringify(courseData),
     });
-    if (!response.ok) throw new Error('Failed to create course');
     invalidateCache('courses');
-    return response.json();
+    return data;
   },
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/courses/${id}`, {
@@ -178,108 +236,34 @@ export const usersAPI = {
 // Students API
 export const studentsAPI = {
   getAll: async () => {
-    const url = `${API_BASE_URL}/students`;
-    console.log('Fetching students from:', url);
-    try {
-      const response = await fetch(url);
-      console.log('Response status:', response.status);
-      console.log('Response headers:', {
-        contentType: response.headers.get('content-type'),
-        cors: response.headers.get('access-control-allow-origin')
-      });
-
-      const contentType = response.headers.get('content-type');
-
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('Non-JSON response from API:', text.substring(0, 200));
-        throw new Error(`API returned non-JSON response. Status: ${response.status}`);
-      }
-
-      if (!response.ok) throw new Error(`Failed to fetch students (${response.status})`);
-      return response.json();
-    } catch (error) {
-      console.error('Students API error:', error);
-      throw error;
-    }
+    return apiRequest(`${API_BASE_URL}/students`, { headers: getAdminHeaders() });
   },
 
   getById: async (id: string) => {
-    const url = `${API_BASE_URL}/students/${id}`;
-    const response = await fetch(url);
-
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      throw new Error('API returned non-JSON response');
-    }
-
-    if (!response.ok) throw new Error('Failed to fetch student');
-    return response.json();
+    return apiRequest(`${API_BASE_URL}/students/${id}`, { headers: getAdminHeaders() });
   },
 
   create: async (studentData: any) => {
-    const url = `${API_BASE_URL}/students`;
-    console.log('Creating student at:', url, 'with data:', studentData);
-    const response = await fetch(url, {
+    return apiRequest(`${API_BASE_URL}/students`, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        ...getAdminHeaders()
-      },
+      headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
       body: JSON.stringify(studentData),
     });
-
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      const text = await response.text();
-      console.error('Non-JSON response from create:', text.substring(0, 200));
-      throw new Error(`API returned non-JSON response. Status: ${response.status}`);
-    }
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || errorData.details || `Failed to create student (${response.status})`);
-    }
-    return response.json();
   },
 
   update: async (id: string, studentData: any) => {
-    const url = `${API_BASE_URL}/students/${id}`;
-    const response = await fetch(url, {
+    return apiRequest(`${API_BASE_URL}/students/${id}`, {
       method: 'PUT',
-      headers: { 
-        'Content-Type': 'application/json',
-        ...getAdminHeaders()
-      },
+      headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
       body: JSON.stringify(studentData),
     });
-
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      throw new Error('API returned non-JSON response');
-    }
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || errorData.details || `Failed to update student (${response.status})`);
-    }
-    return response.json();
   },
 
   delete: async (id: string) => {
-    const url = `${API_BASE_URL}/students/${id}`;
-    const response = await fetch(url, {
+    return apiRequest(`${API_BASE_URL}/students/${id}`, {
       method: 'DELETE',
       headers: { ...getAdminHeaders() }
     });
-
-    const contentType = response.headers.get('content-type');
-    if (!contentType || !contentType.includes('application/json')) {
-      throw new Error('API returned non-JSON response');
-    }
-
-    if (!response.ok) throw new Error(`Failed to delete student (${response.status})`);
-    return response.json();
   },
 
   approveDevice: async (studentId: string) => {
@@ -334,7 +318,7 @@ export const studentsAPI = {
 // Buyers API
 export const buyersAPI = {
   getAll: async () => {
-    const response = await fetch(`${API_BASE_URL}/buyers`);
+    const response = await fetch(`${API_BASE_URL}/buyers`, { headers: getAdminHeaders() });
     if (!response.ok) throw new Error('Failed to fetch buyers');
     return response.json();
   },
@@ -378,7 +362,7 @@ export const buyersAPI = {
 // Tokens API
 export const tokensAPI = {
   getAll: async () => {
-    const response = await fetch(`${API_BASE_URL}/tokens`);
+    const response = await fetch(`${API_BASE_URL}/tokens`, { headers: getAdminHeaders() });
     if (!response.ok) throw new Error('Failed to fetch tokens');
     return response.json();
   },
@@ -434,13 +418,7 @@ export const uploadAPI = {
       const res = await axios.post(`${API_BASE_URL}/v2/upload/image`, formData, config);
       return res.data;
     } catch (err: any) {
-      if (err.response?.status === 401) {
-        localStorage.removeItem('adminToken');
-        localStorage.removeItem('adminId');
-        localStorage.removeItem('isAdminAuthenticated');
-        window.location.hash = '#/admin-login';
-        throw new Error('Your session has expired. Please login again.');
-      }
+      await handleUnauthorized(err.response, `${API_BASE_URL}/v2/upload/image`);
       const errMsg = err.response?.data?.error || 'Image upload failed';
       throw new Error(errMsg);
     }
@@ -460,13 +438,7 @@ export const uploadAPI = {
       const res = await axios.post(`${API_BASE_URL}/v2/upload/video`, formData, config);
       return res.data;
     } catch (err: any) {
-      if (err.response?.status === 401) {
-        localStorage.removeItem('adminToken');
-        localStorage.removeItem('adminId');
-        localStorage.removeItem('isAdminAuthenticated');
-        window.location.hash = '#/admin-login';
-        throw new Error('Your session has expired. Please login again.');
-      }
+      await handleUnauthorized(err.response, `${API_BASE_URL}/v2/upload/video`);
       const errMsg = err.response?.data?.error || 'Video upload failed';
       throw new Error(errMsg);
     }
@@ -485,13 +457,7 @@ export const uploadAPI = {
       const res = await axios.post(`${API_BASE_URL}/v2/upload/pdf`, formData, config);
       return res.data;
     } catch (err: any) {
-      if (err.response?.status === 401) {
-        localStorage.removeItem('adminToken');
-        localStorage.removeItem('adminId');
-        localStorage.removeItem('isAdminAuthenticated');
-        window.location.hash = '#/admin-login';
-        throw new Error('Your session has expired. Please login again.');
-      }
+      await handleUnauthorized(err.response, `${API_BASE_URL}/v2/upload/pdf`);
       const errMsg = err.response?.data?.error || 'Document upload failed';
       throw new Error(errMsg);
     }
@@ -551,7 +517,7 @@ export const ordersAPI = {
   create: async (orderData: any) => {
     const response = await fetch(`${API_BASE_URL}/orders`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify(orderData),
     });
     if (!response.ok) throw new Error('Failed to create order');
@@ -559,7 +525,7 @@ export const ordersAPI = {
   },
 
   getByUserId: async (userId: string) => {
-    const response = await fetch(`${API_BASE_URL}/orders/${userId}`);
+    const response = await fetch(`${API_BASE_URL}/orders/${userId}`, { headers: getAuthHeaders() });
     if (!response.ok) throw new Error('Failed to fetch orders');
     return response.json();
   }
@@ -701,42 +667,24 @@ export const questionsAPI = {
     return response.json();
   },
   create: async (data: any) => {
-    const response = await fetch(`${API_BASE_URL}/questions`, {
+    return apiRequest(`${API_BASE_URL}/questions`, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        ...getAdminHeaders()
-      },
+      headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
       body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error('Failed to create question');
-    return response.json();
   },
   update: async (id: string, data: any) => {
-    const response = await fetch(`${API_BASE_URL}/questions/${id}`, {
+    return apiRequest(`${API_BASE_URL}/questions/${id}`, {
       method: 'PUT',
-      headers: { 
-        'Content-Type': 'application/json',
-        ...getAdminHeaders()
-      },
+      headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
       body: JSON.stringify(data),
     });
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Failed to update question');
-    }
-    return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/questions/${id}`, { 
+    return apiRequest(`${API_BASE_URL}/questions/${id}`, {
       method: 'DELETE',
       headers: { ...getAdminHeaders() }
     });
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.error || 'Failed to delete question');
-    }
-    return response.json();
   },
   bulkDelete: async (ids: string[]) => {
     const response = await fetch(`${API_BASE_URL}/questions/bulk-delete`, {
@@ -1678,34 +1626,34 @@ export const notificationsAPI = {
 // Chats API
 export const chatsAPI = {
   getUnreadCount: async () => {
-    const response = await fetch(`${API_BASE_URL}/chats/unread/admin`);
+    const response = await fetch(`${API_BASE_URL}/chats/unread/admin`, { headers: getAdminHeaders() });
     if (!response.ok) throw new Error('Failed to fetch unread count');
     return response.json();
   },
   getChats: async (studentId?: string) => {
     const url = studentId ? `${API_BASE_URL}/chats?studentId=${studentId}` : `${API_BASE_URL}/chats`;
-    const response = await fetch(url);
+    const response = await fetch(url, { headers: getAuthHeaders() });
     if (!response.ok) throw new Error('Failed to fetch chats');
     return response.json();
   },
   startChat: async (studentId: string, studentName: string) => {
     const response = await fetch(`${API_BASE_URL}/chats/start`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify({ studentId, studentName }),
     });
     if (!response.ok) throw new Error('Failed to start chat');
     return response.json();
   },
   getMessages: async (chatId: string) => {
-    const response = await fetch(`${API_BASE_URL}/chats/${chatId}/messages`);
+    const response = await fetch(`${API_BASE_URL}/chats/${chatId}/messages`, { headers: getAuthHeaders() });
     if (!response.ok) throw new Error('Failed to fetch messages');
     return response.json();
   },
   sendMessage: async (chatId: string, messageData: any) => {
     const response = await fetch(`${API_BASE_URL}/chats/${chatId}/messages`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify(messageData),
     });
     if (!response.ok) throw new Error('Failed to send message');
@@ -1714,7 +1662,7 @@ export const chatsAPI = {
   markRead: async (chatId: string, readerType: 'student' | 'admin') => {
     const response = await fetch(`${API_BASE_URL}/chats/${chatId}/read`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify({ readerType }),
     });
     if (!response.ok) throw new Error('Failed to mark as read');
@@ -1820,19 +1768,19 @@ export const subcategoriesAPI = {
 // Referrals Admin API
 export const referralsAdminAPI = {
   getAll: async () => {
-    const response = await fetch(`${API_BASE_URL}/admin/referrals`);
+    const response = await fetch(`${API_BASE_URL}/admin/referrals`, { headers: getAdminHeaders() });
     if (!response.ok) throw new Error('Failed to fetch referrals');
     return response.json();
   },
   getSettings: async () => {
-    const response = await fetch(`${API_BASE_URL}/admin/referral-settings`);
+    const response = await fetch(`${API_BASE_URL}/admin/referral-settings`, { headers: getAdminHeaders() });
     if (!response.ok) throw new Error('Failed to fetch referral settings');
     return response.json();
   },
   updateSettings: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/admin/referral-settings`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update referral settings');
@@ -1841,7 +1789,7 @@ export const referralsAdminAPI = {
   updateStatus: async (referralCode: string, referredStudentId: string, status: string) => {
     const response = await fetch(`${API_BASE_URL}/admin/referrals/update-status`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
       body: JSON.stringify({ referralCode, referredStudentId, status }),
     });
     if (!response.ok) throw new Error('Failed to update referral status');
@@ -1854,19 +1802,19 @@ export const purchasesAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/purchases`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create purchase');
     return response.json();
   },
   getByStudent: async (studentId: string) => {
-    const response = await fetch(`${API_BASE_URL}/purchases/${studentId}`);
+    const response = await fetch(`${API_BASE_URL}/purchases/${studentId}`, { headers: getAuthHeaders() });
     if (!response.ok) throw new Error('Failed to fetch purchases');
     return response.json();
   },
   getAll: async () => {
-    const response = await fetch(`${API_BASE_URL}/admin/purchases`);
+    const response = await fetch(`${API_BASE_URL}/admin/purchases`, { headers: getAdminHeaders() });
     if (!response.ok) throw new Error('Failed to fetch all purchases');
     return response.json();
   }
@@ -1875,7 +1823,7 @@ export const purchasesAPI = {
 // Dashboard Stats API
 export const dashboardAPI = {
   getStats: async () => {
-    const response = await fetch(`${API_BASE_URL}/dashboard/stats`);
+    const response = await fetch(`${API_BASE_URL}/dashboard/stats`, { headers: getAdminHeaders() });
     if (!response.ok) throw new Error('Failed to fetch dashboard stats');
     return response.json();
   }
@@ -1889,7 +1837,7 @@ export const splashScreenAPI = {
   update: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/splash-screen`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update splash screen settings');
@@ -1907,7 +1855,7 @@ export const quickLinksAPI = {
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/quick-links`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create quick link');
@@ -1916,14 +1864,14 @@ export const quickLinksAPI = {
   update: async (id: string, data: any) => {
     const response = await fetch(`${API_BASE_URL}/quick-links/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update quick link');
     return response.json();
   },
   delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/quick-links/${id}`, { method: 'DELETE' });
+    const response = await fetch(`${API_BASE_URL}/quick-links/${id}`, { method: 'DELETE', headers: getAdminHeaders() });
     if (!response.ok) throw new Error('Failed to delete quick link');
     return response.json();
   }
@@ -1934,7 +1882,7 @@ export const reportedQuestionsAPI = {
   report: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/reported-questions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to report question');

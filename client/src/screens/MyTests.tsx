@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import { useAuthStore } from '../store/authStore';
+import { getAuthHeaders } from '../services/apiClient';
 
 const MyTests: React.FC = () => {
   const navigate = useNavigate();
@@ -23,7 +24,7 @@ const MyTests: React.FC = () => {
   const fetchTestResults = async (studentId: string) => {
     try {
       console.log('Fetching test results for studentId:', studentId);
-      const response = await fetch(`/api/students/${studentId}/test-results`);
+      const response = await fetch(`/api/students/${studentId}/test-results`, { headers: getAuthHeaders() });
       const data = await response.json();
       console.log('Fetched test results:', data);
       

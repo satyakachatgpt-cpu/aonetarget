@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
-import { testsAPI, notificationsAPI } from '../services/apiClient';
+import { testsAPI, notificationsAPI, getAuthHeaders } from '../services/apiClient';
 import { getImageUrl } from '../lib/utils';
 import { useAuthStore } from '../store/authStore';
+import { Course, Student, VideoProgress } from '../types';
+import { useSelector } from 'react-redux';
+import { RootState } from '../store';
 
 interface TestResult {
   id: string;
@@ -35,9 +38,11 @@ const StudentDashboard: React.FC = () => {
   });
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [upcomingTests, setUpcomingTests] = useState<any[]>([]);
-  const [enrolledCourses, setEnrolledCourses] = useState<any[]>([]);
+  const [enrolledCourses, setEnrolledCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [continueWatching, setContinueWatching] = useState<VideoProgress[]>([]);
+  const [recentlyViewed, setRecentlyViewed] = useState<Course[]>([]);
 
   useEffect(() => {
     if (student) {
@@ -51,11 +56,34 @@ const StudentDashboard: React.FC = () => {
 
   const fetchDashboardData = async (studentId: string) => {
     try {
-      const [coursesRes, testsData, resultsRes] = await Promise.all([
-        fetch(`/api/students/${studentId}/courses`).then(r => r.json()).catch(() => []),
+      const [coursesRes, testsData, resultsRes, progressRes] = await Promise.all([
+        fetch(`/api/students/${studentId}/courses`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []),
         testsAPI.getAll().catch(() => []),
-        fetch(`/api/students/${studentId}/test-results`).then(r => r.json()).catch(() => [])
+        fetch(`/api/students/${studentId}/test-results`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []),
+        fetch(`/api/progress/${studentId}`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => [])
       ]);
+
+      // Process Progress (Continue Watching)
+      const backendProgress = Array.isArray(progressRes) ? progressRes : [];
+      if (backendProgress.length > 0) {
+        setContinueWatching(backendProgress as VideoProgress[]);
+      } else {
+        // Fallback to localStorage
+        try {
+          const progressData = JSON.parse(localStorage.getItem('player_progress') || '{}');
+          const sorted = Object.values(progressData)
+            .filter((v: any) => v.timestamp > 0)
+            .sort((a: any, b: any) => (b.updated || 0) - (a.updated || 0))
+            .slice(0, 10);
+          setContinueWatching(sorted as VideoProgress[]);
+        } catch (e) { console.error('Local progress fail:', e); }
+      }
+
+      // Process Recently Viewed (Currently backend-primary if implemented, else local)
+      try {
+        const viewedData = JSON.parse(localStorage.getItem('recently_viewed_courses') || '[]');
+        setRecentlyViewed(viewedData.slice(0, 10));
+      } catch (e) { console.error('Local viewed fail:', e); }
 
       const coursesData = Array.isArray(coursesRes) ? coursesRes : [];
       const resultsData = Array.isArray(resultsRes) ? resultsRes : [];
@@ -98,6 +126,8 @@ const StudentDashboard: React.FC = () => {
       setLoading(false);
     }
   };
+
+  // Progress loading moved to fetchDashboardData for backend-priority sync
 
   const formatTime = (seconds: number) => {
     if (!seconds) return '-';
@@ -198,7 +228,81 @@ const StudentDashboard: React.FC = () => {
         </div>
       </div>
 
-      <div className="px-4 mt-6">
+      <div className="px-4 mt-6 space-y-8">
+        {/* CONTINUE WATCHING SECTION */}
+        {continueWatching.length > 0 && (
+          <section className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="font-black text-xs uppercase tracking-[0.2em] text-gray-400 flex items-center gap-2">
+                <span className="w-1.5 h-1.5 bg-brandBlue rounded-full animate-pulse"></span>
+                Continue Watching
+              </h3>
+            </div>
+            <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-2 -mx-4 px-4 snap-x">
+              {continueWatching.map((v, i) => (
+                <div 
+                  key={i} 
+                  className="bg-white rounded-2xl p-2 w-[240px] shrink-0 border border-gray-100 shadow-sm snap-start group cursor-pointer active:scale-95 transition-all"
+                  onClick={() => navigate(`/course/${v.courseId}`, { state: { resumeVideoId: v.videoId } })}
+                >
+                  <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-100 mb-3">
+                    <img 
+                      src={getImageUrl(v.thumbnail)} 
+                      alt="" 
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      onError={(e) => { e.currentTarget.src = 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=400'; }}
+                    />
+                    <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                      <div className="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="material-symbols-rounded text-2xl">play_arrow</span>
+                      </div>
+                    </div>
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/30">
+                      <div 
+                        className="h-full bg-brandBlue" 
+                        style={{ width: `${(v.timestamp / v.duration) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                  <div className="px-1">
+                    <h4 className="text-[11px] font-bold text-gray-800 line-clamp-1">{v.title}</h4>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase mt-1">
+                      {Math.ceil((v.duration - v.timestamp) / 60)} mins left
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* RECENTLY VIEWED COURSES */}
+        {recentlyViewed.length > 0 && (
+          <section className="animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150">
+            <h3 className="font-black text-xs uppercase tracking-[0.2em] text-gray-400 mb-4 px-1">Recently Viewed</h3>
+            <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2 -mx-4 px-4">
+              {recentlyViewed.map((c, i) => (
+                <div 
+                  key={i} 
+                  onClick={() => navigate(`/course/${c.id || c._id}`)}
+                  className="w-32 shrink-0 group cursor-pointer active:scale-95 transition-all"
+                >
+                  <div className="aspect-[3/4] rounded-2xl overflow-hidden bg-gray-100 mb-2 shadow-sm border border-gray-100">
+                    <img 
+                      src={getImageUrl(c.imageUrl || c.thumbnail)} 
+                      alt="" 
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                    />
+                  </div>
+                  <p className="text-[10px] font-bold text-gray-700 text-center line-clamp-2 leading-tight px-1">
+                    {c.name || c.title}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <div className="flex bg-gray-100 rounded-xl p-1 mb-6">
           {[
             { key: 'dashboard', label: 'Overview', icon: 'dashboard' },

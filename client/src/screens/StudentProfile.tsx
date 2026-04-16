@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import { useAuthStore } from '../store/authStore';
 import { useUIStore } from '../store/uiStore';
+import { getAuthHeaders } from '../services/apiClient';
 
 interface StudentProfileProps {
   setAuth: (auth: boolean) => void;
@@ -66,8 +67,8 @@ const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
   const fetchStats = async (studentId: string) => {
     try {
       const [coursesRes, testsRes] = await Promise.all([
-        fetch(`/api/students/${studentId}/courses`),
-        fetch(`/api/students/${studentId}/test-results`)
+        fetch(`/api/students/${studentId}/courses`, { headers: getAuthHeaders() }),
+        fetch(`/api/students/${studentId}/test-results`, { headers: getAuthHeaders() })
       ]);
 
       const coursesData = await coursesRes.json().catch(() => []);
@@ -97,7 +98,7 @@ const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
     try {
       const response = await fetch(`/api/students/${student.id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(editForm)
       });
 
