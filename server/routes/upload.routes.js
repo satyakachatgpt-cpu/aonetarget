@@ -1,7 +1,7 @@
 import express from 'express';
 import { uploadImage, uploadPDF, uploadVideo } from '../middleware/upload.middleware.js';
 import { authMiddleware } from '../middleware/auth.js';
-import { uploadToCloudinary, deleteFromCloudinary } from '../services/cloudinary.service.js';
+import { uploadToCloudinary, deleteFromCloudinary, uploadBase64ToCloudinary } from '../services/cloudinary.service.js';
 
 const router = express.Router();
 
@@ -30,6 +30,34 @@ router.post('/v2/upload/image', authMiddleware, uploadImage.single('file'), asyn
   } catch (error) {
     console.error('Image upload failed:', error);
     return res.status(500).json({ success: false, error: "Failed to upload image" });
+  }
+});
+
+// ─────────────────────────────────
+// POST /api/v2/upload/image/base64
+// ─────────────────────────────────
+router.post('/v2/upload/image/base64', authMiddleware, async (req, res) => {
+  const { image } = req.body;
+  if (!image) {
+    return res.status(400).json({ success: false, error: "No image data provided" });
+  }
+
+  try {
+    const result = await uploadBase64ToCloudinary(image, {
+      folder: 'aot/images/diagrams',
+      resource_type: 'image'
+    });
+
+    return res.status(200).json({
+      success: true,
+      url: result.url,
+      public_id: result.public_id,
+      format: result.format,
+      bytes: result.bytes
+    });
+  } catch (error) {
+    console.error('Base64 image upload failed:', error);
+    return res.status(500).json({ success: false, error: "Failed to upload base64 image" });
   }
 });
 

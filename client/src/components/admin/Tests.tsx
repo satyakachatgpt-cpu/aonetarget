@@ -7,6 +7,7 @@ import {
   questionsAPI,
   invalidateCache,
   reportedQuestionsAPI,
+  getAdminHeaders,
 } from "../../services/apiClient";
 import QuestionPaperRenderer from "./QuestionPaperRenderer";
 import { InlineMath } from "react-katex";
@@ -365,26 +366,70 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     testTitle: string;
     format: string;
     file: File | null;
-    parsedQuestions?: any[];
+    parsedQuestions: any[];
+    extractedImages: string[];
   }>({
     testSeries: "",
     testTitle: "",
     format: "default",
     file: null,
     parsedQuestions: [],
+    extractedImages: [],
   });
 
-  async function parseFile(file: File): Promise<any[]> {
+  const [activeImageAssignment, setActiveImageAssignment] = useState<{
+    questionId: number;
+    field: string; // "question" | "A" | "B" | "C" | "D"
+  } | null>(null);
+
+  const handleImageSelect = (dataUrl: string) => {
+    if (!activeImageAssignment) return;
+    const { questionId, field } = activeImageAssignment;
+    setBulkUploadData(prev => ({
+      ...prev,
+      parsedQuestions: prev.parsedQuestions.map(q => {
+        if (q.id === questionId) {
+          if (field === "question") return { ...q, questionImage: dataUrl, hasDiagramOptions: false };
+          
+          // Handle option images
+          const oIdx = field.charCodeAt(0) - 65; // A=0, B=1...
+          const newOptionImages = [...(q.optionImages || ["", "", "", ""])];
+          newOptionImages[oIdx] = dataUrl;
+          return { ...q, optionImages: newOptionImages };
+        }
+        return q;
+      })
+    }));
+    setActiveImageAssignment(null);
+  };
+
+  const handleRemoveImage = (qId: number, field: string) => {
+    setBulkUploadData(prev => ({
+      ...prev,
+      parsedQuestions: prev.parsedQuestions.map(q => {
+        if (q.id === qId) {
+          if (field === "question") return { ...q, questionImage: "" };
+          const oIdx = field.charCodeAt(0) - 65;
+          const newOptionImages = [...(q.optionImages || ["", "", "", ""])];
+          newOptionImages[oIdx] = "";
+          return { ...q, optionImages: newOptionImages };
+        }
+        return q;
+      })
+    }));
+  };
+
+  async function parseFile(file: File): Promise<{ questions: any[], extractedImages: string[] }> {
     const extension = file.name.split(".").pop()?.toLowerCase();
     const arrayBuffer = await file.arrayBuffer();
 
     if (extension === "docx") {
       try {
         const result = await mammoth.extractRawText({ arrayBuffer });
-        return extractQuestionsFromText(result.value);
+        return { questions: extractQuestionsFromText(result.value), extractedImages: [] };
       } catch (err) {
         console.error("DOCX parsing error:", err);
-        return [];
+        return { questions: [], extractedImages: [] };
       }
     } else if (extension === "xlsx" || extension === "xls") {
       try {
@@ -393,7 +438,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         const worksheet = workbook.Sheets[firstSheetName];
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
 
-        return jsonData.map((row: any, idx) => ({
+        const parsedQuestions = jsonData.map((row: any, idx) => ({
           id: idx + 1,
           questionEn:
             row.Question || row.question || row.text || "No question text",
@@ -404,21 +449,27 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             row.OptionB || row.B || row.option2 || "",
             row.OptionC || row.C || row.option3 || "",
             row.OptionD || row.D || row.option4 || "",
-          ].filter((o) => o !== ""),
-          correctAnswer: String(row.Answer || row.answer || "A").toUpperCase(),
-          positiveMarks: row.Marks || row.positive_marks || 4,
-          negativeMarks: row.NegativeMarks || row.negative_marks || -1,
-          solution: row.Solution || row.explanation || "Extracted from Excel",
+          ].filter(Boolean),
+          correctAnswer:
+            row.CorrectAnswer || row.correct || row.Answer || row.answer,
+          solution: row.Solution || row.solution || row.Explanation || "",
+          positiveMarks: Number(row.Marks || row.marks || 4),
+          negativeMarks: Number(row.Negative || row.negative || 1),
         }));
+        
+        return { questions: parsedQuestions, extractedImages: [] };
       } catch (err) {
         console.error("Excel parsing error:", err);
-        return [];
+        return { questions: [], extractedImages: [] };
       }
     } else if (extension === "pdf") {
       try {
         console.log("Starting PDF parsing for:", file.name);
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         let fullText = "";
+        // pageMap: stores start char index per page for question-to-page mapping
+        const pageMap: { startIndex: number; pageNumber: number; embeddedImages: { dataUrl: string; y: number }[]; pageDataUrl: string }[] = [];
+        const allExtractedImages: string[] = [];
 
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
@@ -436,53 +487,182 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             pageText += item.str + " ";
             lastY = currentY;
           }
-          fullText += pageText + "\n\n";
+
+          // Extract embedded images (XObjects) from PDF page using operator list
+          const embeddedImages: { dataUrl: string; y: number }[] = [];
+          try {
+            const opList = await (page as any).getOperatorList();
+            const commonObjs = (page as any).commonObjs;
+            const objs = (page as any).objs;
+
+            // Track current transform matrix to get image Y position
+            const fnArray = opList.fnArray as number[];
+            const argsArray = opList.argsArray as any[][];
+            let currentY = 0;
+
+            for (let opIdx = 0; opIdx < fnArray.length; opIdx++) {
+              const fn = fnArray[opIdx];
+              const args = argsArray[opIdx];
+
+              // OPS.transform = 12, captures current matrix [a,b,c,d,e,f] → f is Y
+              if (fn === 12 && args && args.length >= 6) {
+                currentY = args[5];
+              }
+
+              // OPS.paintImageXObject = 85 or paintImageMaskXObject = 84
+              if ((fn === 85 || fn === 84) && args && args[0]) {
+                const imgName = args[0];
+                // Try to get image from page objects
+                const imgObj = objs.has && objs.has(imgName) ? objs.get(imgName) :
+                               (commonObjs.has && commonObjs.has(imgName) ? commonObjs.get(imgName) : null);
+
+                if (imgObj && imgObj.data && imgObj.width && imgObj.height) {
+                  try {
+                    // Render this image to a small canvas
+                    const imgCanvas = document.createElement('canvas');
+                    imgCanvas.width = imgObj.width;
+                    imgCanvas.height = imgObj.height;
+                    const imgCtx = imgCanvas.getContext('2d');
+                    if (imgCtx) {
+                      const imageData = imgCtx.createImageData(imgObj.width, imgObj.height);
+                      // pdfjs image data is RGBA or grayscale — handle both
+                      if (imgObj.data.length === imgObj.width * imgObj.height * 4) {
+                        imageData.data.set(imgObj.data);
+                      } else if (imgObj.data.length === imgObj.width * imgObj.height) {
+                        // Grayscale → RGBA
+                        for (let px = 0; px < imgObj.width * imgObj.height; px++) {
+                          const v = imgObj.data[px];
+                          imageData.data[px * 4] = v;
+                          imageData.data[px * 4 + 1] = v;
+                          imageData.data[px * 4 + 2] = v;
+                          imageData.data[px * 4 + 3] = 255;
+                        }
+                      } else if (imgObj.data.length === imgObj.width * imgObj.height * 3) {
+                        // RGB → RGBA
+                        for (let px = 0; px < imgObj.width * imgObj.height; px++) {
+                          imageData.data[px * 4] = imgObj.data[px * 3];
+                          imageData.data[px * 4 + 1] = imgObj.data[px * 3 + 1];
+                          imageData.data[px * 4 + 2] = imgObj.data[px * 3 + 2];
+                          imageData.data[px * 4 + 3] = 255;
+                        }
+                      }
+                      imgCtx.putImageData(imageData, 0, 0);
+                      // Only keep images large enough to be a real diagram (skip tiny icons/bullets)
+                      if (imgObj.width > 60 && imgObj.height > 60) {
+                        const dataUrl = imgCanvas.toDataURL('image/jpeg', 0.75);
+                        embeddedImages.push({
+                          dataUrl,
+                          y: currentY
+                        });
+                        if (!allExtractedImages.includes(dataUrl)) {
+                          allExtractedImages.push(dataUrl);
+                        }
+                      }
+                    }
+                  } catch (imgErr) {
+                    // skip this image silently
+                  }
+                }
+              }
+            }
+          } catch (opErr) {
+            console.warn(`Could not extract images from page ${i}:`, opErr);
+          }
+
+          // Normalize page text to ensure indexing consistency with extractQuestionsFromText
+          const normalizedPageText = pageText.replace(/\r\n/g, "\n").replace(/[ \t]+/g, " ");
+
+          // Render page to a small compressed JPEG for diagram-option questions
+          // (scale 1.0, JPEG 50% quality → ~100-200KB per page)
+          let pageDataUrl = "";
+          try {
+            const viewport = page.getViewport({ scale: 1.0 });
+            const renderCanvas = document.createElement('canvas');
+            renderCanvas.width = viewport.width;
+            renderCanvas.height = viewport.height;
+            const renderCtx = renderCanvas.getContext('2d');
+            if (renderCtx) {
+              await (page as any).render({ canvasContext: renderCtx, viewport, canvas: renderCanvas }).promise;
+              pageDataUrl = renderCanvas.toDataURL('image/jpeg', 0.50);
+            }
+          } catch (renderErr) {
+            console.warn(`Could not render page ${i} for diagram detection:`, renderErr);
+          }
+          
+          pageMap.push({
+            startIndex: fullText.length,
+            pageNumber: i,
+            embeddedImages,
+            pageDataUrl
+          });
+          fullText += normalizedPageText + "\n\n";
         }
 
-        console.log("Extracted PDF text length:", fullText.length);
-        const questions = extractQuestionsFromText(fullText);
+        const totalImgs = pageMap.reduce((acc, p) => acc + p.embeddedImages.length, 0);
+        console.log(`Extracted PDF text length: ${fullText.length}, Embedded images found: ${totalImgs}`);
+        const questions = extractQuestionsFromText(fullText, pageMap);
         console.log("Extracted questions count:", questions.length);
-        return questions;
+        return { questions, extractedImages: allExtractedImages };
       } catch (err) {
         console.error("PDF parsing error:", err);
-        return [];
+        return { questions: [], extractedImages: [] };
       }
     }
-    return [];
+    return { questions: [], extractedImages: [] };
   }
 
-  function extractQuestionsFromText(text: string): any[] {
+  function extractQuestionsFromText(text: string, pageMap: any[] = []): any[] {
     const questions: any[] = [];
 
     // Normalize text: handle various newline formats and multi-spaces
+    // NOTE: This normalization matches the one used in parseFile for index consistency
     const normalizedText = text.replace(/\r\n/g, "\n").replace(/[ \t]+/g, " ");
 
-    // Split into question blocks
-    // Matches patterns like "1.", "Q1.", "Question 1:", "1)", "(1)" at start of line or after double newline
-    // We use a broader regex to capture various numbering styles
-    const blocks = normalizedText
-      .split(/(?:\n\s*\n|\n|^)(?=\s*(?:Q(?:uestion)?\s*)?\(?\d+\)?[\s.:\)])/i)
-      .filter((b) => b.trim().length > 0);
+    // Split into question blocks strictly by "1. ", "2. " etc at start of line
+    const qSplitRegex = /^\s*(\d+)[\.|\)]\s+/gm;
+    let match;
+    const blockInfos: { start: number; text: string }[] = [];
+
+    while ((match = qSplitRegex.exec(normalizedText)) !== null) {
+      const start = match.index;
+      if (blockInfos.length > 0) {
+        blockInfos[blockInfos.length - 1].text = normalizedText.substring(blockInfos[blockInfos.length - 1].start, start);
+      }
+      blockInfos.push({ start, text: "" });
+    }
+
+    if (blockInfos.length > 0) {
+      blockInfos[blockInfos.length - 1].text = normalizedText.substring(blockInfos[blockInfos.length - 1].start);
+    }
+
+    const validBlockInfos = blockInfos.filter(b => b.text.trim().length > 0);
+    const blocks = validBlockInfos.map(b => b.text);
+    const blockStarts = validBlockInfos.map(b => b.start);
 
     console.log(`Split text into ${blocks.length} potential question blocks.`);
 
-    for (const block of blocks) {
+    for (let bIdx = 0; bIdx < blocks.length; bIdx++) {
+      const block = blocks[bIdx];
+
+      // Filtering per Problem 1
+      const firstLine = block.split('\n')[0];
+      if (/Unit-|Assignment-|ELECTRONIC DEVICES|CHAPTER/i.test(firstLine)) continue;
+      
+      const hasOptions = /\([a-dA-D]\)|[A-D][\.|\)]\s/i.test(block);
+      if (!hasOptions) continue;
+
       // Find options: (A), A., A), [A], Option A:
-      // We look for A, B, C, D in various brackets or followed by dot/dash
       const optionMarkerRegex =
         /(?:\n|[ \t])(?:\(?([A-Da-d])[\s\).\]:]|Option\s*([A-Da-d])[\s.:])(?!\w)/gi;
 
-      let lastIndex = 0;
-      let match;
+      let matchOpt;
       const optionMatches = [];
-
-      // Use a fresh regex instance for each block
       const tempGlobalRegex = new RegExp(optionMarkerRegex);
-      while ((match = tempGlobalRegex.exec(block)) !== null) {
+      while ((matchOpt = tempGlobalRegex.exec(block)) !== null) {
         optionMatches.push({
-          index: match.index,
-          marker: match[0],
-          label: (match[1] || match[2]).toUpperCase(),
+          index: matchOpt.index,
+          marker: matchOpt[0],
+          label: (matchOpt[1] || matchOpt[2]).toUpperCase(),
         });
       }
 
@@ -492,60 +672,38 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       let solution = "";
 
       if (optionMatches.length > 0) {
-        // Text before first option is the question
         questionPart = block.substring(0, optionMatches[0].index).trim();
-
-        // Extract options
         for (let i = 0; i < optionMatches.length; i++) {
           const start = optionMatches[i].index + optionMatches[i].marker.length;
-          const end =
-            i + 1 < optionMatches.length
-              ? optionMatches[i + 1].index
-              : block.length;
+          const end = i + 1 < optionMatches.length ? optionMatches[i + 1].index : block.length;
           let optText = block.substring(start, end).trim();
 
-          // Detect Ans/Solution inside option text (sometimes they are appended on the same line)
-          const ansMatch = optText.match(
-            /(?:Ans(?:wer)?|Correct|उत्तर)[:.\s]*([A-D])/i,
-          );
+          const ansMatch = optText.match(/(?:Ans(?:wer)?|Correct|उत्तर)[:.\s]*([A-D])/i);
           if (ansMatch) {
             answer = ansMatch[1].toUpperCase();
             optText = optText.substring(0, ansMatch.index).trim();
           }
 
-          const solMatch = optText.match(
-            /(?:Sol(?:ution)?|Expl(?:anation)?|हल)[:.\s]*([\s\S]*)/i,
-          );
+          const solMatch = optText.match(/(?:Sol(?:ution)?|Expl(?:anation)?|हल)[:.\s]*([\s\S]*)/i);
           if (solMatch) {
             solution = solMatch[1].trim();
             optText = optText.substring(0, solMatch.index).trim();
           }
-
           if (optText) optionsArray.push(optText);
         }
       } else {
-        // No options found, the whole block is just question text
         questionPart = block.trim();
       }
 
-      // Clean up question text: remove the question number prefix (e.g., "1. ")
-      let questionEn = questionPart
-        .replace(/^\s*(?:Q(?:uestion)?\s*)?\(?\d+\)?[\s.:\)]+\s*/i, "")
-        .trim();
+      let questionEn = questionPart.replace(/^\s*\d+[\.|\)]\s*/i, "").trim();
       let questionHi = "";
 
-      // Hindi detection and separation for bilingual questions
       const hindiRegex = /[\u0900-\u097F]/;
       if (hindiRegex.test(questionEn)) {
-        // If it's a bilingual block, tries to split by newline
-        const lines = questionEn
-          .split("\n")
-          .map((l) => l.trim())
-          .filter((l) => l.length > 0);
+        const lines = questionEn.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
         if (lines.length >= 2) {
           const hasHindi0 = hindiRegex.test(lines[0]);
           const hasHindi1 = hindiRegex.test(lines[1]);
-
           if (hasHindi0 && !hasHindi1) {
             questionHi = lines[0];
             questionEn = lines.slice(1).join(" ");
@@ -553,48 +711,83 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             questionEn = lines[0];
             questionHi = lines.slice(1).join(" ");
           } else if (hasHindi0 && hasHindi1) {
-            // Both have Hindi, maybe just a long Hindi question
             questionHi = questionEn;
-            questionEn = ""; // Or we could duplicate
+            questionEn = "";
           }
         } else if (hindiRegex.test(questionEn)) {
-          // Single line with Hindi
           questionHi = questionEn;
           questionEn = "";
         }
       }
 
-      // Fallback: Global answer detection if not found in options
       if (answer === "A") {
-        const globalAns = block.match(
-          /(?:Ans(?:wer)?|Correct|उत्तर)[:.\s]*([A-D])\b/i,
-        );
+        const globalAns = block.match(/(?:Ans(?:wer)?|Correct|उत्तर)[:.\s]*([A-D])\b/i);
         if (globalAns) answer = globalAns[1].toUpperCase();
       }
 
-      // Fallback: Global solution detection
-      const globalSol = block.match(
-        /(?:Sol(?:ution)?|Expl(?:anation)?|हल)[:.\s]*([\s\S]{5,})/i,
-      );
-      if (globalSol) {
-        solution = globalSol[1].trim();
+      const globalSol = block.match(/(?:Sol(?:ution)?|Expl(?:anation)?|हल)[:.\s]*([\s\S]{5,})/i);
+      if (globalSol) solution = globalSol[1].trim();
+
+      // ==== Diagram-Option Detection ====
+      // If < 2 options have meaningful text (>5 chars), options are likely diagrams
+      const realTextOptions = optionsArray.filter(o => o.trim().replace(/^[a-d][\s\)\.:]/i, '').trim().length > 5);
+      const hasDiagramOptions = realTextOptions.length < 2;
+
+      // Find page mapping for diagram association
+      let qPageNum = 1;
+      let questionImage = "";
+      let hasDiagramOptionsFlag = false;
+
+      if (pageMap && pageMap.length > 0) {
+        const startIdx = blockStarts[bIdx];
+        let matchedPage: any = null;
+        for (const p of pageMap) {
+          if (startIdx >= p.startIndex) {
+            qPageNum = p.pageNumber;
+            matchedPage = p;
+          } else {
+            break;
+          }
+        }
+
+        if (matchedPage) {
+          const questionText = (questionEn + questionHi + block).toLowerCase();
+          const hasFigureRef = /fig(ure)?[\s.]*\d|diagram|circuit|graph|wave|shown below|given below|following figure|refer to|arrangement/i.test(questionText);
+
+          if (hasDiagramOptions) {
+            // Options are diagrams → use compressed page image so student can see the diagrams
+            questionImage = matchedPage.pageDataUrl || "";
+            hasDiagramOptionsFlag = true;
+          } else if (matchedPage.embeddedImages && matchedPage.embeddedImages.length > 0) {
+            // Text options but question references a figure → attach embedded image
+            if (hasFigureRef) {
+              questionImage = matchedPage.embeddedImages[0].dataUrl;
+            } else if (matchedPage.embeddedImages.length === 1) {
+              questionImage = matchedPage.embeddedImages[0].dataUrl;
+            }
+          }
+        }
       }
 
-      // Final sanitization
+      // For diagram-option questions: replace fake placeholders with clean labels
+      const finalOptions = hasDiagramOptionsFlag
+        ? ["A", "B", "C", "D"]
+        : (optionsArray.length >= 2 ? optionsArray.slice(0, 4) : ["Option A", "Option B", "Option C", "Option D"]);
+
       if (questionEn || questionHi) {
         questions.push({
           id: questions.length + 1,
-          questionEn: questionEn || questionHi, // Fallback En to Hi if only Hi exists
+          questionEn: questionEn || questionHi,
           questionHi: questionEn ? questionHi : "",
           type: "Multiple Choice",
-          options:
-            optionsArray.length >= 2
-              ? optionsArray.slice(0, 4)
-              : ["Option A", "Option B", "Option C", "Option D"],
+          options: finalOptions,
           correctAnswer: answer,
           positiveMarks: 4,
           negativeMarks: -1,
           solution: solution || "Extracted from document",
+          pageNumber: qPageNum,
+          hasDiagramOptions: hasDiagramOptionsFlag,
+          questionImage,
         });
       }
     }
@@ -3164,6 +3357,65 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         ? bulkUploadData.parsedQuestions
         : [];
 
+    const extractedImages = bulkUploadData.extractedImages || [];
+
+    // Helper to render question diagram — handles both inline diagrams and diagram-option questions
+    const renderDiagram = (q: any, field: string = "question") => {
+      const dataUrl = field === "question" ? q.questionImage : (q.optionImages?.[field.charCodeAt(0) - 65] || "");
+      
+      if (!dataUrl) {
+        return (
+          <div className="mt-2 text-center">
+            <button 
+              onClick={() => setActiveImageAssignment({ questionId: q.id, field })}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 border-dashed transition-all ${activeImageAssignment?.questionId === q.id && activeImageAssignment?.field === field ? 'border-amber-400 bg-amber-50 text-amber-700 animate-pulse' : 'border-gray-200 text-gray-400 hover:border-black hover:text-black'}`}
+            >
+              <span className="material-symbols-outlined text-[16px]">add_photo_alternate</span>
+              <span className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
+                {activeImageAssignment?.questionId === q.id && activeImageAssignment?.field === field ? 'Select from Gallery' : `Add ${field === 'question' ? 'Diagram' : `Image`}`}
+              </span>
+            </button>
+          </div>
+        );
+      }
+
+      const isPageLevel = field === "question" && q.hasDiagramOptions;
+
+      return (
+        <div className={`mt-3 border rounded-xl overflow-hidden relative group ${isPageLevel ? 'border-amber-200 bg-amber-50/40' : 'border-blue-100 bg-blue-50/40'}`}>
+          <div className={`px-3 py-1.5 border-b flex items-center justify-between gap-1.5 ${isPageLevel ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-100'}`}>
+            <div className="flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[14px]">{isPageLevel ? 'schema' : 'image'}</span>
+              <span className={`text-[10px] font-bold uppercase tracking-wider ${isPageLevel ? 'text-amber-600' : 'text-blue-500'}`}>
+                {isPageLevel ? 'Options as Diagrams' : field === 'question' ? 'Question Diagram' : `Option ${field} Image`}
+              </span>
+            </div>
+            <button 
+              onClick={() => handleRemoveImage(q.id, field)}
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700"
+            >
+              <span className="material-symbols-outlined text-[16px]">delete</span>
+            </button>
+          </div>
+          <div className="p-2 flex flex-col items-center">
+            <img
+              src={dataUrl}
+              alt="Diagram"
+              className={`w-full h-auto rounded-lg object-contain ${field === 'question' ? 'max-h-64' : 'max-h-32'}`}
+              loading="lazy"
+            />
+            <button 
+              onClick={() => setActiveImageAssignment({ questionId: q.id, field })}
+              className="mt-2 text-[10px] font-bold text-gray-400 hover:text-black flex items-center gap-1 transition-colors"
+            >
+              <span className="material-symbols-outlined text-[14px]">sync</span>
+              Change
+            </button>
+          </div>
+        </div>
+      );
+    };
+
     const formats = [
       {
         key: "default",
@@ -3186,7 +3438,58 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     ];
 
     return (
-      <div className="animate-in fade-in duration-500">
+      <div className="animate-in fade-in duration-500 pb-20">
+        {/* Extracted Image Gallery */}
+        {extractedImages.length > 0 && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-8">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-black">collections</span>
+                <h3 className="text-[16px] font-bold text-gray-800">Extracted Image Gallery</h3>
+                <span className="px-2.5 py-0.5 bg-gray-100 rounded-full text-[11px] font-bold text-gray-500">
+                  {extractedImages.length} Images Found
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-400 font-medium italic">Click an image to view full size</p>
+            </div>
+            <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
+              {extractedImages.map((img, idx) => (
+                <div 
+                  key={idx} 
+                  className="flex-shrink-0 w-32 h-32 rounded-xl border-2 border-gray-100 overflow-hidden bg-gray-50 hover:border-black transition-all cursor-pointer relative group"
+                  onClick={() => {
+                    // Logic to preview full size or use for active assignment
+                    if (activeImageAssignment) {
+                      handleImageSelect(img);
+                    }
+                  }}
+                >
+                  <img src={img} alt={`Extracted ${idx}`} className="w-full h-full object-contain p-2" />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                    <span className="text-white text-[10px] font-black uppercase tracking-widest">Select</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {activeImageAssignment && (
+              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between animate-pulse">
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-amber-600">info</span>
+                  <span className="text-[12px] font-bold text-amber-700 uppercase tracking-tight">
+                    Select an image from gallery for Question {activeImageAssignment.questionId} - {activeImageAssignment.field === 'question' ? 'Main Diagram' : `Option ${activeImageAssignment.field}`}
+                  </span>
+                </div>
+                <button 
+                  onClick={() => setActiveImageAssignment(null)}
+                  className="text-[11px] font-black text-amber-600 hover:text-amber-800 underline"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className={`flex gap-5 items-start`}>
           {/* LEFT: Form Card */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200/60 p-6 space-y-5 flex-1 min-w-0">
@@ -3330,11 +3633,12 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           "success",
                         );
                         try {
-                          const questions = await parseFile(file);
+                          const { questions, extractedImages } = await parseFile(file);
                           setBulkUploadData((prev) => ({
                             ...prev,
                             file,
                             parsedQuestions: questions,
+                            extractedImages: extractedImages || [],
                           }));
                           if (questions.length === 0) {
                             showToast(
@@ -3343,7 +3647,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                             );
                           } else {
                             showToast(
-                              `Successfully extracted ${questions.length} questions!`,
+                              `Successfully extracted ${questions.length} questions and ${extractedImages?.length || 0} images!`,
                               "success",
                             );
                           }
@@ -3418,40 +3722,65 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                     }
 
                     // 2. Prepare payload - Standardization to displayOptions
-                    let questionsToUpload = (
-                      bulkUploadData.parsedQuestions || []
-                    )
-                      .filter(
-                        (q) =>
-                          !existingTexts.has(
-                            (q.questionEn || "").trim().toLowerCase(),
-                          ),
-                      )
-                      .map((q) => ({
-                        testId: testId,
-                        courseId:
-                          bulkUploadData.testSeries ||
-                          viewingTestSeries?.id ||
-                          (viewingTestSeries as any)?._id,
-                        questionEn: q.questionEn,
-                        questionHi: q.questionHi || "",
-                        type: "Multiple Choice Question",
-                        marks: q.positiveMarks || 4,
-                        negative: q.negativeMarks || -1,
-                        displayOptions: (q.options || []).map(
-                          (opt: string, i: number) => ({
-                            id: i + 1,
-                            text: opt,
-                            isCorrect:
-                              q.correctAnswer === String.fromCharCode(65 + i),
-                          }),
-                        ),
-                        solution: {
-                          heading: "Full Solution",
-                          text: q.solution || "",
-                        },
-                        format: bulkUploadData.format || "default",
-                      }));
+                    const uploadBase64Image = async (base64Str: string) => {
+                      if (!base64Str || !base64Str.startsWith("data:image")) return base64Str;
+                      try {
+                        const r = await fetch("/api/v2/upload/image/base64", {
+                          method: "POST",
+                          headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
+                          body: JSON.stringify({ image: base64Str }),
+                        });
+                        if (!r.ok) return base64Str;
+                        const data = await r.json();
+                        return data.url || base64Str;
+                      } catch (e) {
+                        return base64Str;
+                      }
+                    };
+
+                    let filteredList = (bulkUploadData.parsedQuestions || []).filter(
+                      (q) => !existingTexts.has((q.questionEn || "").trim().toLowerCase()),
+                    );
+
+                    let questionsToUpload = await Promise.all(
+                      filteredList.map(async (q) => {
+                        const qImageUrl = await uploadBase64Image(q.questionImage || "");
+                        
+                        const processedOptions = await Promise.all(
+                          (q.options || []).map(async (opt: string, i: number) => {
+                            const optImageUrl = await uploadBase64Image(q.optionImages?.[i] || "");
+                            return {
+                              id: i + 1,
+                              text: opt,
+                              image: optImageUrl,
+                              isCorrect: String(q.correctAnswer).toUpperCase() === String.fromCharCode(65 + i),
+                            };
+                          })
+                        );
+
+                        return {
+                          testId: testId,
+                          courseId:
+                            bulkUploadData.testSeries ||
+                            viewingTestSeries?.id ||
+                            (viewingTestSeries as any)?._id,
+                          questionEn: q.questionEn,
+                          questionHi: q.questionHi || "",
+                          questionImage: qImageUrl,
+                          type: "Multiple Choice Question",
+                          marks: q.positiveMarks || 4,
+                          negative: q.negativeMarks || -1,
+                          displayOptions: processedOptions,
+                          hasDiagramOptions: q.hasDiagramOptions || false,
+                          solution: {
+                            heading: "Full Solution",
+                            text: q.solution || "",
+                          },
+                          format: bulkUploadData.format || "default",
+                        };
+                      })
+                    );
+
 
                     if (questionsToUpload.length === 0) {
                       showToast(
@@ -3482,7 +3811,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                     // 3. Bulk upload
                     const res = await fetch("/api/questions/bulk", {
                       method: "POST",
-                      headers: { "Content-Type": "application/json" },
+                      headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
                       body: JSON.stringify({ questions: questionsToUpload }),
                     });
 
@@ -3600,17 +3929,18 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                             </p>
                           </div>
                           <div className="pl-16 space-y-1 font-sans">
-                            {q.options.map((opt: string, i: number) => (
-                              <div
-                                key={i}
-                                className="flex gap-2 text-[11px] text-gray-500"
-                              >
-                                <span className="font-bold">
-                                  ({String.fromCharCode(97 + i)})
-                                </span>
-                                <span>{renderQuestionText(opt)}</span>
-                              </div>
-                            ))}
+                            {q.options.map((opt: string, i: number) => {
+                               const label = String.fromCharCode(65 + i);
+                               return (
+                                <div key={i} className="space-y-2 mb-3">
+                                  <div className="flex gap-2 text-[11px] text-gray-500">
+                                    <span className="font-bold">({label.toLowerCase()})</span>
+                                    <span>{renderQuestionText(opt)}</span>
+                                  </div>
+                                  {renderDiagram(q, label)}
+                                </div>
+                               );
+                            })}
                           </div>
                           <div className="pl-16 space-y-1 text-[11px] text-gray-700 pt-2 font-sans">
                             <p>
@@ -3638,6 +3968,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                               {q.negativeMarks || 0}
                             </p>
                           </div>
+                          {renderDiagram(q)}
                         </div>
                       );
                     }
@@ -3662,17 +3993,20 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                             </div>
                           </div>
                           <div className="pl-8 space-y-1 font-sans">
-                            {q.options.map((opt: string, i: number) => (
-                              <div
-                                key={i}
-                                className="flex gap-2 text-[11px] text-gray-500"
-                              >
-                                <span className="font-bold">
-                                  {String.fromCharCode(65 + i)}.
-                                </span>
-                                <span>{renderQuestionText(opt)}</span>
-                              </div>
-                            ))}
+                            {q.options.map((opt: string, i: number) => {
+                               const label = String.fromCharCode(65 + i);
+                               return (
+                                <div key={i} className="mb-4">
+                                  <div className="flex gap-2 text-[11px] text-gray-500">
+                                    <span className="font-bold">{label}.</span>
+                                    <span>{renderQuestionText(opt)}</span>
+                                  </div>
+                                  <div className="pl-4">
+                                    {renderDiagram(q, label)}
+                                  </div>
+                                </div>
+                               );
+                            })}
                           </div>
                           <div className="pl-8 space-y-2 text-[11px] text-gray-700 pt-2 font-sans">
                             <p>
@@ -3693,6 +4027,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                                 ))}
                             </div>
                           </div>
+                          {renderDiagram(q)}
                         </div>
                       );
                     }
@@ -3715,19 +4050,24 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                             {renderQuestionText(q.questionEn)}
                           </p>
                           <div className="grid grid-cols-2 gap-3">
-                            {q.options.map((o: string, i: number) => (
+                            {q.options.map((o: string, i: number) => {
+                              const label = String.fromCharCode(65 + i);
+                              return (
                               <div
                                 key={i}
-                                className="flex items-center gap-2 p-2 border border-gray-100 rounded-lg bg-white shadow-sm"
+                                className="flex flex-col gap-2 p-2 border border-gray-100 rounded-lg bg-white shadow-sm"
                               >
-                                <span className="w-5 h-5 flex items-center justify-center bg-gray-100 rounded text-[10px] font-bold text-gray-500">
-                                  {String.fromCharCode(65 + i)}
-                                </span>
-                                <span className="text-[11px] text-gray-600 font-medium truncate">
-                                  {renderQuestionText(o)}
-                                </span>
+                                <div className="flex items-center gap-2">
+                                  <span className="w-5 h-5 flex items-center justify-center bg-gray-100 rounded text-[10px] font-bold text-gray-500 shrink-0">
+                                    {label}
+                                  </span>
+                                  <span className="text-[11px] text-gray-600 font-medium truncate">
+                                    {renderQuestionText(o)}
+                                  </span>
+                                </div>
+                                {renderDiagram(q, label)}
                               </div>
-                            ))}
+                            )})}
                           </div>
                           <div className="mt-4 flex items-center gap-4 text-[10px]">
                             <span className="font-bold text-emerald-600 px-2 py-1 bg-emerald-50 rounded">
@@ -3738,6 +4078,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                               {renderQuestionText(q.solution).slice(0, 30)}...
                             </span>
                           </div>
+                          {renderDiagram(q)}
                         </div>
                       );
                     }
@@ -3759,17 +4100,22 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                                 {renderQuestionText(q.questionEn)}
                               </p>
                               <div className="space-y-1">
-                                {q.options.map((o: string, i: number) => (
+                                {q.options.map((o: string, i: number) => {
+                                  const label = String.fromCharCode(65 + i);
+                                  return (
                                   <div
                                     key={i}
-                                    className="flex gap-2 text-[11px] text-gray-500 font-medium"
+                                    className="flex flex-col gap-2 text-[11px] text-gray-500 font-medium mb-2"
                                   >
-                                    <span className="text-blue-500">
-                                      {String.fromCharCode(97 + i)}.
-                                    </span>
-                                    <span>{renderQuestionText(o)}</span>
+                                    <div className="flex gap-2">
+                                      <span className="text-blue-500 shrink-0">
+                                        {String.fromCharCode(97 + i)}.
+                                      </span>
+                                      <span>{renderQuestionText(o)}</span>
+                                    </div>
+                                    <div>{renderDiagram(q, label)}</div>
                                   </div>
-                                ))}
+                                )})}
                               </div>
                             </div>
                           </div>
@@ -3781,6 +4127,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                               +{q.positiveMarks} Marks
                             </span>
                           </div>
+                          {renderDiagram(q)}
                         </div>
                       );
                     }
@@ -3809,17 +4156,22 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                               </p>
                             </div>
                             <div className="space-y-1">
-                              {q.options.map((o: string, i: number) => (
+                              {q.options.map((o: string, i: number) => {
+                                const label = String.fromCharCode(65 + i);
+                                return (
                                 <div
                                   key={i}
-                                  className="flex gap-3 items-center py-1.5 px-3 bg-white/50 rounded-lg text-[11px] text-emerald-800 font-bold border border-emerald-50"
+                                  className="flex flex-col gap-2 py-1.5 px-3 bg-white/50 rounded-lg text-[11px] text-emerald-800 font-bold border border-emerald-50"
                                 >
-                                  <span className="w-4 text-emerald-300">
-                                    {String.fromCharCode(65 + i)}
-                                  </span>
-                                  <span>{renderQuestionText(o)}</span>
+                                  <div className="flex gap-3 items-center">
+                                    <span className="w-4 text-emerald-300 shrink-0">
+                                      {label}
+                                    </span>
+                                    <span>{renderQuestionText(o)}</span>
+                                  </div>
+                                  {renderDiagram(q, label)}
                                 </div>
-                              ))}
+                              )})}
                             </div>
                             <div className="bg-white p-3 rounded-xl border border-emerald-100 space-y-2">
                               <p className="text-[10px] font-black text-emerald-800 flex items-center gap-1">
@@ -3836,6 +4188,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                                 <span>WEIGHTAGE: {q.positiveMarks}M</span>
                               </div>
                             </div>
+                            {renderDiagram(q)}
                           </div>
                         </div>
                       );
@@ -3864,22 +4217,27 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                               {q.type || "multiple_choice"}
                             </div>
                           </div>
-                          {q.options.map((o: string, i: number) => (
+                          {q.options.map((o: string, i: number) => {
+                            const label = String.fromCharCode(65 + i);
+                            return (
                             <div
                               key={i}
                               className="flex border-b border-gray-100 last:border-b-0"
                             >
                               <div className="w-24 bg-gray-50 p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0">
-                                Option
+                                Option {label}
                               </div>
-                              <div className="p-2.5 text-[11px] text-gray-700 font-bold flex gap-2">
-                                <span className="text-gray-300">
-                                  {String.fromCharCode(65 + i)}.
-                                </span>
-                                {renderQuestionText(o)}
+                              <div className="p-2.5 text-[11px] text-gray-700 font-bold flex-1 flex flex-col gap-2">
+                                <div className="flex gap-2">
+                                  <span className="text-gray-300 shrink-0">
+                                    {label}.
+                                  </span>
+                                  {renderQuestionText(o)}
+                                </div>
+                                {renderDiagram(q, label)}
                               </div>
                             </div>
-                          ))}
+                          )})}
                           <div className="flex border-t border-gray-100 bg-[#f8fffe]">
                             <div className="w-24 bg-[#f0f9f7] p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0">
                               Answer
@@ -3914,6 +4272,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                               </div>
                             </div>
                           </div>
+                          {renderDiagram(q)}
                         </div>
                       </div>
                     );
