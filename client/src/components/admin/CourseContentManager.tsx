@@ -1517,21 +1517,29 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
     try {
       const targetCourseId = (selectedCourse as any)._id || selectedCourse.id;
+      const targetFolderId = currentFolder?._id || currentFolder?.id || null;
 
-      const response = await fetch(`${API_BASE_URL}/import-course-content`, {
+      const response = await fetch(`${API_BASE_URL}/content/import`, {
         method: 'POST',
         headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sourceCourseId: importSource,
           targetCourseId,
+          targetFolderId: currentFolder?.id || currentFolder?._id || null,
           itemIds: selectedImportItems,
           action
         })
       });
 
       if (!response.ok) {
-         const errText = await response.text();
-         throw new Error(`Action failed: ${errText}`);
+        let errMsg = 'Action failed';
+        try {
+          const errData = await response.json();
+          errMsg = errData.error || errMsg;
+        } catch (e) {
+          errMsg = await response.text() || errMsg;
+        }
+        throw new Error(errMsg);
       }
 
       showToast(`${selectedImportItems.length} item(s) ${action}ed successfully`, 'success');
@@ -1540,9 +1548,9 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       setImportItems([]);
       setSelectedImportItems([]);
       loadCourseContent();
-    } catch (error) {
+    } catch (error: any) {
       console.error(`Import ${action} error:`, error);
-      showToast(`Failed to ${action} items`, 'error');
+      showToast(error.message || `Failed to ${action} items`, 'error');
     }
   };
 
@@ -4342,7 +4350,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                     className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none appearance-none focus:border-gray-400 transition-all shadow-sm"
                   >
                     <option value="">Select Course</option>
-                    {courses.filter(c => (c._id || c.id) !== ((selectedCourse as any)?._id || (selectedCourse as any)?.id)).map(course => (
+                    {courses.map(course => (
                       <option key={course._id || course.id} value={course._id || course.id}>
                         {course.name || course.title}
                       </option>

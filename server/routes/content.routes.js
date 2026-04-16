@@ -119,6 +119,7 @@ router.delete('/courses/:id/videos/:videoId', adminMiddleware, deleteCourseVideo
 router.post('/video/sign-url', authMiddleware, signVideoUrl);
 
 // Course Import
-router.post('/courses/import', adminMiddleware, importCourseContent);
+// Course Import (Changed to avoid route shadowing with /courses/:id)
+router.post('/content/import', adminMiddleware, importCourseContent);
 
 export default router;
