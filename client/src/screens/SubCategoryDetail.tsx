@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { coursesAPI } from '../services/apiClient';
+import { coursesAPI, getAuthHeaders } from '../services/apiClient';
 import { getImageUrl } from '../lib/utils';
 
 interface Course {
@@ -78,7 +78,7 @@ const SubCategoryDetail: React.FC = () => {
 
       if (studentId) {
         try {
-          const enrolledRes = await fetch(`/api/students/${studentId}/courses`).then(r => r.json()).catch(() => []);
+          const enrolledRes = await fetch(`/api/students/${studentId}/courses`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []);
           const ids = Array.isArray(enrolledRes) ? enrolledRes.map((c: any) => c.id) : [];
           setEnrolledCourseIds(ids);
         } catch { }
@@ -370,7 +370,7 @@ const SubCategoryDetail: React.FC = () => {
                                   if (isFree) {
                                     fetch(`/api/students/${studentId}/enroll`, {
                                       method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
+                                      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                                       body: JSON.stringify({ courseId: cId })
                                     }).then(r => r.json()).then(data => {
                                       if (data.error && !data.error.includes('Already')) {

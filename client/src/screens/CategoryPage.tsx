@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { categoriesAPI, subcategoriesAPI, coursesAPI, subjectsAPI } from '../services/apiClient';
+import { categoriesAPI, subcategoriesAPI, coursesAPI, subjectsAPI, getAuthHeaders } from '../services/apiClient';
 import { getImageUrl } from '../lib/utils';
 
 interface Category {
@@ -763,7 +763,7 @@ const CategoryPage: React.FC = () => {
           subcategoriesAPI.getAll(categoryId).catch(() => []),
           subjectsAPI.getAll().catch(() => []),
           coursesAPI.getAll().catch(() => []),
-          sId ? fetch(`/api/students/${sId}/courses`).then(r => r.json()).catch(() => []) : Promise.resolve([])
+          sId ? fetch(`/api/students/${sId}/courses`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []) : Promise.resolve([])
         ]);
 
         const cat = (Array.isArray(cats) ? cats : []).find((c: Category) => c.id === categoryId);

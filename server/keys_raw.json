@@ -1,9 +1,0 @@
-{
-  "db": {
-    "razorpayKeyId": "rzp_test_SHtpA0FZ4yBcos"
-  },
-  "env": {
-    "RAZORPAY_KEY_ID": "rzp_test_SHtpA0FZ4yBcos",
-    "RAZORPAY_KEY_SECRET_Len": 24
-  }
-}

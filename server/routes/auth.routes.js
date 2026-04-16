@@ -1,43 +1,80 @@
 import express from 'express';
+import * as authController from '../controllers/auth.controller.js';
 import { 
-  adminLogin, 
-  studentLogin, 
-  forgotPassword, 
-  resetPassword, 
-  logout 
-} from '../controllers/auth.controller.js';
-import { bruteForceGate } from '../middleware/security.js';
+  getCurrentUser, 
+  logout as studentLogout, 
+  getUserById, 
+  createUser 
+} from '../controllers/student.controller.js';
+import { bruteForceGate, publicLimiter, authLimiter } from '../middleware/security.js';
+import { authMiddleware, adminMiddleware } from '../middleware/auth.js';
+import rateLimit from 'express-rate-limit';
 
 const router = express.Router();
 
 /**
- * @route POST /api/admin/login
- * @desc Admin Login with brute-force protection
+ * Standard Rate Limiters (Mirrored from server.js)
  */
-router.post('/admin/login', bruteForceGate('adminId'), adminLogin);
+const otpLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 3,
+  message: { error: 'Too many OTP requests from this IP, please try again after a minute' }
+});
 
 /**
- * @route POST /api/students/login
- * @desc Student Login with brute-force protection
+ * Admin Routes
  */
-router.post('/students/login', bruteForceGate('phone'), studentLogin);
+router.post('/admin/login', bruteForceGate('adminId'), authController.adminLogin);
 
 /**
- * @route POST /api/auth/forgot-password
- * @desc Forgot Password Request
+ * Student Authentication & Registration (Mirrored from server.js)
  */
-router.post('/auth/forgot-password', bruteForceGate('identifier'), forgotPassword);
+router.post('/students/register', publicLimiter, authController.registerStudent);
+router.post('/students/login', bruteForceGate('phone'), authController.studentLogin);
+router.post('/students/login-password', bruteForceGate('phone'), authController.loginWithPassword);
 
 /**
- * @route POST /api/auth/reset-password
- * @desc Reset Password with token
+ * OTP Routes
  */
-router.post('/auth/reset-password', resetPassword);
+router.post('/otp/send', otpLimiter, authController.sendOtp);
+router.post('/otp/verify', authLimiter, authController.verifyOtp);
 
 /**
- * @route POST /api/auth/logout
- * @desc Secure Logout & Revocation
+ * Registration/Signup Specific OTPs (Aliases for modularity)
  */
-router.post('/auth/logout', logout);
+router.post('/students/signup/send-otp', otpLimiter, authController.sendOtp);
+router.post('/students/signup/verify-otp', authLimiter, authController.verifyOtp);
+
+/**
+ * Password Management (OTP Based - Mirrored from server.js)
+ */
+router.post('/students/forgot-password/send-otp', otpLimiter, authController.forgotPasswordSendOtp);
+router.post('/students/forgot-password/verify-otp', authLimiter, authController.forgotPasswordVerifyOtp);
+router.post('/students/reset-password', authLimiter, bruteForceGate('phone'), authController.resetPasswordWithOtp);
+router.post('/students/change-password', authMiddleware, authController.changePassword);
+
+/**
+ * Password Management (Link/Token Based - Existing Modular)
+ */
+router.post('/auth/forgot-password', bruteForceGate('identifier'), authController.forgotPassword);
+router.post('/auth/reset-password', authController.resetPassword);
+
+/**
+ * Session & Token Management
+ */
+router.post('/auth/refresh', authController.refreshAccessToken);
+router.post('/auth/logout', authController.logout);
+
+/**
+ * Identity Checks (Managed in student.routes.js)
+ */
+
+/**
+ * Migrated Identity & User Management (Phase H1)
+ */
+router.get('/me', getCurrentUser);
+router.post('/logout', studentLogout);
+router.get('/users/:id', adminMiddleware, getUserById);
+router.post('/users', adminMiddleware, createUser);
 
 export default router;

@@ -1,8 +1,11 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
-const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
-const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || crypto.randomBytes(64).toString('hex');
+if (!process.env.JWT_SECRET) {
+  throw new Error("JWT_SECRET is required but not provided in environment variables.");
+}
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 const ACCESS_TOKEN_EXPIRY = '15m';
 const REFRESH_TOKEN_EXPIRY = '7d';
 
@@ -58,29 +61,32 @@ export function verifySignedUrl(filePath, signature, expiry) {
 
 export function authMiddleware(req, res, next) {
   const authHeader = req.headers['authorization'] || req.headers['Authorization'];
+  let token = null;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else if (req.cookies?.accessToken) {
+    token = req.cookies.accessToken;
+  }
+
+  if (!token) {
     return res.status(401).json({
       error: 'Authentication required',
       code: 'NO_AUTH'
     });
   }
 
-  const token = authHeader.split(' ')[1];
-
   try {
     const decoded = verifyAccessToken(token);
+    req.user = decoded;
 
-    // Set user info based on role
+    // Attach admin context if role is admin
     if (decoded.isAdmin || decoded.role === 'admin') {
       req.admin = {
         id: decoded.adminId,
         name: decoded.name,
         role: 'admin'
       };
-      req.user = decoded;
-    } else {
-      req.user = decoded;
     }
 
     next();
@@ -100,15 +106,20 @@ export function authMiddleware(req, res, next) {
 
 export function adminMiddleware(req, res, next) {
   const authHeader = req.headers['authorization'] || req.headers['Authorization'];
+  let token = null;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else if (req.cookies?.accessToken) {
+    token = req.cookies.accessToken;
+  }
+
+  if (!token) {
     return res.status(401).json({
       error: 'Admin authentication required',
       code: 'NO_AUTH'
     });
   }
-
-  const token = authHeader.split(' ')[1];
 
   try {
     const decoded = verifyAccessToken(token);
@@ -161,6 +172,12 @@ export function optionalAuth(req, res, next) {
   } catch (e) {
   }
   next();
+}
+
+export function studentOwnerOrAdmin(req, res, next) {
+  if (req.user?.isAdmin || req.user?.role === 'admin') return next();
+  if (req.user?.studentId && String(req.user.studentId) === String(req.params.id)) return next();
+  return res.status(403).json({ error: 'Forbidden' });
 }
 
 export { JWT_SECRET, JWT_REFRESH_SECRET };

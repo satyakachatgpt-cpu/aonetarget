@@ -3,12 +3,12 @@ const { ObjectId } = mongoose.Types;
 import Course from '../models/Course.js';
 import Video from '../models/Video.js';
 import { findCourse, getRelatedCourseIds, syncDemoVideoWithFreeContent } from '../services/course.service.js';
+import { db } from '../config/db.js';
 
 /**
  * Get all courses with optional filters and pagination
  */
 export const getCourses = async (req, res) => {
-  const db = mongoose.connection.db;
   try {
     const filter = {};
     const { 
@@ -142,7 +142,6 @@ export const createCourse = async (req, res) => {
  * Bulk update courses
  */
 export const bulkUpdateCourses = async (req, res) => {
-  const db = mongoose.connection.db;
   try {
     const { updates } = req.body;
     if (!Array.isArray(updates)) return res.status(400).json({ error: 'Updates must be an array' });
@@ -168,7 +167,6 @@ export const bulkUpdateCourses = async (req, res) => {
  * Delete all courses (Warning: High impact)
  */
 export const deleteAllCourses = async (req, res) => {
-  const db = mongoose.connection.db;
   try {
     const result = await db.collection('courses').deleteMany({});
     res.json({ success: true, message: `Deleted ${result.deletedCount} courses` });
@@ -204,7 +202,6 @@ export const getCourseById = async (req, res) => {
  * Update single course or package
  */
 export const updateCourse = async (req, res) => {
-  const db = mongoose.connection.db;
   try {
     const { _id, ...updateData } = req.body;
     const id = req.params.id;
@@ -263,7 +260,6 @@ export const updateCourse = async (req, res) => {
  * Delete single course or package
  */
 export const deleteCourse = async (req, res) => {
-  const db = mongoose.connection.db;
   try {
     const { id } = req.params;
     let filter = { id: id };
@@ -279,5 +275,62 @@ export const deleteCourse = async (req, res) => {
   } catch (error) {
     console.error('[COURSE CONTROLLER] Delete Error:', error);
     res.status(500).json({ error: 'Failed to delete course' });
+  }
+};
+
+/**
+ * GET /api/courses/:id/tests  (student-facing)
+ *
+ * Returns active, non-series tests for a student's course page.
+ * Uses richer filtering than the admin version:
+ *   - Resolves all related course ID variants via getRelatedCourseIds
+ *   - Excludes test-series container documents (isSeries: true)
+ *   - Filters for active status only
+ *   - Includes tests from explicitly attached test-series by name/title
+ *
+ * IMPORTANT: This is NOT interchangeable with getCourseTests in test.controller.js.
+ * That handler serves the admin panel with a simpler query + question counts.
+ * This handler serves the student frontend with richer filtering.
+ */
+export const getStudentCourseTests = async (req, res) => {
+  try {
+    const course = await findCourse(req.params.id);
+    if (!course) return res.json([]);
+
+    const idVariants = await getRelatedCourseIds(course, req.params.id);
+
+    // Initial query to find tests directly associated with this course
+    let query = {
+      $or: [
+        { courseId: { $in: idVariants } },
+        { testSeriesId: { $in: idVariants } }
+      ],
+      isSeries: { $ne: true }, // Filter out Test Series containers
+      $and: [{ $or: [{ status: 'active' }, { status: { $exists: false } }] }]
+    };
+
+    // Include tests from explicitly attached test series
+    if (course.content && Array.isArray(course.content.testSeries) && course.content.testSeries.length > 0) {
+      const attachedSeries = await db.collection('tests').find({
+        $or: [
+          { name: { $in: course.content.testSeries } },
+          { title: { $in: course.content.testSeries } },
+          { seriesName: { $in: course.content.testSeries } }
+        ],
+        isSeries: true
+      }).toArray();
+
+      const attachedSeriesIds = attachedSeries.map(s => String(s.id || s._id || ''));
+      if (attachedSeriesIds.length > 0) {
+        query.$or.push({ testSeriesId: { $in: attachedSeriesIds } });
+      }
+    }
+
+    const tests = await db.collection('tests').find(query).toArray();
+    console.log(`GET /api/courses/${req.params.id}/tests - Found ${tests.length} tests (filtered for course and attached series)`);
+    res.json(tests);
+  } catch (error) {
+    console.error('Error fetching course tests:', error);
+    res.status(500).json({ error: 'Failed to fetch course tests' });
   }
 };

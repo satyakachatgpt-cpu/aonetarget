@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import { useAuthStore } from '../store/authStore';
 import { toast } from 'sonner';
+import { getAuthHeaders } from '../services/apiClient';
 
 interface SettingsProps {
   setAuth?: (auth: boolean) => void;
@@ -86,7 +87,7 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+          ...getAuthHeaders()
         },
         body: JSON.stringify({
           currentPassword: passwordData.current,

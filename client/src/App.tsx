@@ -4,6 +4,7 @@ import { Toaster } from 'sonner';
 import BottomNav from './components/BottomNav';
 import SplashScreen from './components/SplashScreen';
 import { useAuthStore } from './store/authStore';
+import { clearAdminSession } from './services/apiClient';
 import FreeContent from './screens/FreeContent';
 import FreeVideosList from './screens/FreeVideosList';
 import StudyDashboard from './screens/StudyDashboard';
@@ -101,11 +102,7 @@ const App: React.FC = () => {
       const elapsed = Date.now() - parseInt(loginTime, 10);
       if (elapsed > 18 * 60 * 60 * 1000) {
         // Session expired
-        localStorage.removeItem('isAdminAuthenticated');
-        localStorage.removeItem('adminId');
-        localStorage.removeItem('adminName');
-        localStorage.removeItem('adminToken');
-        localStorage.removeItem('adminLoginTimestamp');
+        clearAdminSession();
         return false;
       }
     }
@@ -128,11 +125,7 @@ const App: React.FC = () => {
       if (loginTime) {
         const elapsed = Date.now() - parseInt(loginTime, 10);
         if (elapsed > 18 * 60 * 60 * 1000) {
-          localStorage.removeItem('isAdminAuthenticated');
-          localStorage.removeItem('adminId');
-          localStorage.removeItem('adminName');
-          localStorage.removeItem('adminToken');
-          localStorage.removeItem('adminLoginTimestamp');
+          clearAdminSession();
           setIsAdminLoggedIn(false);
         }
       }

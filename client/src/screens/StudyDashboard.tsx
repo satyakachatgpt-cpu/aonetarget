@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import LiveClassesCalendar from '../components/student/LiveClassesCalendar';
 import { getPdfUrl, getVideoUrl, getImageUrl, getYouTubeThumbnail, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
 import { useAuthStore } from '../store/authStore';
+import { getAuthHeaders } from '../services/apiClient';
 
 const QUIZ_QUESTIONS = [
   {
@@ -81,14 +82,14 @@ const StudyDashboard: React.FC = () => {
         // Fetch user downloads to check what's already offline
         if (storedStudent) {
           const s = JSON.parse(storedStudent);
-          const dRes = await fetch(`/api/students/${s.id}/downloads`).then(r => r.ok ? r.json() : []);
+          const dRes = await fetch(`/api/students/${s.id}/downloads`, { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : []);
           if (Array.isArray(dRes)) {
             setDownloadedIds(new Set(dRes.map(d => d.id || d._id)));
           }
 
           // Fetch Enrollment Status
           try {
-            const enrolledRes = await fetch(`/api/students/${s.id}/enrolled/${id}`);
+            const enrolledRes = await fetch(`/api/students/${s.id}/enrolled/${id}`, { headers: getAuthHeaders() });
             if (enrolledRes.ok) {
               const enrolledData = await enrolledRes.json();
               setIsEnrolled(enrolledData.enrolled || false);
@@ -175,7 +176,7 @@ const StudyDashboard: React.FC = () => {
 
       const response = await fetch(`/api/students/${student.id}/downloads`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(downloadData)
       });
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { getAdminHeaders } from '../../services/apiClient';
 
 interface TestResult {
   id: string;
@@ -39,7 +40,7 @@ const AllReports: React.FC<Props> = ({ showToast }) => {
 
   const loadResults = async () => {
     try {
-      const res = await fetch('/api/admin/test-results');
+      const res = await fetch('/api/admin/test-results', { headers: getAdminHeaders() });
       const data = await res.json();
       setResults(Array.isArray(data) ? data : []);
     } catch (error) {

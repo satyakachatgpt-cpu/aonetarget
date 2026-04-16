@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getAuthHeaders } from '../services/apiClient';
 
 const ReferEarn: React.FC = () => {
   const navigate = useNavigate();
@@ -21,7 +22,7 @@ const ReferEarn: React.FC = () => {
 
   const loadReferralData = async (sid: string) => {
     try {
-      const statsRes = await fetch(`/api/referrals/${sid}`);
+      const statsRes = await fetch(`/api/referrals/${sid}`, { headers: getAuthHeaders() });
       const statsData = await statsRes.json();
 
       if (statsData.referralCode) {
@@ -32,13 +33,13 @@ const ReferEarn: React.FC = () => {
           pendingEarnings: statsData.pendingEarnings || 0
         });
 
-        const historyRes = await fetch(`/api/referrals/${sid}/history`);
+        const historyRes = await fetch(`/api/referrals/${sid}/history`, { headers: getAuthHeaders() });
         const historyData = await historyRes.json();
         setHistory(historyData);
       } else {
         const genRes = await fetch('/api/referrals/generate', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify({ studentId: sid })
         });
         const genData = await genRes.json();

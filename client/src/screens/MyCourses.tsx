@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
+import { getAuthHeaders } from '../services/apiClient';
 
 const MyCourses: React.FC = () => {
   const navigate = useNavigate();
@@ -22,7 +23,7 @@ const MyCourses: React.FC = () => {
 
   const fetchCourses = async (studentId: string) => {
     try {
-      const response = await fetch(`/api/students/${studentId}/courses`);
+      const response = await fetch(`/api/students/${studentId}/courses`, { headers: getAuthHeaders() });
       const data = await response.json();
       const courseList: any[] = Array.isArray(data) ? data : [];
 
@@ -34,7 +35,7 @@ const MyCourses: React.FC = () => {
           try {
             const [videosRes, progressRes] = await Promise.all([
               fetch(`/api/courses/${courseId}/videos`),
-              fetch(`/api/students/${studentId}/courses/${courseId}/progress`),
+              fetch(`/api/students/${studentId}/courses/${courseId}/progress`, { headers: getAuthHeaders() }),
             ]);
 
             const videosData = videosRes.ok ? await videosRes.json() : [];

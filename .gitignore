@@ -37,6 +37,14 @@ client/node_modules/
 *.tmp
 .temp_bulk_server.txt
 .temp_bulk_uploader.txt
+server/scratch/
+server/*.tmp
+server/*_check.json
+server/keys_raw.json
+server/diag.cjs
+server/test_db.js
+server/test_email.js
+server/test-razorpay.js
 
 # Upload folders - ignore files but keep folder structure
 server/uploads/images/*

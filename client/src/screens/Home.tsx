@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { coursesAPI, blogAPI, newsAPI, categoriesAPI, bannersAPI, testsAPI, testSeriesAPI, liveVideosAPI, quickLinksAPI } from '../services/apiClient';
 import StudentSidebar from '../components/StudentSidebar';
 import { useAuthStore } from '../store/authStore';
+import { Course, Student } from '../types';
 
 
 interface NewsItem {
@@ -81,7 +82,7 @@ const HomeLiveCountdownDisplay = ({ scheduledTimeStr }: { scheduledTimeStr: stri
 const Home: React.FC = () => {
   const navigate = useNavigate();
   const { student, isAuthenticated, unreadNotificationsCount } = useAuthStore();
-  const [courses, setCourses] = useState<any[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [filteredCategories, setFilteredCategories] = useState<any[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
@@ -1024,7 +1025,7 @@ const Home: React.FC = () => {
                         </div>
 
                         <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-30">
-                          <button className="bg-yellow-400 text-black text-[9px] font-bold px-3 py-1 rounded-full shadow-lg">
+                          <button className="bg-white text-black text-[9px] font-black px-4 py-2 rounded-xl shadow-lg border border-white/20 uppercase tracking-widest active:scale-95 transition-all">
                             JOIN NOW
                           </button>
                         </div>
@@ -1063,7 +1064,7 @@ const Home: React.FC = () => {
                           <div className="w-6 h-6 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20">
                             <span className="material-symbols-rounded text-white text-[14px]">school</span>
                           </div>
-                          <button className="bg-yellow-400 text-black text-[11px] font-black px-4 py-1.5 rounded-full hover:bg-yellow-300 transition-colors whitespace-nowrap shadow-lg uppercase tracking-wide">
+                          <button className="bg-white text-black text-[11px] font-black px-4 py-2 rounded-xl hover:bg-white transition-all whitespace-nowrap shadow-lg uppercase tracking-widest active:scale-95 border border-white/20">
                             Join
                           </button>
                         </div>

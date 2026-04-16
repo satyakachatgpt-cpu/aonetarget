@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import FileViewer from '../components/FileViewer';
 import { getImageUrl, getVideoUrl, getPdfUrl } from '../lib/utils';
+import { getAuthHeaders } from '../services/apiClient';
 
 const Downloads: React.FC = () => {
   const navigate = useNavigate();
@@ -36,7 +37,7 @@ const Downloads: React.FC = () => {
 
   const fetchDownloads = async (studentId: string) => {
     try {
-      const response = await fetch(`/api/students/${studentId}/downloads`);
+      const response = await fetch(`/api/students/${studentId}/downloads`, { headers: getAuthHeaders() });
       const data = await response.json();
       setDownloads(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -78,7 +79,8 @@ const Downloads: React.FC = () => {
 
     try {
       const response = await fetch(`/api/students/${student.id}/downloads/${downloadId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: getAuthHeaders()
       });
 
       if (!response.ok) {

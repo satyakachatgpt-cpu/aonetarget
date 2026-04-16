@@ -2,42 +2,12 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getImageUrl, getVideoUrl, getPdfUrl, getYouTubeThumbnail, getGradientPlaceholder, toYouTubeEmbed, isYouTubeUrl, isLiveUrl } from '../lib/utils';
 import StudentVideoPlayer from '../components/student/StudentVideoPlayer';
+import { Course, Video, Progress } from '../types';
 import { useAuthStore } from '../store/authStore';
 import { useUIStore } from '../store/uiStore';
 import { CATEGORY_GRADIENTS } from '../constants';
 
-interface Video {
-  id: string;
-  _id?: string;
-  title: string;
-  duration: string;
-  thumbnail?: string;
-  videoUrl?: string;
-  youtubeUrl?: string;
-  isFree?: boolean;
-  topicId?: string;
-  topicName?: string;
-  order?: number;
-  completed?: boolean;
-  publishOn?: string;
-  scheduledTime?: string;
-  startTime?: string;
-  contentType?: string;
-  endTime?: string;
-  joinBeforeMinutes?: number;
-  meetingLink?: string;
-  instructor?: string;
-  url?: string;
-  folderId?: string | null;
-  status?: string;
-  streamStatus?: string;
-  isLive?: boolean;
-  isDemo?: boolean;
-  pdf1?: string;
-  pdf2?: string;
-  studyMaterial?: string;
-  scheduledAt?: string;
-}
+// Local Video interface removed; using Course/Video/Progress from ../types
 
 interface Note {
   id: string;
@@ -63,29 +33,7 @@ interface Test {
   status: string;
 }
 
-interface Course {
-  id: string;
-  name: string;
-  title?: string;
-  description?: string;
-  instructor?: string;
-  thumbnail?: string;
-  imageUrl?: string;
-  price?: number;
-  mrp?: number;
-  category?: string;
-  enrollmentCount?: number;
-  notesCount?: number;
-  demoVideo?: string;
-  settings?: { showTabs?: boolean;[key: string]: any };
-  content?: { upsell?: { enabled?: boolean; courses: string[] };[key: string]: any };
-}
-
-interface Progress {
-  completedVideos: string[];
-  completedTests: string[];
-  completedNotes: string[];
-}
+// Interfaces moved to src/types/index.ts
 
 const CourseDetails: React.FC = () => {
   const { id } = useParams();
@@ -155,7 +103,7 @@ const CourseDetails: React.FC = () => {
       const vid = selectedVideo.id || selectedVideo._id;
       const res = await fetch(`/api/live-chat/${vid}/messages`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({
           senderId: student.id || student._id,
           senderName: student.name || 'Student',
@@ -200,6 +148,10 @@ const CourseDetails: React.FC = () => {
     };
     if (adminId) headers['x-admin-id'] = adminId;
     if (adminToken) headers['Authorization'] = `Bearer ${adminToken}`;
+    if (!headers['Authorization']) {
+      const studentToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      if (studentToken) headers['Authorization'] = `Bearer ${studentToken}`;
+    }
     return headers;
   };
 
@@ -333,13 +285,13 @@ const CourseDetails: React.FC = () => {
 
       if (studentId) {
         try {
-          const enrolledRes = await fetch(`/api/students/${studentId}/enrolled/${id}`);
+          const enrolledRes = await fetch(`/api/students/${studentId}/enrolled/${id}`, { headers: getAuthHeaders() });
           if (enrolledRes.ok) {
             const enrolledData = await enrolledRes.json();
             setIsEnrolled(enrolledData.enrolled || false);
 
             if (enrolledData.enrolled) {
-              const progressRes = await fetch(`/api/students/${studentId}/courses/${id}/progress`);
+              const progressRes = await fetch(`/api/students/${studentId}/courses/${id}/progress`, { headers: getAuthHeaders() });
               if (progressRes.ok) {
                 const progressData = await progressRes.json();
                 setProgress(progressData);
@@ -366,14 +318,14 @@ const CourseDetails: React.FC = () => {
     try {
       const response = await fetch(`/api/students/${studentId}/enroll`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ courseId: id })
       });
 
       if (response.ok) {
         setIsEnrolled(true);
         alert('Enrollment successful! You now have access to all course content.');
-        const progressRes = await fetch(`/api/students/${studentId}/courses/${id}/progress`);
+        const progressRes = await fetch(`/api/students/${studentId}/courses/${id}/progress`, { headers: getAuthHeaders() });
         const progressData = await progressRes.json();
         setProgress(progressData);
       } else {
@@ -400,7 +352,7 @@ const CourseDetails: React.FC = () => {
     try {
       await fetch(`/api/students/${studentId}/courses/${id}/progress`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ videoId, action: 'complete' })
       });
       setProgress(prev => ({
@@ -422,7 +374,7 @@ const CourseDetails: React.FC = () => {
             const all = await res.json();
             const recommended = all.filter((c: any) =>
               course.content?.upsell?.courses.includes(c.title || c.name) &&
-              (c.id || c._id) !== (course.id || (course as any)._id)
+              (c.id || c._id) !== (course.id || course._id)
             );
             setUpsellData(recommended);
           }
@@ -436,8 +388,56 @@ const CourseDetails: React.FC = () => {
     fetchCourseData();
   }, [id]);
 
+  useEffect(() => {
+    if (course) {
+      document.title = `${course.name || course.title} | Aone Target`;
+      
+      // TRACK RECENTLY VIEWED
+      try {
+        const viewed = JSON.parse(localStorage.getItem('recently_viewed_courses') || '[]');
+        const filtered = viewed.filter((c: any) => (c.id || c._id) !== (course.id || course._id));
+        const updated = [{ 
+          id: course.id || course._id || "", 
+          name: course.name || course.title, 
+          imageUrl: course.imageUrl || course.thumbnail 
+        }, ...filtered].slice(0, 10);
+        localStorage.setItem('recently_viewed_courses', JSON.stringify(updated));
+      } catch (e) { console.error(e); }
+    }
+  }, [course]);
+
   const navigateIntoFolder = (folder: any) => {
     setNavigationHistory(prev => [...prev, folder]);
+  };
+
+  const handleStartLearning = () => {
+    // Find first playable video or resume last one
+    if (videos.length > 0) {
+      // Check for resume video first
+      const resumeVideoId = (navigate as any).state?.resumeVideoId;
+      let targetVideo = videos.find(v => (v.id || v._id) === resumeVideoId);
+      
+      if (!targetVideo) {
+        // Fallback to first video
+        targetVideo = videos[0];
+      }
+      
+      handleVideoClick(targetVideo);
+    }
+  };
+
+  const handleAutoNext = () => {
+    if (!selectedVideo) return;
+    const currentIndex = videos.findIndex(v => (v.id || v._id) === (selectedVideo.id || selectedVideo._id));
+    if (currentIndex !== -1 && currentIndex < videos.length - 1) {
+      const nextVideo = videos[currentIndex + 1];
+      // Skip if it's a folder or non-playable
+      if (nextVideo.contentType === 'folder') {
+         // Optionally navigate into folder, but for simple auto-next we just stop or skip
+         return;
+      }
+      handleVideoClick(nextVideo);
+    }
   };
 
   const navigateUp = () => {
@@ -596,7 +596,11 @@ const CourseDetails: React.FC = () => {
               <div className="w-8 h-8 bg-primary-50 rounded-full flex items-center justify-center">
                 <span className="material-symbols-rounded text-primary-600 text-base">person</span>
               </div>
-              <span className="text-sm text-gray-600 font-medium">{course.instructor}</span>
+              <span className="text-sm text-gray-600 font-medium">
+                {typeof course.instructor === 'string' 
+                  ? course.instructor 
+                  : (course.instructor?.name || course.instructor?.instructorHindi || '')}
+              </span>
             </div>
           )}
           <div className="flex flex-wrap gap-2 mt-3">
@@ -1215,7 +1219,7 @@ const CourseDetails: React.FC = () => {
           </div>
         )}
 
-        {!isEnrolled && (
+        {!isEnrolled ? (
           <div className="mt-8 mb-24 px-4 sticky bottom-4 z-40">
             <div className="bg-[#0D1B2A] p-5 rounded-[2.2rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex items-center justify-between border border-white/10 mx-auto max-w-sm animate-fade-in-up">
               <div className="flex flex-col gap-0.5 ml-1">
@@ -1246,6 +1250,21 @@ const CourseDetails: React.FC = () => {
               )}
             </div>
           </div>
+        ) : (
+          <div className="mt-8 mb-24 px-4 sticky bottom-4 z-40">
+            <button
+               onClick={handleStartLearning}
+               className="w-full max-w-sm mx-auto flex items-center justify-center gap-3 bg-brandBlue text-white p-5 rounded-[2.2rem] shadow-[0_20px_50px_rgba(46,115,232,0.3)] border border-brandBlue/20 animate-fade-in-up active:scale-[0.98] transition-all"
+            >
+               <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                  <span className="material-symbols-rounded text-white">play_arrow</span>
+               </div>
+               <div className="flex flex-col items-start">
+                  <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">Success! Enrolled</span>
+                  <span className="text-sm font-black uppercase tracking-widest">START LEARNING</span>
+               </div>
+            </button>
+          </div>
         )}
       </main>
 
@@ -1269,6 +1288,7 @@ const CourseDetails: React.FC = () => {
           onSendMessage={(msg) => {
             handleSendLiveMessage(msg);
           }}
+          onNext={handleAutoNext}
         />
       )}
     </div>

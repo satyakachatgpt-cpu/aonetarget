@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { RightSideDrawer, DrawerHeader, DrawerBody, DrawerFooter } from '../DrawerSystem';
+import { getAdminHeaders } from '../../../services/apiClient';
 
 interface UserRecord {
   id: string; // This is the MongoDB _id string from the backend
@@ -80,9 +81,7 @@ const NoPurchaseReport: React.FC<Props> = ({ showToast }) => {
       query.append('limit', itemsPerPage.toString());
 
       const res = await fetch(`/api/admin/reports/no-purchase?${query.toString()}`, {
-          headers: {
-              'x-admin-id': localStorage.getItem('adminId') || 'admin'
-          }
+          headers: getAdminHeaders()
       });
       const data = await res.json();
       setUsers(data.users || []);
@@ -148,7 +147,7 @@ const NoPurchaseReport: React.FC<Props> = ({ showToast }) => {
     try {
         const res = await fetch(`/api/admin/reports/no-purchase/${user.id}`, {
             method: 'DELETE',
-            headers: { 'x-admin-id': localStorage.getItem('adminId') || 'admin' }
+            headers: getAdminHeaders()
         });
         
         if (!res.ok) {
@@ -177,7 +176,7 @@ const NoPurchaseReport: React.FC<Props> = ({ showToast }) => {
            method: 'PUT',
            headers: { 
                'Content-Type': 'application/json',
-               'x-admin-id': localStorage.getItem('adminId') || 'admin' 
+               ...getAdminHeaders()
            },
            body: JSON.stringify(editForm)
        });

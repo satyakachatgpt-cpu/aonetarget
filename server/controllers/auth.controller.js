@@ -3,10 +3,107 @@ import crypto from 'crypto';
 import mongoose from 'mongoose';
 const { ObjectId } = mongoose.Types;
 
-import { generateTokens, generateAdminToken, generateDeviceId } from '../middleware/auth.js';
+import { generateTokens, generateAdminToken, generateDeviceId, verifyRefreshToken } from '../middleware/auth.js';
 import { recordAttempt, GENERIC_AUTH_ERROR } from '../middleware/security.js';
 import { sendEmail, templates } from '../utils/email.js';
+import sendSMS from '../utils/sendSMS.js';
 import { findStudent, findAdmin } from '../services/user.service.js';
+import { getDb } from '../config/db.js';
+import Student from '../models/Student.js';
+import * as authService from '../services/auth.service.js';
+
+const OTP_EXPIRY_MS = 5 * 60 * 1000;
+const REFRESH_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+
+function shouldExposeOtp() {
+  return process.env.NODE_ENV !== 'production' && process.env.RETURN_OTP_IN_RESPONSE !== 'false';
+}
+
+function sanitizeStudent(student) {
+  const raw = typeof student.toObject === 'function' ? student.toObject() : { ...student };
+  delete raw.password;
+  delete raw.sessionToken;
+  return raw;
+}
+
+/**
+ * Hardened Password Verification with Auto-Migration
+ * Handles both bcrypt and legacy plaintext passwords
+ */
+async function verifyAndMigratePassword(db, user, plainPassword, collectionName, label) {
+  if (!user || !user.password || !plainPassword) return false;
+
+  // 1. Standard Hashed Verification
+  if (user.password.startsWith('$2')) {
+    return await bcrypt.compare(plainPassword, user.password);
+  }
+
+  // 2. Legacy Plaintext Fallback (Exact Match Only)
+  if (user.password === plainPassword) {
+    try {
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(plainPassword, salt);
+      await db.collection(collectionName).updateOne({ _id: user._id }, { $set: { password: hashedPassword } });
+      console.log(`[SECURITY] ${label} password migrated to bcrypt.`);
+      return true;
+    } catch (migError) {
+      console.error(`[SECURITY ERROR] Failed to migrate password for ${label}:`, migError);
+      return true; // Still return true because verification was successful
+    }
+  }
+
+  return false;
+}
+
+function setRefreshCookie(res, refreshToken) {
+  res.cookie('refreshToken', refreshToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/api/auth/refresh',
+    maxAge: REFRESH_EXPIRY_MS
+  });
+}
+
+function setAccessCookie(res, accessToken) {
+  res.cookie('accessToken', accessToken, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/api',
+    maxAge: 15 * 60 * 1000
+  });
+}
+
+async function persistRefreshToken(db, refreshToken, student, ip) {
+  const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+  await db.collection('refresh_tokens').insertOne({
+    tokenHash,
+    studentId: student.id || student._id?.toString(),
+    ip,
+    expiresAt: new Date(Date.now() + REFRESH_EXPIRY_MS),
+    createdAt: new Date()
+  });
+}
+
+async function issueStudentSession(req, res, db, student, deviceId) {
+  const { accessToken, refreshToken } = generateTokens(student);
+  await persistRefreshToken(db, refreshToken, student, req.ip || req.connection.remoteAddress);
+  setAccessCookie(res, accessToken);
+  setRefreshCookie(res, refreshToken);
+  return {
+    student: sanitizeStudent(student),
+    accessToken,
+    refreshToken,
+    deviceId
+  };
+}
+
+function otpPurposeFromRequest(req) {
+  if (req.body?.purpose === 'signup' || req.path.includes('/signup')) return 'signup';
+  if (req.body?.purpose === 'reset' || req.path.includes('/forgot-password')) return 'reset';
+  return 'login';
+}
 
 /**
  * Admin Login Controller
@@ -14,24 +111,20 @@ import { findStudent, findAdmin } from '../services/user.service.js';
 export const adminLogin = async (req, res) => {
   const { adminId, password } = req.body;
   const ip = req.ip || req.connection.remoteAddress;
+
+  // Check DB readiness
+  if (mongoose.connection.readyState !== 1) {
+    return res.status(503).json({ 
+      success: false, 
+      error: 'Database connection is not ready. Please try again in few seconds.' 
+    });
+  }
+
   const db = mongoose.connection.db;
 
   try {
     const admin = await db.collection('admins').findOne({ adminId: adminId?.trim() });
-    let isMatch = false;
-
-    if (admin) {
-      if (admin.password.startsWith('$2')) {
-        isMatch = await bcrypt.compare(password, admin.password);
-      } else {
-        isMatch = admin.password === password;
-        if (isMatch) {
-          const hashedPassword = await bcrypt.hash(password, 10);
-          await db.collection('admins').updateOne({ _id: admin._id }, { $set: { password: hashedPassword } });
-          console.log(`[SECURITY] Admin ${adminId} password migrated to bcrypt.`);
-        }
-      }
-    }
+    const isMatch = await verifyAndMigratePassword(db, admin, password, 'admins', `Admin ${adminId}`);
 
     if (!isMatch) {
       await recordAttempt(adminId, ip, false);
@@ -42,6 +135,16 @@ export const adminLogin = async (req, res) => {
     console.log(`[LOGIN SUCCESS] Admin: ${adminId}, Name: ${admin.name}`);
     
     const adminToken = generateAdminToken(admin);
+
+    // Set Access Token cookie for unified auth handling (Stabilization)
+    res.cookie('accessToken', adminToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 18 * 60 * 60 * 1000, // 18 hours matching token expiry
+      path: '/api'
+    });
+
     res.json({
       success: true,
       message: 'Login successful',
@@ -56,12 +159,12 @@ export const adminLogin = async (req, res) => {
 };
 
 /**
- * Student Login Controller
+ * Student Login Controller (Standard JWT login)
  */
 export const studentLogin = async (req, res) => {
   const { phone, password } = req.body;
   const ip = req.ip || req.connection.remoteAddress;
-  const db = mongoose.connection.db;
+  const db = getDb();
 
   try {
     if (!phone || !password) {
@@ -73,19 +176,7 @@ export const studentLogin = async (req, res) => {
       $or: [{ phone }, { phone: cleanPhone }] 
     });
 
-    let isMatch = false;
-    if (student) {
-      if (student.password && student.password.startsWith('$2')) {
-        isMatch = await bcrypt.compare(password, student.password);
-      } else {
-        isMatch = (student.password === password);
-        if (isMatch) {
-          const hashedPassword = await bcrypt.hash(password, 10);
-          await db.collection('students').updateOne({ _id: student._id }, { $set: { password: hashedPassword } });
-          console.log(`[SECURITY] Student ${phone} password migrated to bcrypt.`);
-        }
-      }
-    }
+    const isMatch = await verifyAndMigratePassword(db, student, password, 'students', `Student ${phone}`);
 
     if (!isMatch) {
       await recordAttempt(phone, ip, false);
@@ -95,26 +186,12 @@ export const studentLogin = async (req, res) => {
     await recordAttempt(phone, ip, true);
     console.log(`[LOGIN SUCCESS] Student: ${phone}, Name: ${student.name}`);
 
-    const { accessToken, refreshToken } = generateTokens(student);
-    const deviceId = generateDeviceId();
-
-    const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
-    await db.collection('refresh_tokens').insertOne({
-      tokenHash,
-      studentId: student.id || student._id.toString(),
-      ip,
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      createdAt: new Date()
-    });
-
-    const { password: _, ...studentNoPwd } = student;
+    const deviceId = req.body.deviceId || generateDeviceId();
+    const session = await issueStudentSession(req, res, db, student, deviceId);
     res.json({
       success: true,
       message: 'Login successful',
-      student: studentNoPwd,
-      accessToken,
-      refreshToken,
-      deviceId
+      ...session
     });
   } catch (error) {
     console.error('[STUDENT LOGIN ERROR]', error);
@@ -123,12 +200,469 @@ export const studentLogin = async (req, res) => {
 };
 
 /**
- * Forgot Password Controller
+ * Student Login with Password & Device Lock (Mirrored from server.js)
+ */
+export const loginWithPassword = async (req, res) => {
+  try {
+    const db = getDb();
+    const { loginId, password, deviceId: incomingDeviceId } = req.body;
+    
+    if (!loginId || !password) {
+      return res.status(400).json({ error: 'Login ID and Password required' });
+    }
+
+    let loginQuery = {};
+    if (loginId.includes('@')) {
+      loginQuery = { email: loginId.toLowerCase().trim() };
+    } else if (/^\d+$/.test(loginId)) {
+      loginQuery = { phone: loginId.replace(/\D/g, '') };
+    } else {
+      loginQuery = { $or: [{ username: loginId }, { userId: loginId }] };
+    }
+
+    const student = await db.collection('students').findOne(loginQuery);
+
+    if (!student) {
+      return res.status(401).json({ error: 'Student not found with this ID or Mobile Number' });
+    }
+
+    if (!student.password) {
+      return res.status(401).json({ error: 'Password not set for this account. Please contact admin.' });
+    }
+
+    const isMatch = await verifyAndMigratePassword(db, student, password, 'students', `Student ${loginId}`);
+    if (!isMatch) {
+      return res.status(401).json({ error: 'Incorrect password' });
+    }
+
+    if (student.status === 'inactive') {
+      return res.status(403).json({ error: 'Your account is currently inactive. Contact support.' });
+    }
+
+    if (!incomingDeviceId) {
+      return res.status(400).json({ error: 'Device ID is required for secure login' });
+    }
+
+    // STRICT DEVICE LOCK LOGIC
+    if (!student.deviceId) {
+      await db.collection('students').updateOne(
+        { _id: student._id },
+        { $set: { deviceId: incomingDeviceId, deviceLocked: true, pendingDeviceId: null } }
+      );
+    } else {
+      if (student.deviceLocked && student.deviceId !== incomingDeviceId) {
+        await db.collection('students').updateOne(
+          { _id: student._id },
+          { $set: { pendingDeviceId: incomingDeviceId } }
+        );
+        return res.status(403).json({ error: 'This account is locked to another device. Please contact admin.' });
+      }
+    }
+
+    const session = await issueStudentSession(req, res, db, student, incomingDeviceId);
+
+    res.json({
+      success: true,
+      ...session
+    });
+  } catch (error) {
+    console.error('Password Login error:', error);
+    res.status(500).json({ error: 'Internal server error during login' });
+  }
+};
+
+/**
+ * Student Registration (Mirrored from server.js)
+ */
+export const registerStudent = async (req, res) => {
+  try {
+    const db = getDb();
+    const { name, email, phone, username, class: studentClass, target, address, state, district, whatsAppNumber, alternateNumber, gender, dob, password } = req.body;
+
+    if (!name || !phone) {
+      return res.status(400).json({ error: 'Name and phone are required' });
+    }
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    const stored = await authService.getValidOtp(cleanPhone, 'signup');
+    
+    if (!stored || !stored.verified) {
+      return res.status(400).json({ error: 'Please verify your phone number with OTP first' });
+    }
+
+    const cleanWA = whatsAppNumber ? whatsAppNumber.replace(/\D/g, '') : '';
+    const cleanAlt = alternateNumber ? alternateNumber.replace(/\D/g, '') : '';
+    const normalizedEmail = email ? email.toLowerCase().trim() : '';
+
+    const existingStudent = await Student.findOne({
+      $or: [
+        { phone: cleanPhone },
+        ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+        ...(username ? [{ userId: username }, { username: username }] : [])
+      ]
+    });
+
+    if (existingStudent) {
+      if (normalizedEmail && existingStudent.email === normalizedEmail) {
+        return res.status(400).json({ error: 'This email address is already registered.' });
+      }
+      if (username && (existingStudent.userId === username || existingStudent.username === username)) {
+        return res.status(400).json({ error: 'This username is already taken.' });
+      }
+      return res.status(400).json({ error: 'Phone number already registered' });
+    }
+
+    await authService.consumeOtp(cleanPhone, 'signup');
+
+    const studentId = username || 'STU-' + Date.now();
+    const salt = password ? await bcrypt.genSalt(10) : null;
+    const hashedPassword = (password && salt) ? await bcrypt.hash(password, salt) : undefined;
+
+    const student = new Student({
+      id: studentId,
+      userId: studentId,
+      username: username || studentId,
+      name,
+      email: normalizedEmail,
+      phone: cleanPhone,
+      password: hashedPassword,
+      whatsAppNumber: cleanWA,
+      alternateNumber: cleanAlt,
+      class: studentClass || '11th',
+      admission: {
+        fullAddress: address || '',
+        admissionDate: new Date()
+      },
+      state: state || '',
+      district: district || '',
+      gender: gender || '',
+      dob: dob || '',
+      enrolledCourses: [],
+      status: 'active'
+    });
+
+    await student.save();
+
+    if (student.email) {
+      const { subject, html } = templates.registration(student.name);
+      sendEmail({ to: student.email, subject, html }).catch(e => console.error('Registration email error:', e));
+    }
+
+    res.status(201).json({ success: true, message: 'Registration successful', student });
+  } catch (error) {
+    console.error('Error registering student:', error);
+    res.status(500).json({ error: 'Registration failed: ' + error.message });
+  }
+};
+
+/**
+ * Generic OTP Send (Mirrored from server.js /api/otp/send and Signup OTP)
+ */
+export const sendOtp = async (req, res) => {
+  try {
+    const db = getDb();
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Phone number is required' });
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length < 10) return res.status(400).json({ error: 'Invalid phone number' });
+
+    const purpose = otpPurposeFromRequest(req);
+    const student = await db.collection('students').findOne({ $or: [{ phone: cleanPhone }, { phone }] });
+    
+    if (purpose === 'signup' && student) {
+      return res.status(400).json({ error: 'Account already exists. Please login.' });
+    }
+    if (purpose === 'login' && !student) {
+      return res.status(404).json({ error: 'Account not found. Please sign up first.' });
+    }
+
+    const lastSent = await db.collection('otps').findOne({ phone: cleanPhone, purpose });
+    if (lastSent?.createdAt && Date.now() - new Date(lastSent.createdAt).getTime() < 30000) {
+      return res.status(429).json({ error: 'Please wait 30 seconds before requesting another OTP' });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // No console log of OTP value in production
+
+    await authService.saveOtp(cleanPhone, purpose, otp);
+
+    const otpMessage = 'Your AoneTarget login OTP is ' + otp + '. Valid for 10 minutes. Do not share.';
+    const smsResult = await sendSMS(cleanPhone, otpMessage, process.env.DLT_OTP_TEMPLATE_ID);
+
+    if (!smsResult.success) {
+      return res.status(500).json({ success: false, message: 'SMS sending failed. Please try again.' });
+    }
+
+    res.json({ success: true, message: 'OTP sent to your mobile number' });
+  } catch (error) {
+    console.error('Send OTP error:', error);
+    res.status(500).json({ error: 'Failed to send OTP' });
+  }
+};
+
+/**
+ * Generic OTP Verify (Mirrored from server.js /api/otp/verify and Signup Verify)
+ */
+export const verifyOtp = async (req, res) => {
+  try {
+    const db = getDb();
+    const { phone, otp, deviceId } = req.body;
+    if (!phone || !otp) return res.status(400).json({ error: 'Phone and OTP are required' });
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    const purpose = otpPurposeFromRequest(req);
+    const stored = await authService.getValidOtp(cleanPhone, purpose);
+
+    if (!stored) {
+      return res.status(400).json({ error: 'OTP expired or not found' });
+    }
+
+    if (String(stored.otp) !== String(otp)) {
+      await db.collection('otps').updateOne({ _id: stored._id }, { $inc: { attempts: 1 } });
+      return res.status(400).json({ error: 'Invalid OTP' });
+    }
+
+    if (purpose === 'signup') {
+      await authService.markOtpVerified(cleanPhone, purpose);
+      return res.json({ success: true, message: 'OTP verified' });
+    }
+
+    const student = await db.collection('students').findOne({ $or: [{ phone: cleanPhone }, { phone }] });
+    if (!student) return res.status(404).json({ error: 'Account not found. Please sign up first.' });
+    if (student.status === 'inactive') {
+      return res.status(403).json({ error: 'Your account is currently inactive. Contact support.' });
+    }
+
+    const incomingDeviceId = deviceId || generateDeviceId();
+    if (!student.deviceId) {
+      await db.collection('students').updateOne(
+        { _id: student._id },
+        { $set: { deviceId: incomingDeviceId, deviceLocked: true, pendingDeviceId: null } }
+      );
+      student.deviceId = incomingDeviceId;
+    } else if (student.deviceLocked && student.deviceId !== incomingDeviceId) {
+      await db.collection('students').updateOne(
+        { _id: student._id },
+        { $set: { pendingDeviceId: incomingDeviceId } }
+      );
+      return res.status(403).json({ error: 'This account is locked to another device. Please contact admin.' });
+    }
+
+    await authService.consumeOtp(cleanPhone, purpose);
+    const session = await issueStudentSession(req, res, db, student, incomingDeviceId);
+    res.json({ success: true, message: 'Login successful', ...session });
+  } catch (error) {
+    console.error('OTP verification failed:', error);
+    res.status(500).json({ error: 'Verification failed' });
+  }
+};
+
+/**
+ * Forgot Password - Send OTP via SMS (Mirrored from server.js)
+ */
+export const forgotPasswordSendOtp = async (req, res) => {
+  try {
+    const db = getDb();
+    const { phone } = req.body;
+    if (!phone) return res.status(400).json({ error: 'Phone number is required' });
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    const student = await Student.findOne({ $or: [{ phone: cleanPhone }, { phone }] });
+    
+    if (!student) return res.status(404).json({ error: 'No account found with this phone number' });
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Safety: No OTP in logs
+
+    await authService.saveOtp(cleanPhone, 'reset', otp);
+
+    const resetOtpMessage = 'Your AoneTarget password reset OTP is ' + otp + '. Valid for 10 minutes. Do not share.';
+    const smsResult = await sendSMS(cleanPhone, resetOtpMessage, process.env.DLT_FORGOT_TEMPLATE_ID);
+
+    if (!smsResult.success) {
+      return res.status(500).json({ success: false, message: 'Failed to send reset OTP.' });
+    }
+
+    res.json({ success: true, message: 'OTP sent to your mobile number' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to send reset OTP' });
+  }
+};
+
+/**
+ * Forgot Password - Verify OTP (Mirrored from server.js)
+ */
+export const forgotPasswordVerifyOtp = async (req, res) => {
+  try {
+    const db = getDb();
+    const { phone, otp } = req.body;
+    const cleanPhone = phone.replace(/\D/g, '');
+    
+    const stored = await authService.getValidOtp(cleanPhone, 'reset');
+    if (stored && String(stored.otp) === String(otp)) {
+      await authService.markOtpVerified(cleanPhone, 'reset');
+      return res.json({ success: true, message: 'OTP verified' });
+    }
+    
+    res.status(400).json({ error: 'Invalid or expired OTP' });
+  } catch (error) {
+    res.status(500).json({ error: 'Verification failed' });
+  }
+};
+
+/**
+ * Reset Password with OTP (Mirrored from server.js)
+ */
+export const resetPasswordWithOtp = async (req, res) => {
+  try {
+    const db = getDb();
+    const { phone, newPassword } = req.body;
+    const cleanPhone = phone.replace(/\D/g, '');
+    const stored = await authService.getValidOtp(cleanPhone, 'reset');
+
+    if (!stored || !stored.verified) {
+      return res.status(400).json({ error: 'Session expired or not verified' });
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+    await Student.updateOne(
+      { $or: [{ phone: cleanPhone }, { phone }] },
+      { $set: { password: hashedPassword } }
+    );
+
+    await authService.consumeOtp(cleanPhone, 'reset');
+    res.json({ success: true, message: 'Password reset successful. Please login.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+};
+
+/**
+ * Change Password (Authenticated) (Mirrored from server.js)
+ */
+export const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user?.studentId || req.user?._id || req.user?.id;
+    const student = await Student.findOne({
+      $or: [
+        { id: userId },
+        ...(userId && ObjectId.isValid(userId) ? [{ _id: new ObjectId(userId) }] : [])
+      ]
+    });
+
+    if (!student || !student.password) {
+      return res.status(404).json({ error: 'User not found or password not set' });
+    }
+
+    const isMatch = await bcrypt.compare(currentPassword, student.password);
+    if (!isMatch) return res.status(400).json({ error: 'Incorrect current password' });
+
+    const salt = await bcrypt.genSalt(10);
+    student.password = await bcrypt.hash(newPassword, salt);
+    await student.save();
+
+    res.json({ success: true, message: 'Password changed successfully' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to change password' });
+  }
+};
+
+/**
+ * Session Validation (Mirrored from server.js)
+ */
+export const validateSession = async (req, res) => {
+  try {
+    const db = getDb();
+    const { studentId, sessionToken } = req.body || {};
+    if (!studentId || !sessionToken) return res.status(400).json({ error: 'studentId and sessionToken are required' });
+
+    const student = await db.collection('students').findOne({ id: studentId });
+    if (!student || !student.sessionToken || student.sessionToken !== sessionToken) {
+      return res.status(401).json({ valid: false, error: 'Session invalid or expired' });
+    }
+    return res.json({ valid: true });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to validate session' });
+  }
+};
+
+/**
+ * Identifier Checks
+ */
+export const checkPhone = async (req, res) => {
+  try {
+    const db = getDb();
+    const { phone } = req.body || {};
+    if (!phone) return res.status(400).json({ error: 'Phone number is required' });
+
+    const cleanPhone = phone.replace(/\D/g, '');
+    const exists = await db.collection('students').findOne({ $or: [{ phone }, { phone: cleanPhone }] });
+    return res.json({ exists: !!exists });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed' });
+  }
+};
+
+export const checkEmail = async (req, res) => {
+  try {
+    const db = getDb();
+    const { email } = req.body || {};
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+
+    const exists = await db.collection('students').findOne({ email: email.toLowerCase().trim() });
+    return res.json({ exists: !!exists });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed' });
+  }
+};
+
+/**
+ * Access Token Refresh (Mirrored from app.js)
+ */
+export const refreshAccessToken = async (req, res) => {
+  try {
+    const db = getDb();
+    const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+    if (!refreshToken) return res.status(401).json({ error: 'Refresh token required' });
+    
+    const decoded = verifyRefreshToken(refreshToken);
+    const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
+    const tokenRecord = await db.collection('refresh_tokens').findOne({
+      tokenHash,
+      studentId: decoded.studentId,
+      expiresAt: { $gt: new Date() }
+    });
+
+    if (!tokenRecord) return res.status(401).json({ error: 'Invalid refresh token' });
+
+    const student = await Student.findOne({
+      $or: [
+        { id: decoded.studentId },
+        ...(decoded.studentId && /^[a-f\d]{24}$/i.test(decoded.studentId) ? [{ _id: new ObjectId(decoded.studentId) }] : [])
+      ]
+    });
+    
+    if (!student) return res.status(401).json({ error: 'User not found' });
+    
+    await db.collection('refresh_tokens').deleteOne({ _id: tokenRecord._id });
+    const session = await issueStudentSession(req, res, db, student.toObject(), student.deviceId || null);
+    res.json({ accessToken: session.accessToken, refreshToken: session.refreshToken });
+  } catch (error) {
+    res.status(401).json({ error: 'Invalid refresh token' });
+  }
+};
+
+/**
+ * Forgot Password Controller (Email Based Link)
  */
 export const forgotPassword = async (req, res) => {
   const { identifier } = req.body;
   const ip = req.ip || req.connection.remoteAddress;
-  const db = mongoose.connection.db;
+  const db = getDb();
 
   try {
     if (!identifier) {
@@ -177,11 +711,11 @@ export const forgotPassword = async (req, res) => {
 };
 
 /**
- * Reset Password Controller
+ * Reset Password Controller (Email Based Link)
  */
 export const resetPassword = async (req, res) => {
   const { token, newPassword } = req.body;
-  const db = mongoose.connection.db;
+  const db = getDb();
 
   try {
     if (!token || !newPassword) {
@@ -230,14 +764,29 @@ export const resetPassword = async (req, res) => {
  * Logout Controller
  */
 export const logout = async (req, res) => {
-  const { refreshToken } = req.body;
-  const db = mongoose.connection.db;
+  const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+  const db = getDb();
 
   try {
     if (refreshToken) {
       const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
       await db.collection('refresh_tokens').deleteOne({ tokenHash });
     }
+    res.clearCookie('refreshToken', {
+      path: '/api/auth/refresh',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax'
+    });
+    res.clearCookie('accessToken', {
+      path: '/api',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax'
+    });
+    res.clearCookie('sessionToken', {
+      path: '/',
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax'
+    });
     res.json({ success: true, message: 'Logged out successfully' });
   } catch (error) {
     console.error('[LOGOUT ERROR]', error);

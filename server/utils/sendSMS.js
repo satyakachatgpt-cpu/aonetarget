@@ -39,6 +39,7 @@ const sendSMS = async (phone, message, templateId) => {
       console.log(`[SMS] Attempt ${attempt}/${MAX_RETRIES} → phone: ${phone}`);
       console.log('[SMS] Message being sent:', message);
       console.log('[SMS] Template ID being used:', templateId);
+      
       const response = await smsClient.get(url);
       const data = response.data;
       console.log('[SMS] PrimeClick response:', data);

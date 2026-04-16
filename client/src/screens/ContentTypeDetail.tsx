@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getImageUrl } from '../lib/utils';
+import { getAuthHeaders } from '../services/apiClient';
 
 interface Course {
   _id?: string;
@@ -112,7 +113,7 @@ const ContentTypeDetail: React.FC = () => {
 
       if (studentId) {
         try {
-          const enrolledRes = await fetch(`/api/students/${studentId}/courses`);
+          const enrolledRes = await fetch(`/api/students/${studentId}/courses`, { headers: getAuthHeaders() });
           const enrolled = await enrolledRes.json();
           const ids = Array.isArray(enrolled) ? enrolled.map((c: any) => c.id || c.courseId || c._id) : [];
           setEnrolledCourseIds(ids);
@@ -159,7 +160,7 @@ const ContentTypeDetail: React.FC = () => {
     try {
       await fetch(`/api/students/${studentId}/enroll`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ courseId: cId }),
       });
       setEnrolledCourseIds(prev => [...prev, cId]);
