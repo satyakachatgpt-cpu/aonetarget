@@ -1471,10 +1471,10 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       setIsImportLoading(true);
       try {
         const [videosRes, notesRes, testsRes, foldersRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/courses/${importSource}/videos`),
-          fetch(`${API_BASE_URL}/courses/${importSource}/notes`),
-          fetch(`${API_BASE_URL}/courses/${importSource}/tests`),
-          fetch(`${API_BASE_URL}/courses/${importSource}/folders`)
+          fetch(`${API_BASE_URL}/courses/${importSource}/videos`, { headers: getAuthHeaders() }),
+          fetch(`${API_BASE_URL}/courses/${importSource}/notes`, { headers: getAuthHeaders() }),
+          fetch(`${API_BASE_URL}/courses/${importSource}/tests`, { headers: getAuthHeaders() }),
+          fetch(`${API_BASE_URL}/courses/${importSource}/folders`, { headers: getAuthHeaders() })
         ]);
 
         const videosData = await videosRes.json();
@@ -1509,9 +1509,9 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     try {
       const targetCourseId = (selectedCourse as any)._id || selectedCourse.id;
 
-      const response = await fetch(`${API_BASE_URL}/courses/import`, {
+      const response = await fetch(`${API_BASE_URL}/import-course-content`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
         body: JSON.stringify({
           sourceCourseId: importSource,
           targetCourseId,
@@ -1520,7 +1520,10 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         })
       });
 
-      if (!response.ok) throw new Error('Action failed');
+      if (!response.ok) {
+         const errText = await response.text();
+         throw new Error(`Action failed: ${errText}`);
+      }
 
       showToast(`${selectedImportItems.length} item(s) ${action}ed successfully`, 'success');
       setShowImportModal(false);

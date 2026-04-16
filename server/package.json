@@ -8,6 +8,7 @@
     "dev": "node --no-deprecation server.js"
   },
   "dependencies": {
+    "axios": "^1.15.0",
     "bcrypt": "^5.1.1",
     "cheerio": "^1.2.0",
     "cloudinary": "^2.9.0",
