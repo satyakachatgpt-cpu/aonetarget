@@ -277,10 +277,10 @@ export const loginWithPassword = async (req, res) => {
 export const registerStudent = async (req, res) => {
   try {
     const db = getDb();
-    const { name, email, phone, username, class: studentClass, target, address, state, district, whatsAppNumber, alternateNumber, gender, dob, password } = req.body;
+    const { name, email, phone, username, class: studentClass, target, address, state, district, gender, dob, password } = req.body;
 
-    if (!name || !phone) {
-      return res.status(400).json({ error: 'Name and phone are required' });
+    if (!name || !phone || !email) {
+      return res.status(400).json({ error: 'Name, email, and phone are required' });
     }
 
     const cleanPhone = phone.replace(/\D/g, '');
@@ -290,8 +290,6 @@ export const registerStudent = async (req, res) => {
       return res.status(400).json({ error: 'Please verify your phone number with OTP first' });
     }
 
-    const cleanWA = whatsAppNumber ? whatsAppNumber.replace(/\D/g, '') : '';
-    const cleanAlt = alternateNumber ? alternateNumber.replace(/\D/g, '') : '';
     const normalizedEmail = email ? email.toLowerCase().trim() : '';
 
     const existingStudent = await Student.findOne({
@@ -326,8 +324,6 @@ export const registerStudent = async (req, res) => {
       email: normalizedEmail,
       phone: cleanPhone,
       password: hashedPassword,
-      whatsAppNumber: cleanWA,
-      alternateNumber: cleanAlt,
       class: studentClass || '11th',
       admission: {
         fullAddress: address || '',

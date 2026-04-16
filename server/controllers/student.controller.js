@@ -181,54 +181,55 @@ export const updateStudent = async (req, res) => {
     console.log('PUT /api/students/:id - Updating student:', req.params.id, req.body);
     const { _id, ...body } = req.body;
 
-    const updateData = {
-      name: body.name ? body.name.trim() : body.name,
-      email: (body.email && body.email.trim()) ? body.email.toLowerCase().trim() : null, // Handle empty string as null
-      phone: body.phone ? body.phone.trim() : body.phone,
-      userId: body.userId ? body.userId.trim() : body.userId,
-      highQualification: body.highQualification,
-      dob: body.dob,
-      city: body.city,
-      state: body.state,
-      course: body.course,
-      status: body.status,
-      registrationType: body.registrationType,
-      registrationDate: body.registrationDate,
-      district: body.district,
-      gender: body.gender,
-      whatsAppNumber: body.whatsAppNumber,
-      alternateNumber: body.alternateNumber,
-      alternateWhatsAppNumber: body.alternateWhatsAppNumber || body.alternateNumber,
-      class: body.class,
-      notes: body.notes,
-      paymentStatus: body.paymentStatus,
-      admission: {
-        fatherName: body.fatherName ? body.fatherName.trim() : body.fatherName,
-        motherName: body.motherName ? body.motherName.trim() : body.motherName,
-        gender: body.gender,
-        alternatePhone: (body.alternateNumber || body.alternatePhone || "").trim(),
-        fullAddress: body.fullAddress || body.address,
-        batchTiming: body.batchTiming,
-        admissionDate: body.admissionDate
-      },
-      fees: {
-        totalFees: Number(body.totalFees || 0),
-        paidAmount: Number(body.paidAmount || 0),
-        remainingAmount: Number(body.totalFees || 0) - Number(body.paidAmount || 0)
-      },
-      academic: {
-        previousClass: body.previousClass,
-        schoolName: body.schoolName,
-        marksPercentage: body.marksPercentage,
-        passingYear: body.passingYear
-      },
-      documents: {
-        aadharCard: body.aadharCard,
-        marksheet: body.marksheet,
-        photo: body.photo,
-        profilePhoto: body.profilePhoto
+    const updateData = {};
+    const stringFields = [
+      'name', 'phone', 'userId', 'highQualification', 'dob', 'city', 'state', 
+      'course', 'status', 'registrationType', 'registrationDate', 'district', 
+      'gender', 'whatsAppNumber', 'alternateNumber', 'alternateWhatsAppNumber', 
+      'class', 'notes', 'paymentStatus', 'banReason'
+    ];
+
+    stringFields.forEach(field => {
+      if (body[field] !== undefined) {
+        if (typeof body[field] === 'string' && field !== 'banReason') {
+          updateData[field] = body[field].trim();
+        } else {
+          updateData[field] = body[field];
+        }
       }
-    };
+    });
+
+    if (body.email !== undefined) {
+      updateData.email = (body.email && body.email.trim()) ? body.email.toLowerCase().trim() : null;
+    }
+
+    if (body.isBanned !== undefined) updateData.isBanned = body.isBanned;
+
+    // Handle Nested Objects (Preserve existing data if not provided)
+    if (body.fatherName !== undefined) updateData['admission.fatherName'] = body.fatherName.trim();
+    if (body.motherName !== undefined) updateData['admission.motherName'] = body.motherName.trim();
+    if (body.admissionDate !== undefined) updateData['admission.admissionDate'] = body.admissionDate;
+    if (body.batchTiming !== undefined) updateData['admission.batchTiming'] = body.batchTiming;
+    if (body.fullAddress !== undefined || body.address !== undefined) {
+      updateData['admission.fullAddress'] = body.fullAddress || body.address;
+    }
+
+    if (body.totalFees !== undefined) updateData['fees.totalFees'] = Number(body.totalFees);
+    if (body.paidAmount !== undefined) updateData['fees.paidAmount'] = Number(body.paidAmount);
+    if (body.totalFees !== undefined || body.paidAmount !== undefined) {
+      // Logic for remaining amount needs careful handling if only one is updated
+      // but for simplicity in partial updates, we'll let Mongoose handle specific paths
+    }
+
+    const academicFields = ['previousClass', 'schoolName', 'marksPercentage', 'passingYear'];
+    academicFields.forEach(f => {
+      if (body[f] !== undefined) updateData[`academic.${f}`] = body[f];
+    });
+
+    const docFields = ['aadharCard', 'marksheet', 'photo', 'profilePhoto'];
+    docFields.forEach(f => {
+      if (body[f] !== undefined) updateData[`documents.${f}`] = body[f];
+    });
 
     if (updateData.email) {
       const existing = await Student.findOne({
@@ -278,8 +279,8 @@ export const deleteStudent = async (req, res) => {
   try {
     const db = getDb();
     console.log('DELETE /api/students/:id - Deleting student:', req.params.id);
-    const result = await db.collection('students').deleteOne({ id: req.params.id });
-    if (result.deletedCount === 0) {
+    const result = await Student.findOneAndDelete({ id: req.params.id });
+    if (!result) {
       console.warn('Student not found for deletion:', req.params.id);
       return res.status(404).json({ error: 'Student not found' });
     }
@@ -291,10 +292,45 @@ export const deleteStudent = async (req, res) => {
   }
 };
 
+export const banStudent = async (req, res) => {
+  try {
+    const { userId, reason } = req.body;
+    console.log('POST /api/security-admin/ban-user - Banning user:', userId, 'Reason:', reason);
+    
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+
+    const student = await Student.findOneAndUpdate(
+      { id: userId },
+      { 
+        $set: { 
+          isBanned: true, 
+          banReason: reason || 'Terms of service violation',
+          status: 'inactive',
+          activeSessions: [],
+          deviceId: null,
+          pendingDeviceId: null,
+          activeDeviceId: null,
+          sessionToken: null
+        } 
+      },
+      { new: true }
+    );
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    console.log('Student banned and sessions cleared:', userId);
+    res.json({ success: true, message: 'User has been banned and sessions cleared' });
+  } catch (error) {
+    console.error('Error banning student:', error);
+    res.status(500).json({ error: 'Failed to ban student', details: error.message });
+  }
+};
+
 export const deleteAllStudents = async (req, res) => {
   try {
-    const db = getDb();
-    const result = await db.collection('students').deleteMany({});
+    const result = await Student.deleteMany({});
     res.json({ success: true, message: `Deleted ${result.deletedCount} students` });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete all students' });
@@ -306,8 +342,8 @@ export const bulkCreateStudents = async (req, res) => {
     const db = getDb();
     const { students } = req.body;
     if (!Array.isArray(students) || students.length === 0) return res.status(400).json({ error: 'No students provided' });
-    const result = await db.collection('students').insertMany(students);
-    res.status(201).json({ success: true, inserted: result.insertedCount });
+    const result = await Student.insertMany(students);
+    res.status(201).json({ success: true, inserted: result.length });
   } catch (error) {
     res.status(500).json({ error: 'Failed to bulk create students' });
   }
@@ -320,7 +356,7 @@ export const updateAllStudents = async (req, res) => {
     if (!Array.isArray(updates)) return res.status(400).json({ error: 'Updates must be an array' });
     for (const update of updates) {
       const { id, _id, ...data } = update;
-      await db.collection('students').updateOne({ id }, { $set: data });
+      await Student.updateOne({ id }, { $set: data });
     }
     res.json({ success: true, message: `Updated ${updates.length} students` });
   } catch (error) {

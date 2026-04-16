@@ -12,13 +12,11 @@ const phoneSchema = z.object({
 
 const profileSchema = z.object({
   name: z.string().min(3, 'Name must be at least 3 characters'),
-  email: z.string().email('Invalid email address').optional().or(z.literal('')),
+  email: z.string().email('Invalid email address').min(1, 'Email is required'),
   phone: z.string().length(10, 'Enter a valid 10-digit phone number').regex(/^\d+$/, 'Digits only'),
   address: z.string().optional().or(z.literal('')),
   state: z.string().min(1, 'Please select a state'),
   district: z.string().min(1, 'Please select a district'),
-  whatsAppNumber: z.string().length(10, "WhatsApp number must be 10 digits").regex(/^\d+$/, 'Digits only'),
-  alternateNumber: z.string().length(10, "Alternate number must be 10 digits").regex(/^\d+$/, 'Digits only'),
   gender: z.string().optional().or(z.literal('')),
   dob: z.string().optional().or(z.literal('')),
   class: z.string().min(1, 'Please select a class'),
@@ -52,6 +50,151 @@ const getDeviceId = () => {
   return deviceId;
 };
 
+interface SelectionModalProps {
+  isOpen: boolean;
+  type: 'state' | 'district' | 'class' | null;
+  onClose: () => void;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
+  options: string[];
+  selectedValue: string;
+  onSelect: (value: string) => void;
+}
+
+const SelectionModal: React.FC<SelectionModalProps> = ({
+  isOpen,
+  type,
+  onClose,
+  searchQuery,
+  onSearchChange,
+  options,
+  selectedValue,
+  onSelect
+}) => {
+  if (!isOpen) return null;
+
+  const filteredOptions = options.filter(opt =>
+    opt.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
+      <div className="relative w-full max-w-lg bg-white rounded-t-[32px] sm:rounded-[32px] h-[80vh] sm:h-auto sm:max-h-[70vh] flex flex-col overflow-hidden animate-slide-in-bottom sm:animate-fade-in">
+        <div className="p-6 border-b border-gray-100 shrink-0">
+          <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-4 sm:hidden"></div>
+          <h3 className="text-xl font-black text-gray-800 capitalize">Select {type}</h3>
+          <div className="mt-4 relative">
+            <span className="material-symbols-rounded absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">search</span>
+            <input
+              type="text"
+              placeholder={`Search ${type}...`}
+              className="w-full pl-12 pr-4 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-[#1A237E] text-sm"
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              autoFocus
+            />
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto p-4 space-y-1 hide-scrollbar">
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((opt) => (
+              <button
+                key={opt}
+                onClick={() => onSelect(opt)}
+                className={`w-full px-6 py-4 rounded-2xl text-left text-sm font-bold transition-all ${selectedValue === opt
+                  ? 'bg-[#1A237E]/10 text-[#1A237E] border-2 border-[#1A237E]/20'
+                  : 'text-gray-600 hover:bg-gray-50 hover:pl-8'
+                  }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span>{opt}</span>
+                  {selectedValue === opt && (
+                    <span className="material-symbols-rounded text-lg">check_circle</span>
+                  )}
+                </div>
+              </button>
+            ))
+          ) : (
+            <div className="p-10 text-center">
+              <span className="material-symbols-rounded text-5xl text-gray-200">search_off</span>
+              <p className="text-gray-400 mt-2 font-bold">No results found</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface ScrollPickerProps {
+  value: string;
+  options: { value: string; label: string }[];
+  onChange: (val: string) => void;
+  label: string;
+}
+
+const ScrollPicker: React.FC<ScrollPickerProps> = ({ value, options, onChange, label }) => {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const lastValueRef = useRef(value);
+
+  useEffect(() => {
+    // Only scroll programmatically if the value changed from outside (prop update)
+    if (value !== lastValueRef.current && scrollRef.current) {
+      const index = options.findIndex(opt => opt.value === value);
+      if (index !== -1) {
+        scrollRef.current.scrollTo({
+          top: index * 44,
+          behavior: 'smooth'
+        });
+        lastValueRef.current = value;
+      }
+    }
+  }, [value, options]);
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const scrollTop = e.currentTarget.scrollTop;
+    const index = Math.round(scrollTop / 44);
+    const newValue = options[index]?.value;
+    
+    if (newValue && newValue !== value) {
+      lastValueRef.current = newValue;
+      onChange(newValue);
+    }
+  };
+
+  return (
+    <div className="relative group flex-1">
+      <label className="text-[10px] uppercase tracking-[0.15em] text-[#1A237E] font-black mb-2 block text-center opacity-70">{label}</label>
+      <div className="relative h-36 overflow-hidden bg-white rounded-3xl border border-gray-100 shadow-[inset_0_2px_10px_rgba(0,0,0,0.02)]">
+        {/* Selection Indicator */}
+        <div className="absolute top-1/2 left-0 right-0 h-11 -translate-y-1/2 bg-[#1A237E]/5 border-y border-[#1A237E]/10 pointer-events-none z-10 mx-2 rounded-xl"></div>
+
+        <div
+          ref={scrollRef}
+          onScroll={handleScroll}
+          className="h-full overflow-y-auto snap-y snap-mandatory hide-scrollbar flex flex-col items-center py-[50px]"
+        >
+          {options.map((opt, idx) => (
+            <div
+              key={idx}
+              className={`h-11 shrink-0 flex items-center justify-center snap-center px-4 w-full transition-all duration-300 cursor-pointer z-20 ${value === opt.value
+                ? 'text-[#1A237E] font-black text-lg scale-110'
+                : 'text-gray-400 text-sm font-bold opacity-60'
+                }`}
+            >
+              {opt.label}
+            </div>
+          ))}
+        </div>
+
+        <div className="absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-white via-white/80 to-transparent pointer-events-none z-10"></div>
+        <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-white via-white/80 to-transparent pointer-events-none z-10"></div>
+      </div>
+    </div>
+  );
+};
+
 const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   const navigate = useNavigate();
   const [step, setStep] = useState<'login' | 'otp' | 'signup' | 'profile' | 'category' | 'subcategory' | 'forgot-password' | 'reset-otp' | 'new-password' | 'signup-otp'>('login');
@@ -81,8 +224,6 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       address: '',
       state: '',
       district: '',
-      whatsAppNumber: '',
-      alternateNumber: '',
       gender: '',
       dob: '',
       class: '',
@@ -131,7 +272,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   const [dobMonth, setDobMonth] = useState('');
   const [dobYear, setDobYear] = useState('');
 
-  const [selectionModal, setSelectionModal] = useState<{ isOpen: boolean, type: 'state' | 'district' | null }>({ isOpen: false, type: null });
+  const [selectionModal, setSelectionModal] = useState<{ isOpen: boolean, type: 'state' | 'district' | 'class' | null }>({ isOpen: false, type: null });
   const [searchQuery, setSearchQuery] = useState('');
   
   // New States for Password & Forgot Password
@@ -139,7 +280,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   const [resetPhone, setResetPhone] = useState('');
   const [newPasswordData, setNewPasswordData] = useState({ password: '', confirm: '' });
 
-  const openSelection = (type: 'state' | 'district') => {
+  const openSelection = (type: 'state' | 'district' | 'class') => {
     if (type === 'district' && !selectedState) {
       toast.error('Please select a state first');
       return;
@@ -154,70 +295,13 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       setProfileValue('district', '');
     } else if (selectionModal.type === 'district') {
       setProfileValue('district', value);
+    } else if (selectionModal.type === 'class') {
+      setProfileValue('class', value);
     }
     setSelectionModal({ isOpen: false, type: null });
   };
 
-  const SelectionModal = () => {
-    if (!selectionModal.isOpen) return null;
-
-    const options = selectionModal.type === 'state'
-      ? Object.keys(indiaStateDistrictMap).sort()
-      : availableDistricts.sort();
-
-    const filteredOptions = options.filter(opt =>
-      opt.toLowerCase().includes(searchQuery.toLowerCase())
-    );
-
-    return (
-      <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setSelectionModal({ isOpen: false, type: null })}></div>
-        <div className="relative w-full max-w-lg bg-white rounded-t-[32px] sm:rounded-[32px] h-[80vh] sm:h-auto sm:max-h-[70vh] flex flex-col overflow-hidden animate-slide-in-bottom sm:animate-fade-in">
-          <div className="p-6 border-b border-gray-100 shrink-0">
-            <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-4 sm:hidden"></div>
-            <h3 className="text-xl font-black text-gray-800 capitalize">Select {selectionModal.type}</h3>
-            <div className="mt-4 relative">
-              <span className="material-symbols-rounded absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">search</span>
-              <input
-                type="text"
-                placeholder={`Search ${selectionModal.type}...`}
-                className="w-full pl-12 pr-4 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-[#1A237E] text-sm"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                autoFocus
-              />
-            </div>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-1 hide-scrollbar">
-            {filteredOptions.length > 0 ? (
-              filteredOptions.map((opt) => (
-                <button
-                  key={opt}
-                  onClick={() => handleSelection(opt)}
-                  className={`w-full px-6 py-4 rounded-2xl text-left text-sm font-bold transition-all ${(selectionModal.type === 'state' ? selectedState : profileWatch('district')) === opt
-                    ? 'bg-[#1A237E]/10 text-[#1A237E] border-2 border-[#1A237E]/20'
-                    : 'text-gray-600 hover:bg-gray-50 hover:pl-8'
-                    }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span>{opt}</span>
-                    {(selectionModal.type === 'state' ? selectedState : profileWatch('district')) === opt && (
-                      <span className="material-symbols-rounded text-lg">check_circle</span>
-                    )}
-                  </div>
-                </button>
-              ))
-            ) : (
-              <div className="p-10 text-center">
-                <span className="material-symbols-rounded text-5xl text-gray-200">search_off</span>
-                <p className="text-gray-400 mt-2 font-bold">No results found</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
+// Modal and ScrollPicker moved outside to prevent remount issues
 
   useEffect(() => {
     if (dobDay && dobMonth && dobYear) {
@@ -226,49 +310,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
     }
   }, [dobDay, dobMonth, dobYear, setProfileValue]);
 
-  const ScrollPicker = ({ value, options, onChange, label }: { value: string, options: any[], onChange: (val: string) => void, label: string }) => {
-    const scrollRef = useRef<HTMLDivElement>(null);
-
-    useEffect(() => {
-      const index = options.findIndex(opt => opt.value === value);
-      if (index !== -1 && scrollRef.current) {
-        scrollRef.current.scrollTo({
-          top: index * 44,
-          behavior: 'smooth'
-        });
-      }
-    }, [value, options]);
-
-    return (
-      <div className="relative group flex-1">
-        <label className="text-[10px] uppercase tracking-[0.15em] text-[#1A237E] font-black mb-2 block text-center opacity-70">{label}</label>
-        <div className="relative h-36 overflow-hidden bg-white rounded-3xl border border-gray-100 shadow-[inset_0_2px_10px_rgba(0,0,0,0.02)]">
-          <div className="absolute top-1/2 left-0 right-0 h-11 -translate-y-1/2 bg-[#1A237E]/5 border-y border-[#1A237E]/10 pointer-events-none z-10 mx-2 rounded-xl"></div>
-
-          <div
-            ref={scrollRef}
-            className="h-full overflow-y-auto snap-y snap-mandatory hide-scrollbar flex flex-col items-center py-[62px]"
-          >
-            {options.map((opt, idx) => (
-              <div
-                key={idx}
-                onClick={() => onChange(opt.value)}
-                className={`h-11 shrink-0 flex items-center justify-center snap-center px-4 w-full transition-all duration-300 cursor-pointer z-20 ${value === opt.value
-                  ? 'text-[#1A237E] font-black text-lg scale-110'
-                  : 'text-gray-400 text-sm font-bold opacity-60'
-                  }`}
-              >
-                {opt.label}
-              </div>
-            ))}
-          </div>
-
-          <div className="absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-white via-white/80 to-transparent pointer-events-none z-10"></div>
-          <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-white via-white/80 to-transparent pointer-events-none z-10"></div>
-        </div>
-      </div>
-    );
-  };
+// ScrollPicker moved outside to prevent remount issues
 
   useEffect(() => {
     if (resendTimer > 0) {
@@ -1040,7 +1082,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
             )}
           </div>
           <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">Email</label>
+            <label className="text-xs font-semibold text-gray-600 block mb-1">Email *</label>
             <input
               type="email"
               {...profileReg('email')}
@@ -1091,50 +1133,6 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
               <input type="hidden" {...profileReg('district')} />
               {profileErrors.district && (
                 <p className="text-red-500 text-[10px] mt-1 font-bold">{profileErrors.district.message}</p>
-              )}
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">WhatsApp No *</label>
-              <input
-                type="tel"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                {...profileReg('whatsAppNumber')}
-                placeholder="10-digit number"
-                maxLength={10}
-                onKeyDown={(e) => {
-                  const val = e.currentTarget.value.replace(/\D/g, '');
-                  const allowed = ['Backspace','Delete','ArrowLeft','ArrowRight','Tab','Enter'];
-                  if (!allowed.includes(e.key) && !/^\d$/.test(e.key)) e.preventDefault();
-                  if (/^\d$/.test(e.key) && val.length >= 10) e.preventDefault();
-                }}
-                className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:border-[#303F9F] text-sm ${profileErrors.whatsAppNumber ? 'border-red-500' : 'border-gray-200'}`}
-              />
-              {profileErrors.whatsAppNumber && (
-                <p className="text-red-500 text-[10px] mt-1 font-bold">{profileErrors.whatsAppNumber.message}</p>
-              )}
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">Alternate No *</label>
-              <input
-                type="tel"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                {...profileReg('alternateNumber')}
-                placeholder="10-digit number"
-                maxLength={10}
-                onKeyDown={(e) => {
-                  const val = e.currentTarget.value.replace(/\D/g, '');
-                  const allowed = ['Backspace','Delete','ArrowLeft','ArrowRight','Tab','Enter'];
-                  if (!allowed.includes(e.key) && !/^\d$/.test(e.key)) e.preventDefault();
-                  if (/^\d$/.test(e.key) && val.length >= 10) e.preventDefault();
-                }}
-                className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:border-[#303F9F] text-sm ${profileErrors.alternateNumber ? 'border-red-500' : 'border-gray-200'}`}
-              />
-              {profileErrors.alternateNumber && (
-                <p className="text-red-500 text-[10px] mt-1 font-bold">{profileErrors.alternateNumber.message}</p>
               )}
             </div>
           </div>
@@ -1194,22 +1192,16 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
             <input type="hidden" {...profileReg('dob')} />
           </div>
           <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-2">Class</label>
-            <div className="grid grid-cols-3 gap-2">
-              {['9th', '10th', '11th', '12th', 'Dropper'].map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setProfileValue('class', c)}
-                  className={`py-3 rounded-xl text-sm font-bold transition-all border ${profileWatch('class') === c
-                    ? 'bg-[#1A237E] text-white border-[#1A237E] shadow-lg shadow-blue-900/20'
-                    : 'bg-white text-gray-500 border-gray-100 hover:border-gray-200'
-                    }`}
-                >
-                  {c}
-                </button>
-              ))}
-            </div>
+            <label className="text-xs font-semibold text-gray-600 block mb-1">Class *</label>
+            <button
+              type="button"
+              onClick={() => openSelection('class')}
+              className={`w-full px-4 py-3.5 border rounded-xl flex items-center justify-between text-sm transition-all ${profileErrors.class ? 'border-red-500' : 'border-gray-200'
+                } ${profileWatch('class') ? 'text-gray-800 font-bold' : 'text-gray-400 hover:border-gray-300'}`}
+            >
+              <span>{profileWatch('class') || 'Select Class'}</span>
+              <span className="material-symbols-rounded text-gray-400">expand_more</span>
+            </button>
             <input type="hidden" {...profileReg('class')} />
             {profileErrors.class && (
               <p className="text-red-500 text-[10px] mt-1 font-bold">{profileErrors.class.message}</p>
@@ -1324,7 +1316,21 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
           </div>
         </div>
       </div>
-      <SelectionModal />
+      <SelectionModal
+        isOpen={selectionModal.isOpen}
+        type={selectionModal.type}
+        onClose={() => setSelectionModal({ isOpen: false, type: null })}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        options={selectionModal.type === 'state'
+          ? Object.keys(indiaStateDistrictMap).sort()
+          : selectionModal.type === 'district'
+            ? availableDistricts.sort()
+            : ['9th', '10th', '11th', '12th', 'Dropper']
+        }
+        selectedValue={selectionModal.type === 'state' ? selectedState : selectionModal.type === 'district' ? profileWatch('district') : profileWatch('class')}
+        onSelect={handleSelection}
+      />
     </div>
   );
 };
