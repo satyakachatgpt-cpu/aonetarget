@@ -436,10 +436,12 @@ const StudyDashboard: React.FC = () => {
                   )}
 
                   {videos
-                    .filter(v => normalizeId(v.folderId) === currentFolderId && (activeSubject === 'All Subjects' || v.subject === activeSubject))
+                    .filter(v => normalizeId(v.folderId) === currentFolderId && (activeSubject === 'All Subjects' || v.subject === activeSubject) && 
+                      (v.contentType === 'recorded' || (v.contentType !== 'live_stream' && v.contentType !== 'youtube_zoom' && v.streamStatus !== 'live')))
                     .length > 0 ? (
                     videos
-                      .filter(v => normalizeId(v.folderId) === currentFolderId && (activeSubject === 'All Subjects' || v.subject === activeSubject))
+                      .filter(v => normalizeId(v.folderId) === currentFolderId && (activeSubject === 'All Subjects' || v.subject === activeSubject) && 
+                      (v.contentType === 'recorded' || (v.contentType !== 'live_stream' && v.contentType !== 'youtube_zoom' && v.streamStatus !== 'live')))
                       .map((video, idx) => (
                         <div key={video._id || idx} className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden group hover:border-brandBlue transition-all">
                           <div className="p-4 flex gap-4 items-center">

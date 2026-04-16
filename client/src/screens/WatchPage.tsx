@@ -3,11 +3,11 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import StudentVideoPlayer from '../components/student/StudentVideoPlayer';
 import Playlist from '../components/Playlist';
 import { getVideoUrl, toYouTubeEmbed, getEmbedUrl } from '../lib/utils';
-import { getAuthHeaders } from '../services/apiClient';
+import { getAuthHeaders, getAdminHeaders } from '../services/apiClient';
 
 function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
   const raw = (lc.streamStatus || lc.status || 'upcoming').toLowerCase();
-  if (['ended', 'completed', 'inactive'].includes(raw)) return 'ended';
+  if (['ended', 'completed', 'inactive', 'recorded'].includes(raw)) return 'ended';
   if (raw === 'live') return 'live';
   return 'upcoming';
 }
@@ -104,8 +104,9 @@ const WatchPage: React.FC = () => {
       }
       try {
         setLoading(true);
+        const headers = isAdmin ? { ...getAdminHeaders() } : { ...getAuthHeaders() };
         const response = await fetch(`/api/courses/${batchId}/videos`, {
-          headers: getAuthHeaders()
+          headers
         });
         const videos = await response.json();
 
@@ -189,7 +190,7 @@ const WatchPage: React.FC = () => {
   return (
     <StudentVideoPlayer
       videoId={String(currentVideo.id || currentVideo._id || '')}
-      src={toYouTubeEmbed(currentVideo.youtubeUrl || currentVideo.videoUrl || currentVideo.url || currentVideo.embedUrl || '')}
+      src={toYouTubeEmbed(currentVideo.recordedLink || currentVideo.youtubeUrl || currentVideo.videoUrl || currentVideo.url || currentVideo.embedUrl || '')}
       title={currentVideo.title}
       isLive={isLive}
       chatMessages={liveMessages}

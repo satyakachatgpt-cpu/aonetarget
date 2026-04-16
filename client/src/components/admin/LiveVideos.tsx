@@ -16,7 +16,7 @@ interface LiveSession {
   scheduledDate: string;
   scheduledTime: string;
   duration: number;
-  status: 'scheduled' | 'live' | 'ended' | 'cancelled';
+  status: 'scheduled' | 'live' | 'ended' | 'cancelled' | 'recorded';
   viewers?: number;
   notifyStudents: boolean;
   isRecurring: boolean;
@@ -194,7 +194,11 @@ const LiveVideos: React.FC<Props> = ({ showToast }) => {
 
   const updateStatus = async (session: LiveSession, newStatus: LiveSession['status']) => {
     try {
-      await liveVideosAPI.update(session.id, { ...session, status: newStatus });
+      const updateData = { ...session, status: newStatus };
+      if (newStatus === 'recorded') {
+        updateData.recordedLink = session.streamUrl;
+      }
+      await liveVideosAPI.update(session.id, updateData);
       showToast(`Session ${newStatus === 'live' ? 'is now LIVE!' : 'status updated'}`);
       loadData();
     } catch (error) {
@@ -207,6 +211,7 @@ const LiveVideos: React.FC<Props> = ({ showToast }) => {
       case 'live': return 'bg-red-500 text-white';
       case 'scheduled': return 'bg-amber-100 text-amber-700';
       case 'ended': return 'bg-gray-100 text-gray-600';
+      case 'recorded': return 'bg-blue-100 text-blue-600';
       case 'cancelled': return 'bg-red-100 text-red-600';
       default: return 'bg-gray-100 text-gray-600';
     }
@@ -240,7 +245,7 @@ const LiveVideos: React.FC<Props> = ({ showToast }) => {
   );
 
   const liveSessions = filteredSessions.filter(s => s.status === 'live');
-  const pastSessions = filteredSessions.filter(s => s.status === 'ended' || s.status === 'cancelled');
+  const pastSessions = filteredSessions.filter(s => s.status === 'ended' || s.status === 'cancelled' || s.status === 'recorded');
 
   const getCalendarDays = () => {
     const today = new Date();
@@ -320,7 +325,7 @@ const LiveVideos: React.FC<Props> = ({ showToast }) => {
               <span className="material-icons-outlined text-green-500 text-xl">check_circle</span>
             </div>
             <div>
-              <p className="text-2xl font-black text-gray-800">{pastSessions.filter(s => s.status === 'ended').length}</p>
+              <p className="text-2xl font-black text-gray-800">{pastSessions.filter(s => s.status === 'ended' || s.status === 'recorded').length}</p>
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Completed</p>
             </div>
           </div>
@@ -363,6 +368,7 @@ const LiveVideos: React.FC<Props> = ({ showToast }) => {
               <option value="all">All Status</option>
               <option value="live">Live Now</option>
               <option value="scheduled">Scheduled</option>
+              <option value="recorded">Recorded</option>
               <option value="ended">Ended</option>
               <option value="cancelled">Cancelled</option>
             </select>
@@ -484,7 +490,7 @@ const LiveVideos: React.FC<Props> = ({ showToast }) => {
                         Watch Stream
                       </button>
                       <button
-                        onClick={() => updateStatus(session, 'ended')}
+                        onClick={() => updateStatus(session, 'recorded')}
                         className="bg-gray-100 text-gray-600 px-3 py-1.5 rounded-lg text-[10px] font-black"
                       >
                         End Stream

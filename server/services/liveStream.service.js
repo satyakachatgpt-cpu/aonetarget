@@ -31,18 +31,25 @@ export async function syncLiveStream(id, data, operation = 'update') {
     const syncData = { ...data };
     
     // Metadata standardization
-    if (data.url || data.streamId || data.link || data.videoUrl) {
-      syncData.url = data.url || data.streamId || data.link || data.videoUrl;
+    if (data.url || data.streamId || data.link || data.videoUrl || data.streamUrl || data.recordedLink || data.liveLink) {
+      syncData.url = data.url || data.streamId || data.link || data.videoUrl || data.streamUrl || data.recordedLink || data.liveLink;
     }
     
     // Force Correct Classification
-    syncData.contentType = 'live_stream';
-    syncData.type = 'live';
-    
-    // Visibility vs Lifecycle Split
-    if (!syncData.status || syncData.status === 'upcoming' || syncData.status === 'live' || syncData.status === 'ended') {
-      if (!syncData.streamStatus) syncData.streamStatus = syncData.status || 'upcoming';
-      syncData.status = 'active'; 
+    if (data.status === 'recorded' || data.streamStatus === 'recorded') {
+      syncData.contentType = 'recorded';
+      syncData.type = 'recorded';
+      syncData.streamStatus = 'recorded';
+      syncData.status = 'active'; // In main videos collection, recorded is active
+    } else {
+      syncData.contentType = 'live_stream';
+      syncData.type = 'live';
+      
+      // Visibility vs Lifecycle Split
+      if (!syncData.status || syncData.status === 'upcoming' || syncData.status === 'live' || syncData.status === 'ended') {
+        if (!syncData.streamStatus) syncData.streamStatus = syncData.status || 'upcoming';
+        syncData.status = 'active'; 
+      }
     }
 
     if (data.pdf1Url) syncData.pdf1 = data.pdf1Url;

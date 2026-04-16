@@ -465,25 +465,34 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
   };
 
   const handleEndLiveStream = async (video: any) => {
-    if (!confirm(`End live stream "${video.title}"? This will mark it as ended for all students.`)) return;
+    if (!confirm(`End live stream "${video.title}"? This will mark it as ended and save as a recording.`)) return;
     try {
       const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
       const videoId = (video as any)._id || video.id;
       const adminToken = localStorage.getItem('adminToken');
-      await fetch(`${API_BASE_URL}/courses/${courseId}/videos/${videoId}`, {
+      const url = video.meetingLink || video.link || video.url || video.videoUrl;
+      const response = await fetch(`${API_BASE_URL}/courses/${courseId}/videos/${videoId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${adminToken}`
         },
-        body: JSON.stringify({ ...video, status: 'active', streamStatus: 'ended', endTime: new Date().toISOString() })
+        body: JSON.stringify({ 
+          ...video, 
+          status: 'active', 
+          streamStatus: 'recorded', 
+          recordedLink: url,
+          endTime: new Date().toISOString() 
+        })
       });
+      if (!response.ok) throw new Error('Failed to end stream');
+
       setVideos(prev => prev.map(v =>
         ((v as any)._id || v.id) === videoId
-          ? { ...v, streamStatus: 'ended' } as any
+          ? { ...v, streamStatus: 'recorded', contentType: 'recorded', type: 'recorded', recordedLink: url } as any
           : v
       ));
-      showToast('Live stream ended successfully', 'success');
+      showToast('Live stream ended and converted to recorded class', 'success');
     } catch { showToast('Failed to end live stream', 'error'); }
   };
 
@@ -2196,21 +2205,21 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
   };
 
   const renderContentItem = (item: any, level: number) => {
-    const isFolder = item.type === 'folder';
-    const isVideo = item.type === 'video';
-    const isNote = item.type === 'note';
-    const isTest = item.type === 'test';
+    const isFolder = item.type === 'folder' || item.contentType === 'folder';
+    const isVideo = item.type === 'video' || item.contentType === 'video' || item.contentType === 'recorded' || item.streamStatus === 'recorded';
+    const isNote = item.type === 'note' || item.contentType === 'note' || item.type === 'document' || item.contentType === 'document';
+    const isTest = item.type === 'test' || item.contentType === 'test';
     const itemId = normalizeId(item._id || item.id);
     const isExpanded = itemId ? expandedFolders.includes(itemId) : false;
     const isActiveUploadFolder = isFolder && currentFolder && normalizeId(currentFolder._id || currentFolder.id) === itemId;
-    const isLiveStream = item?.contentType === 'live_stream' || item?.type === 'live' || item?.streamType === 'live' || item?.platform === 'youtube_zoom';
+    const isLiveStream = (item?.contentType === 'live_stream' || item?.type === 'live' || item?.streamType === 'live' || item?.platform === 'youtube_zoom') && item?.streamStatus !== 'recorded' && item?.status !== 'recorded';
 
     const getCalculatedLiveStatus = (item: any) => {
       if (!isLiveStream) return null;
       // Strictly respect streamStatus for lifecycle, fallback to status only if it looks like a lifecycle status
       const lifecycleStatus = (item.streamStatus || (['upcoming', 'live', 'ended'].includes(item.status) ? item.status : 'upcoming')).toLowerCase();
 
-      if (['ended', 'inactive', 'completed', 'finished', 'disable'].includes(lifecycleStatus)) {
+      if (['ended', 'inactive', 'completed', 'finished', 'disable', 'recorded'].includes(lifecycleStatus)) {
         return 'ended';
       }
       if (lifecycleStatus === 'live') {
