@@ -270,7 +270,7 @@ export const deleteExamDocument = async (req, res) => {
 
 export const importCourseContent = async (req, res) => {
   try {
-    const { sourceCourseId, targetCourseId, itemIds, action } = req.body;
+    const { sourceCourseId, targetCourseId, targetFolderId, itemIds, action } = req.body;
     if (!sourceCourseId || !targetCourseId || !itemIds || !Array.isArray(itemIds)) {
       return res.status(400).json({ error: 'Missing required parameters' });
     }
@@ -347,7 +347,7 @@ export const importCourseContent = async (req, res) => {
     for (const itemId of itemIds) {
       const sourceFolder = await db.collection('folders').findOne({ $or: buildIdQuery(itemId) });
       if (sourceFolder) {
-        await processFolderRecursively(sourceFolder, targetCourseId, action, null);
+        await processFolderRecursively(sourceFolder, targetCourseId, action, targetFolderId || null);
         processedCount++;
       } else {
         for (const collName of contentCollections) {
@@ -362,13 +362,13 @@ export const importCourseContent = async (req, res) => {
               
               newItem.id = `${targetColl}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
               newItem.courseId = String(targetCourseId);
-              newItem.folderId = null;
+              newItem.folderId = targetFolderId || null;
               newItem.createdAt = new Date().toISOString();
               await db.collection(targetColl).insertOne(newItem);
             } else {
               await db.collection(collName).updateOne(
                 { _id: item._id },
-                { $set: { courseId: String(targetCourseId), folderId: null } }
+                { $set: { courseId: String(targetCourseId), folderId: targetFolderId || null } }
               );
             }
             processedCount++;
@@ -379,7 +379,8 @@ export const importCourseContent = async (req, res) => {
     }
     res.status(200).json({ success: true, processed: processedCount });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to process import action' });
+    console.error('importCourseContent logic error:', error);
+    res.status(500).json({ error: error.message || 'Failed to process import action' });
   }
 };
 
