@@ -2,12 +2,12 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import StudentVideoPlayer from '../components/student/StudentVideoPlayer';
 import Playlist from '../components/Playlist';
-import { getVideoUrl, toYouTubeEmbed, getEmbedUrl } from '../lib/utils';
-import { getAuthHeaders } from '../services/apiClient';
+import { getVideoUrl, toYouTubeEmbed, getEmbedUrl, normalizeId } from '../lib/utils';
+import { getAuthHeaders, getAdminHeaders } from '../services/apiClient';
 
 function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
   const raw = (lc.streamStatus || lc.status || 'upcoming').toLowerCase();
-  if (['ended', 'completed', 'inactive'].includes(raw)) return 'ended';
+  if (['ended', 'completed', 'inactive', 'recorded'].includes(raw)) return 'ended';
   if (raw === 'live') return 'live';
   return 'upcoming';
 }
@@ -104,18 +104,19 @@ const WatchPage: React.FC = () => {
       }
       try {
         setLoading(true);
+        const headers = isAdmin ? { ...getAdminHeaders() } : { ...getAuthHeaders() };
         const response = await fetch(`/api/courses/${batchId}/videos`, {
-          headers: getAuthHeaders()
+          headers
         });
         const videos = await response.json();
 
         if (Array.isArray(videos) && videos.length > 0) {
           setPlaylist(videos);
-          const targetId = String(videoId || '').toLowerCase();
+          const targetId = normalizeId(videoId);
 
           let current = videos.find((v: any) => {
-            const ids = [v._id, v.id, v.videoId].filter(Boolean).map(String);
-            return ids.some(id => id.toLowerCase() === targetId);
+            const ids = [v._id, v.id, v.videoId].filter(Boolean).map(normalizeId);
+            return ids.includes(targetId);
           });
 
           if (!current && videos.length > 0) current = videos[0];
@@ -155,7 +156,22 @@ const WatchPage: React.FC = () => {
     );
   }
 
-  if (!currentVideo) return null;
+  if (!currentVideo) {
+    return (
+      <div className="h-[100dvh] bg-[#000000] flex flex-col items-center justify-center overflow-hidden font-outfit relative">
+        <div onClick={() => navigate(-1)} className="fixed top-0 left-0 w-24 h-24 z-[9999999] cursor-pointer group flex items-start justify-start p-6 active:scale-90 transition-all">
+          <div className="w-10 h-10 bg-white/10 hover:bg-red-600/80 backdrop-blur-3xl border border-white/20 rounded-full text-white flex items-center justify-center shadow-2xl transition-all duration-200">
+            <span className="material-symbols-rounded text-2xl font-bold">arrow_back</span>
+          </div>
+        </div>
+        <div className="relative w-24 h-24 mb-6 bg-white/5 rounded-full flex items-center justify-center text-white/20">
+          <span className="material-symbols-rounded text-5xl">video_off</span>
+        </div>
+        <h2 className="text-white text-xl font-black uppercase tracking-widest mb-2 text-center">Video Not Found</h2>
+        <p className="text-white/40 text-xs font-bold uppercase tracking-[0.2em] text-center max-w-xs">The requested video could not be loaded or has been removed.</p>
+      </div>
+    );
+  }
 
   const isUpcomingStream = currentVideo.contentType === 'live_stream' && computeEffectiveStatus(currentVideo) !== 'live';
 
@@ -189,7 +205,7 @@ const WatchPage: React.FC = () => {
   return (
     <StudentVideoPlayer
       videoId={String(currentVideo.id || currentVideo._id || '')}
-      src={toYouTubeEmbed(currentVideo.youtubeUrl || currentVideo.videoUrl || currentVideo.url || currentVideo.embedUrl || '')}
+      src={toYouTubeEmbed(currentVideo.recordedLink || currentVideo.youtubeUrl || currentVideo.videoUrl || currentVideo.url || currentVideo.embedUrl || '')}
       title={currentVideo.title}
       isLive={isLive}
       chatMessages={liveMessages}

@@ -35,7 +35,7 @@ const VideoPlayer: React.FC = () => {
 
   if (!video) return null;
 
-  const videoUrl = toYouTubeEmbed(video.youtubeUrl || video.videoUrl || video.url || '');
+  const videoUrl = toYouTubeEmbed(video.recordedLink || video.youtubeUrl || video.videoUrl || video.url || '');
 
   const handleMarkDone = () => {
     // We could call an API here if needed, but for now just navigate back

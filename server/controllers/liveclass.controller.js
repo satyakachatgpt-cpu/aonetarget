@@ -21,6 +21,10 @@ const calculateStreamStatus = (item) => {
     return 'live';
   }
   
+  if (lifecycleStatus === 'recorded') {
+    return 'recorded';
+  }
+  
   return 'upcoming';
 };
 

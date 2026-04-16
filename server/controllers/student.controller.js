@@ -277,6 +277,7 @@ export const updateStudent = async (req, res) => {
 
 export const deleteStudent = async (req, res) => {
   try {
+    const db = getDb();
     console.log('DELETE /api/students/:id - Deleting student:', req.params.id);
     const result = await Student.findOneAndDelete({ id: req.params.id });
     if (!result) {
@@ -338,6 +339,7 @@ export const deleteAllStudents = async (req, res) => {
 
 export const bulkCreateStudents = async (req, res) => {
   try {
+    const db = getDb();
     const { students } = req.body;
     if (!Array.isArray(students) || students.length === 0) return res.status(400).json({ error: 'No students provided' });
     const result = await Student.insertMany(students);
@@ -349,6 +351,7 @@ export const bulkCreateStudents = async (req, res) => {
 
 export const updateAllStudents = async (req, res) => {
   try {
+    const db = getDb();
     const { updates } = req.body;
     if (!Array.isArray(updates)) return res.status(400).json({ error: 'Updates must be an array' });
     for (const update of updates) {
