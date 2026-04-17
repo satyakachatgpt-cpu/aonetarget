@@ -15,6 +15,7 @@ import {
   startChat,
   getChatMessages,
   sendChatMessage,
+  editChatMessage,
   markChatAsRead,
   getLiveChatMessages,
   sendLiveChatMessage
@@ -42,6 +43,7 @@ router.get('/chats/unread/admin', adminMiddleware, getUnreadAdminCount);
 router.post('/chats/start', authMiddleware, startChat);
 router.get('/chats/:chatId/messages', authMiddleware, getChatMessages);
 router.post('/chats/:chatId/messages', authMiddleware, sendChatMessage);
+router.put('/chats/:chatId/messages/:messageId', authMiddleware, editChatMessage);
 router.put('/chats/:chatId/read', authMiddleware, markChatAsRead);
 
 // Live Chat (Phase 19D)
