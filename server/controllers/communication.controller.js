@@ -5,7 +5,7 @@ import { findCourse, getRelatedCourseIds } from '../services/course.service.js';
 const { ObjectId } = mongoose.Types;
 
 function isAdminRequest(req) {
-  return req.admin || req.user?.isAdmin || req.user?.role === 'admin';
+  return !!(req.admin || req.user?.isAdmin || req.user?.role === 'admin');
 }
 
 function studentIdentityVariants(req) {
@@ -300,7 +300,31 @@ export const getChatMessages = async (req, res) => {
       .find({ chatId: req.params.chatId })
       .sort({ createdAt: 1 })
       .toArray();
-    res.json(messages);
+
+    // Normalization for legacy records (Phase 19D compatibility)
+    const normalized = messages.map(msg => {
+      const type = msg.senderType;
+      const sId = String(msg.senderId || '');
+      const sName = String(msg.senderName || '').toLowerCase();
+
+      // Case 1: Explicitly saved correctly as admin
+      if (type === 'admin') return msg;
+
+      // Case 2: Strict admin identity patterns
+      const isSystemAdmin = sId === 'admin' || sId.startsWith('admin_');
+      
+      // Case 3: Identity-Name match (Safe combined indicator)
+      const isIndicatedAdmin = (sName.includes('admin')) && (sId.toLowerCase().includes('admin'));
+
+      if (isSystemAdmin || isIndicatedAdmin) {
+        return { ...msg, senderType: 'admin' };
+      }
+
+      // Case 4: Default fallback for any uncertainty is student (safer)
+      return { ...msg, senderType: type === 'admin' ? 'admin' : 'student' };
+    });
+
+    res.json(normalized);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch chat messages' });
   }
@@ -310,10 +334,23 @@ export const sendChatMessage = async (req, res) => {
   try {
     const { chatId } = req.params;
     if (!await assertChatAccess(req, res, chatId)) return;
-    const { senderId, senderName, senderType, message } = req.body;
-    const effectiveSenderType = isAdminRequest(req) ? (senderType || 'admin') : 'student';
-    const effectiveSenderId = isAdminRequest(req) ? (senderId || req.user?.adminId || req.user?.id) : req.user?.studentId;
-    const effectiveSenderName = isAdminRequest(req) ? (senderName || req.user?.name || 'Admin') : (req.user?.name || senderName || 'Student');
+    const { senderId, senderName, message } = req.body;
+    
+    // PRODUCTION-GRADE ROLE ENFORCEMENT
+    // 1. Determine role strictly from server-side session, NOT client payload.
+    const isVerifiedAdmin = isAdminRequest(req);
+    const effectiveSenderType = isVerifiedAdmin ? 'admin' : 'student';
+
+    // 2. Determine safe sender identification markers.
+    const effectiveSenderId = isVerifiedAdmin 
+      ? (req.admin?.id || req.user?.adminId || 'admin') 
+      : (req.user?.studentId || senderId);
+    
+    // 3. Determine safe display name.
+    const effectiveSenderName = isVerifiedAdmin 
+      ? (senderName || req.user?.name || 'Admin') 
+      : (req.user?.name || senderName || 'Student');
+
     const msgId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
     const chatMessage = {
       id: msgId,
@@ -342,6 +379,55 @@ export const sendChatMessage = async (req, res) => {
     res.status(201).json(chatMessage);
   } catch (error) {
     res.status(500).json({ error: 'Failed to send message' });
+  }
+};
+
+export const editChatMessage = async (req, res) => {
+  try {
+    const { chatId, messageId } = req.params;
+    const { message } = req.body;
+    
+    if (!await assertChatAccess(req, res, chatId)) return;
+    
+    const chatMsg = await db.collection('chatMessages').findOne({ id: messageId });
+    if (!chatMsg) return res.status(404).json({ error: 'Message not found' });
+    
+    const isVerifiedAdmin = isAdminRequest(req);
+    const isOwner = !isVerifiedAdmin && studentIdentityVariants(req).includes(String(chatMsg.senderId));
+    const isAdminEditingOwn = isVerifiedAdmin && chatMsg.senderType === 'admin';
+
+    if (!isOwner && !isAdminEditingOwn) {
+      return res.status(403).json({ error: 'Unauthorized to edit this message' });
+    }
+
+    const result = await db.collection('chatMessages').updateOne(
+      { id: messageId },
+      { $set: { message, updatedAt: new Date(), isEdited: true } }
+    );
+    
+    if (result.matchedCount === 0) {
+      console.warn(`Edit failed: Message ${messageId} not found in DB`);
+      return res.status(404).json({ error: 'Message not found' });
+    }
+    
+    // Safety: ensure we also update the chat's lastMessage summary if this was the latest message
+    const latestMessages = await db.collection('chatMessages')
+      .find({ chatId })
+      .sort({ createdAt: -1 })
+      .limit(1)
+      .toArray();
+      
+    if (latestMessages.length > 0 && latestMessages[0].id === messageId) {
+      await db.collection('chats').updateOne(
+        { id: chatId },
+        { $set: { lastMessage: message, updatedAt: new Date() } }
+      );
+    }
+
+    res.json({ success: true, message: 'Message updated successfully' });
+  } catch (error) {
+    console.error('Error editing chat message:', error);
+    res.status(500).json({ error: 'Server error while saving edit' });
   }
 };
 

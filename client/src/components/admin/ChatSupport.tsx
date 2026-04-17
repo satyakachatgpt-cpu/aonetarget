@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getAdminHeaders } from '../../services/apiClient';
 
 interface Chat {
   id: string;
@@ -20,6 +21,7 @@ interface ChatMessage {
   senderType: 'student' | 'admin';
   message: string;
   createdAt: string;
+  isEdited?: boolean;
 }
 
 interface Props {
@@ -44,9 +46,17 @@ const ChatSupport: React.FC<Props> = ({ showToast }) => {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [actionMenu, setActionMenu] = useState<{ x: number, y: number, msg: ChatMessage } | null>(null);
+  const [editingMsg, setEditingMsg] = useState<ChatMessage | null>(null);
+  const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
+  const longPressTimer = useRef<any>(null);
+  const touchStartPos = useRef<{ x: number, y: number } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<any>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const chatPanelRef = useRef<HTMLDivElement>(null);
+
+  const messagesRef = useRef<ChatMessage[]>([]); // Ref to track current messages for polling comparison
 
   useEffect(() => {
     fetchChats();
@@ -68,7 +78,7 @@ const ChatSupport: React.FC<Props> = ({ showToast }) => {
 
   const fetchChats = async () => {
     try {
-      const r = await fetch('/api/chats');
+      const r = await fetch('/api/chats', { headers: getAdminHeaders() });
       const d = await r.json();
       setChats(Array.isArray(d) ? d : []);
     } catch (e) { console.error(e); } finally { setLoading(false); }
@@ -76,16 +86,20 @@ const ChatSupport: React.FC<Props> = ({ showToast }) => {
 
   const fetchMessages = async (id: string) => {
     try {
-      const r = await fetch(`/api/chats/${id}/messages`);
+      const r = await fetch(`/api/chats/${id}/messages`, { headers: getAdminHeaders() });
       const d = await r.json();
-      setMessages(Array.isArray(d) ? d : []);
+      const newMessages = Array.isArray(d) ? d : [];
+      if (JSON.stringify(newMessages) !== JSON.stringify(messagesRef.current)) {
+        setMessages(newMessages);
+        messagesRef.current = newMessages;
+      }
     } catch (e) { console.error(e); }
   };
 
   const markRead = async (id: string) => {
     try {
       await fetch(`/api/chats/${id}/read`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
         body: JSON.stringify({ readerType: 'admin' })
       });
       setChats(p => p.map(c => c.id === id ? { ...c, unreadAdmin: 0 } : c));
@@ -96,12 +110,77 @@ const ChatSupport: React.FC<Props> = ({ showToast }) => {
     if (!newMessage.trim() || !selectedChat || sending) return;
     setSending(true);
     try {
-      const r = await fetch(`/api/chats/${selectedChat.id}/messages`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ senderId: 'admin', senderName: 'Admin', senderType: 'admin', message: newMessage.trim() })
-      });
-      if (r.ok) { setNewMessage(''); await fetchMessages(selectedChat.id); fetchChats(); inputRef.current?.focus(); }
-    } catch (_) { showToast('Failed to send message', 'error'); } finally { setSending(false); }
+      if (editingMsg) {
+        const r = await fetch(`/api/chats/${selectedChat.id}/messages/${editingMsg.id}`, {
+          method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
+          body: JSON.stringify({ message: newMessage.trim() })
+        });
+        if (r.ok) { setEditingMsg(null); setNewMessage(''); await fetchMessages(selectedChat.id); fetchChats(); }
+      } else {
+        const r = await fetch(`/api/chats/${selectedChat.id}/messages`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
+          body: JSON.stringify({ senderId: 'admin', senderName: 'Admin', senderType: 'admin', message: newMessage.trim() })
+        });
+        if (r.ok) { setNewMessage(''); await fetchMessages(selectedChat.id); fetchChats(); inputRef.current?.focus(); }
+      }
+    } catch (_) { showToast('Failed to process message', 'error'); } finally { setSending(false); }
+  };
+
+  const handleCopy = (text: string) => {
+    if (!navigator.clipboard) {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.select();
+      try { document.execCommand('copy'); showToast('Copied to clipboard'); } catch (err) { console.error('Copy failed', err); }
+      document.body.removeChild(textArea);
+    } else {
+      navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard')).catch(err => console.error('Copy failed', err));
+    }
+    setActionMenu(null);
+  };
+
+  const handleOpenMenu = (x: number, y: number, msg: ChatMessage) => {
+    const menuWidth = 130;
+    const menuHeight = 100;
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+
+    let top = y;
+    let left = x;
+
+    if (chatPanelRef.current) {
+      const rect = chatPanelRef.current.getBoundingClientRect();
+      if (x + menuWidth > rect.right - 10) left = x - menuWidth;
+      if (left < rect.left + 10) left = rect.left + 10;
+      if (y + menuHeight > rect.bottom - 10) top = y - menuHeight;
+      if (top < rect.top + 10) top = rect.top + 10;
+    }
+
+    setMenuStyle({ top, left });
+    setActionMenu({ x, y, msg });
+  };
+
+  const onTouchStart = (e: React.TouchEvent | React.MouseEvent, msg: ChatMessage) => {
+    const x = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const y = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    touchStartPos.current = { x, y };
+    longPressTimer.current = setTimeout(() => handleOpenMenu(x, y, msg), 600);
+  };
+
+  const onTouchMove = (e: React.TouchEvent | React.MouseEvent) => {
+    if (!touchStartPos.current) return;
+    const x = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    const y = 'touches' in e ? e.touches[0].clientY : e.clientY;
+    const dist = Math.sqrt(Math.pow(x - touchStartPos.current.x, 2) + Math.pow(y - touchStartPos.current.y, 2));
+    if (dist > 10) clearTimeout(longPressTimer.current);
+  };
+
+  const onTouchEnd = () => clearTimeout(longPressTimer.current);
+
+  const onContextMenu = (e: React.MouseEvent, msg: ChatMessage) => {
+    e.preventDefault();
+    handleOpenMenu(e.clientX, e.clientY, msg);
   };
 
   const fmtTime = (d: string) => {
@@ -179,7 +258,9 @@ const ChatSupport: React.FC<Props> = ({ showToast }) => {
         border: '1.5px solid #E5E7EB',
         background: '#fff',
         boxShadow: '0 2px 16px rgba(0,0,0,0.06)',
-      }}>
+      }}
+      ref={chatPanelRef}
+    >
 
         {/* ══ Sidebar ══ */}
         <div style={{
@@ -378,7 +459,14 @@ const ChatSupport: React.FC<Props> = ({ showToast }) => {
                         display: 'flex', alignItems: 'flex-end',
                         gap: 8, marginBottom: 2,
                         justifyContent: isAdmin ? 'flex-end' : 'flex-start',
-                      }}>
+                      }}
+                      onContextMenu={(e) => onContextMenu(e, msg)}
+                      onPointerDown={(e) => onTouchStart(e, msg)}
+                      onPointerMove={onTouchMove}
+                      onPointerUp={onTouchEnd}
+                      onPointerLeave={onTouchEnd}
+                      onPointerCancel={onTouchEnd}
+                      >
                         {!isAdmin && (
                           <div style={{
                             width: 28, height: 28, borderRadius: 8,
@@ -410,6 +498,7 @@ const ChatSupport: React.FC<Props> = ({ showToast }) => {
                             marginTop: 4, fontSize: 10,
                             color: isAdmin ? 'rgba(255,255,255,0.5)' : '#C4CAD4',
                           }}>
+                            {msg.isEdited && <span style={{ fontStyle: 'italic', fontWeight: 500, opacity: 0.8 }}>Edited</span>}
                             <span>{fmtMsg(msg.createdAt)}</span>
                             {isAdmin && (
                               <span className="material-icons-outlined" style={{ fontSize: 12 }}>done_all</span>
@@ -433,14 +522,83 @@ const ChatSupport: React.FC<Props> = ({ showToast }) => {
                 <div ref={messagesEndRef} />
               </div>
 
+              {/* Action Menu */}
+              {actionMenu && (
+                <div 
+                  style={{ position: 'fixed', inset: 0, zIndex: 999 }} 
+                  onClick={() => setActionMenu(null)}
+                >
+                  <div
+                    style={{
+                      position: 'absolute', background: '#fff', borderRadius: 12,
+                      boxShadow: '0 4px 20px rgba(0,0,0,0.15)', padding: '4px 0',
+                      minWidth: 130, border: '1px solid #F3F4F6', ...menuStyle
+                    }}
+                  >
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleCopy(actionMenu.msg.message); }}
+                      style={{
+                        width: '100%', border: 'none', background: 'none', padding: '9px 16px',
+                        display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                        fontSize: 13, color: '#374151'
+                      }}
+                      onMouseEnter={e => (e.currentTarget.style.background = '#F9FAFB')}
+                      onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                    >
+                      <span className="material-icons-outlined" style={{ fontSize: 18, color: '#9CA3AF' }}>content_copy</span>
+                      <span>Copy</span>
+                    </button>
+                    {actionMenu.msg.senderType === 'admin' && (
+                      <button
+                        onClick={(e) => { 
+                          e.stopPropagation(); 
+                          setEditingMsg(actionMenu.msg); 
+                          setNewMessage(actionMenu.msg.message); 
+                          setActionMenu(null); 
+                          inputRef.current?.focus();
+                        }}
+                        style={{
+                          width: '100%', border: 'none', borderTop: '1px solid #F3F4F6',
+                          background: 'none', padding: '9px 16px',
+                          display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                          fontSize: 13, color: '#374151'
+                        }}
+                        onMouseEnter={e => (e.currentTarget.style.background = '#F9FAFB')}
+                        onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                      >
+                        <span className="material-icons-outlined" style={{ fontSize: 18, color: '#9CA3AF' }}>edit</span>
+                        <span>Edit</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Input bar */}
               <div style={{
-                padding: '10px 16px',
                 borderTop: '1px solid #F3F4F6',
                 background: '#fff',
-                display: 'flex', alignItems: 'center', gap: 8,
+                display: 'flex', flexDirection: 'column',
                 flexShrink: 0,
               }}>
+                {editingMsg && (
+                  <div style={{
+                    padding: '6px 16px', background: '#EEF2FF', borderBottom: '1px solid #E0E7FF',
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+                  }}>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#1A237E', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span className="material-icons-outlined" style={{ fontSize: 14 }}>edit</span>
+                      Editing Message
+                    </span>
+                    <button 
+                      onClick={() => { setEditingMsg(null); setNewMessage(''); }}
+                      style={{ border: 'none', background: 'none', color: '#1A237E', cursor: 'pointer', padding: 4 }}
+                    >
+                      <span className="material-icons-outlined" style={{ fontSize: 16 }}>close</span>
+                    </button>
+                  </div>
+                )}
+                <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span className="material-icons-outlined" style={{ fontSize: 20, color: '#C4CAD4', flexShrink: 0, cursor: 'pointer' }}>sentiment_satisfied_alt</span>
 
                 <input
@@ -473,24 +631,29 @@ const ChatSupport: React.FC<Props> = ({ showToast }) => {
                   onClick={sendMessage}
                   disabled={!newMessage.trim() || sending}
                   style={{
-                    width: 40, height: 40,
-                    borderRadius: 10,
-                    background: !newMessage.trim() || sending ? '#F3F4F6' : '#111827',
-                    border: 'none',
-                    cursor: !newMessage.trim() || sending ? 'not-allowed' : 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    width: 36, height: 36, borderRadius: 10,
+                    background: !newMessage.trim() || sending ? '#F3F4F6' : '#1A237E',
                     color: !newMessage.trim() || sending ? '#9CA3AF' : '#fff',
-                    transition: 'background 0.15s',
-                    flexShrink: 0,
+                    border: 'none', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.2s',
                   }}
                 >
-                  {sending
-                    ? <div style={{ width: 16, height: 16, border: '2px solid rgba(0,0,0,0.15)', borderTopColor: '#111', borderRadius: '50%', animation: 'chat-spin 0.7s linear infinite' }} />
-                    : <span className="material-icons-outlined" style={{ fontSize: 18 }}>send</span>
-                  }
+                  {sending ? (
+                    <div style={{
+                      width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)',
+                      borderTopColor: '#fff', borderRadius: '50%',
+                      animation: 'chat-spin 0.6s linear infinite'
+                    }} />
+                  ) : editingMsg ? (
+                    <span className="material-icons-outlined" style={{ fontSize: 20 }}>check</span>
+                  ) : (
+                    <span className="material-icons-outlined" style={{ fontSize: 20 }}>send</span>
+                  )}
                 </button>
               </div>
-            </>
+            </div>
+          </>
           ) : (
             /* Empty state — same minimal style */
             <div style={{

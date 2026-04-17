@@ -1681,7 +1681,19 @@ export const chatsAPI = {
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify({ readerType }),
     });
-    if (!response.ok) throw new Error('Failed to mark as read');
+    if (!response.ok) throw new Error('Failed to mark chat as read');
+    return response.json();
+  },
+  editMessage: async (chatId: string, messageId: string, message: string) => {
+    const response = await fetch(`${API_BASE_URL}/chats/${chatId}/messages/${messageId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+      body: JSON.stringify({ message })
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to edit message');
+    }
     return response.json();
   }
 };
