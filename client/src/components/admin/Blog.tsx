@@ -38,6 +38,7 @@ const Blog: React.FC<Props> = ({ showToast }) => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [formData, setFormData] = useState({
@@ -91,10 +92,12 @@ const Blog: React.FC<Props> = ({ showToast }) => {
   const paginatedPosts = filteredPosts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const handleSubmit = async () => {
-    if (!formData.title.trim() || !formData.content.trim()) {
+    if (!formData.title?.trim() || !formData.content?.trim()) {
       showToast('Title and content are required', 'error');
       return;
     }
+    if (isSaving) return;
+    setIsSaving(true);
     try {
       const postData = {
         id: editingPost?.id || `post_${Date.now()}`,
@@ -130,6 +133,8 @@ const Blog: React.FC<Props> = ({ showToast }) => {
       loadPosts();
     } catch (error) {
       showToast('Failed to save post', 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -426,7 +431,7 @@ const Blog: React.FC<Props> = ({ showToast }) => {
                 type="text"
                 placeholder="News title"
                 value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                 className="w-full h-[54px] px-5 border border-gray-200 rounded-2xl text-[15px] font-medium outline-none focus:border-navy transition-all placeholder:text-gray-300 bg-white shadow-sm"
               />
             </div>
@@ -438,7 +443,7 @@ const Blog: React.FC<Props> = ({ showToast }) => {
                   type="text"
                   placeholder="Author name"
                   value={formData.author}
-                  onChange={(e) => setFormData({ ...formData, author: e.target.value })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, author: e.target.value }))}
                   className="w-full h-[54px] px-5 border border-gray-200 rounded-2xl text-[15px] font-medium outline-none focus:border-navy transition-all placeholder:text-gray-300 bg-white shadow-sm"
                 />
               </div>
@@ -448,7 +453,7 @@ const Blog: React.FC<Props> = ({ showToast }) => {
                   type="text"
                   placeholder="e.g. Technology"
                   value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value }))}
                   className="w-full h-[54px] px-5 border border-gray-200 rounded-2xl text-[15px] font-medium outline-none focus:border-navy transition-all placeholder:text-gray-300 bg-white shadow-sm"
                 />
               </div>
@@ -460,7 +465,7 @@ const Blog: React.FC<Props> = ({ showToast }) => {
               <textarea
                 placeholder="Short summary"
                 value={formData.excerpt}
-                onChange={(e) => setFormData({ ...formData, excerpt: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, excerpt: e.target.value }))}
                 rows={2}
                 className="w-full h-[90px] px-5 py-4 border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-navy transition-all resize-none placeholder:text-gray-300 bg-white shadow-sm"
               />
@@ -471,7 +476,7 @@ const Blog: React.FC<Props> = ({ showToast }) => {
               <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm">
                 <RichTextEditor
                   content={formData.content}
-                  onChange={(html) => setFormData({ ...formData, content: html })}
+                  onChange={(html) => setFormData(prev => ({ ...prev, content: html }))}
                   height="450px"
                 />
               </div>
@@ -528,14 +533,14 @@ const Blog: React.FC<Props> = ({ showToast }) => {
                 <div className="flex bg-[#f8fafc] p-1.5 rounded-[20px] w-full border border-gray-100 h-[54px]">
                   <button
                     type="button"
-                    onClick={() => setFormData({ ...formData, status: 'draft' })}
+                    onClick={() => setFormData(prev => ({ ...prev, status: 'draft' }))}
                     className={`flex-1 text-[13px] font-bold rounded-xl transition-all ${formData.status === 'draft' ? 'bg-white text-gray-900 shadow-sm border border-gray-100/50' : 'text-gray-400 hover:text-gray-600'}`}
                   >
                     Draft
                   </button>
                   <button
                     type="button"
-                    onClick={() => setFormData({ ...formData, status: 'published' })}
+                    onClick={() => setFormData(prev => ({ ...prev, status: 'published' }))}
                     className={`flex-1 text-[13px] font-bold rounded-xl transition-all ${formData.status === 'published' ? 'bg-white text-gray-900 shadow-sm border border-gray-100/50' : 'text-gray-400 hover:text-gray-600'}`}
                   >
                     Published
@@ -549,7 +554,7 @@ const Blog: React.FC<Props> = ({ showToast }) => {
                   type="text"
                   placeholder="Comma separated"
                   value={formData.tags}
-                  onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, tags: e.target.value }))}
                   className="w-full h-[54px] px-5 border border-gray-200 rounded-2xl text-[15px] font-medium outline-none focus:border-navy transition-all bg-white shadow-sm placeholder:text-gray-300"
                 />
               </div>
@@ -559,7 +564,7 @@ const Blog: React.FC<Props> = ({ showToast }) => {
                 <input
                   type="date"
                   value={formData.publishDate}
-                  onChange={(e) => setFormData({ ...formData, publishDate: e.target.value })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, publishDate: e.target.value }))}
                   className="w-full h-[54px] px-5 border border-gray-200 rounded-2xl text-[15px] font-medium outline-none focus:border-navy transition-all bg-white shadow-sm text-gray-700"
                 />
               </div>
@@ -570,7 +575,7 @@ const Blog: React.FC<Props> = ({ showToast }) => {
                   <input
                     type="checkbox"
                     checked={formData.featured}
-                    onChange={(e) => setFormData({ ...formData, featured: e.target.checked })}
+                    onChange={(e) => setFormData(prev => ({ ...prev, featured: e.target.checked }))}
                     className="w-5 h-5 rounded border-gray-200 accent-navy"
                   />
                   <span className="text-[13px] font-bold text-gray-700">Featured News</span>
@@ -588,9 +593,11 @@ const Blog: React.FC<Props> = ({ showToast }) => {
               </button>
               <button
                 onClick={handleSubmit}
-                className="flex-1 bg-[#1A237E] text-white h-[56px] rounded-xl font-black uppercase hover:bg-[#151b60] transition-all shadow-lg active:scale-95"
+                disabled={isSaving}
+                className={`flex-1 ${isSaving ? 'bg-gray-400' : 'bg-[#1A237E] hover:bg-[#151b60]'} text-white h-[56px] rounded-xl font-black uppercase transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2`}
               >
-                {editingPost ? 'Update News' : 'Create News'}
+                {isSaving && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
+                {isSaving ? 'Saving...' : (editingPost ? 'Update News' : 'Create News')}
               </button>
             </div>
 
