@@ -2739,18 +2739,23 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                       {(q?.displayOptions || []).map(
                         (opt: any, oidx: number) => {
                           const optionLabel = String.fromCharCode(65 + oidx);
+                          // If correctAnswer is set (e.g. from bulk edit), use ONLY that.
+                          // Otherwise fall back to opt.isCorrect (legacy flag).
+                          const isCorrect = q?.correctAnswer
+                            ? q.correctAnswer.toUpperCase() === optionLabel
+                            : !!opt?.isCorrect;
                           return (
                             <div
                               key={oidx}
-                              className={`rounded-xl border shadow-sm overflow-hidden transition-all hover:shadow-md flex flex-col ${opt?.isCorrect ? "border-[#82B366] ring-1 ring-[#82B366]/20" : "border-gray-100"}`}
+                              className={`rounded-xl border shadow-sm overflow-hidden transition-all hover:shadow-md flex flex-col ${isCorrect ? "border-[#82B366] ring-1 ring-[#82B366]/20" : "border-gray-100"}`}
                             >
                               <div
-                                className={`px-4 py-2.5 border-b flex items-center justify-between gap-2 ${opt?.isCorrect ? "bg-[#D5E8D4]/40 border-[#82B366] text-[#2E7D32]" : "bg-[#fcfcfc] border-gray-100 text-gray-500"}`}
+                                className={`px-4 py-2.5 border-b flex items-center justify-between gap-2 ${isCorrect ? "bg-[#D5E8D4]/40 border-[#82B366] text-[#2E7D32]" : "bg-[#fcfcfc] border-gray-100 text-gray-500"}`}
                               >
                                 <span className="text-[11px] font-black uppercase tracking-widest">
                                   Option {optionLabel}
                                 </span>
-                                {opt?.isCorrect && (
+                                {isCorrect && (
                                   <span className="material-symbols-outlined text-[18px] font-black">
                                     check_circle
                                   </span>
