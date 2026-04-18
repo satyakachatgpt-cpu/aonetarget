@@ -15,26 +15,40 @@ export const getAllTests = async (req, res) => {
     const startTimeMetric = Date.now();
     const { courseId } = req.query;
 
-    const aggregation = [
-      { $match: courseId ? { courseId } : {} },
-      {
-        $lookup: {
-          from: 'questions',
-          localField: 'id',
-          foreignField: 'testId',
-          as: 'qList'
-        }
-      },
-      {
-        $addFields: {
-          id: { $ifNull: ['$id', { $toString: '$_id' }] },
-          questions: { $size: '$qList' }
-        }
-      },
-      { $project: { qList: 0 } }
-    ];
+    const matchStage = courseId ? { courseId } : {};
+    const tests = await db.collection('tests').find(matchStage).toArray();
 
-    const testsWithCounts = await db.collection('tests').aggregate(aggregation).toArray();
+    // Count questions accurately for each test using OR conditions (handles both 'id' and '_id')
+    const testsWithCounts = await Promise.all(tests.map(async (test) => {
+      const testId = test.id ? String(test.id) : null;
+      const testObjectId = test._id ? test._id.toString() : null;
+
+      const orConditions = [];
+      if (testId) {
+        orConditions.push({ testId: testId });
+        if (!isNaN(testId)) orConditions.push({ testId: Number(testId) });
+      }
+      if (testObjectId && testObjectId !== testId) {
+        orConditions.push({ testId: testObjectId });
+        if (ObjectId.isValid(testObjectId)) {
+          orConditions.push({ testId: new ObjectId(testObjectId) });
+        }
+      }
+      // also check for "test_ID" format
+      if (testId) orConditions.push({ testId: `test_${testId}` });
+      if (testObjectId) orConditions.push({ testId: `test_${testObjectId}` });
+
+      const questionCount = orConditions.length > 0
+        ? await db.collection('questions').countDocuments({ $or: orConditions })
+        : 0;
+
+      return {
+        ...test,
+        id: testId || testObjectId,
+        questions: questionCount
+      };
+    }));
+
     console.log(`[PERF] Admin /api/tests loaded with counts in ${Date.now() - startTimeMetric}ms`);
     res.json(testsWithCounts);
   } catch (error) {

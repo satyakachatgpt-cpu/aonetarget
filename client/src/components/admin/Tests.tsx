@@ -2761,8 +2761,19 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                                   </span>
                                 )}
                               </div>
-                              <div className="p-8 flex-1 flex items-center justify-center min-h-[100px] text-[15px] font-bold text-gray-700 text-center leading-relaxed">
-                                {renderQuestionText(opt?.text || "Option Text")}
+                              <div className="p-8 flex-1 flex flex-col items-center justify-center min-h-[100px] gap-3 text-[15px] font-bold text-gray-700 text-center leading-relaxed">
+                                {renderQuestionText(opt?.text || "")}
+                                {/* Option image: check displayOptions[i].image OR optionAImage / optionBImage */}
+                                {(opt?.image || q[`option${optionLabel}Image`]) && (
+                                  <img
+                                    src={opt?.image || q[`option${optionLabel}Image`]}
+                                    alt={`Option ${optionLabel}`}
+                                    className="max-w-full max-h-[160px] object-contain rounded-lg border border-gray-100 mt-1"
+                                  />
+                                )}
+                                {!opt?.text && !(opt?.image || q[`option${optionLabel}Image`]) && (
+                                  <span className="text-gray-300">Option Text</span>
+                                )}
                               </div>
                             </div>
                           );

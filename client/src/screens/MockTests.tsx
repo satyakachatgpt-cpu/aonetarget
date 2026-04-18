@@ -52,7 +52,7 @@ const MockTests: React.FC = () => {
         const questions =
           Array.isArray(item.questions)
             ? item.questions.length
-            : Number(item.totalQuestions) || 0;
+            : Number(item.questions) || Number(item.totalQuestions) || Number(item.numberOfQuestions) || 0;
 
         const hasValidData =
           duration > 0 &&
@@ -245,7 +245,7 @@ const MockTests: React.FC = () => {
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-3">
                         <span className="flex items-center gap-1 text-[11px] text-gray-400 font-medium whitespace-nowrap">
                           <span className="material-symbols-rounded text-[15px] text-primary-400">help</span>
-                          {test.questions?.length || test.totalQuestions || test.numberOfQuestions || 0} Questions
+                          {(Array.isArray(test.questions) ? test.questions.length : (Number(test.questions) || test.totalQuestions || test.numberOfQuestions || 0))} Questions
                         </span>
                         <span className="flex items-center gap-1 text-[11px] text-gray-400 font-medium whitespace-nowrap">
                           <span className="material-symbols-rounded text-[15px] text-primary-400">timer</span>
