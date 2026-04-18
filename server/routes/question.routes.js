@@ -8,7 +8,8 @@ import {
   deleteAllQuestions,
   bulkDeleteQuestions,
   bulkCreateQuestions,
-  bulkExcelUpload
+  bulkExcelUpload,
+  deleteQuestionsByTest
 } from '../controllers/question.controller.js';
 import { excelUpload } from '../middleware/upload.middleware.js';
 import { adminMiddleware } from '../middleware/auth.js';
@@ -29,5 +30,6 @@ router.post('/bulk-excel', adminMiddleware, excelUpload.single('file'), bulkExce
 // Specific Question Operations
 router.put('/:id', adminMiddleware, updateQuestion);
 router.delete('/:id', adminMiddleware, deleteQuestion);
+router.delete('/test/:testId', adminMiddleware, deleteQuestionsByTest);
 
 export default router;

@@ -10,6 +10,7 @@ import {
 } from './DrawerSystem';
 import RichTextEditor from '../shared/RichTextEditor';
 import { extractYouTubeId, toYouTubeEmbed } from '../../lib/utils';
+import { uploadAPI } from '../../services/apiClient';
 
 interface QuestionForm {
   id?: string | number;
@@ -18,17 +19,17 @@ interface QuestionForm {
   questionHeading: string;
   questionText: string;
   questionEn?: string;
-  questionImages: (File | null)[];  // array of 3
+  questionImages: (File | string | null)[];  // array of 3
   options: {
     text: string;
-    file: File | null;
+    file: File | string | null;
     isCorrect: boolean;
   }[];  // array of 5
   answerMode: 'Single' | 'Multiple';
   solution: {
     heading: string;
     text: string;
-    images: (File | null)[];  // array of 2
+    images: (File | string | null)[];  // array of 2
     video: string;
   };
   positiveMarks: number;
@@ -45,19 +46,20 @@ interface AddQuestionModalProps {
   editingQuestion?: any; // To support future edits
   onSaveAndGoToPrevious?: (data: any) => void;
   onSaveAndGoToNext?: (data: any) => void;
+  test?: any; // New prop for test context
 }
 
 interface OptionRowProps {
   index: number;
   option: {
     text: string;
-    file: File | null;
+    file: File | string | null;
     isCorrect: boolean;
   };
   errors: Record<string, string>;
   handleCorrectToggle: (index: number) => void;
   handleOptionTextChange: (index: number, text: string) => void;
-  handleOptionFileUpload: (index: number, file: File | null) => void;
+  handleOptionFileUpload: (index: number, file: File | string | null) => void;
 }
 
 const OptionRow: React.FC<OptionRowProps> = ({ 
@@ -69,6 +71,7 @@ const OptionRow: React.FC<OptionRowProps> = ({
   handleOptionFileUpload 
 }) => {
   const isRequired = index < 2;
+  const [upLoading, setUpLoading] = useState(false);
 
   return (
     <div className="space-y-4 mb-8">
@@ -97,15 +100,22 @@ const OptionRow: React.FC<OptionRowProps> = ({
       </div>
 
       <div className="grid grid-cols-[160px_1fr] gap-4">
-        <div className="h-[120px] bg-gray-100 rounded-lg flex flex-col items-center justify-center text-center p-2 relative overflow-hidden group border border-gray-100">
-          {option.file ? (
+        <div className="h-[120px] bg-gray-100 rounded-lg flex flex-col items-center justify-center text-center p-2 relative overflow-hidden group border border-gray-100 bg-white shadow-inner">
+          {upLoading ? (
+            <div className="flex flex-col items-center gap-2">
+                <div className="w-6 h-6 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+                <span className="text-[10px] font-bold text-gray-400 uppercase">Uploading...</span>
+            </div>
+          ) : option.file ? (
             <>
-              {option.file.type.startsWith('image/') ? (
+              {typeof option.file === 'string' ? (
+                 <img src={option.file} className="w-full h-full object-contain" />
+              ) : option.file instanceof File && option.file.type.startsWith('image/') ? (
                  <img src={URL.createObjectURL(option.file)} className="w-full h-full object-contain" />
               ) : (
                 <div className="flex flex-col items-center">
                   <span className="material-symbols-outlined text-gray-400 text-[32px]">description</span>
-                  <span className="text-[10px] text-gray-400 truncate w-full px-1 mt-1 font-medium">{option.file.name}</span>
+                  <span className="text-[10px] text-gray-400 truncate w-full px-1 mt-1 font-medium">{typeof option.file === 'string' ? 'File' : 'Selected File'}</span>
                 </div>
               )}
               <button 
@@ -127,9 +137,13 @@ const OptionRow: React.FC<OptionRowProps> = ({
             type="file" 
             className="hidden" 
             accept="image/*, application/pdf" 
-            onChange={(e) => {
+            onChange={async (e) => {
               const file = e.target.files?.[0];
-              if (file) handleOptionFileUpload(index, file);
+              if (file) {
+                  setUpLoading(true);
+                  await handleOptionFileUpload(index, file);
+                  setUpLoading(false);
+              }
             }}
           />
           <span className="text-[14px] font-bold text-gray-700">Upload File</span>
@@ -144,8 +158,8 @@ interface ImageUploadSetProps {
   label: string;
   index: number;
   type?: 'question' | 'solution';
-  file: File | null;
-  handleImageUpload: (index: number, type: 'question' | 'solution', file: File | null) => void;
+  file: File | string | null;
+  handleImageUpload: (index: number, type: 'question' | 'solution', file: File | string | null) => void;
 }
 
 const ImageUploadSet: React.FC<ImageUploadSetProps> = ({ 
@@ -155,14 +169,21 @@ const ImageUploadSet: React.FC<ImageUploadSetProps> = ({
   file,
   handleImageUpload
 }) => {
+  const [isUploading, setIsUploading] = useState(false);
+
   return (
     <div className="space-y-4">
       <label className="text-[13px] font-bold text-[#444] block">{label}</label>
       <div className="grid grid-cols-[160px_1fr] gap-4">
-        <div className="h-[120px] bg-gray-100 rounded-lg flex flex-col items-center justify-center relative overflow-hidden group border border-gray-100">
-          {file ? (
+        <div className="h-[120px] bg-gray-100 rounded-lg flex flex-col items-center justify-center relative overflow-hidden group border border-gray-100 bg-white">
+          {isUploading ? (
+              <div className="flex flex-col items-center gap-2">
+                  <div className="w-8 h-8 border-[3px] border-black/10 border-t-black rounded-full animate-spin" />
+                  <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Uploading...</span>
+              </div>
+          ) : file ? (
             <>
-              <img src={URL.createObjectURL(file)} className="w-full h-full object-contain" />
+              <img src={typeof file === 'string' ? file : URL.createObjectURL(file)} className="w-full h-full object-contain" />
               <button 
                 onClick={() => handleImageUpload(index, type, null)}
                 className="absolute inset-0 bg-black/40 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
@@ -182,9 +203,13 @@ const ImageUploadSet: React.FC<ImageUploadSetProps> = ({
             type="file" 
             className="hidden" 
             accept="image/*" 
-            onChange={(e) => {
+            onChange={async (e) => {
               const file = e.target.files?.[0];
-              if (file) handleImageUpload(index, type, file);
+              if (file) {
+                  setIsUploading(true);
+                  await handleImageUpload(index, type, file);
+                  setIsUploading(false);
+              }
             }}
           />
           <span className="text-[14px] font-bold text-gray-700">Upload Image</span>
@@ -204,7 +229,8 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
   onUploadImage,
   editingQuestion,
   onSaveAndGoToPrevious,
-  onSaveAndGoToNext
+  onSaveAndGoToNext,
+  test
 }) => {
   const [activeEditor, setActiveEditor] = useState<string | null>(null);
   const [form, setForm] = useState<QuestionForm>({
@@ -218,116 +244,127 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
     solution: {
       heading: 'Full Solution',
       text: '',
-      images: [null, null],
+      images: [null, null] as (File | string | null)[],
       video: ''
     },
-    positiveMarks: 1,
-    negativeMarks: 0
+    positiveMarks: test?.marksPerQuestion || 1,
+    negativeMarks: test?.negativeMarking || 0
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  const prevOpenRef = useRef(false);
+
   useEffect(() => {
-    if (isOpen && sections.length > 0 && !form.sectionId) {
-      setForm(prev => ({ ...prev, sectionId: sections[0].id }));
-    }
-
-    if (isOpen && editingQuestion) {
-      // Robustly map existing question data to form
-
-      // --- Normalize options: handle string arrays, object arrays, or displayOptions ---
-      let rawOptions: { text: string; file: File | null; isCorrect: boolean }[] = [];
-      
-      if (editingQuestion.displayOptions && Array.isArray(editingQuestion.displayOptions)) {
-        rawOptions = editingQuestion.displayOptions.map((o: any) => ({
-          text: typeof o === 'string' ? o : (o?.text || ''),
-          file: null,
-          isCorrect: typeof o === 'object' ? (o?.isCorrect || false) : false
-        }));
-      } else if (editingQuestion.options && Array.isArray(editingQuestion.options)) {
-        rawOptions = editingQuestion.options.map((o: any) => {
-          if (typeof o === 'string') {
-            return { text: o, file: null, isCorrect: false };
-          } else if (typeof o === 'object' && o !== null) {
-            return { text: o.text || o.label || '', file: null, isCorrect: o.isCorrect || false };
+    if (isOpen && !prevOpenRef.current) {
+        // Drawer just opened - initialize form
+        if (editingQuestion) {
+          // Robustly map existing question data to form
+          let rawOptions: { text: string; file: File | string | null; isCorrect: boolean }[] = [];
+          
+          if (editingQuestion.displayOptions && Array.isArray(editingQuestion.displayOptions)) {
+            rawOptions = editingQuestion.displayOptions.map((o: any, i: number) => ({
+              text: typeof o === 'string' ? o : (o?.text || ''),
+              file: o?.image || editingQuestion?.[`option${String.fromCharCode(65 + i)}Image`] || null,
+              isCorrect: typeof o === 'object' ? (o?.isCorrect || false) : false
+            }));
+          } else if (editingQuestion.options && Array.isArray(editingQuestion.options)) {
+            rawOptions = editingQuestion.options.map((o: any, i: number) => {
+              if (typeof o === 'string') {
+                return { text: o, file: editingQuestion?.[`option${String.fromCharCode(65 + i)}Image`] || null, isCorrect: false };
+              } else if (typeof o === 'object' && o !== null) {
+                return { text: o.text || o.label || '', file: o.image || editingQuestion?.[`option${String.fromCharCode(65 + i)}Image`] || null, isCorrect: o.isCorrect || false };
+              }
+              return { text: '', file: null, isCorrect: false };
+            });
           }
-          return { text: '', file: null, isCorrect: false };
-        });
-      }
 
-      // Ensure we always have exactly 5 options for the UI
-      const paddedOptions = [...rawOptions];
-      while (paddedOptions.length < 5) {
-        paddedOptions.push({ text: '', file: null, isCorrect: false });
-      }
-      const finalOptions = paddedOptions.slice(0, 5);
+          // Fallback for options if not in displays
+          if (rawOptions.length === 0) {
+              ['A', 'B', 'C', 'D', 'E'].forEach((opt, idx) => {
+                  if (editingQuestion[`option${opt}`]) {
+                      rawOptions.push({
+                          text: editingQuestion[`option${opt}`],
+                          file: editingQuestion[`option${opt}Image`] || null,
+                          isCorrect: editingQuestion.correctAnswer === opt
+                      });
+                  }
+              });
+          }
 
-      // --- Normalize solution: handle string, object, or missing ---
-      let normalizedSolution: { heading: string; text: string; images: (File | null)[]; video: string };
-      const rawSolution = editingQuestion.solution;
-      if (typeof rawSolution === 'string') {
-        normalizedSolution = {
-          heading: 'Full Solution',
-          text: rawSolution,
-          images: [null, null],
-          video: ''
-        };
-      } else if (rawSolution && typeof rawSolution === 'object') {
-        normalizedSolution = {
-          heading: rawSolution.heading || 'Full Solution',
-          text: rawSolution.text || '',
-          images: Array.isArray(rawSolution.images) ? [...rawSolution.images, null, null].slice(0, 2) : [null, null],
-          video: typeof rawSolution.video === 'string' ? rawSolution.video : ''
-        };
-      } else {
-        normalizedSolution = {
-          heading: 'Full Solution',
-          text: '',
-          images: [null, null],
-          video: ''
-        };
-      }
+          const paddedOptions = [...rawOptions];
+          while (paddedOptions.length < 5) {
+            paddedOptions.push({ text: '', file: null, isCorrect: false });
+          }
+          const finalOptions = paddedOptions.slice(0, 5);
 
-      // --- Normalize questionImages: ensure array of 3 ---
-      let normalizedQImages: (File | null)[] = [null, null, null];
-      if (Array.isArray(editingQuestion.questionImages)) {
-        normalizedQImages = [...editingQuestion.questionImages, null, null, null].slice(0, 3);
-      }
+          let normalizedSolution: { heading: string; text: string; images: (File | string | null)[]; video: string };
+          const rawSolution = editingQuestion.solution;
+          const legacySolutionImage = editingQuestion.solutionImage;
 
-      setForm({
-        id: editingQuestion.id || editingQuestion._id,
-        questionType: editingQuestion.questionType || 'Multiple Choice Question',
-        sectionId: editingQuestion.sectionId || sections[0]?.id || '',
-        questionHeading: editingQuestion.questionHeading || '',
-        questionText: editingQuestion.questionText || editingQuestion.questionEn || '',
-        questionImages: normalizedQImages,
-        options: finalOptions,
-        answerMode: editingQuestion.answerMode || 'Single',
-        solution: normalizedSolution,
-        positiveMarks: editingQuestion.positiveMarks || editingQuestion.marks || 1,
-        negativeMarks: editingQuestion.negativeMarks || editingQuestion.negative || 0
-      });
-    } else if (isOpen && !editingQuestion) {
-      // Reset form for fresh creation
-      setForm({
-        questionType: 'Multiple Choice Question',
-        sectionId: sections[0]?.id || '',
-        questionHeading: '',
-        questionText: '',
-        questionImages: [null, null, null],
-        options: Array(5).fill(null).map(() => ({ text: '', file: null, isCorrect: false })),
-        answerMode: 'Single',
-        solution: {
-          heading: 'Full Solution',
-          text: '',
-          images: [null, null],
-          video: ''
-        },
-        positiveMarks: 1,
-        negativeMarks: 0
-      });
+          if (typeof rawSolution === 'string') {
+            normalizedSolution = {
+              heading: 'Full Solution',
+              text: rawSolution,
+              images: [legacySolutionImage || null, null],
+              video: ''
+            };
+          } else if (rawSolution && typeof rawSolution === 'object') {
+            normalizedSolution = {
+              heading: rawSolution.heading || 'Full Solution',
+              text: rawSolution.text || '',
+              images: Array.isArray(rawSolution.images) && rawSolution.images.length > 0 
+                ? [...rawSolution.images, null, null].slice(0, 2) 
+                : [legacySolutionImage || null, null],
+              video: typeof rawSolution.video === 'string' ? rawSolution.video : ''
+            };
+          } else {
+            normalizedSolution = { 
+              heading: 'Full Solution', 
+              text: '', 
+              images: [legacySolutionImage || null, null], 
+              video: '' 
+            };
+          }
+
+          let normalizedQImages: (File | string | null)[] = [null, null, null];
+          if (Array.isArray(editingQuestion.questionImages)) {
+            normalizedQImages = [...editingQuestion.questionImages, null, null, null].slice(0, 3);
+          } else if (editingQuestion.questionImage || editingQuestion.image) {
+            normalizedQImages[0] = editingQuestion.questionImage || editingQuestion.image;
+          }
+
+          setForm({
+            id: editingQuestion.id || editingQuestion._id,
+            questionType: editingQuestion.questionType || 'Multiple Choice Question',
+            sectionId: editingQuestion.sectionId || sections[0]?.id || '',
+            questionHeading: editingQuestion.questionHeading || '',
+            questionText: editingQuestion.questionText || editingQuestion.questionEn || '',
+            questionImages: normalizedQImages,
+            options: finalOptions,
+            answerMode: editingQuestion.answerMode || 'Single',
+            solution: normalizedSolution,
+            positiveMarks: editingQuestion.positiveMarks || editingQuestion.marks || test?.marksPerQuestion || 1,
+            negativeMarks: editingQuestion.negativeMarks || editingQuestion.negative || test?.negativeMarking || 0
+          });
+        } else {
+          // Reset form for fresh creation
+          setForm({
+            questionType: 'Multiple Choice Question',
+            sectionId: sections[0]?.id || '',
+            questionHeading: '',
+            questionText: '',
+            questionImages: [null, null, null],
+            options: Array(5).fill(null).map(() => ({ text: '', file: null, isCorrect: false })),
+            answerMode: 'Single',
+            solution: { heading: 'Full Solution', text: '', images: [null, null], video: '' },
+            positiveMarks: test?.marksPerQuestion || 1,
+            negativeMarks: test?.negativeMarking || 0
+          });
+        }
     }
-  }, [isOpen, editingQuestion, sections]);
+    prevOpenRef.current = isOpen;
+  }, [isOpen, editingQuestion, sections, test]);
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -358,11 +395,12 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
   };
 
   const buildSubmissionData = () => {
-    return {
+    const data: any = {
       ...form,
-      questionEn: form.questionText, // Ensure both are sent
-      marks: form.positiveMarks,     // Map positiveMarks to marks
-      negative: form.negativeMarks,   // Map negativeMarks to negative
+      question: form.questionText,
+      questionEn: form.questionText,
+      marks: form.positiveMarks,     
+      negative: form.negativeMarks,
       optionsContent: (form.options || []).map((opt, i) => ({
         id: String.fromCharCode(97 + i),
         label: opt?.text || ''
@@ -370,9 +408,32 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
       displayOptions: (form.options || []).map((opt, i) => ({
         id: i + 1,
         text: opt?.text || '',
-        isCorrect: opt?.isCorrect || false
+        isCorrect: opt?.isCorrect || false,
+        image: typeof opt.file === 'string' ? opt.file : null // Placeholder, will be replaced by actual upload result if File
       }))
     };
+
+    // Ensure questionImage (singular) is set for compatibility
+    if (form.questionImages[0] && typeof form.questionImages[0] === 'string') {
+      data.questionImage = form.questionImages[0];
+    } else if (!form.questionImages[0]) {
+      data.questionImage = null;
+    }
+
+    // Ensure solutionImage (singular) is set for compatibility
+    if (form.solution?.images?.[0] && typeof form.solution.images[0] === 'string') {
+        data.solutionImage = form.solution.images[0];
+    }
+
+    // Map option files too
+    (form.options || []).forEach((opt, i) => {
+        const char = String.fromCharCode(65 + i);
+        if (typeof opt.file === 'string') {
+            data[`option${char}Image`] = opt.file;
+        }
+    });
+
+    return data;
   };
 
   const handleSave = () => {
@@ -383,22 +444,74 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
     }
   };
 
-  const handleImageUpload = (index: number, type: 'question' | 'solution', file: File | null) => {
-    if (type === 'question') {
-      const newImages = [...form.questionImages];
-      newImages[index] = file;
-      setForm({ ...form, questionImages: newImages });
+  const handleImageUpload = async (index: number, type: 'question' | 'solution', file: File | string | null) => {
+    if (!file) {
+      if (type === 'question') {
+        const newImages = [...form.questionImages];
+        newImages[index] = null;
+        setForm({ ...form, questionImages: newImages });
+      } else {
+        const newImages = [...form.solution.images];
+        newImages[index] = null;
+        setForm({ ...form, solution: { ...form.solution, images: newImages } });
+      }
+      return;
+    }
+
+    if (file instanceof File) {
+      try {
+        const res = await uploadAPI.uploadImage(file);
+        if (res && res.url) {
+          if (type === 'question') {
+            const newImages = [...form.questionImages];
+            newImages[index] = res.url;
+            setForm({ ...form, questionImages: newImages });
+          } else {
+            const newImages = [...form.solution.images];
+            newImages[index] = res.url;
+            setForm({ ...form, solution: { ...form.solution, images: newImages } });
+          }
+        }
+      } catch (err) {
+        console.error("Upload failed", err);
+      }
     } else {
-      const newImages = [...form.solution.images];
-      newImages[index] = file;
-      setForm({ ...form, solution: { ...form.solution, images: newImages } });
+      if (type === 'question') {
+        const newImages = [...form.questionImages];
+        newImages[index] = file;
+        setForm({ ...form, questionImages: newImages });
+      } else {
+        const newImages = [...form.solution.images];
+        newImages[index] = file;
+        setForm({ ...form, solution: { ...form.solution, images: newImages } });
+      }
     }
   };
 
-  const handleOptionFileUpload = (index: number, file: File | null) => {
-    const newOptions = [...form.options];
-    newOptions[index].file = file;
-    setForm({ ...form, options: newOptions });
+  const handleOptionFileUpload = async (index: number, file: File | string | null) => {
+    if (!file) {
+      const newOptions = [...form.options];
+      newOptions[index].file = null;
+      setForm({ ...form, options: newOptions });
+      return;
+    }
+
+    if (file instanceof File) {
+      try {
+        const res = await uploadAPI.uploadImage(file);
+        if (res && res.url) {
+          const newOptions = [...form.options];
+          newOptions[index].file = res.url;
+          setForm({ ...form, options: newOptions });
+        }
+      } catch (err) {
+        console.error("Option upload failed", err);
+      }
+    } else {
+      const newOptions = [...form.options];
+      newOptions[index].file = file;
+      setForm({ ...form, options: newOptions });
+    }
   };
 
   const handleOptionTextChange = (index: number, text: string) => {
@@ -684,6 +797,7 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
         <div className="border-t border-gray-100 pt-8" />
 
         {/* SECTION 5 — SCORING */}
+        {(!test?.marksPerQuestion && !test?.negativeMarking) && (
         <div className="space-y-6 pb-20">
           <h3 className="text-[17px] font-bold text-gray-800 tracking-tight">Scoring</h3>
           <div className="grid grid-cols-2 gap-8">
@@ -709,6 +823,8 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
             </div>
           </div>
         </div>
+        )}
+        <div className="h-20" />
       </DrawerBody>
 
       <DrawerFooter className="p-0 border-t border-gray-100">

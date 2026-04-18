@@ -13,10 +13,28 @@ import QuestionPaperRenderer from "./QuestionPaperRenderer";
 import { InlineMath } from "react-katex";
 import "katex/dist/katex.min.css";
 
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
 import AddTestDrawer from "./AddTestDrawer";
 import AddSingleTestDrawer from "./AddSingleTestDrawer";
 import AddTestPDFDrawer from "./AddTestPDFDrawer";
 import SubjectiveTestDrawer from "./SubjectiveTestDrawer";
+import BulkEditQuestionsDrawer from "./BulkEditQuestionsDrawer";
 import AddTestPDFBulkDrawer from "./AddTestPDFBulkDrawer";
 import ViewFormatModal from "./ViewFormatModal";
 import AddQuestionDrawer from "./AddQuestionDrawer";
@@ -25,23 +43,6 @@ import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import * as pdfjsLib from "pdfjs-dist";
 import { generateDOCX } from "./DOCXGenerator";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || "5.5.207"}/build/pdf.worker.min.mjs`;
@@ -290,47 +291,41 @@ const CustomDropdown = ({
   );
 };
 
-const SortableQuestionItem = ({ id, question, index }: any) => {
+
+
+const SortableRow = ({ q, idx, setViewingAddQuestionForm, handleDeleteQuestion, viewingQuestionEditor }: any) => {
   const {
     attributes,
     listeners,
     setNodeRef,
     transform,
     transition,
-    isDragging,
-  } = useSortable({ id });
+    isDragging
+  } = useSortable({ id: q.id || q._id });
 
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    zIndex: isDragging ? 1000 : "auto",
-    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 100 : 1,
+    opacity: isDragging ? 0.8 : 1,
   };
 
   return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`flex items-center gap-6 p-4 border rounded-xl bg-white transition-all group ${isDragging ? "border-primary-400 shadow-xl scale-[1.02] cursor-grabbing" : "border-gray-100 hover:border-gray-200 hover:shadow-sm cursor-move"}`}
-      {...attributes}
-      {...listeners}
-    >
-      <div className="flex items-center justify-center text-gray-300 group-hover:text-gray-400 transition-colors">
-        <span className="material-symbols-outlined text-[20px]">
-          drag_indicator
-        </span>
-      </div>
-      <div className="flex-1 min-w-0 text-left">
-        <p className="text-[14px] font-bold text-gray-700 truncate">
-          {index + 1}. {question.questionEn || "No question text available"}
-        </p>
-        {question.subject && (
-          <span className="text-[10px] text-primary-500 font-bold uppercase tracking-wider">
-            {question.subject}
-          </span>
-        )}
-      </div>
-    </div>
+    <tr ref={setNodeRef} style={style} className={`${isDragging ? 'bg-blue-50' : 'bg-white'} border-b border-gray-50 hover:bg-gray-50/80 transition-all group`}>
+      <td className="px-6 py-4">
+        <div className="flex items-center gap-3">
+           <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-black transition-colors focus:outline-none">
+             <span className="material-symbols-outlined text-[20px]">drag_indicator</span>
+           </div>
+           <span className="text-[13px] font-bold text-gray-400">{idx + 1}</span>
+        </div>
+      </td>
+      <td className="px-6 py-4">
+        <div className="text-[14px] font-bold text-gray-700 max-w-2xl line-clamp-2">
+          {q.questionEn || "No question text"}
+        </div>
+      </td>
+    </tr>
   );
 };
 
@@ -342,6 +337,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0); // Added for progress visibility
   const [showModal, setShowModal] = useState(false);
   const [editingTest, setEditingTest] = useState<Test | null>(null);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -361,6 +357,42 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const [activeTab, setActiveTab] = useState("Tests");
   const [selectedContentType, setSelectedContentType] = useState("");
 
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = async (event: any) => {
+    const { active, over } = event;
+
+    if (active.id !== over?.id) {
+      const oldIndex = editorQuestions.findIndex((q: any) => (q.id || q._id) === active.id);
+      const newIndex = editorQuestions.findIndex((q: any) => (q.id || q._id) === over.id);
+
+      const updatedQuestions = arrayMove(editorQuestions, oldIndex, newIndex);
+      
+      try {
+        setEditorQuestions(updatedQuestions);
+        // Save the reordered list to Test document
+        const testId = viewingQuestionEditor?.id || viewingQuestionEditor?._id;
+        if (testId) {
+          await testsAPI.update(testId, {
+            ...viewingQuestionEditor,
+            questions: updatedQuestions
+          });
+          showToast("Order updated successfully", "success");
+        }
+      } catch (err) {
+        showToast("Failed to save new order", "error");
+        // Revert on failure
+        const originalQs = await testsAPI.getQuestions(viewingQuestionEditor?.id || viewingQuestionEditor?._id);
+        setEditorQuestions(originalQs);
+      }
+    }
+  };
+
   const [bulkUploadData, setBulkUploadData] = useState<{
     testSeries: string;
     testTitle: string;
@@ -368,6 +400,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     file: File | null;
     parsedQuestions: any[];
     extractedImages: string[];
+    uploadMode: 'append' | 'replace';
   }>({
     testSeries: "",
     testTitle: "",
@@ -375,6 +408,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     file: null,
     parsedQuestions: [],
     extractedImages: [],
+    uploadMode: 'append',
   });
 
   const [activeImageAssignment, setActiveImageAssignment] = useState<{
@@ -729,14 +763,13 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       if (globalSol) solution = globalSol[1].trim();
 
       // ==== Diagram-Option Detection ====
-      // If < 2 options have meaningful text (>5 chars), options are likely diagrams
       const realTextOptions = optionsArray.filter(o => o.trim().replace(/^[a-d][\s\)\.:]/i, '').trim().length > 5);
       const hasDiagramOptions = realTextOptions.length < 2;
 
-      // Find page mapping for diagram association
       let qPageNum = 1;
       let questionImage = "";
       let hasDiagramOptionsFlag = false;
+      let needsReview = false;
 
       if (pageMap && pageMap.length > 0) {
         const startIdx = blockStarts[bIdx];
@@ -755,21 +788,28 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           const hasFigureRef = /fig(ure)?[\s.]*\d|diagram|circuit|graph|wave|shown below|given below|following figure|refer to|arrangement/i.test(questionText);
 
           if (hasDiagramOptions) {
-            // Options are diagrams → use compressed page image so student can see the diagrams
-            questionImage = matchedPage.pageDataUrl || "";
             hasDiagramOptionsFlag = true;
+            questionImage = ""; // Do NOT attach whole page as question image
+            needsReview = true;
           } else if (matchedPage.embeddedImages && matchedPage.embeddedImages.length > 0) {
-            // Text options but question references a figure → attach embedded image
             if (hasFigureRef) {
               questionImage = matchedPage.embeddedImages[0].dataUrl;
+              needsReview = matchedPage.embeddedImages.length > 1; 
             } else if (matchedPage.embeddedImages.length === 1) {
               questionImage = matchedPage.embeddedImages[0].dataUrl;
+              needsReview = false;
+            } else {
+              questionImage = matchedPage.embeddedImages[0].dataUrl;
+              needsReview = true;
             }
           }
         }
       }
 
-      // For diagram-option questions: replace fake placeholders with clean labels
+      if (!hasDiagramOptionsFlag && optionsArray.length < 2) {
+          needsReview = true;
+      }
+
       const finalOptions = hasDiagramOptionsFlag
         ? ["A", "B", "C", "D"]
         : (optionsArray.length >= 2 ? optionsArray.slice(0, 4) : ["Option A", "Option B", "Option C", "Option D"]);
@@ -788,6 +828,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           pageNumber: qPageNum,
           hasDiagramOptions: hasDiagramOptionsFlag,
           questionImage,
+          needsReview
         });
       }
     }
@@ -862,6 +903,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     useState(false);
   const [showFloatingAddMenu, setShowFloatingAddMenu] = useState(false);
   const [showFloatingMoreMenu, setShowFloatingMoreMenu] = useState(false);
+  const [showBulkEditDrawer, setShowBulkEditDrawer] = useState(false);
+  const [bulkEditRange, setBulkEditRange] = useState({ from: 1, to: 10 });
   const [viewingAddQuestionForm, setViewingAddQuestionForm] = useState<
     any | null
   >(null);
@@ -872,33 +915,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const [showSortModal, setShowSortModal] = useState(false);
 
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 5,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
-  );
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (over && active.id !== over.id) {
-      setEditorQuestions((items) => {
-        const oldIndex = items.findIndex(
-          (i) => (i.id || i._id) === active.id,
-        );
-        const newIndex = items.findIndex(
-          (i) => (i.id || i._id) === over.id,
-        );
-
-        return arrayMove(items, oldIndex, newIndex);
-      });
-    }
-  };
+  const [isBulkEditQuestionsOn, setIsBulkEditQuestionsOn] = useState(false);
   // Results Tab States
   const [results, setResults] = useState<any[]>([]);
   const [resultFilters, setResultFilters] = useState({
@@ -1023,6 +1040,97 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         <span key={i} dangerouslySetInnerHTML={{ __html: String(part) }} />
       );
     });
+  };
+
+  const renderDiagram = (q: any, field: string = "question", isEditable: boolean = false) => {
+    let dataUrl = "";
+    if (field === "question") {
+      dataUrl = q.questionImage || (Array.isArray(q.questionImages) ? q.questionImages[0] : "");
+    } else if (field === "solution") {
+      dataUrl = q.solutionImage || (q.solution?.images && Array.isArray(q.solution.images) ? q.solution.images[0] : "");
+    } else {
+      // Option Image (A, B, C, D)
+      dataUrl = q.optionImages?.[field.charCodeAt(0) - 65] || "";
+    }
+    
+    if (!dataUrl) {
+      if (!isEditable) return null;
+      return (
+        <div className="mt-2 flex items-center gap-2 justify-start">
+          <button 
+            onClick={() => setActiveImageAssignment({ questionId: q.id, field })}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 border-dashed transition-all ${activeImageAssignment?.questionId === q.id && activeImageAssignment?.field === field ? 'border-amber-400 bg-amber-50 text-amber-700 animate-pulse' : 'border-gray-200 text-gray-400 hover:border-amber-500 hover:text-amber-600'}`}
+          >
+            <span className="material-symbols-outlined text-[16px]">collections</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
+              Map from Gallery
+            </span>
+          </button>
+          <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 border-dashed border-gray-200 text-gray-400 hover:border-black hover:text-black cursor-pointer transition-all">
+            <span className="material-symbols-outlined text-[16px]">upload_file</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Upload Manual</span>
+            <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                  setActiveImageAssignment({ questionId: q.id, field });
+                  setTimeout(() => handleImageSelect(ev.target?.result as string), 0);
+                };
+                reader.readAsDataURL(file);
+              }
+            }} />
+          </label>
+        </div>
+      );
+    }
+
+    const isPageLevel = field === "question" && q.hasDiagramOptions;
+
+    return (
+      <div className={`mt-3 border rounded-xl overflow-hidden relative group ${isPageLevel ? 'border-amber-200 bg-amber-50/40' : 'border-blue-100 bg-blue-50/40'} ${!isEditable ? 'max-w-[400px]' : ''}`}>
+        <div className={`px-3 py-1.5 border-b flex items-center justify-between gap-1.5 ${isPageLevel ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-100'}`}>
+          <div className="flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[14px]">{isPageLevel ? 'schema' : field === 'solution' ? 'psychology' : 'image'}</span>
+            <span className={`text-[10px] font-bold uppercase tracking-wider ${isPageLevel ? 'text-amber-600' : 'text-blue-500'}`}>
+              {isPageLevel ? 'Options as Diagrams' : field === 'question' ? 'Question Diagram' : field === 'solution' ? 'Solution Diagram' : `Option ${field} Image`}
+            </span>
+          </div>
+          {isEditable && (
+            <button 
+              onClick={() => handleRemoveImage(q.id, field)}
+              className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700"
+            >
+              <span className="material-symbols-outlined text-[16px]">delete</span>
+            </button>
+          )}
+        </div>
+        <div className="p-2 flex flex-col items-center">
+          <img src={dataUrl} alt="Diagram" className={`w-full h-auto rounded-lg object-contain ${field === 'question' ? 'max-h-64' : 'max-h-32'}`} loading="lazy" />
+          {isEditable && (
+            <div className="flex items-center gap-4 mt-3">
+              <button onClick={() => setActiveImageAssignment({ questionId: q.id, field })} className="text-[10px] font-bold text-gray-500 hover:text-black flex items-center gap-1 transition-colors">
+                <span className="material-symbols-outlined text-[14px]">collections</span> Change (Gallery)
+              </button>
+              <label className="text-[10px] font-bold text-gray-500 hover:text-black flex items-center gap-1 transition-colors cursor-pointer">
+                <span className="material-symbols-outlined text-[14px]">upload_file</span> Change (Upload)
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      setActiveImageAssignment({ questionId: q.id, field });
+                      setTimeout(() => handleImageSelect(ev.target?.result as string), 0);
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }} />
+              </label>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   };
 
   const handleSaveQuestion = async (data?: any) => {
@@ -2353,22 +2461,40 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
           <div className="max-w-[1400px] mx-auto p-6 space-y-6">
             {/* Stats Bar */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6 flex items-center justify-between shadow-sm">
+            <div className="bg-white rounded-xl border border-gray-100 p-6 flex flex-wrap items-center justify-between shadow-sm gap-4">
               <div className="flex items-center gap-6">
-                <span className="text-[13px] font-bold text-gray-600">
-                  {viewingQuestionEditor.marks || 0} Marks
-                </span>
-                <span className="text-[13px] font-bold text-gray-600">
-                  {viewingQuestionEditor.time || 0} Minutes
-                </span>
-                <span className="text-[13px] font-bold text-gray-600">
-                  {viewingQuestionEditor.time || 0} Minutes
-                </span>
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Total Format</span>
+                  <div className="flex items-center gap-4 mt-1">
+                    <span className="px-3 py-1 bg-gray-50 text-[13px] font-bold text-gray-700 rounded-lg">
+                      {viewingQuestionEditor.marks || 0} Marks
+                    </span>
+                    <span className="px-3 py-1 bg-gray-50 text-[13px] font-bold text-gray-700 rounded-lg">
+                      {viewingQuestionEditor.duration || viewingQuestionEditor.time || 0} Minutes
+                    </span>
+                    <span className="px-3 py-1 bg-gray-50 text-[13px] font-bold text-gray-700 rounded-lg">
+                      {editorQuestions.length} Questions
+                    </span>
+                  </div>
+                </div>
+
+                <div className="w-[1px] h-10 bg-gray-100" />
+
+                <div className="flex flex-col">
+                  <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest">Test-Level Scoring</span>
+                  <div className="flex items-center gap-4 mt-1">
+                    <span className="px-3 py-1 bg-green-50 text-[#2E7D32] text-[13px] font-bold rounded-lg border border-green-100">
+                      +{viewingQuestionEditor.marksPerQuestion || 0} per Right
+                    </span>
+                    <span className="px-3 py-1 bg-red-50 text-[#C62828] text-[13px] font-bold rounded-lg border border-red-100">
+                      -{viewingQuestionEditor.negativeMarking || 0} per Wrong
+                    </span>
+                  </div>
+                </div>
               </div>
               <p className="text-[12px] font-medium text-gray-400">
                 Last Published:{" "}
-                {viewingQuestionEditor.published ||
-                  "October 30, 2025, 12:43 pm"}
+                {viewingQuestionEditor.published || "Not Published"}
               </p>
             </div>
 
@@ -2479,6 +2605,13 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                     <div className="absolute right-0 top-full mt-2 w-[220px] bg-white rounded-xl shadow-2xl border border-gray-100 py-2 animate-in fade-in zoom-in-95 duration-200 origin-top-right z-[101]">
                       {[
                         {
+                          label: "Bulk Edit",
+                          icon: "edit_calendar",
+                          onClick: () => {
+                            setShowBulkEditDrawer(true);
+                          },
+                        },
+                        {
                           label: "Bulk Delete",
                           icon: "delete",
                           onClick: () => {
@@ -2487,9 +2620,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           },
                         },
                         {
-                          label: "Sort Questions",
-                          icon: "sort",
-                          onClick: () => { setShowSortModal(true); },
+                          label: isBulkEditQuestionsOn ? "Exit Sorting" : "Sort Questions",
+                          icon: isBulkEditQuestionsOn ? "close" : "sort",
+                          onClick: () => setIsBulkEditQuestionsOn(!isBulkEditQuestionsOn),
                         },
                       ].map((item, idx) => (
                         <button
@@ -2515,6 +2648,41 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             </div>
 
             {/* Question List */}
+            {isBulkEditQuestionsOn ? (
+               <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden text-[#1a202c]">
+                 <DndContext 
+                   sensors={sensors}
+                   collisionDetection={closestCenter}
+                   onDragEnd={handleDragEnd}
+                 >
+                   <table className="w-full text-left border-collapse">
+                     <thead className="bg-[#FAFAFA]">
+                       <tr>
+                         <th className="px-6 py-4 text-[12px] font-black text-gray-400 uppercase tracking-widest w-24">Order</th>
+                         <th className="px-6 py-4 text-[12px] font-black text-gray-400 uppercase tracking-widest">Question Text</th>
+                       </tr>
+                     </thead>
+                     <tbody className="divide-y divide-gray-50">
+                       <SortableContext 
+                         items={editorQuestions.map((q: any) => q.id || q._id)}
+                         strategy={verticalListSortingStrategy}
+                       >
+                         {(editorQuestions || []).map((q: any, idx: number) => (
+                           <SortableRow 
+                             key={q.id || q._id}
+                             q={q}
+                             idx={idx}
+                             setViewingAddQuestionForm={setViewingAddQuestionForm}
+                             handleDeleteQuestion={handleDeleteQuestion}
+                             viewingQuestionEditor={viewingQuestionEditor}
+                           />
+                         ))}
+                       </SortableContext>
+                     </tbody>
+                   </table>
+                 </DndContext>
+               </div>
+            ) : (
             <div className="space-y-6">
               {(qeTests || []).map((q, idx) => (
                 <div
@@ -2523,17 +2691,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 >
                   {/* Top Right Buttons inside card */}
                   <div className="absolute top-8 right-8 flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-1 bg-[#E8F5E9] text-[#2E7D32] rounded-sm uppercase text-[10px] font-black tracking-wider border border-[#C8E6C9]">
-                        +{Number(q?.marks || 1).toFixed(2)}
-                      </span>
-                      <span className="px-2.5 py-1 bg-[#FFEBEE] text-[#C62828] rounded-sm uppercase text-[10px] font-black tracking-wider border border-[#FFCDD2]">
-                        -{Number(q?.negative || 0).toFixed(2)}
-                      </span>
-                    </div>
                     <button
                       onClick={() => setViewingAddQuestionForm(q)}
-                      className="flex items-center gap-2 px-4 py-1.5 border border-gray-100 rounded-lg text-[13px] font-bold text-gray-600 hover:bg-gray-50"
+                      className="flex items-center gap-2 px-4 py-1.5 border border-gray-100 rounded-lg text-[13px] font-bold text-gray-600 hover:bg-gray-50 transition-all"
                     >
                       <span className="material-symbols-outlined text-[18px]">
                         edit_note
@@ -2544,7 +2704,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                       onClick={() =>
                         handleDeleteQuestion(q.id || (q as any)._id)
                       }
-                      className="w-9 h-9 border border-gray-100 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"
+                      className="w-9 h-9 border border-gray-100 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 transition-all"
                     >
                       <span className="material-symbols-outlined text-[20px]">
                         delete
@@ -2568,6 +2728,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                             {renderQuestionText(q.questionHi)}
                           </div>
                         )}
+                        <div className="max-w-[400px]">
+                          {renderDiagram(q)}
+                        </div>
                       </div>
                     </div>
 
@@ -2601,10 +2764,37 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                         },
                       )}
                     </div>
+
+                    {/* Answer Key & Solution */}
+                    <div className="mt-8 pt-8 border-t border-gray-50 bg-[#F9FAFB]/50 rounded-b-xl p-8 ml-10">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                           <span className="material-symbols-outlined text-[20px] font-black">task_alt</span>
+                        </div>
+                        <span className="text-[14px] font-black text-emerald-800 uppercase tracking-widest">
+                          Correct Answer: {q.correctAnswer}
+                        </span>
+                      </div>
+                      
+                      {(q.solution || q.solutionEn) && (
+                        <div className="space-y-4">
+                          <div className="text-[14px] text-gray-600 leading-relaxed font-medium">
+                            <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest block mb-2">Detailed Explanation</span>
+                            <div className="bg-white/80 p-4 rounded-xl border border-gray-100 italic">
+                                {renderQuestionText(q.solutionEn || (typeof q.solution === 'string' ? q.solution : q.solution?.text) || "No explanation provided.")}
+                            </div>
+                          </div>
+                          <div className="max-w-[400px]">
+                            {renderDiagram(q, 'solution')}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}
             </div>
+            )}
           </div>
         </div>
       );
@@ -2687,12 +2877,25 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
           <div className="relative">
             <button
-              onClick={() => setShowAddSingleTestDrawer(true)}
+              onClick={() => setShowAddMenu(!showAddMenu)}
               className="w-11 h-11 bg-black text-white rounded-full flex items-center justify-center hover:bg-gray-800 transition-all shadow-md active:scale-95"
               title="Add Test"
             >
               <span className="material-symbols-outlined text-[26px]">add</span>
             </button>
+            {showAddMenu && (
+               <div className="absolute right-0 top-full mt-2 w-[250px] bg-white rounded-xl shadow-2xl border border-gray-100 py-2 z-[101]">
+                   <button onClick={() => { setShowAddMenu(false); setEditingTest(null); setShowAddSingleTestDrawer(true); }} className="w-full flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors text-left">
+                      <span className="material-symbols-outlined text-[20px] text-gray-500">post_add</span><span className="text-[14px] font-bold text-gray-800">Create Test</span>
+                   </button>
+                   <button onClick={() => { setShowAddMenu(false); setShowAddTestPDFDrawer(true); }} className="w-full flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors text-left">
+                      <span className="material-symbols-outlined text-[20px] text-gray-500">picture_as_pdf</span><span className="text-[14px] font-bold text-gray-800">PDF Test Upload (Single/Bulk)</span>
+                   </button>
+                   <button onClick={() => { setShowAddMenu(false); setShowSubjectiveTestDrawer(true); }} className="w-full flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors text-left">
+                      <span className="material-symbols-outlined text-[20px] text-gray-500">draw</span><span className="text-[14px] font-bold text-gray-800">Create Subjective Test</span>
+                   </button>
+               </div>
+            )}
           </div>
         </div>
 
@@ -2752,7 +2955,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           <p className="text-[13px] text-gray-400 font-medium max-w-[280px]">We couldn't find any tests for this series. Try adjusting your search or add a new test.</p>
                         </div>
                         <button
-                          onClick={() => setShowAddSingleTestDrawer(true)}
+                          onClick={() => { setEditingTest(null); setShowAddSingleTestDrawer(true); }}
                           className="px-6 py-2 bg-black text-white rounded-xl text-[13px] font-bold shadow-sm hover:scale-105 transition-all mt-2"
                         >
                           Add Your First Test
@@ -3359,62 +3562,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
     const extractedImages = bulkUploadData.extractedImages || [];
 
-    // Helper to render question diagram — handles both inline diagrams and diagram-option questions
-    const renderDiagram = (q: any, field: string = "question") => {
-      const dataUrl = field === "question" ? q.questionImage : (q.optionImages?.[field.charCodeAt(0) - 65] || "");
-      
-      if (!dataUrl) {
-        return (
-          <div className="mt-2 text-center">
-            <button 
-              onClick={() => setActiveImageAssignment({ questionId: q.id, field })}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 border-dashed transition-all ${activeImageAssignment?.questionId === q.id && activeImageAssignment?.field === field ? 'border-amber-400 bg-amber-50 text-amber-700 animate-pulse' : 'border-gray-200 text-gray-400 hover:border-black hover:text-black'}`}
-            >
-              <span className="material-symbols-outlined text-[16px]">add_photo_alternate</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
-                {activeImageAssignment?.questionId === q.id && activeImageAssignment?.field === field ? 'Select from Gallery' : `Add ${field === 'question' ? 'Diagram' : `Image`}`}
-              </span>
-            </button>
-          </div>
-        );
-      }
 
-      const isPageLevel = field === "question" && q.hasDiagramOptions;
-
-      return (
-        <div className={`mt-3 border rounded-xl overflow-hidden relative group ${isPageLevel ? 'border-amber-200 bg-amber-50/40' : 'border-blue-100 bg-blue-50/40'}`}>
-          <div className={`px-3 py-1.5 border-b flex items-center justify-between gap-1.5 ${isPageLevel ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-100'}`}>
-            <div className="flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[14px]">{isPageLevel ? 'schema' : 'image'}</span>
-              <span className={`text-[10px] font-bold uppercase tracking-wider ${isPageLevel ? 'text-amber-600' : 'text-blue-500'}`}>
-                {isPageLevel ? 'Options as Diagrams' : field === 'question' ? 'Question Diagram' : `Option ${field} Image`}
-              </span>
-            </div>
-            <button 
-              onClick={() => handleRemoveImage(q.id, field)}
-              className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700"
-            >
-              <span className="material-symbols-outlined text-[16px]">delete</span>
-            </button>
-          </div>
-          <div className="p-2 flex flex-col items-center">
-            <img
-              src={dataUrl}
-              alt="Diagram"
-              className={`w-full h-auto rounded-lg object-contain ${field === 'question' ? 'max-h-64' : 'max-h-32'}`}
-              loading="lazy"
-            />
-            <button 
-              onClick={() => setActiveImageAssignment({ questionId: q.id, field })}
-              className="mt-2 text-[10px] font-bold text-gray-400 hover:text-black flex items-center gap-1 transition-colors"
-            >
-              <span className="material-symbols-outlined text-[14px]">sync</span>
-              Change
-            </button>
-          </div>
-        </div>
-      );
-    };
 
     const formats = [
       {
@@ -3668,6 +3816,45 @@ const Tests: React.FC<Props> = ({ showToast }) => {
               </div>
             </div>
 
+            {/* Progress Bar */}
+            {(isParsing || (uploadProgress > 0 && uploadProgress < 100)) && (
+              <div className="mt-4 space-y-2">
+                <div className="flex justify-between text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                  <span>{isParsing ? 'Extracting Content...' : 'Uploading Questions...'}</span>
+                  <span>{Math.round(uploadProgress)}%</span>
+                </div>
+                <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-black transition-all duration-300"
+                    style={{ width: `${uploadProgress || (isParsing ? 50 : 0)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Upload Mode: Append vs Replace */}
+            <div className="space-y-3 mt-6">
+              <label className="text-[12px] font-semibold text-[#1a7a5e]">Upload Mode *</label>
+              <div className="flex gap-4">
+                {[
+                  { id: 'append', label: 'Append to Existing', icon: 'playlist_add', desc: 'Adds new questions after existing ones' },
+                  { id: 'replace', label: 'Replace All', icon: 'sync_problem', desc: 'Deletes existing questions before uploading', color: 'text-red-500' }
+                ].map(mode => (
+                  <div
+                    key={mode.id}
+                    onClick={() => setBulkUploadData({ ...bulkUploadData, uploadMode: mode.id as any })}
+                    className={`flex-1 p-4 rounded-xl border-2 cursor-pointer transition-all ${bulkUploadData.uploadMode === mode.id ? 'border-black bg-gray-50 shadow-sm' : 'border-gray-100 hover:border-gray-200 opacity-80'}`}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`material-symbols-outlined text-[20px] ${bulkUploadData.uploadMode === mode.id ? 'text-black' : 'text-gray-400'}`}>{mode.icon}</span>
+                      <span className="text-[13px] font-bold">{mode.label}</span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 leading-tight">{mode.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
             <div className="pt-6 flex items-center gap-4">
               <button
                 onClick={async () => {
@@ -3695,21 +3882,34 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                   }
 
                   try {
+                    const targetTestMatch =
+                      tests.find((t) => (t.id || (t as any)._id) === testId) ||
+                      detailTests.find(
+                        (t) => (t.id || (t as any)._id) === testId,
+                      );
+                    
+                    if (bulkUploadData.uploadMode === 'replace') {
+                      const confirm = window.confirm("WARNING: 'Replace All' mode will DELETE all existing questions in this test and replace them with the current file contents. Do you want to continue?");
+                      if (!confirm) return;
+
+                      showToast("Clearing existing questions...", "success");
+                      // Call clear questions API if exists, otherwise delete them
+                      // Standard way: update with empty array might not work if questions are separate docs
+                      // But our backend usually has a 'clear' or we delete them manually
+                      await fetch(`/api/questions/test/${testId}`, { 
+                        method: 'DELETE',
+                        headers: getAdminHeaders()
+                      });
+                    }
+
                     // 1. Fetch current questions for duplicate check and limit enforcement
-                    const existingQuestions =
-                      await testsAPI.getQuestions(testId);
+                    const existingQuestions = bulkUploadData.uploadMode === 'replace' ? [] : await testsAPI.getQuestions(testId);
                     const existingTexts = new Set(
                       existingQuestions.map((q: any) =>
                         (q.questionEn || q.question || "").trim().toLowerCase(),
                       ),
                     );
 
-                    // Get the limit for this test
-                    const targetTestMatch =
-                      tests.find((t) => (t.id || (t as any)._id) === testId) ||
-                      detailTests.find(
-                        (t) => (t.id || (t as any)._id) === testId,
-                      );
                     const limit = targetTestMatch?.noOfQuestions || 0;
                     const currentCount = existingQuestions.length;
 
@@ -3742,6 +3942,21 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                       (q) => !existingTexts.has((q.questionEn || "").trim().toLowerCase()),
                     );
 
+                    // Scoring settings from test
+                    const defaultMarks = targetTestMatch?.marksPerQuestion || targetTestMatch?.marks;
+                    const defaultNeg = targetTestMatch?.negativeMarking;
+
+                    // VALIDATION: Ensure scoring is defined
+                    const questionsMissingMarks = filteredList.filter(q => !q.positiveMarks && !q.marks && !defaultMarks);
+                    if (questionsMissingMarks.length > 0) {
+                      showToast(
+                        `${questionsMissingMarks.length} questions are missing marks and no Test-level default is set. Please set a 'Marks Per Question' in Test settings first.`,
+                        "error"
+                      );
+                      setIsParsing(false);
+                      return;
+                    }
+
                     let questionsToUpload = await Promise.all(
                       filteredList.map(async (q) => {
                         const qImageUrl = await uploadBase64Image(q.questionImage || "");
@@ -3768,8 +3983,10 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           questionHi: q.questionHi || "",
                           questionImage: qImageUrl,
                           type: "Multiple Choice Question",
-                          marks: q.positiveMarks || 4,
-                          negative: q.negativeMarks || -1,
+                          marks: q.positiveMarks || q.marks || defaultMarks,
+                          negative: q.negativeMarks || q.negative || defaultNeg,
+                          positiveMarks: q.positiveMarks || q.marks || defaultMarks,
+                          negativeMarks: q.negativeMarks || q.negative || defaultNeg,
                           displayOptions: processedOptions,
                           hasDiagramOptions: q.hasDiagramOptions || false,
                           solution: {
@@ -3797,63 +4014,80 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                     ) {
                       const allowed = limit - currentCount;
                       showToast(
-                        `Only ${allowed} out of ${questionsToUpload.length} new questions will be uploaded as per the limit (${limit}).`,
+                        `Only ${allowed} out of ${questionsToUpload.length} new q. will be uploaded as per limit (${limit}).`,
                         "error",
                       );
                       questionsToUpload = questionsToUpload.slice(0, allowed);
                     }
 
                     showToast(
-                      `Uploading ${questionsToUpload.length} new questions...`,
+                      `Uploading ${questionsToUpload.length} questions...`,
                       "success",
                     );
 
-                    // 3. Bulk upload
-                    const res = await fetch("/api/questions/bulk", {
-                      method: "POST",
-                      headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
-                      body: JSON.stringify({ questions: questionsToUpload }),
-                    });
+                    // 3. Sequential upload with progress
+                    setIsParsing(true);
+                    setUploadProgress(0);
+                    let uploadedCount = 0;
+                    const totalToUpload = questionsToUpload.length;
 
-                    if (!res.ok) throw new Error("Upload failed");
+                    try {
+                      for (const q of questionsToUpload) {
+                        const res = await fetch("/api/questions", {
+                          method: "POST",
+                          headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
+                          body: JSON.stringify(q),
+                        });
+                        if (!res.ok) throw new Error("Upload failed at question " + (uploadedCount + 1));
+                        uploadedCount++;
+                        setUploadProgress((uploadedCount / totalToUpload) * 100);
+                      }
 
-                    invalidateCache("tests");
-                    showToast(
-                      `${questionsToUpload.length} questions uploaded successfully!`,
-                      "success",
-                    );
+                      invalidateCache("tests");
+                      showToast(
+                        `${uploadedCount} questions uploaded successfully!`,
+                        "success",
+                      );
 
-                    // 4. Update the test's viewFormat if needed
-                    const formatVal = bulkUploadData.format || "default";
-                    await fetch(`/api/tests/${testId}`, {
-                      method: "PUT",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ viewFormat: formatVal }),
-                    });
+                      // 4. Update the test's viewFormat if needed
+                      const formatVal = bulkUploadData.format || "default";
+                      await fetch(`/api/tests/${testId}`, {
+                        method: "PUT",
+                        headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
+                        body: JSON.stringify({ viewFormat: formatVal }),
+                      });
 
-                    // 5. Cleanup and Sync
-                    setBulkUploadData({
-                      ...bulkUploadData,
-                      file: null,
-                      parsedQuestions: [],
-                    });
+                      // 5. Cleanup and Sync
+                      setBulkUploadData({
+                        ...bulkUploadData,
+                        file: null,
+                        parsedQuestions: [],
+                        extractedImages: [],
+                        uploadMode: 'append'
+                      });
 
-                    // Sync the editor view if we are in it
-                    const updatedQs = await testsAPI.getQuestions(testId);
-                    setEditorQuestions(updatedQs);
+                      // Sync the editor view if we are in it
+                      const updatedQs = await testsAPI.getQuestions(testId);
+                      setEditorQuestions(updatedQs);
 
-                    // 6. Redirect to view results
-                    if (targetTestMatch) {
-                      setViewingQuestionEditor(targetTestMatch);
-                      setActiveTab("Tests");
+                      // 6. Redirect to view results
+                      if (targetTestMatch) {
+                        setViewingQuestionEditor(targetTestMatch);
+                        setActiveTab("Tests");
+                      }
+                      loadData();
+                      } catch (err: any) {
+                        showToast(err.message || "Upload failed", "error");
+                      } finally {
+                        setIsParsing(false);
+                        setUploadProgress(0);
+                      }
+                    } catch (err: any) {
+                      showToast(err.message || "Upload failed", "error");
+                    } finally {
+                      setIsParsing(false);
+                      setUploadProgress(0);
                     }
-                    loadData();
-                  } catch (err: any) {
-                    showToast(
-                      err.message || "Failed to upload questions",
-                      "error",
-                    );
-                  }
                 }}
                 className="px-8 h-10 bg-[#12A5B8] hover:bg-[#0E8A9A] text-white rounded-lg font-medium text-[14px] transition-all active:scale-95 flex items-center justify-center w-[120px]"
               >
@@ -3918,8 +4152,14 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                       return (
                         <div
                           key={idx}
-                          className="px-5 py-6 hover:bg-gray-50/50 transition-colors border-l-4 border-transparent hover:border-black space-y-3 font-serif"
+                          className={`px-5 py-6 transition-colors border-l-4 space-y-3 font-serif ${q.needsReview ? 'bg-orange-50/30 border-orange-400 hover:bg-orange-50/50' : 'hover:bg-gray-50/50 border-transparent hover:border-black'}`}
                         >
+                          {q.needsReview && (
+                            <div className="flex items-center gap-2 mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg shrink-0 w-max">
+                              <span className="material-symbols-outlined text-yellow-600 text-[18px]">warning</span>
+                              <span className="text-[12px] font-bold text-yellow-700">Needs Review: Diagram uncertain or missing</span>
+                            </div>
+                          )}
                           <div className="flex gap-2">
                             <span className="font-bold text-[13px] text-gray-900 shrink-0">
                               Question:
@@ -3937,7 +4177,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                                     <span className="font-bold">({label.toLowerCase()})</span>
                                     <span>{renderQuestionText(opt)}</span>
                                   </div>
-                                  {renderDiagram(q, label)}
+                                  {renderDiagram(q, label, true)}
                                 </div>
                                );
                             })}
@@ -3968,7 +4208,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                               {q.negativeMarks || 0}
                             </p>
                           </div>
-                          {renderDiagram(q)}
+                          {renderDiagram(q, "question", true)}
                         </div>
                       );
                     }
@@ -3977,8 +4217,14 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                       return (
                         <div
                           key={idx}
-                          className="px-5 py-6 hover:bg-gray-50/50 transition-colors border-l-4 border-transparent hover:border-black space-y-3 font-serif"
+                          className={`px-5 py-6 transition-colors border-l-4 space-y-3 font-serif ${q.needsReview ? 'bg-orange-50/30 border-orange-400 hover:bg-orange-50/50' : 'hover:bg-gray-50/50 border-transparent hover:border-black'}`}
                         >
+                          {q.needsReview && (
+                            <div className="flex items-center gap-2 mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg shrink-0 w-max">
+                              <span className="material-symbols-outlined text-yellow-600 text-[18px]">warning</span>
+                              <span className="text-[12px] font-bold text-yellow-700">Needs Review: Diagram uncertain or missing</span>
+                            </div>
+                          )}
                           <div className="flex gap-2">
                             <span className="font-bold text-[13px] text-gray-900 shrink-0">
                               {idx + 1}.
@@ -4002,7 +4248,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                                     <span>{renderQuestionText(opt)}</span>
                                   </div>
                                   <div className="pl-4">
-                                    {renderDiagram(q, label)}
+                                    {renderDiagram(q, label, true)}
                                   </div>
                                 </div>
                                );
@@ -4027,7 +4273,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                                 ))}
                             </div>
                           </div>
-                          {renderDiagram(q)}
+                          {renderDiagram(q, "question", true)}
                         </div>
                       );
                     }
@@ -4036,12 +4282,13 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                       return (
                         <div
                           key={idx}
-                          className="px-5 py-4 hover:bg-blue-50/30 transition-colors border-b border-gray-100"
+                          className={`px-5 py-4 transition-colors border-b border-gray-100 ${q.needsReview ? 'bg-orange-50/30 hover:bg-orange-50/50' : 'hover:bg-blue-50/30'}`}
                         >
                           <div className="bg-gray-50 px-3 py-1.5 rounded-md flex justify-between items-center mb-3">
-                            <span className="text-[10px] font-black text-gray-400 uppercase">
-                              Question {idx + 1}
-                            </span>
+                           <div className="flex items-center gap-2 text-[10px] font-black uppercase">
+                            <span className="text-gray-400">Question {idx + 1}</span>
+                            {q.needsReview && <span className="text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded">⚠️ Needs Review</span>}
+                           </div>
                             <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full">
                               GRID STYLE
                             </span>
@@ -4065,7 +4312,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                                     {renderQuestionText(o)}
                                   </span>
                                 </div>
-                                {renderDiagram(q, label)}
+                                {renderDiagram(q, label, true)}
                               </div>
                             )})}
                           </div>
@@ -4078,7 +4325,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                               {renderQuestionText(q.solution).slice(0, 30)}...
                             </span>
                           </div>
-                          {renderDiagram(q)}
+                          {renderDiagram(q, "question", true)}
                         </div>
                       );
                     }
@@ -4113,7 +4360,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                                       </span>
                                       <span>{renderQuestionText(o)}</span>
                                     </div>
-                                    <div>{renderDiagram(q, label)}</div>
+                                    <div>{renderDiagram(q, label, true)}</div>
                                   </div>
                                 )})}
                               </div>
@@ -4127,7 +4374,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                               +{q.positiveMarks} Marks
                             </span>
                           </div>
-                          {renderDiagram(q)}
+                          {renderDiagram(q, "question", true)}
                         </div>
                       );
                     }
@@ -4169,7 +4416,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                                     </span>
                                     <span>{renderQuestionText(o)}</span>
                                   </div>
-                                  {renderDiagram(q, label)}
+                                  {renderDiagram(q, label, true)}
                                 </div>
                               )})}
                             </div>
@@ -4183,12 +4430,15 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                               <p className="text-[11px] text-gray-500 leading-relaxed italic">
                                 {renderQuestionText(q.solution)}
                               </p>
-                              <div className="pt-2 flex gap-4 text-[10px] font-black text-emerald-600">
-                                <span>CORRECT: {q.correctAnswer}</span>
-                                <span>WEIGHTAGE: {q.positiveMarks}M</span>
-                              </div>
+                              {renderDiagram(q, "solution", true)}
+                              {!(viewingQuestionEditor?.marksPerQuestion || viewingQuestionEditor?.totalMarks) && (
+                                <div className="pt-2 flex gap-4 text-[10px] font-black text-emerald-600">
+                                  <span>CORRECT: {q.correctAnswer}</span>
+                                  <span>WEIGHTAGE: {q.positiveMarks}M</span>
+                                </div>
+                              )}
                             </div>
-                            {renderDiagram(q)}
+                            {renderDiagram(q, "question", true)}
                           </div>
                         </div>
                       );
@@ -4234,7 +4484,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                                   </span>
                                   {renderQuestionText(o)}
                                 </div>
-                                {renderDiagram(q, label)}
+                                {renderDiagram(q, label, true)}
                               </div>
                             </div>
                           )})}
@@ -4250,29 +4500,32 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                             <div className="w-24 bg-gray-50 p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0">
                               Solution
                             </div>
-                            <div className="p-2.5 text-[11px] text-gray-500 italic flex-1">
+                            <div className="p-2.5 text-[11px] text-gray-500 italic flex-1 flex flex-col gap-2">
                               {renderQuestionText(q.solution)}
+                              {renderDiagram(q, "solution", true)}
                             </div>
                           </div>
-                          <div className="flex border-t border-gray-100">
-                            <div className="flex-1 flex border-r border-gray-100">
-                              <div className="w-24 bg-gray-50 p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0 whitespace-nowrap">
-                                Positive Marks
-                              </div>
-                              <div className="p-2.5 text-[11px] text-green-600 font-black">
-                                {q.positiveMarks}
-                              </div>
+                          {!(viewingQuestionEditor?.marksPerQuestion || viewingQuestionEditor?.totalMarks) && (
+                            <div className="flex border-t border-gray-100">
+                             <div className="flex-1 flex border-r border-gray-100">
+                               <div className="w-24 bg-gray-50 p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0 whitespace-nowrap">
+                                 Positive Marks
+                               </div>
+                               <div className="p-2.5 text-[11px] text-green-600 font-black">
+                                 {q.positiveMarks}
+                               </div>
+                             </div>
+                             <div className="flex-1 flex">
+                               <div className="w-24 bg-gray-50 p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0 whitespace-nowrap">
+                                 Negative Marks
+                               </div>
+                               <div className="p-2.5 text-[11px] text-red-500 font-black">
+                                 {q.negativeMarks}
+                               </div>
+                             </div>
                             </div>
-                            <div className="flex-1 flex">
-                              <div className="w-24 bg-gray-50 p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0 whitespace-nowrap">
-                                Negative Marks
-                              </div>
-                              <div className="p-2.5 text-[11px] text-red-500 font-black">
-                                {q.negativeMarks}
-                              </div>
-                            </div>
-                          </div>
-                          {renderDiagram(q)}
+                          )}
+                          {renderDiagram(q, "question", true)}
                         </div>
                       </div>
                     );
@@ -4846,7 +5099,21 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
       <AddSingleTestDrawer
         isOpen={showAddSingleTestDrawer}
-        onClose={() => setShowAddSingleTestDrawer(false)}
+        onClose={() => {
+          setShowAddSingleTestDrawer(false);
+          setEditingTest(null);
+        }}
+        editingTest={editingTest}
+        testSeriesOptions={courses.map((c) => ({
+          value: c.id || (c as any)._id,
+          label: c.name || c.title || "Unnamed Series",
+        }))}
+        defaultTestSeries={
+          viewingTestSeries 
+            ? [viewingTestSeries.id || (viewingTestSeries as any)._id] 
+            : []
+        }
+        showToast={showToast}
         onSubmit={async (testData) => {
           try {
             // Auto-fill courseId from context if adding within a series
@@ -4906,17 +5173,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             showToast(err.message || "Failed to save test", "error");
           }
         }}
-        testSeriesOptions={tests
-          .filter((t: any) => t.isSeries === true)
-          .map((t: any) => ({
-            value: t.id || (t as any)._id,
-            label: t.name || t.title || "",
-          }))}
-        defaultTestSeries={
-          viewingTestSeries
-            ? [viewingTestSeries.id || (viewingTestSeries as any)._id]
-            : []
-        }
       />
 
       <AddTestPDFDrawer
@@ -4924,21 +5180,36 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         onClose={() => setShowAddTestPDFDrawer(false)}
         onSubmit={async (data) => {
           try {
-            // Simulate API call for PDF test
-            showToast("Test PDF uploaded and processed", "success");
-            await testsAPI.create({
-              ...data,
-              courseId: viewingTestSeries.id,
-              type: "PDF",
-            });
+            if (!data.pdfFiles || data.pdfFiles.length === 0) {
+              throw new Error("Please select at least one PDF file");
+            }
+            showToast(`Processing ${data.pdfFiles.length} PDF(s)...`, "success");
+            const targetCourseId = viewingTestSeries?.id || (viewingTestSeries as any)?._id || (data.testSeries && data.testSeries.length > 0 ? data.testSeries[0] : "");
+
+            for (let i = 0; i < data.pdfFiles.length; i++) {
+              const file = data.pdfFiles[i];
+              const originalTitle = data.title || "Untitled Test";
+              const testTitle = data.pdfFiles.length > 1 ? file.name.replace(/\.[^/.]+$/, "") : originalTitle;
+              
+              await testsAPI.create({
+                ...data,
+                title: testTitle,
+                name: testTitle,
+                courseId: targetCourseId,
+                type: "PDF",
+                pdfFile: file // Add individual file back as pdfFile for backwards compatibility
+              });
+            }
+
             setShowAddTestPDFDrawer(false);
-            showToast("Test PDF added successfully", "success");
+            showToast(`${data.pdfFiles.length} Test PDF(s) added successfully`, "success");
+            loadData();
           } catch (err: any) {
             showToast(err.message, "error");
           }
         }}
         testSeriesOptions={courses.map((c) => ({
-          value: c.id,
+          value: c.id || (c as any)?._id,
           label: c.name || c.title || "",
         }))}
       />
@@ -5536,100 +5807,11 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         </div>
       )}
 
-      {/* Sort Question Order Modal */}
-      {showSortModal && (
-        <div className="fixed inset-0 bg-black/40 z-[100000] flex items-center justify-center backdrop-blur-[2px] animate-in fade-in duration-300 p-6">
-          <div className="w-full max-w-[750px] bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
-            {/* Header */}
-            <div className="flex items-center justify-between px-8 py-5 border-b border-gray-100">
-              <h3 className="text-[17px] font-bold text-gray-800 tracking-tight">
-                Sort Question Order
-              </h3>
-              <button
-                onClick={() => setShowSortModal(false)}
-                className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-black hover:bg-gray-50 rounded-full transition-all"
-              >
-                <span className="material-symbols-outlined font-bold">
-                  close
-                </span>
-              </button>
-            </div>
 
-            {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={editorQuestions.map((q) => q.id || q._id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="space-y-4">
-                    {editorQuestions.map((q, idx) => (
-                      <SortableQuestionItem
-                        key={q.id || q._id || idx}
-                        id={q.id || q._id}
-                        question={q}
-                        index={idx}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
-              {editorQuestions.length === 0 && (
-                <div className="py-20 text-center">
-                  <span className="material-symbols-outlined text-gray-200 text-6xl">
-                    quiz
-                  </span>
-                  <p className="text-gray-400 mt-4 font-medium">
-                    No questions available to sort
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="px-8 py-5 border-t border-gray-100 flex items-center justify-end gap-3 bg-white rounded-b-2xl">
-              <button
-                onClick={() => setShowSortModal(false)}
-                className="px-8 py-2.5 border border-gray-200 rounded-lg text-[13px] font-bold text-gray-500 hover:bg-gray-50 transition-all active:scale-95"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  try {
-                    const updates = editorQuestions.map((q, idx) => ({
-                      id: q.id,
-                      _id: q._id,
-                      orderIndex: idx + 1,
-                    }));
-
-                    await questionsAPI.updateAll(updates);
-                    showToast("Question order saved successfully", "success");
-                    setShowSortModal(false);
-                    loadData();
-                  } catch (err: any) {
-                    showToast(
-                      err.message || "Failed to save question order",
-                      "error",
-                    );
-                  }
-                }}
-                disabled={editorQuestions.length === 0}
-                className="px-10 py-2.5 bg-[#4F46E5] text-white text-[13px] font-bold rounded-lg hover:bg-[#4338CA] transition-all shadow-md active:scale-95 disabled:opacity-50"
-              >
-                Save Order
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {/* Add Question Drawer */}
       <AddQuestionDrawer
         isOpen={!!viewingAddQuestionForm}
+        test={viewingQuestionEditor}
         onClose={() => setViewingAddQuestionForm(null)}
         onSubmit={(data) => {
           handleSaveQuestion(data);
@@ -5768,6 +5950,48 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           </div>
         </div>
       )}
+
+      <BulkEditQuestionsDrawer
+        isOpen={showBulkEditDrawer}
+        onClose={() => setShowBulkEditDrawer(false)}
+        questions={editorQuestions}
+        test={viewingQuestionEditor}
+        testName={viewingQuestionEditor?.name || viewingQuestionEditor?.title}
+        onSave={async (updatedQuestions) => {
+          try {
+            // Priority 1: Update individual questions in global collection if they have IDs
+            const individualUpdates = updatedQuestions.map(async (q: any) => {
+              const qId = q.id || q._id;
+              if (qId && typeof qId === 'string' && qId.length > 5) {
+                try {
+                  return await fetch(`/api/questions/${qId}`, {
+                    method: 'PUT',
+                    headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify(q)
+                  });
+                } catch (e) {
+                  console.warn(`Failed to update individual question ${qId}`, e);
+                }
+              }
+              return null;
+            });
+            
+            await Promise.all(individualUpdates);
+
+            // Priority 2: Update the Test document (embedded fallback)
+            setEditorQuestions(updatedQuestions);
+            await testsAPI.update(viewingQuestionEditor.id || viewingQuestionEditor._id, {
+              ...viewingQuestionEditor,
+              questions: updatedQuestions
+            });
+            
+            showToast("Bulk edit changes saved successfully", "success");
+          } catch (error: any) {
+            showToast(error.message || "Failed to save bulk edits", "error");
+            throw error;
+          }
+        }}
+      />
 
     </div>
   );

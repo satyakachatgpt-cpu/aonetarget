@@ -14,8 +14,10 @@ export const evaluateTest = ({ questions, answers, test }) => {
   const questionResults = questions.map((q) => {
     const studentAnswer = answers[q.id] || null;
     const isCorrect = studentAnswer === q.correctAnswer;
-    const marks = q.marks || test.marksPerQuestion || 4;
-    const negMarks = q.negativeMarks || testNegativeMarking || 0;
+    
+    // Resolve marks: Strictly use saved DB values
+    const marks = Number(q.marks || q.positiveMarks || test.marksPerQuestion);
+    const negMarks = Number(q.negativeMarks || test.negativeMarking);
 
     totalMarks += marks;
 

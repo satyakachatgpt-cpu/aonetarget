@@ -58,7 +58,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
         testSeries: [] as string[],
         noOfQuestions: '0',
         totalMarks: '',
-        totalDuration: '180',
+        totalDuration: '',
         sortingOrder: '0.00',
         enableSectionSelector: false,
         startDate: '2026-03-09T23:11:38',
@@ -86,7 +86,9 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
         isLive: false,
         adminStatus: 'Enable',
         telegramChannelId: '',
-        sendTelegramNotice: false
+        sendTelegramNotice: false,
+        marksPerQuestion: '',
+        negativeMarking: ''
     });
 
     const [sections, setSections] = useState([
@@ -96,30 +98,99 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
     const pdfInputRef = useRef<HTMLInputElement>(null);
     const videoInputRef = useRef<HTMLInputElement>(null);
 
-    useEffect(() => {
-        if (editingTest) {
-            setFormData(prev => ({
-                ...prev,
-                title: editingTest.name || '',
-                status: editingTest.status === 'active' ? 'Free' : 'Paid', // Assuming mapping
-                testSeries: editingTest.courseId ? [editingTest.courseId] : [],
-                noOfQuestions: editingTest.questions?.toString() || '',
-                totalMarks: editingTest.totalMarks?.toString() || '',
-                totalDuration: editingTest.duration?.toString() || '',
-                sortingOrder: editingTest.sortBy?.toString() || '0.00',
-                enableSectionSelector: editingTest.enableSectionSelector || false,
-                startDate: editingTest.openDate || '2026-03-09T23:11:38',
-                endDate: editingTest.closeDate || '2026-03-09T23:11:38',
-            }));
-            if (editingTest.sections) setSections(editingTest.sections);
-        }
-    }, [editingTest]);
+    const prevOpenRef = useRef(false);
 
     useEffect(() => {
-        if (isOpen && !editingTest && defaultTestSeries && defaultTestSeries.length > 0) {
-            setFormData(prev => ({ ...prev, testSeries: defaultTestSeries }));
+        if (isOpen && !prevOpenRef.current) {
+            // Drawer just opened - initialize form
+            if (editingTest) {
+                setFormData({
+                    title: editingTest.name || editingTest.title || '',
+                    status: editingTest.status === 'active' ? 'Free' : (editingTest.status === 'inactive' ? 'Paid' : 'Free'),
+                    testSeries: editingTest.courseId ? [editingTest.courseId] : (editingTest.courseIds || []),
+                    noOfQuestions: editingTest.noOfQuestions?.toString() || editingTest.questions?.toString() || '0',
+                    totalMarks: editingTest.totalMarks?.toString() || editingTest.marks?.toString() || '',
+                    totalDuration: editingTest.duration?.toString() || editingTest.time?.toString() || '',
+                    sortingOrder: editingTest.sortBy?.toString() || '0.00',
+                    enableSectionSelector: editingTest.enableSectionSelector || false,
+                    startDate: editingTest.openDate || editingTest.date || new Date().toISOString().slice(0, 16),
+                    endDate: editingTest.closeDate || editingTest.date || new Date().toISOString().slice(0, 16),
+                    language: editingTest.language || 'English',
+                    translationTitle: editingTest.translationTitle || '',
+                    maxAttempts: editingTest.maxAttempts?.toString() || '-1',
+                    shuffleQuestions: editingTest.shuffleQuestions || false,
+                    shuffleOptions: editingTest.shuffleOptions || false,
+                    displayPause: editingTest.displayPause || false,
+                    allowTestAttempt: editingTest.allowTestAttempt !== undefined ? editingTest.allowTestAttempt : true,
+                    allQuestionCompulsory: editingTest.allQuestionCompulsory || false,
+                    uiType: editingTest.uiType || 'Default',
+                    testPdf: null,
+                    testVideo: null,
+                    solutionLink: editingTest.solutionLink || '',
+                    enablePartialScoring: editingTest.enablePartialScoring || false,
+                    displayTestResults: editingTest.displayTestResults !== undefined ? editingTest.displayTestResults : true,
+                    displayRank: editingTest.displayRank !== undefined ? editingTest.displayRank : true,
+                    showSolution: editingTest.showSolution !== undefined ? editingTest.showSolution : true,
+                    showTotalStudents: editingTest.showTotalStudents !== undefined ? editingTest.showTotalStudents : true,
+                    showPercentile: editingTest.showPercentile !== undefined ? editingTest.showPercentile : true,
+                    showSolutionsPdf: editingTest.showSolutionsPdf || false,
+                    isLive: editingTest.isLive || false,
+                    adminStatus: editingTest.adminStatus || 'Enable',
+                    telegramChannelId: editingTest.telegramChannelId || '',
+                    sendTelegramNotice: editingTest.sendTelegramNotice || false,
+                    marksPerQuestion: editingTest.marksPerQuestion?.toString() || '',
+                    negativeMarking: editingTest.negativeMarking?.toString() || ''
+                });
+                if (editingTest.sections && Array.isArray(editingTest.sections)) {
+                    setSections(editingTest.sections);
+                }
+            } else {
+                // Reset for NEW test
+                setFormData({
+                    title: '',
+                    status: 'Free',
+                    testSeries: defaultTestSeries || [],
+                    noOfQuestions: '0',
+                    totalMarks: '',
+                    totalDuration: '',
+                    sortingOrder: '0.00',
+                    enableSectionSelector: false,
+                    startDate: new Date().toISOString().slice(0, 16),
+                    endDate: new Date().toISOString().slice(0, 16),
+                    language: 'English',
+                    translationTitle: '',
+                    maxAttempts: '-1',
+                    shuffleQuestions: false,
+                    shuffleOptions: false,
+                    displayPause: false,
+                    allowTestAttempt: true,
+                    allQuestionCompulsory: false,
+                    uiType: 'Default',
+                    testPdf: null,
+                    testVideo: null,
+                    solutionLink: '',
+                    enablePartialScoring: false,
+                    displayTestResults: true,
+                    displayRank: true,
+                    showSolution: true,
+                    showTotalStudents: true,
+                    showPercentile: true,
+                    showSolutionsPdf: false,
+                    isLive: false,
+                    adminStatus: 'Enable',
+                    telegramChannelId: '',
+                    sendTelegramNotice: false,
+                    marksPerQuestion: '',
+                    negativeMarking: ''
+                });
+                setSections([{ id: Date.now(), section: '', maxQuestions: -1, partTitle: '', cutoff: 0, isOptional: true, fixedTiming: false }]);
+            }
         }
+        prevOpenRef.current = isOpen;
     }, [isOpen, editingTest, defaultTestSeries]);
+
+    // Removed the redundant second useEffect that was only handling testSeries
+
 
     const handleInputChange = (field: string, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -269,12 +340,60 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
 
                                     {/* Total Marks */}
                                     <div className="space-y-2 col-span-1">
-                                        <label className="text-[13px] font-bold text-[#2d3748]">Total Marks<span className="text-red-500 ml-0.5">*</span></label>
+                                        <label className="text-[13px] font-bold text-[#2d3748]">Total Marks (Registered)<span className="text-red-500 ml-0.5">*</span></label>
                                         <input
                                             type="text"
                                             value={formData.totalMarks}
                                             onChange={(e) => handleInputChange('totalMarks', e.target.value)}
-                                            placeholder="Enter total marks"
+                                            placeholder="Sum of all question marks"
+                                            className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-400 transition-all placeholder:text-gray-300 shadow-sm"
+                                        />
+                                    </div>
+
+                                    {/* No of Questions */}
+                                    <div className="space-y-2 col-span-1">
+                                        <label className="text-[13px] font-bold text-[#2d3748]">No. of Questions<span className="text-red-500 ml-0.5">*</span></label>
+                                        <input
+                                            type="text"
+                                            value={formData.noOfQuestions}
+                                            onChange={(e) => handleInputChange('noOfQuestions', e.target.value)}
+                                            placeholder="Expected total questions"
+                                            className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-400 transition-all placeholder:text-gray-300 shadow-sm"
+                                        />
+                                    </div>
+
+                                    {/* Total Duration */}
+                                    <div className="space-y-2 col-span-1">
+                                        <label className="text-[13px] font-bold text-[#2d3748]">Test Duration (Minutes)<span className="text-red-500 ml-0.5">*</span></label>
+                                        <input
+                                            type="text"
+                                            value={formData.totalDuration}
+                                            onChange={(e) => handleInputChange('totalDuration', e.target.value)}
+                                            placeholder="Timer duration"
+                                            className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-400 transition-all placeholder:text-gray-300 shadow-sm"
+                                        />
+                                    </div>
+
+                                    {/* Marks Per Question */}
+                                    <div className="space-y-2 col-span-1">
+                                        <label className="text-[13px] font-bold text-[#2d3748]">Marks Per Question (Default)<span className="text-red-500 ml-0.5">*</span></label>
+                                        <input
+                                            type="text"
+                                            value={formData.marksPerQuestion}
+                                            onChange={(e) => handleInputChange('marksPerQuestion', e.target.value)}
+                                            placeholder="4"
+                                            className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-400 transition-all placeholder:text-gray-300 shadow-sm"
+                                        />
+                                    </div>
+
+                                    {/* Negative Marking */}
+                                    <div className="space-y-2 col-span-1">
+                                        <label className="text-[13px] font-bold text-[#2d3748]">Negative Marking (Default)<span className="text-red-500 ml-0.5">*</span></label>
+                                        <input
+                                            type="text"
+                                            value={formData.negativeMarking}
+                                            onChange={(e) => handleInputChange('negativeMarking', e.target.value)}
+                                            placeholder="-1"
                                             className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-400 transition-all placeholder:text-gray-300 shadow-sm"
                                         />
                                     </div>
@@ -720,6 +839,8 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                                     if (!formData.title) return showToast?.('Test Title is mandatory!', 'error');
                                     if (formData.testSeries.length === 0) return showToast?.('Select at least one Test Series!', 'error');
                                     if (!formData.totalMarks) return showToast?.('Total Marks is mandatory!', 'error');
+                                    if (!formData.marksPerQuestion) return showToast?.('Marks Per Question is mandatory!', 'error');
+                                    if (!formData.negativeMarking) return showToast?.('Negative Marking is mandatory!', 'error');
                                     
                                     onSubmit({ ...formData, sections });
                                 }}

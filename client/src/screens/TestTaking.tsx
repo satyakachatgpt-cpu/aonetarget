@@ -203,8 +203,8 @@ const TestTaking: React.FC = () => {
       let negativeMarksTotal = 0;
       const testNegMarking = test?.negativeMarking || 0;
       questions.forEach(q => {
-        const marks = q.marks || test?.marksPerQuestion || 4;
-        const negMarks = q.negativeMarks !== undefined ? q.negativeMarks : (q.negative !== undefined ? q.negative : (testNegMarking || 0));
+        const marks = Number(q.marks) || Number(q.positiveMarks) || Number(test?.marksPerQuestion) || Number(test?.marks) || 0;
+        const negMarks = Number(q.negativeMarks) !== undefined && !isNaN(Number(q.negativeMarks)) ? Number(q.negativeMarks) : (Number(q.negative) !== undefined && !isNaN(Number(q.negative)) ? Number(q.negative) : (Number(testNegMarking) || 0));
         totalMarks += marks;
         if (answers[q.id]) {
           if (answers[q.id] === q.correctAnswer) {
@@ -472,7 +472,14 @@ const TestTaking: React.FC = () => {
                 Question {currentIndex + 1} of {questions.length}
               </span>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-gray-400">{currentQuestion?.marks || test?.marksPerQuestion || 1} mark{(currentQuestion?.marks || 1) > 1 ? 's' : ''}</span>
+                <div className="flex flex-col items-end">
+                   <span className="text-[10px] font-black text-green-600">
+                    +{Number(test?.marksPerQuestion) || Number(test?.positive) || Number(currentQuestion?.marks) || Number(currentQuestion?.positiveMarks) || 0}
+                  </span>
+                  <span className="text-[10px] font-black text-red-500">
+                    -{Math.abs(Number(test?.negativeMarking) || Number(test?.negative) || Number(currentQuestion?.negativeMarks) || Number(currentQuestion?.negative) || 0)}
+                  </span>
+                </div>
                 <button
                   onClick={() => currentQuestion && toggleFlag(currentQuestion.id)}
                   className={`p-1.5 rounded-full ${flagged.has(currentQuestion?.id) ? 'bg-amber-100 text-amber-600' : 'bg-gray-100 text-gray-400'}`}
@@ -490,12 +497,6 @@ const TestTaking: React.FC = () => {
               </p>
               {currentQuestion.questionImage && (
                 <img src={getImageUrl(currentQuestion.questionImage)} alt="Question" className="mt-3 max-w-full rounded-lg border max-h-60 object-contain" />
-              )}
-              {(test?.negativeMarking > 0 || currentQuestion.negativeMarks > 0) && (
-                <p className="text-[10px] text-[#D32F2F] mt-2 flex items-center gap-1">
-                  <span className="material-symbols-rounded text-[12px]">remove_circle</span>
-                  Negative marking: -{currentQuestion.negativeMarks || test?.negativeMarking || 0} marks for wrong answer
-                </p>
               )}
             </div>
 
