@@ -177,6 +177,26 @@ export const deleteAllQuestions = async (req, res) => {
   }
 };
 
+export const deleteQuestionsByTest = async (req, res) => {
+  const { testId } = req.params;
+  try {
+    const filter = { $or: [{ testId: testId }, { testId: String(testId) }] };
+    if (!isNaN(testId)) filter.$or.push({ testId: Number(testId) });
+    
+    // Also handle possible ObjectId
+    if (mongoose.Types.ObjectId.isValid(testId)) {
+        filter.$or.push({ testId: new mongoose.Types.ObjectId(testId) });
+    }
+
+    const result = await db.collection('questions').deleteMany(filter);
+    console.log(`[Delete By Test] Deleted ${result.deletedCount} questions for test ${testId}`);
+    res.json({ success: true, message: `Deleted ${result.deletedCount} questions for test` });
+  } catch (error) {
+    console.error('[Delete By Test] Error:', error);
+    res.status(500).json({ error: 'Failed to delete questions for test: ' + error.message });
+  }
+};
+
 export const bulkDeleteQuestions = async (req, res) => {
   try {
     const { ids, questionIds } = req.body;
@@ -264,8 +284,8 @@ export const bulkExcelUpload = async (req, res) => {
       optionD: row.optionD || row['Option D'] || '',
       correctAnswer: (row.correctAnswer || row['Correct Answer'] || 'A').toString().toUpperCase(),
       explanation: row.explanation || '',
-      marks: parseInt(row.marks) || 4,
-      negativeMarks: parseFloat(row.negativeMarks) || 0
+      marks: Number(row.marks) || 0,
+      negativeMarks: Number(row.negativeMarks) || 0
     }));
     if (questions.length === 0) return res.status(400).json({ error: 'No valid question data found' });
     const result = await db.collection('questions').insertMany(questions);

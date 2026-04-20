@@ -28,7 +28,7 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
         image: null as string | null,
         validity: '',
         expiryMode: 'Validity' as 'Validity' | 'End Date' | 'Lifetime Access',
-        duration: '180',
+        duration: '',
         noOfQuestions: '0',
     });
     const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -58,7 +58,7 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
                     image: editingTest.logo || null,
                     validity: editingTest.validity || '',
                     expiryMode: editingTest.expiryMode || 'Validity',
-                    duration: editingTest.duration?.toString() || '180',
+                    duration: editingTest.duration?.toString() || '',
                     noOfQuestions: editingTest.noOfQuestions?.toString() || editingTest.questions?.toString() || '0',
                 });
                 setImagePreview(editingTest.logo || null);

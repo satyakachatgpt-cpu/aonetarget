@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RightSideDrawer, DrawerBody } from './DrawerSystem';
 import CustomDropdown from './CustomDropdown';
+import RichTextEditor from '../shared/RichTextEditor';
 
 interface AddSingleTestDrawerProps {
     isOpen: boolean;
@@ -22,6 +23,11 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
     showToast
 }) => {
     const [activeTab, setActiveTab] = useState<'Basic' | 'Advanced'>('Basic');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [showTermsEditor, setShowTermsEditor] = useState(false);
+
+    // Get current datetime string for min attribute restriction
+    const minDateTime = new Date().toISOString().slice(0, 16);
 
     // Helper to format date for display
     const formatDisplayDate = (dateStr: string) => {
@@ -58,7 +64,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
         testSeries: [] as string[],
         noOfQuestions: '0',
         totalMarks: '',
-        totalDuration: '180',
+        totalDuration: '',
         sortingOrder: '0.00',
         enableSectionSelector: false,
         startDate: '2026-03-09T23:11:38',
@@ -86,7 +92,10 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
         isLive: false,
         adminStatus: 'Enable',
         telegramChannelId: '',
-        sendTelegramNotice: false
+        sendTelegramNotice: false,
+        marksPerQuestion: '',
+        negativeMarking: '',
+        termsAndConditions: ''
     });
 
     const [sections, setSections] = useState([
@@ -96,30 +105,101 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
     const pdfInputRef = useRef<HTMLInputElement>(null);
     const videoInputRef = useRef<HTMLInputElement>(null);
 
-    useEffect(() => {
-        if (editingTest) {
-            setFormData(prev => ({
-                ...prev,
-                title: editingTest.name || '',
-                status: editingTest.status === 'active' ? 'Free' : 'Paid', // Assuming mapping
-                testSeries: editingTest.courseId ? [editingTest.courseId] : [],
-                noOfQuestions: editingTest.questions?.toString() || '',
-                totalMarks: editingTest.totalMarks?.toString() || '',
-                totalDuration: editingTest.duration?.toString() || '',
-                sortingOrder: editingTest.sortBy?.toString() || '0.00',
-                enableSectionSelector: editingTest.enableSectionSelector || false,
-                startDate: editingTest.openDate || '2026-03-09T23:11:38',
-                endDate: editingTest.closeDate || '2026-03-09T23:11:38',
-            }));
-            if (editingTest.sections) setSections(editingTest.sections);
-        }
-    }, [editingTest]);
+    const prevOpenRef = useRef(false);
 
     useEffect(() => {
-        if (isOpen && !editingTest && defaultTestSeries && defaultTestSeries.length > 0) {
-            setFormData(prev => ({ ...prev, testSeries: defaultTestSeries }));
+        if (isOpen && !prevOpenRef.current) {
+            // Drawer just opened - initialize form
+            if (editingTest) {
+                setFormData({
+                    title: editingTest.name || editingTest.title || '',
+                    status: editingTest.status === 'active' ? 'Free' : (editingTest.status === 'inactive' ? 'Paid' : 'Free'),
+                    testSeries: editingTest.courseId ? [editingTest.courseId] : (editingTest.courseIds || []),
+                    noOfQuestions: editingTest.noOfQuestions?.toString() || editingTest.questions?.toString() || '0',
+                    totalMarks: editingTest.totalMarks?.toString() || editingTest.marks?.toString() || '',
+                    totalDuration: editingTest.duration?.toString() || editingTest.time?.toString() || '',
+                    sortingOrder: editingTest.sortBy?.toString() || '0.00',
+                    enableSectionSelector: editingTest.enableSectionSelector || false,
+                    startDate: editingTest.openDate || editingTest.date || new Date().toISOString().slice(0, 16),
+                    endDate: editingTest.closeDate || editingTest.date || new Date().toISOString().slice(0, 16),
+                    language: editingTest.language || 'English',
+                    translationTitle: editingTest.translationTitle || '',
+                    maxAttempts: editingTest.maxAttempts?.toString() || '-1',
+                    shuffleQuestions: editingTest.shuffleQuestions || false,
+                    shuffleOptions: editingTest.shuffleOptions || false,
+                    displayPause: editingTest.displayPause || false,
+                    allowTestAttempt: editingTest.allowTestAttempt !== undefined ? editingTest.allowTestAttempt : true,
+                    allQuestionCompulsory: editingTest.allQuestionCompulsory || false,
+                    uiType: editingTest.uiType || 'Default',
+                    testPdf: null,
+                    testVideo: null,
+                    solutionLink: editingTest.solutionLink || '',
+                    enablePartialScoring: editingTest.enablePartialScoring || false,
+                    displayTestResults: editingTest.displayTestResults !== undefined ? editingTest.displayTestResults : true,
+                    displayRank: editingTest.displayRank !== undefined ? editingTest.displayRank : true,
+                    showSolution: editingTest.showSolution !== undefined ? editingTest.showSolution : true,
+                    showTotalStudents: editingTest.showTotalStudents !== undefined ? editingTest.showTotalStudents : true,
+                    showPercentile: editingTest.showPercentile !== undefined ? editingTest.showPercentile : true,
+                    showSolutionsPdf: editingTest.showSolutionsPdf || false,
+                    isLive: editingTest.isLive || false,
+                    adminStatus: editingTest.adminStatus || 'Enable',
+                    telegramChannelId: editingTest.telegramChannelId || '',
+                    sendTelegramNotice: editingTest.sendTelegramNotice || false,
+                    marksPerQuestion: editingTest.marksPerQuestion?.toString() || '',
+                    negativeMarking: editingTest.negativeMarking?.toString() || '',
+                    termsAndConditions: editingTest.termsAndConditions || ''
+                });
+                if (editingTest.sections && Array.isArray(editingTest.sections)) {
+                    setSections(editingTest.sections);
+                }
+            } else {
+                // Reset for NEW test
+                setFormData({
+                    title: '',
+                    status: 'Free',
+                    testSeries: defaultTestSeries || [],
+                    noOfQuestions: '0',
+                    totalMarks: '',
+                    totalDuration: '',
+                    sortingOrder: '0.00',
+                    enableSectionSelector: false,
+                    startDate: new Date().toISOString().slice(0, 16),
+                    endDate: new Date().toISOString().slice(0, 16),
+                    language: 'English',
+                    translationTitle: '',
+                    maxAttempts: '-1',
+                    shuffleQuestions: false,
+                    shuffleOptions: false,
+                    displayPause: false,
+                    allowTestAttempt: true,
+                    allQuestionCompulsory: false,
+                    uiType: 'Default',
+                    testPdf: null,
+                    testVideo: null,
+                    solutionLink: '',
+                    enablePartialScoring: false,
+                    displayTestResults: true,
+                    displayRank: true,
+                    showSolution: true,
+                    showTotalStudents: true,
+                    showPercentile: true,
+                    showSolutionsPdf: false,
+                    isLive: false,
+                    adminStatus: 'Enable',
+                    telegramChannelId: '',
+                    sendTelegramNotice: false,
+                    marksPerQuestion: '',
+                    negativeMarking: '',
+                    termsAndConditions: ''
+                });
+                setSections([{ id: Date.now(), section: '', maxQuestions: -1, partTitle: '', cutoff: 0, isOptional: true, fixedTiming: false }]);
+            }
         }
+        prevOpenRef.current = isOpen;
     }, [isOpen, editingTest, defaultTestSeries]);
+
+    // Removed the redundant second useEffect that was only handling testSeries
+
 
     const handleInputChange = (field: string, value: any) => {
         setFormData(prev => ({ ...prev, [field]: value }));
@@ -246,12 +326,59 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
 
                                     {/* Test Instructions */}
                                     <div className="space-y-2 col-span-2">
-                                        <label className="text-[13px] font-bold text-[#2d3748]">Test Instructions<span className="text-red-500 ml-0.5">*</span></label>
-                                        <div className="flex">
-                                            <button className="flex items-center justify-center px-6 h-12 border border-gray-200 rounded-xl text-[14px] font-bold text-[#4a5568] hover:bg-gray-50 transition-all shadow-sm">
-                                                Add Terms
-                                            </button>
-                                        </div>
+                                        <label className="text-[13px] font-bold text-[#2d3748]">Test Instructions (Terms and Conditions)<span className="text-red-500 ml-0.5">*</span></label>
+                                        {!showTermsEditor ? (
+                                            <div className="flex">
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (!formData.termsAndConditions) {
+                                                            setFormData(prev => ({ 
+                                                                ...prev, 
+                                                                termsAndConditions: '<ul><li>Ensure you have a stable internet connection before starting the test.</li><li>You must attempt all the questions.</li></ul>' 
+                                                            }));
+                                                        }
+                                                        setShowTermsEditor(true);
+                                                    }}
+                                                    className={`flex items-center justify-center px-6 h-12 border ${formData.termsAndConditions ? 'border-[#1a202c] bg-gray-50 text-[#1a202c]' : 'border-gray-200 text-[#4a5568] hover:bg-gray-50'} rounded-xl text-[14px] font-bold transition-all shadow-sm`}>
+                                                    {formData.termsAndConditions ? 'Edit Terms' : 'Add Terms'}
+                                                </button>
+                                                {formData.termsAndConditions && (
+                                                    <div className="ml-3 flex items-center text-green-600 text-[13px] font-bold bg-green-50 px-3 rounded-lg border border-green-100">
+                                                        <span className="material-symbols-outlined text-[18px] mr-1">check_circle</span>
+                                                        Terms Added
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
+                                                <RichTextEditor
+                                                    label=""
+                                                    content={formData.termsAndConditions}
+                                                    onChange={(val) => handleInputChange('termsAndConditions', val)}
+                                                    height="250px"
+                                                />
+                                                <div className="mt-3 flex gap-2 justify-end">
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (formData.termsAndConditions === '<ul><li>Ensure you have a stable internet connection before starting the test.</li><li>You must attempt all the questions.</li></ul>') {
+                                                                handleInputChange('termsAndConditions', '');
+                                                            }
+                                                            setShowTermsEditor(false);
+                                                        }}
+                                                        className="px-4 h-10 bg-gray-100 text-gray-600 border border-gray-200 rounded-lg text-[13px] font-bold hover:bg-gray-200 transition-all">
+                                                        Cancel
+                                                    </button>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setShowTermsEditor(false)}
+                                                        className="px-6 h-10 bg-[#1a202c] text-white rounded-lg text-[13px] font-bold hover:bg-black transition-all">
+                                                        Update Terms
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Test Series */}
@@ -269,12 +396,60 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
 
                                     {/* Total Marks */}
                                     <div className="space-y-2 col-span-1">
-                                        <label className="text-[13px] font-bold text-[#2d3748]">Total Marks<span className="text-red-500 ml-0.5">*</span></label>
+                                        <label className="text-[13px] font-bold text-[#2d3748]">Total Marks (Registered)<span className="text-red-500 ml-0.5">*</span></label>
                                         <input
                                             type="text"
                                             value={formData.totalMarks}
                                             onChange={(e) => handleInputChange('totalMarks', e.target.value)}
-                                            placeholder="Enter total marks"
+                                            placeholder="Sum of all question marks"
+                                            className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-400 transition-all placeholder:text-gray-300 shadow-sm"
+                                        />
+                                    </div>
+
+                                    {/* No of Questions */}
+                                    <div className="space-y-2 col-span-1">
+                                        <label className="text-[13px] font-bold text-[#2d3748]">No. of Questions<span className="text-red-500 ml-0.5">*</span></label>
+                                        <input
+                                            type="text"
+                                            value={formData.noOfQuestions}
+                                            onChange={(e) => handleInputChange('noOfQuestions', e.target.value)}
+                                            placeholder="Expected total questions"
+                                            className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-400 transition-all placeholder:text-gray-300 shadow-sm"
+                                        />
+                                    </div>
+
+                                    {/* Total Duration */}
+                                    <div className="space-y-2 col-span-1">
+                                        <label className="text-[13px] font-bold text-[#2d3748]">Test Duration (Minutes)<span className="text-red-500 ml-0.5">*</span></label>
+                                        <input
+                                            type="text"
+                                            value={formData.totalDuration}
+                                            onChange={(e) => handleInputChange('totalDuration', e.target.value)}
+                                            placeholder="Timer duration"
+                                            className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-400 transition-all placeholder:text-gray-300 shadow-sm"
+                                        />
+                                    </div>
+
+                                    {/* Marks Per Question */}
+                                    <div className="space-y-2 col-span-1">
+                                        <label className="text-[13px] font-bold text-[#2d3748]">Marks Per Question (Default)<span className="text-red-500 ml-0.5">*</span></label>
+                                        <input
+                                            type="text"
+                                            value={formData.marksPerQuestion}
+                                            onChange={(e) => handleInputChange('marksPerQuestion', e.target.value)}
+                                            placeholder="4"
+                                            className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-400 transition-all placeholder:text-gray-300 shadow-sm"
+                                        />
+                                    </div>
+
+                                    {/* Negative Marking */}
+                                    <div className="space-y-2 col-span-1">
+                                        <label className="text-[13px] font-bold text-[#2d3748]">Negative Marking (Default)<span className="text-red-500 ml-0.5">*</span></label>
+                                        <input
+                                            type="text"
+                                            value={formData.negativeMarking}
+                                            onChange={(e) => handleInputChange('negativeMarking', e.target.value)}
+                                            placeholder="-1"
                                             className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-400 transition-all placeholder:text-gray-300 shadow-sm"
                                         />
                                     </div>
@@ -411,6 +586,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                                                     <input
                                                         type="datetime-local"
                                                         step="1"
+                                                        min={minDateTime}
                                                         value={formData.startDate}
                                                         onChange={(e) => handleInputChange('startDate', e.target.value)}
                                                         className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
@@ -428,6 +604,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                                                     <input
                                                         type="datetime-local"
                                                         step="1"
+                                                        min={formData.startDate || minDateTime}
                                                         value={formData.endDate}
                                                         onChange={(e) => handleInputChange('endDate', e.target.value)}
                                                         className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
@@ -716,15 +893,23 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
 
                         <div className="flex justify-center mt-10 pb-8">
                             <button
-                                onClick={() => {
+                                disabled={isSubmitting}
+                                onClick={async () => {
                                     if (!formData.title) return showToast?.('Test Title is mandatory!', 'error');
                                     if (formData.testSeries.length === 0) return showToast?.('Select at least one Test Series!', 'error');
                                     if (!formData.totalMarks) return showToast?.('Total Marks is mandatory!', 'error');
+                                    if (!formData.marksPerQuestion) return showToast?.('Marks Per Question is mandatory!', 'error');
+                                    if (!formData.negativeMarking) return showToast?.('Negative Marking is mandatory!', 'error');
                                     
-                                    onSubmit({ ...formData, sections });
+                                    setIsSubmitting(true);
+                                    try {
+                                        await onSubmit({ ...formData, sections });
+                                    } finally {
+                                        setIsSubmitting(false);
+                                    }
                                 }}
-                                className="w-[240px] h-[54px] bg-[#1a202c] text-white text-[15px] font-bold rounded-2xl hover:bg-black transition-all shadow-lg hover:shadow-xl active:scale-[0.98] uppercase tracking-[2px]">
-                                Submit
+                                className={`w-[240px] h-[54px] bg-[#1a202c] text-white text-[15px] font-bold rounded-2xl transition-all shadow-lg hover:shadow-xl uppercase tracking-[2px] ${isSubmitting ? 'opacity-70 cursor-not-allowed' : 'hover:bg-black active:scale-[0.98]'}`}>
+                                {isSubmitting ? 'Submitting...' : 'Submit'}
                             </button>
                         </div>
                     </div>

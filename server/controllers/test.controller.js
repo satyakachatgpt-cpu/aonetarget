@@ -15,26 +15,51 @@ export const getAllTests = async (req, res) => {
     const startTimeMetric = Date.now();
     const { courseId } = req.query;
 
-    const aggregation = [
-      { $match: courseId ? { courseId } : {} },
-      {
-        $lookup: {
-          from: 'questions',
-          localField: 'id',
-          foreignField: 'testId',
-          as: 'qList'
-        }
-      },
-      {
-        $addFields: {
-          id: { $ifNull: ['$id', { $toString: '$_id' }] },
-          questions: { $size: '$qList' }
-        }
-      },
-      { $project: { qList: 0 } }
-    ];
+    const matchStage = courseId ? { courseId } : {};
+    const tests = await db.collection('tests').find(matchStage).toArray();
 
-    const testsWithCounts = await db.collection('tests').aggregate(aggregation).toArray();
+    // Count questions accurately for each test using OR conditions (handles both 'id' and '_id')
+    const testsWithCounts = await Promise.all(tests.map(async (test) => {
+      const testId = test.id ? String(test.id) : null;
+      const testObjectId = test._id ? test._id.toString() : null;
+
+      const orConditions = [];
+      if (testId) {
+        orConditions.push({ testId: testId });
+        if (!isNaN(testId)) orConditions.push({ testId: Number(testId) });
+      }
+      if (testObjectId && testObjectId !== testId) {
+        orConditions.push({ testId: testObjectId });
+        if (ObjectId.isValid(testObjectId)) {
+          orConditions.push({ testId: new ObjectId(testObjectId) });
+        }
+      }
+      // also check for "test_ID" format
+      if (testId) orConditions.push({ testId: `test_${testId}` });
+      if (testObjectId) orConditions.push({ testId: `test_${testObjectId}` });
+
+      const questionCount = orConditions.length > 0
+        ? await db.collection('questions').countDocuments({ $or: orConditions })
+        : 0;
+
+      return {
+        ...test,
+        id: testId || testObjectId,
+        questions: questionCount
+      };
+    }));
+
+    // Sort tests by sortingOrder / sortBy (Descending by default as requested: higher number = rank higher)
+    testsWithCounts.sort((a, b) => {
+      const sortA = parseFloat(a.sortingOrder || a.sortBy || 0) || 0;
+      const sortB = parseFloat(b.sortingOrder || b.sortBy || 0) || 0;
+      if (sortB !== sortA) return sortB - sortA;
+      
+      const dateA = new Date(a.createdAt || a.openDate || a.date || 0).getTime();
+      const dateB = new Date(b.createdAt || b.openDate || b.date || 0).getTime();
+      return dateB - dateA;
+    });
+
     console.log(`[PERF] Admin /api/tests loaded with counts in ${Date.now() - startTimeMetric}ms`);
     res.json(testsWithCounts);
   } catch (error) {
@@ -321,18 +346,28 @@ export const bulkExcelImport = async (req, res) => {
     }
     
     const existingQuestions = test ? (test.questions || []) : [];
-    const newQuestions = jsonData.map((row, i) => ({
-      id: `q_${Date.now()}_${i}`,
-      question: row.question || row.Question || '',
-      optionA: row.optionA || row['Option A'] || '',
-      optionB: row.optionB || row['Option B'] || '',
-      optionC: row.optionC || row['Option C'] || '',
-      optionD: row.optionD || row['Option D'] || '',
-      correctAnswer: (row.correctAnswer || row['Correct Answer'] || 'A').toString().toUpperCase(),
-      explanation: row.explanation || row.Explanation || '',
-      marks: parseInt(row.marks || row.Marks) || 4,
-      negativeMarks: parseFloat(row.negativeMarks || row['Negative Marks']) || 0
-    }));
+    const testMarks = test ? (Number(test.marks) || 0) : 0;
+    const newQuestions = jsonData.map((row, i) => {
+      let providedMarks = (row.marks !== undefined && row.marks !== '') ? parseFloat(row.marks) : ((row.Marks !== undefined && row.Marks !== '') ? parseFloat(row.Marks) : undefined);
+      let providedNeg = (row.negativeMarks !== undefined && row.negativeMarks !== '') ? parseFloat(row.negativeMarks) : ((row['Negative Marks'] !== undefined && row['Negative Marks'] !== '') ? parseFloat(row['Negative Marks']) : undefined);
+
+      if ((providedMarks === undefined || isNaN(providedMarks)) && testMarks <= 0) {
+         throw new Error(`Excel Import Blocked: Question ${i + 1} is missing marks, and Test has no default marks.`);
+      }
+
+      return {
+        id: row.id || `q_${Date.now()}_${i}`,
+        question: row.question || row.Question || '',
+        optionA: row.optionA || row['Option A'] || '',
+        optionB: row.optionB || row['Option B'] || '',
+        optionC: row.optionC || row['Option C'] || '',
+        optionD: row.optionD || row['Option D'] || '',
+        correctAnswer: (row.correctAnswer || row['Correct Answer'] || 'A').toString().toUpperCase(),
+        explanation: row.explanation || row.Explanation || '',
+        marks: providedMarks,
+        negativeMarks: providedNeg
+      };
+    });
     
     const allQuestions = [...existingQuestions, ...newQuestions];
     if (test) {
@@ -362,19 +397,30 @@ export const bulkQuestionsImport = async (req, res) => {
     }
     
     const existingQuestions = test.questions || [];
-    const newQuestions = questions.map((q, i) => ({
-      id: `q_${Date.now()}_${i}`,
-      question: q.question || '',
-      optionA: q.optionA || q.option_a || '',
-      optionB: q.optionB || q.option_b || '',
-      optionC: q.optionC || q.option_c || '',
-      optionD: q.optionD || q.option_d || '',
-      correctAnswer: (q.correctAnswer || q.correct_answer || q.answer || 'A').toUpperCase(),
-      explanation: q.explanation || '',
-      marks: parseInt(q.marks) || 4,
-      negativeMarks: parseFloat(q.negativeMarks || q.negative_marks) || 0,
-      questionImage: q.questionImage || '',
-    }));
+    const testMarks = Number(test.marks) || 0;
+    
+    const newQuestions = questions.map((q, i) => {
+      let providedMarks = q.marks !== undefined && q.marks !== '' ? parseFloat(q.marks) : undefined;
+      let providedNeg = (q.negativeMarks !== undefined && q.negativeMarks !== '') ? parseFloat(q.negativeMarks) : ((q.negative_marks !== undefined && q.negative_marks !== '') ? parseFloat(q.negative_marks) : undefined);
+
+      if ((providedMarks === undefined || isNaN(providedMarks)) && testMarks <= 0) {
+         throw new Error(`Bulk Import Blocked: Question ${i + 1} is missing marks, and Test has no default marks.`);
+      }
+
+      return {
+        id: `q_${Date.now()}_${i}`,
+        question: q.question || '',
+        optionA: q.optionA || q.option_a || '',
+        optionB: q.optionB || q.option_b || '',
+        optionC: q.optionC || q.option_c || '',
+        optionD: q.optionD || q.option_d || '',
+        correctAnswer: (q.correctAnswer || q.correct_answer || q.answer || 'A').toUpperCase(),
+        explanation: q.explanation || '',
+        marks: providedMarks,
+        negativeMarks: providedNeg,
+        questionImage: q.questionImage || '',
+      };
+    });
     
     const allQuestions = [...existingQuestions, ...newQuestions];
     await db.collection('tests').updateOne(
@@ -407,6 +453,72 @@ export const publishTest = async (req, res) => {
     if (!isNaN(id)) orConditions.push({ id: Number(id) });
     if (ObjectId.isValid(id)) orConditions.push({ _id: new ObjectId(id) });
     orConditions.push({ _id: id });
+
+    // Validation: Block incomplete tests
+    const test = await db.collection('tests').findOne({ $or: orConditions });
+    if (!test) {
+      return res.status(404).json({ error: 'Test not found' });
+    }
+
+    const qFilter = { $or: [{ testId: id }, { testId: String(id) }] };
+    if (!isNaN(id)) qFilter.$or.push({ testId: Number(id) });
+    if (ObjectId.isValid(id)) qFilter.$or.push({ testId: new ObjectId(id) });
+    
+    const questions = await db.collection('questions').find(qFilter).toArray();
+    
+    const testMarks = test.marks || test.marksPerQuestion;
+    const testDuration = test.duration || test.time;
+    const testNegativeMarking = test.negativeMarking;
+    const declaredCount = Number(test.noOfQuestions) || 0;
+    const actualCount = questions.length;
+
+    // VALIDATION: Strict Consistency Checks
+    if (declaredCount > 0 && actualCount !== declaredCount) {
+      return res.status(400).json({ 
+        error: `Inconsistent Question Count! Test settings say ${declaredCount} questions, but ${actualCount} questions have been added. Please fix before publishing.` 
+      });
+    }
+
+    if (!testDuration) {
+      return res.status(400).json({ error: 'Test Duration (Timer) is missing. Set duration before publishing.' });
+    }
+
+    // CHECK: Every question must have marks (directly or via test-level default)
+    const questionsWithoutMarks = questions.filter(q => 
+      (q.marks === undefined || q.marks === null || q.marks === "") && 
+      (q.positiveMarks === undefined || q.positiveMarks === null || q.positiveMarks === "") && 
+      (test.marksPerQuestion === undefined || test.marksPerQuestion === null || test.marksPerQuestion === "")
+    );
+
+    if (questionsWithoutMarks.length > 0) {
+      return res.status(400).json({ 
+        error: `${questionsWithoutMarks.length} questions are missing marks, and no Test-level default (Marks Per Question) is set. Please specify marks for all questions.` 
+      });
+    }
+
+    let hasError = false;
+    let errorMsg = '';
+
+    for (let i = 0; i < questions.length; i++) {
+      let q = questions[i];
+      let qMarks = Number(q.marks) || Number(q.positiveMarks);
+      if (isNaN(qMarks) || qMarks <= 0) {
+         if (testMarks <= 0) {
+           hasError = true;
+           errorMsg = `Publish blocked: Missing marks configuration. Question ${i + 1} has no marks, and Test has no default marks.`;
+           break;
+         }
+      }
+    }
+
+    if (questions.length === 0 && test.type !== 'PDF') {
+       // Optionally block empty tests, but maybe subjective tests have 0 questions?
+       // Leaving it optional to avoid breaking existing flows, mainly validate the ones with questions
+    }
+
+    if (hasError) {
+      return res.status(400).json({ error: errorMsg });
+    }
 
     const result = await db.collection('tests').updateOne(
       { $or: orConditions },

@@ -29,6 +29,8 @@ const TestTaking: React.FC = () => {
   const [reportIssue, setReportIssue] = useState('');
   const [reportComment, setReportComment] = useState('');
   const [reportingStatus, setReportingStatus] = useState(false);
+  const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
 
   useEffect(() => {
     // Reset session state when changing tests
@@ -41,6 +43,8 @@ const TestTaking: React.FC = () => {
     setLoading(true);
     setError('');
     setReportModal(null);
+    setHasAcceptedTerms(false);
+    setActiveSectionId(null);
 
     const storedStudent = localStorage.getItem('studentData');
     if (storedStudent && storedStudent !== 'undefined') {
@@ -99,6 +103,10 @@ const TestTaking: React.FC = () => {
       const durationSecs = (testData.duration || 60) * 60;
       setTimeLeft(durationSecs);
       startTimeRef.current = Date.now();
+      if (testData?.enableSectionSelector && Array.isArray(testData?.sections) && testData.sections.length > 0) {
+        setActiveSectionId(testData.sections[0].id.toString());
+      }
+
     } catch (err: any) {
       setError(err.message || 'Failed to load test');
     } finally {
@@ -107,7 +115,8 @@ const TestTaking: React.FC = () => {
   };
 
   useEffect(() => {
-    if (questions.length > 0 && !submitted && timeLeft > 0) {
+    const needsTerms = test?.termsAndConditions && test?.termsAndConditions.trim() !== '' && test?.termsAndConditions !== '<p><br></p>';
+    if (questions.length > 0 && !submitted && timeLeft > 0 && (!needsTerms || hasAcceptedTerms)) {
       timerRef.current = setInterval(() => {
         setTimeLeft(prev => {
           if (prev <= 1) {
@@ -122,7 +131,7 @@ const TestTaking: React.FC = () => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [questions.length, submitted]);
+  }, [questions.length, submitted, hasAcceptedTerms, timeLeft > 0, test?.termsAndConditions]);
 
   const formatTime = (secs: number) => {
     const h = Math.floor(secs / 3600);
@@ -203,8 +212,10 @@ const TestTaking: React.FC = () => {
       let negativeMarksTotal = 0;
       const testNegMarking = test?.negativeMarking || 0;
       questions.forEach(q => {
-        const marks = q.marks || test?.marksPerQuestion || 4;
-        const negMarks = q.negativeMarks !== undefined ? q.negativeMarks : (q.negative !== undefined ? q.negative : (testNegMarking || 0));
+        const marks = Number(q.marks || q.positiveMarks || test?.marksPerQuestion || test?.marks || 0);
+        const qNeg = q.negativeMarks !== undefined && q.negativeMarks !== '' ? q.negativeMarks : (q.negative !== undefined && q.negative !== '' ? q.negative : null);
+        const negMarks = Math.abs(Number(qNeg ?? testNegMarking ?? 0));
+        
         totalMarks += marks;
         if (answers[q.id]) {
           if (answers[q.id] === q.correctAnswer) {
@@ -378,9 +389,77 @@ const TestTaking: React.FC = () => {
     );
   }
 
-  const currentQuestion = questions[currentIndex];
-  const answeredCount = Object.keys(answers).length;
-  const flaggedCount = flagged.size;
+  const isSectionEnabled = (test?.enableSectionSelector === true || test?.enableSectionSelector === 'true') && Array.isArray(test?.sections) && test.sections.length > 0;
+  
+  const displayQuestions = isSectionEnabled && activeSectionId
+    ? questions.filter((q: any) => q.sectionId?.toString() === activeSectionId)
+    : questions;
+
+  const currentQuestion = displayQuestions[currentIndex];
+  const answeredCount = displayQuestions.filter(q => answers[q.id] !== undefined).length;
+  const flaggedCount = displayQuestions.filter(q => flagged.has(q.id)).length;
+  const remainingCount = displayQuestions.length - answeredCount;
+
+  const needsTerms = test?.termsAndConditions && test?.termsAndConditions.trim() !== '' && test?.termsAndConditions !== '<p><br></p>';
+
+  if (!loading && !error && !submitted && needsTerms && !hasAcceptedTerms) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+          <header className="bg-[#1A237E] text-white py-3 px-4 sticky top-0 z-30 shadow-md">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate('/mock-tests', { replace: true })}
+                className="p-1.5 rounded-full hover:bg-white/20 transition-colors"
+                title="Back to Tests"
+              >
+                <span className="material-symbols-rounded text-[20px]">arrow_back</span>
+              </button>
+              <h1 className="text-sm font-bold flex-1 truncate">{test?.title || test?.name || 'Test Instructions'}</h1>
+            </div>
+          </header>
+          
+          <div className="flex-1 overflow-y-auto p-4 max-w-4xl mx-auto w-full">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-full">
+                  <div className="p-4 md:p-6 border-b border-gray-100 bg-blue-50/30 flex items-center justify-between">
+                     <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-[#1A237E]/10 flex items-center justify-center text-[#1A237E]">
+                           <span className="material-symbols-rounded text-xl">gavel</span>
+                        </div>
+                        <div>
+                           <h2 className="text-lg font-black text-gray-800 tracking-tight">Terms &amp; Conditions</h2>
+                           <p className="text-xs text-gray-500 font-medium">Please read carefully before starting the test</p>
+                        </div>
+                     </div>
+                  </div>
+                  
+                  <div className="p-5 md:p-8 flex-1 overflow-y-auto prose max-w-none text-[14.5px] leading-relaxed text-gray-700 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li]:mb-2 [&>ol]:list-decimal [&>ol]:pl-5 [&>ol>li]:mb-2 [&>p]:mb-4" dangerouslySetInnerHTML={{ __html: test.termsAndConditions }} />
+                  
+                  <div className="p-5 md:p-6 border-t border-gray-100 bg-gray-50 flex flex-col gap-3">
+                     <div className="text-xs text-center text-gray-500 mb-1">
+                        By clicking start, you agree to all the terms listed above. The timer will start immediately.
+                     </div>
+                     <button
+                        onClick={() => {
+                            setHasAcceptedTerms(true);
+                            startTimeRef.current = Date.now();
+                        }}
+                        className="w-full py-4 bg-[#1A237E] text-white rounded-xl text-[14px] font-bold uppercase tracking-wider hover:bg-[#283593] transition-all shadow-md hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
+                     >
+                        I Accept &amp; Start Test
+                        <span className="material-symbols-rounded text-[20px]">arrow_forward</span>
+                     </button>
+                     <button
+                        onClick={() => navigate('/mock-tests', { replace: true })}
+                        className="w-full py-3 bg-white text-gray-600 rounded-xl text-[13px] font-bold border border-gray-200 hover:bg-gray-50 transition-all"
+                     >
+                        Cancel
+                     </button>
+                  </div>
+              </div>
+          </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -403,6 +482,28 @@ const TestTaking: React.FC = () => {
         </div>
       </header>
 
+      {isSectionEnabled && (
+        <div className="bg-white border-b border-gray-100 overflow-x-auto hide-scrollbar flex items-center px-4 py-2 shadow-sm sticky top-[60px] z-20">
+          {test.sections.map((sec: any) => (
+            <button
+              key={sec.id}
+              onClick={() => {
+                setActiveSectionId(sec.id.toString());
+                setCurrentIndex(0);
+                setShowPalette(false);
+              }}
+              className={`whitespace-nowrap px-4 py-2 text-[13px] font-bold rounded-lg transition-all mx-1 ${
+                activeSectionId === sec.id.toString()
+                  ? 'bg-[#1A237E]/10 text-[#1A237E]'
+                  : 'text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              {sec.partTitle || sec.section || `Section`}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-3 text-[10px] text-gray-500">
           <span className="flex items-center gap-1">
@@ -411,7 +512,7 @@ const TestTaking: React.FC = () => {
           </span>
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-gray-300"></span>
-            {questions.length - answeredCount} Remaining
+            {remainingCount} Remaining
           </span>
           {flaggedCount > 0 && (
             <span className="flex items-center gap-1">
@@ -425,7 +526,7 @@ const TestTaking: React.FC = () => {
           className="flex items-center gap-1 text-[#303F9F] text-xs font-bold"
         >
           <span className="material-symbols-rounded text-[16px]">grid_view</span>
-          {currentIndex + 1}/{questions.length}
+          {displayQuestions.length > 0 ? currentIndex + 1 : 0}/{displayQuestions.length}
         </button>
       </div>
 
@@ -438,7 +539,7 @@ const TestTaking: React.FC = () => {
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
-            {questions.map((q, idx) => {
+            {displayQuestions.map((q, idx) => {
               const status = getQuestionStatus(q.id);
               let bg = 'bg-gray-100 text-gray-600';
               if (status === 'answered') bg = 'bg-green-500 text-white';
@@ -469,10 +570,17 @@ const TestTaking: React.FC = () => {
           <div>
             <div className="flex items-center justify-between mb-4">
               <span className="text-[10px] font-bold text-[#303F9F] bg-blue-50 px-2 py-1 rounded">
-                Question {currentIndex + 1} of {questions.length}
+                Question {currentIndex + 1} of {displayQuestions.length}
               </span>
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-gray-400">{currentQuestion?.marks || test?.marksPerQuestion || 1} mark{(currentQuestion?.marks || 1) > 1 ? 's' : ''}</span>
+                <div className="flex flex-col items-end">
+                   <span className="text-[10px] font-black text-green-600">
+                    +{Number(test?.marksPerQuestion) || Number(test?.positive) || Number(currentQuestion?.marks) || Number(currentQuestion?.positiveMarks) || 0}
+                  </span>
+                  <span className="text-[10px] font-black text-red-500">
+                    -{Math.abs(Number(test?.negativeMarking) || Number(test?.negative) || Number(currentQuestion?.negativeMarks) || Number(currentQuestion?.negative) || 0)}
+                  </span>
+                </div>
                 <button
                   onClick={() => currentQuestion && toggleFlag(currentQuestion.id)}
                   className={`p-1.5 rounded-full ${flagged.has(currentQuestion?.id) ? 'bg-amber-100 text-amber-600' : 'bg-gray-100 text-gray-400'}`}
@@ -490,12 +598,6 @@ const TestTaking: React.FC = () => {
               </p>
               {currentQuestion.questionImage && (
                 <img src={getImageUrl(currentQuestion.questionImage)} alt="Question" className="mt-3 max-w-full rounded-lg border max-h-60 object-contain" />
-              )}
-              {(test?.negativeMarking > 0 || currentQuestion.negativeMarks > 0) && (
-                <p className="text-[10px] text-[#D32F2F] mt-2 flex items-center gap-1">
-                  <span className="material-symbols-rounded text-[12px]">remove_circle</span>
-                  Negative marking: -{currentQuestion.negativeMarks || test?.negativeMarking || 0} marks for wrong answer
-                </p>
               )}
             </div>
 
@@ -565,7 +667,7 @@ const TestTaking: React.FC = () => {
           Previous
         </button>
 
-        {currentIndex === questions.length - 1 ? (
+        {currentIndex === displayQuestions.length - 1 ? (
           <button
             onClick={() => setConfirmSubmit(true)}
             className="flex items-center gap-1 px-6 py-2.5 rounded-lg text-xs font-bold bg-[#D32F2F] text-white"
@@ -575,7 +677,7 @@ const TestTaking: React.FC = () => {
           </button>
         ) : (
           <button
-            onClick={() => setCurrentIndex(prev => Math.min(questions.length - 1, prev + 1))}
+            onClick={() => setCurrentIndex(prev => Math.min(displayQuestions.length - 1, prev + 1))}
             className="flex items-center gap-1 px-4 py-2.5 rounded-lg text-xs font-bold bg-[#1A237E] text-white"
           >
             Next
@@ -602,7 +704,7 @@ const TestTaking: React.FC = () => {
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-gray-500">Unanswered</span>
-                <span className="font-bold text-[#D32F2F]">{questions.length - answeredCount}</span>
+                <span className="font-bold text-[#D32F2F]">{remainingCount}</span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-gray-500">Flagged</span>
