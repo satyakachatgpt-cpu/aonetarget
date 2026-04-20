@@ -49,6 +49,17 @@ export const getAllTests = async (req, res) => {
       };
     }));
 
+    // Sort tests by sortingOrder / sortBy (Descending by default as requested: higher number = rank higher)
+    testsWithCounts.sort((a, b) => {
+      const sortA = parseFloat(a.sortingOrder || a.sortBy || 0) || 0;
+      const sortB = parseFloat(b.sortingOrder || b.sortBy || 0) || 0;
+      if (sortB !== sortA) return sortB - sortA;
+      
+      const dateA = new Date(a.createdAt || a.openDate || a.date || 0).getTime();
+      const dateB = new Date(b.createdAt || b.openDate || b.date || 0).getTime();
+      return dateB - dateA;
+    });
+
     console.log(`[PERF] Admin /api/tests loaded with counts in ${Date.now() - startTimeMetric}ms`);
     res.json(testsWithCounts);
   } catch (error) {

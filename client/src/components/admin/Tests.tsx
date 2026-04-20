@@ -5152,7 +5152,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
             let result;
             if (editingTest) {
-              result = await testsAPI.update(editingTest.id, payload);
+              const targetId = editingTest.id || editingTest._id || (editingTest as any)._id;
+              result = await testsAPI.update(targetId, payload);
               showToast("Test updated successfully", "success");
             } else {
               result = await testsAPI.create(payload);
@@ -5161,16 +5162,24 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
             // Refresh the specific list inside the series view
             if (viewingTestSeries) {
-              const seriesId =
-                viewingTestSeries.id || (viewingTestSeries as any)._id;
-              const res = await fetch(`/api/courses/${seriesId}/tests`);
-              if (res.ok) {
-                const data = await res.json();
-                setDetailTests(Array.isArray(data) ? data : []);
+              try {
+                const seriesId = viewingTestSeries.id || (viewingTestSeries as any)._id;
+                const res = await fetch(`/api/courses/${seriesId}/tests`);
+                if (res.ok) {
+                  const data = await res.json();
+                  setDetailTests(Array.isArray(data) ? data : []);
+                }
+              } catch (e) {
+                console.error("Failed to fetch specific tests list", e);
               }
             }
 
-            loadData(); // Refresh global list
+            try {
+               await loadData(); // Refresh global list
+            } catch (e) {
+               console.error("Failed to load global data", e);
+            }
+            
             setShowAddSingleTestDrawer(false);
             setEditingTest(null);
           } catch (err: any) {

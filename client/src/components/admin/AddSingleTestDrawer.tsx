@@ -23,7 +23,11 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
     showToast
 }) => {
     const [activeTab, setActiveTab] = useState<'Basic' | 'Advanced'>('Basic');
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [showTermsEditor, setShowTermsEditor] = useState(false);
+
+    // Get current datetime string for min attribute restriction
+    const minDateTime = new Date().toISOString().slice(0, 16);
 
     // Helper to format date for display
     const formatDisplayDate = (dateStr: string) => {
@@ -582,6 +586,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                                                     <input
                                                         type="datetime-local"
                                                         step="1"
+                                                        min={minDateTime}
                                                         value={formData.startDate}
                                                         onChange={(e) => handleInputChange('startDate', e.target.value)}
                                                         className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
@@ -599,6 +604,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                                                     <input
                                                         type="datetime-local"
                                                         step="1"
+                                                        min={formData.startDate || minDateTime}
                                                         value={formData.endDate}
                                                         onChange={(e) => handleInputChange('endDate', e.target.value)}
                                                         className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
@@ -887,17 +893,23 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
 
                         <div className="flex justify-center mt-10 pb-8">
                             <button
-                                onClick={() => {
+                                disabled={isSubmitting}
+                                onClick={async () => {
                                     if (!formData.title) return showToast?.('Test Title is mandatory!', 'error');
                                     if (formData.testSeries.length === 0) return showToast?.('Select at least one Test Series!', 'error');
                                     if (!formData.totalMarks) return showToast?.('Total Marks is mandatory!', 'error');
                                     if (!formData.marksPerQuestion) return showToast?.('Marks Per Question is mandatory!', 'error');
                                     if (!formData.negativeMarking) return showToast?.('Negative Marking is mandatory!', 'error');
                                     
-                                    onSubmit({ ...formData, sections });
+                                    setIsSubmitting(true);
+                                    try {
+                                        await onSubmit({ ...formData, sections });
+                                    } finally {
+                                        setIsSubmitting(false);
+                                    }
                                 }}
-                                className="w-[240px] h-[54px] bg-[#1a202c] text-white text-[15px] font-bold rounded-2xl hover:bg-black transition-all shadow-lg hover:shadow-xl active:scale-[0.98] uppercase tracking-[2px]">
-                                Submit
+                                className={`w-[240px] h-[54px] bg-[#1a202c] text-white text-[15px] font-bold rounded-2xl transition-all shadow-lg hover:shadow-xl uppercase tracking-[2px] ${isSubmitting ? 'opacity-70 cursor-not-allowed' : 'hover:bg-black active:scale-[0.98]'}`}>
+                                {isSubmitting ? 'Submitting...' : 'Submit'}
                             </button>
                         </div>
                     </div>

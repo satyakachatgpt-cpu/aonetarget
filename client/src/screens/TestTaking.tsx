@@ -30,6 +30,7 @@ const TestTaking: React.FC = () => {
   const [reportComment, setReportComment] = useState('');
   const [reportingStatus, setReportingStatus] = useState(false);
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
 
   useEffect(() => {
     // Reset session state when changing tests
@@ -43,6 +44,7 @@ const TestTaking: React.FC = () => {
     setError('');
     setReportModal(null);
     setHasAcceptedTerms(false);
+    setActiveSectionId(null);
 
     const storedStudent = localStorage.getItem('studentData');
     if (storedStudent && storedStudent !== 'undefined') {
@@ -101,6 +103,10 @@ const TestTaking: React.FC = () => {
       const durationSecs = (testData.duration || 60) * 60;
       setTimeLeft(durationSecs);
       startTimeRef.current = Date.now();
+      if (testData?.enableSectionSelector && Array.isArray(testData?.sections) && testData.sections.length > 0) {
+        setActiveSectionId(testData.sections[0].id.toString());
+      }
+
     } catch (err: any) {
       setError(err.message || 'Failed to load test');
     } finally {
@@ -381,9 +387,17 @@ const TestTaking: React.FC = () => {
     );
   }
 
-  const currentQuestion = questions[currentIndex];
-  const answeredCount = Object.keys(answers).length;
-  const flaggedCount = flagged.size;
+  const isSectionEnabled = (test?.enableSectionSelector === true || test?.enableSectionSelector === 'true') && Array.isArray(test?.sections) && test.sections.length > 0;
+  
+  const displayQuestions = isSectionEnabled && activeSectionId
+    ? questions.filter((q: any) => q.sectionId?.toString() === activeSectionId)
+    : questions;
+
+  const currentQuestion = displayQuestions[currentIndex];
+  const answeredCount = displayQuestions.filter(q => answers[q.id] !== undefined).length;
+  const flaggedCount = displayQuestions.filter(q => flagged.has(q.id)).length;
+  const remainingCount = displayQuestions.length - answeredCount;
+
   const needsTerms = test?.termsAndConditions && test?.termsAndConditions.trim() !== '' && test?.termsAndConditions !== '<p><br></p>';
 
   if (!loading && !error && !submitted && needsTerms && !hasAcceptedTerms) {
@@ -466,6 +480,28 @@ const TestTaking: React.FC = () => {
         </div>
       </header>
 
+      {isSectionEnabled && (
+        <div className="bg-white border-b border-gray-100 overflow-x-auto hide-scrollbar flex items-center px-4 py-2 shadow-sm sticky top-[60px] z-20">
+          {test.sections.map((sec: any) => (
+            <button
+              key={sec.id}
+              onClick={() => {
+                setActiveSectionId(sec.id.toString());
+                setCurrentIndex(0);
+                setShowPalette(false);
+              }}
+              className={`whitespace-nowrap px-4 py-2 text-[13px] font-bold rounded-lg transition-all mx-1 ${
+                activeSectionId === sec.id.toString()
+                  ? 'bg-[#1A237E]/10 text-[#1A237E]'
+                  : 'text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              {sec.partTitle || sec.section || `Section`}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center justify-between">
         <div className="flex items-center gap-3 text-[10px] text-gray-500">
           <span className="flex items-center gap-1">
@@ -474,7 +510,7 @@ const TestTaking: React.FC = () => {
           </span>
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-gray-300"></span>
-            {questions.length - answeredCount} Remaining
+            {remainingCount} Remaining
           </span>
           {flaggedCount > 0 && (
             <span className="flex items-center gap-1">
@@ -488,7 +524,7 @@ const TestTaking: React.FC = () => {
           className="flex items-center gap-1 text-[#303F9F] text-xs font-bold"
         >
           <span className="material-symbols-rounded text-[16px]">grid_view</span>
-          {currentIndex + 1}/{questions.length}
+          {displayQuestions.length > 0 ? currentIndex + 1 : 0}/{displayQuestions.length}
         </button>
       </div>
 
@@ -501,7 +537,7 @@ const TestTaking: React.FC = () => {
             </button>
           </div>
           <div className="flex flex-wrap gap-2">
-            {questions.map((q, idx) => {
+            {displayQuestions.map((q, idx) => {
               const status = getQuestionStatus(q.id);
               let bg = 'bg-gray-100 text-gray-600';
               if (status === 'answered') bg = 'bg-green-500 text-white';
@@ -532,7 +568,7 @@ const TestTaking: React.FC = () => {
           <div>
             <div className="flex items-center justify-between mb-4">
               <span className="text-[10px] font-bold text-[#303F9F] bg-blue-50 px-2 py-1 rounded">
-                Question {currentIndex + 1} of {questions.length}
+                Question {currentIndex + 1} of {displayQuestions.length}
               </span>
               <div className="flex items-center gap-2">
                 <div className="flex flex-col items-end">
@@ -629,7 +665,7 @@ const TestTaking: React.FC = () => {
           Previous
         </button>
 
-        {currentIndex === questions.length - 1 ? (
+        {currentIndex === displayQuestions.length - 1 ? (
           <button
             onClick={() => setConfirmSubmit(true)}
             className="flex items-center gap-1 px-6 py-2.5 rounded-lg text-xs font-bold bg-[#D32F2F] text-white"
@@ -639,7 +675,7 @@ const TestTaking: React.FC = () => {
           </button>
         ) : (
           <button
-            onClick={() => setCurrentIndex(prev => Math.min(questions.length - 1, prev + 1))}
+            onClick={() => setCurrentIndex(prev => Math.min(displayQuestions.length - 1, prev + 1))}
             className="flex items-center gap-1 px-4 py-2.5 rounded-lg text-xs font-bold bg-[#1A237E] text-white"
           >
             Next
@@ -666,7 +702,7 @@ const TestTaking: React.FC = () => {
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-gray-500">Unanswered</span>
-                <span className="font-bold text-[#D32F2F]">{questions.length - answeredCount}</span>
+                <span className="font-bold text-[#D32F2F]">{remainingCount}</span>
               </div>
               <div className="flex justify-between text-xs">
                 <span className="text-gray-500">Flagged</span>
