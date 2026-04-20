@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
-import { couponsAPI, coursesAPI, categoriesAPI, testSeriesAPI, pdfsAPI, packagesAPI, uploadAPI, subcategoriesAPI } from '../../services/apiClient';
+import { couponsAPI, coursesAPI, categoriesAPI, testSeriesAPI, pdfsAPI, packagesAPI, uploadAPI, subcategoriesAPI, subjectsAPI } from '../../services/apiClient';
 import RichTextEditor from '../shared/RichTextEditor';
 import { AdminUIContext } from '../../context/AdminUIContext';
 import { getImageUrl, getVideoUrl, extractYouTubeId, toYouTubeEmbed } from '../../lib/utils';
@@ -56,6 +56,14 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
     const [showSubCategories, setShowSubCategories] = useState(false);
     const [allSubCategories, setAllSubCategories] = useState<any[]>([]);
     const [loadingSubCategories, setLoadingSubCategories] = useState(false);
+    const [allSubjects, setAllSubjects] = useState<any[]>([]);
+    const [level1Branch, setLevel1Branch] = useState(courseData?.level1Branch || '');
+    const [level2Branch, setLevel2Branch] = useState(courseData?.level2Branch || '');
+    const [selectedSubjectId, setSelectedSubjectId] = useState(courseData?.subjectId || '');
+    const [selectedCategoryId, setSelectedCategoryId] = useState(courseData?.categoryId || '');
+    const [showLevel1Branch, setShowLevel1Branch] = useState(false);
+    const [showLevel2Branch, setShowLevel2Branch] = useState(false);
+    const [showSubjects, setShowSubjects] = useState(false);
 
 
     // Advanced Settings States
@@ -113,6 +121,22 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                 setSelectedSubCategoryId(courseData.subcategoryId);
             }
 
+            if (courseData.categoryId) {
+                setSelectedCategoryId(courseData.categoryId);
+            }
+
+            if (courseData.level1Branch) {
+                setLevel1Branch(courseData.level1Branch);
+            }
+
+            if (courseData.level2Branch) {
+                setLevel2Branch(courseData.level2Branch);
+            }
+
+            if (courseData.subjectId) {
+                setSelectedSubjectId(courseData.subjectId);
+            }
+
             if (courseData.validity) {
                 setValidityTab(courseData.validity.tab || 'set');
                 setValidityUnit(courseData.validity.unit || 'Months');
@@ -155,6 +179,16 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
             }
         }
     }, [courseData]);
+
+    // Legacy Subject Hydration fallback
+    useEffect(() => {
+        if (courseData && !courseData.subjectId && courseData.subject && allSubjects.length > 0 && !selectedSubjectId) {
+            const found = allSubjects.find(s => s.name === courseData.subject);
+            if (found) {
+                setSelectedSubjectId(String(found.id || found._id));
+            }
+        }
+    }, [allSubjects, courseData]);
 
     const [testSeriesList, setTestSeriesList] = useState<any[]>([]);
     const [booksList, setBooksList] = useState<any[]>([]);
@@ -219,13 +253,14 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                 setLoadingCategories(true);
 
                 // Fetch coupons, courses, and categories in parallel
-                const [couponsData, coursesData, categoriesData, testSeriesData, pdfsData, subcategoriesData] = await Promise.all([
+                const [couponsData, coursesData, categoriesData, testSeriesData, pdfsData, subcategoriesData, subjectsData] = await Promise.all([
                     couponsAPI.getAll().catch(() => []),
                     coursesAPI.getAll().catch(() => []),
                     categoriesAPI.getAll().catch(() => []),
                     testSeriesAPI.getAll().catch(() => []),
                     pdfsAPI.getAll().catch(() => []),
-                    subcategoriesAPI.getAll().catch(() => [])
+                    subcategoriesAPI.getAll().catch(() => []),
+                    subjectsAPI.getAll().catch(() => [])
                 ]);
 
                 if (Array.isArray(couponsData)) {
@@ -251,6 +286,10 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
 
                 if (Array.isArray(subcategoriesData)) {
                     setAllSubCategories(subcategoriesData);
+                }
+
+                if (subjectsData) {
+                    setAllSubjects(Array.isArray(subjectsData) ? subjectsData : (subjectsData?.data || []));
                 }
             } catch (error) {
                 console.error('Failed to fetch data:', error);
@@ -295,12 +334,36 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
         return true;
     };
 
+    const normalizeSubcategoryToContentType = (subId: string) => {
+        if (!subId) return '';
+        const id = subId.toLowerCase();
+        
+        // Explicit mappings for known buckets
+        if (id.includes('recorded_batch') || id.includes('recorded-batch')) return 'recorded_batch';
+        if (id.includes('live_classroom') || id.includes('live_class')) return 'live_classroom';
+        if (id.includes('crash_course') || id.includes('crash-course')) return 'crash_course';
+        if (id.includes('mock_test') || id.includes('mock-test')) return 'mock_test';
+        
+        // Generic singularization and cleanup fallback
+        let normalized = id
+            .replace(/neet_|iit_jee_|iit-jee_|nursing_cet_|foundation_/g, "")
+            .replace(/batches/g, "batch")
+            .replace(/-/g, "_");
+            
+        return normalized;
+    };
+
     const handlePublish = async () => {
         if (!validateForm()) return;
 
         setIsPublishing(true);
 
         try {
+            const selectedSubjectObj = allSubjects.find(s => String(s.id || s._id) === String(selectedSubjectId));
+            
+            // Auto-detect subcategory if empty but subject provides it
+            const finalSubcategoryId = selectedSubCategoryId || selectedSubjectObj?.subcategoryId || '';
+
             const coursePayload = {
                 name: title,
                 title,
@@ -308,7 +371,13 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                 price: price ? parseFloat(price) : 0,
                 originalPrice: originalPrice ? parseFloat(originalPrice) : 0,
                 categories: selectedCategories,
-                subcategoryId: selectedSubCategoryId,
+                categoryId: selectedCategoryId,
+                subcategoryId: finalSubcategoryId,
+                contentType: normalizeSubcategoryToContentType(finalSubcategoryId),
+                level1Branch: level1Branch,
+                level2Branch: level2Branch,
+                subjectId: selectedSubjectId,
+                subject: selectedSubjectObj?.name || '',
                 validity: {
                     tab: validityTab,
                     unit: validityUnit,
@@ -444,7 +513,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                     <div className="flex-1">
                         {/* Step 1: Basic Course Information */}
                         {activeStep === 1 && (
-                            <div className="animate-in fade-in slide-in-from-right-4 duration-500">
+                            <div className="animate-in fade-in slide-in-from-right-4 duration-500 overflow-visible">
                                 {/* Title Row */}
                                 <div className="grid grid-cols-1 gap-6 mb-6">
                                     <div className="space-y-1.5">
@@ -557,577 +626,883 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                                     </div>
                                 </div>
 
-                                 {/* Categories Row */}
-                                 <div className="space-y-1.5 mb-8">
-                                     <label className="text-[13px] font-semibold text-gray-700">Categories</label>
-                                     <div className="relative">
-                                         <div onMouseDown={(e) => { e.preventDefault(); setShowCategories(!showCategories); setShowSubCategories(false); }} className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] transition-all cursor-pointer flex items-center justify-between hover:border-gray-300 bg-white">
-                                             <span className={selectedCategories.length ? 'text-gray-900 font-medium' : 'text-gray-400'}>{selectedCategories.length ? selectedCategories.join(', ') : 'Select Categories'}</span>
-                                             <span className={`material-symbols-outlined text-gray-400 transition-transform ${showCategories ? 'rotate-180' : ''}`}>expand_more</span>
+                                 {/* Compact Selection Path */}
+                                 <div className="mb-6 bg-slate-50 p-3 rounded-lg border border-slate-200 flex items-center gap-2 flex-wrap min-h-[44px]">
+                                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2 flex items-center gap-1">
+                                         <span className="material-symbols-outlined text-[14px]">account_tree</span>
+                                         Path:
+                                     </span>
+                                     
+                                     {/* Category Chip */}
+                                     {selectedCategories[0] ? (
+                                         <div className="flex items-center gap-2">
+                                             <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-[11px] font-bold rounded-sm border border-blue-200/50">
+                                                 {selectedCategories[0]}
+                                             </span>
+                                             <span className="material-symbols-outlined text-slate-300 text-[14px]">chevron_right</span>
                                          </div>
-                                          {showCategories && (
-                                             <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-sm shadow-xl z-[100] py-1 animate-in fade-in slide-in-from-top-2 duration-200">
-                                                 <div className="max-h-[200px] overflow-y-auto">
-                                                     {(categories.length > 0 ? categories : [{ name: 'Class 10th' }, { name: 'Class 11th' }, { name: 'Class 12th' }, { name: 'NEET Special' }]).map((catObj: any) => {
-                                                         const catName = typeof catObj === 'string' ? catObj : catObj.name || catObj.title;
-                                                         return (
-                                                             <div key={catName} onMouseDown={(e) => {
-                                                                 e.preventDefault();
-                                                                 // Enforce single selection as requested
-                                                                 setSelectedCategories([catName]);
-                                                                 // Reset sub-category selection when category changes
-                                                                 setSelectedSubCategoryId('');
-                                                                 // Close dropdown after selection
-                                                                 setShowCategories(false);
-                                                             }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-gray-50 flex items-center justify-between ${selectedCategories.includes(catName) ? 'text-black bg-gray-50 font-semibold' : 'text-gray-600'}`}>
-                                                                 {catName} {selectedCategories.includes(catName) && <span className="material-symbols-outlined text-[16px]">check</span>}
+                                     ) : (
+                                         <span className="text-[11px] text-slate-300 italic">Select Category...</span>
+                                     )}
+
+                                     {/* Level 1 Chip */}
+                                     {(() => {
+                                         const cat = categories.find(c => String(c.id || c._id) === String(selectedCategoryId));
+                                         if (cat && cat.branchesL1 && cat.branchesL1.length > 0) {
+                                             const branch = cat.branchesL1.find((b: any) => b.slug === level1Branch);
+                                             return (
+                                                 <div className="flex items-center gap-2 animate-in fade-in transition-all">
+                                                     <span className={`px-2 py-0.5 text-[11px] font-bold rounded-sm border ${level1Branch ? 'bg-indigo-100 text-indigo-800 border-indigo-200/50' : 'bg-slate-100 text-slate-400 border-slate-200'}`}>
+                                                         {branch?.label || (cat.level1Label || 'Branch')}
+                                                     </span>
+                                                     <span className="material-symbols-outlined text-slate-300 text-[14px]">chevron_right</span>
+                                                 </div>
+                                             );
+                                         }
+                                         return null;
+                                     })()}
+
+                                     {/* Level 2 Chip */}
+                                     {(() => {
+                                         const cat = categories.find(c => String(c.id || c._id) === String(selectedCategoryId));
+                                         if (cat && cat.hierarchyMode === 'board-class' && cat.branchesL2 && cat.branchesL2.length > 0) {
+                                             const branch = cat.branchesL2.find((b: any) => b.slug === level2Branch);
+                                             return (
+                                                 <div className="flex items-center gap-2 animate-in fade-in transition-all">
+                                                     <span className={`px-2 py-0.5 text-[11px] font-bold rounded-sm border ${level2Branch ? 'bg-purple-100 text-purple-800 border-purple-200/50' : 'bg-slate-100 text-slate-400 border-slate-200'}`}>
+                                                         {branch?.label || (cat.level2Label || 'Class')}
+                                                     </span>
+                                                     <span className="material-symbols-outlined text-slate-300 text-[14px]">chevron_right</span>
+                                                 </div>
+                                             );
+                                         }
+                                         return null;
+                                     })()}
+
+                                     {/* Subcategory Chip */}
+                                     {(() => {
+                                         const cat = categories.find(c => String(c.id || c._id) === String(selectedCategoryId));
+                                         if (!cat) return null;
+
+                                         const hasL1 = cat.branchesL1 && cat.branchesL1.length > 0;
+                                         const hasL2 = cat.hierarchyMode === 'board-class' && cat.branchesL2 && cat.branchesL2.length > 0;
+
+                                         // Strict Path-Aware Filtering for Subcategories
+                                         const filteredSubCategories = allSubCategories.filter(sub => 
+                                             String(sub.categoryId) === String(selectedCategoryId) &&
+                                             (hasL1 ? sub.level1Branch === level1Branch : true) &&
+                                             (hasL2 ? sub.level2Branch === level2Branch : true)
+                                         );
+
+                                         const showSubCategoryStep = filteredSubCategories.length > 0 || (isEditMode && selectedSubCategoryId);
+
+                                         if (showSubCategoryStep) {
+                                             return (
+                                                 <div className="flex items-center gap-2">
+                                                     <div className={`flex items-center gap-2 animate-in fade-in transition-all ${selectedSubCategoryId ? 'opacity-100' : 'opacity-40'}`}>
+                                                        <span className={`px-2 py-0.5 text-[11px] font-bold rounded-sm border ${selectedSubCategoryId ? 'bg-emerald-100 text-emerald-800 border-emerald-200/50' : 'bg-slate-100 text-slate-400 border-slate-200'}`}>
+                                                            {allSubCategories.find(s => String(s.id || s._id) === String(selectedSubCategoryId))?.title || 'Subcategory'}
+                                                        </span>
+                                                     </div>
+                                                     <span className="material-symbols-outlined text-slate-300 text-[14px]">chevron_right</span>
+                                                 </div>
+                                             );
+                                         }
+                                         return null;
+                                     })()}
+
+                                     {/* Subject Chip */}
+                                     {(() => {
+                                         const subObj = allSubCategories.find(s => String(s.id || s._id) === String(selectedSubCategoryId));
+                                         const cat = categories.find(c => String(c.id || c._id) === String(selectedCategoryId));
+                                         if (!cat) return null;
+
+                                         const hasL1 = cat?.branchesL1 && cat?.branchesL1.length > 0;
+                                         const hasL2 = cat?.hierarchyMode === 'board-class' && cat?.branchesL2 && cat?.branchesL2.length > 0;
+                                         
+                                         // Strict Path-Aware Filtering for Subcategories
+                                         const filteredSubCategories = allSubCategories.filter(sub => 
+                                             String(sub.categoryId) === String(selectedCategoryId) &&
+                                             (hasL1 ? sub.level1Branch === level1Branch : true) &&
+                                             (hasL2 ? sub.level2Branch === level2Branch : true)
+                                         );
+
+                                         const showSubCategoryStep = filteredSubCategories.length > 0 || (isEditMode && selectedSubCategoryId);
+
+                                         // Path is valid if branches are selected (if they exist)
+                                         const isBranchPathSelected = (!hasL1 || level1Branch) && (!hasL2 || level2Branch);
+                                         if (!isBranchPathSelected) return null;
+
+                                         const filteredSubjects = allSubjects.filter(subj => 
+                                             String(subj.categoryId) === String(selectedCategoryId) &&
+                                             (hasL1 ? subj.level1Branch === level1Branch : true) &&
+                                             (hasL2 ? subj.level2Branch === level2Branch : true) &&
+                                             (showSubCategoryStep ? (selectedSubCategoryId ? (String(subj.subcategoryId) === String(selectedSubCategoryId) || subj.course === subObj?.title) : true) : true)
+                                         );
+
+                                         if (filteredSubjects.length > 0) {
+                                             return (
+                                                 <div className={`flex items-center gap-2 animate-in fade-in transition-all ${selectedSubjectId ? 'opacity-100' : 'opacity-40'}`}>
+                                                     <span className={`px-2 py-0.5 text-[11px] font-bold rounded-sm border ${selectedSubjectId ? 'bg-amber-100 text-amber-800 border-amber-200/50' : 'bg-slate-100 text-slate-400 border-slate-200'}`}>
+                                                         {allSubjects.find(s => String(s.id || s._id) === String(selectedSubjectId))?.name || 'Subject'}
+                                                     </span>
+                                                 </div>
+                                             );
+                                         }
+                                         return null;
+                                     })()}
+                                 </div>
+
+                                 {/* Tighter Section Stack */}
+                                 <div className="space-y-4">
+                                     {/* STEP 1: Category */}
+                                     <div className={`flex items-start gap-4 p-4 rounded-lg bg-white border border-slate-100 hover:border-slate-200 transition-all shadow-sm relative ${showCategories ? 'z-[9999]' : 'z-auto'}`}>
+                                         <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center text-[11px] font-black flex-shrink-0">01</div>
+                                         <div className="flex-1 space-y-2">
+                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Primary Category*</label>
+                                             <div className="relative">
+                                                 <div onMouseDown={(e) => { e.preventDefault(); setShowCategories(!showCategories); setShowSubCategories(false); setShowLevel1Branch(false); setShowLevel2Branch(false); setShowSubjects(false); }} className="w-full border border-slate-200 px-3 py-2 rounded text-[13px] transition-all cursor-pointer flex items-center justify-between hover:border-blue-400 bg-white font-medium">
+                                                     <span className={selectedCategories.length ? 'text-slate-900' : 'text-slate-400'}>{selectedCategories.length ? selectedCategories.join(', ') : 'Choose Category'}</span>
+                                                     <span className={`material-symbols-outlined text-slate-400 transition-transform ${showCategories ? 'rotate-180' : ''} text-[18px]`}>expand_more</span>
+                                                 </div>
+                                                  {showCategories && (
+                                                     <div className="absolute top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded shadow-xl z-[10000] py-1 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                         <div className="max-h-[250px] overflow-y-auto">
+                                                             {categories.map((catObj: any) => {
+                                                                 const catName = catObj.title || catObj.name;
+                                                                 const catId = catObj.id || catObj._id;
+                                                                 return (
+                                                                     <div key={String(catId)} onMouseDown={(e) => {
+                                                                         e.preventDefault();
+                                                                         setSelectedCategories([catName]);
+                                                                         setSelectedCategoryId(String(catId));
+                                                                         // Cascading Reset
+                                                                         setLevel1Branch('');
+                                                                         setLevel2Branch('');
+                                                                         setSelectedSubCategoryId('');
+                                                                         setSelectedSubjectId('');
+                                                                         setShowCategories(false);
+                                                                     }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-slate-50 flex items-center justify-between ${String(selectedCategoryId) === String(catId) ? 'text-blue-600 bg-blue-50 font-bold' : 'text-slate-600'}`}>
+                                                                         {catName} {String(selectedCategoryId) === String(catId) && <span className="material-symbols-outlined text-[16px]">check_circle</span>}
+                                                                     </div>
+                                                                 );
+                                                             })}
+                                                         </div>
+                                                     </div>
+                                                 )}
+                                             </div>
+                                         </div>
+                                     </div>
+
+                                     {/* Dynamic Steps Block */}
+                                     {selectedCategoryId && (() => {
+                                         const selectedCatObj = categories.find(c => String(c.id || c._id) === String(selectedCategoryId));
+                                         if (!selectedCatObj) return null;
+
+                                         const mode = selectedCatObj.hierarchyMode || 'simple';
+                                         const hasL1 = selectedCatObj.branchesL1 && selectedCatObj.branchesL1.length > 0;
+                                         const hasL2 = mode === 'board-class' && selectedCatObj.branchesL2 && selectedCatObj.branchesL2.length > 0;
+
+                                         // Strict Path-Aware Filtering for Subcategories
+                                         const filteredSubCategories = allSubCategories.filter(sub => 
+                                             String(sub.categoryId) === String(selectedCategoryId) &&
+                                             (hasL1 ? sub.level1Branch === level1Branch : true) &&
+                                             (hasL2 ? sub.level2Branch === level2Branch : true)
+                                         );
+
+                                         // Determine if subcategory step should be shown
+                                         const showSubCategoryStep = filteredSubCategories.length > 0 || (isEditMode && selectedSubCategoryId);
+
+                                         return (
+                                             <div className="space-y-4 animate-in fade-in duration-500 overflow-visible">
+                                                 {/* STEP 2: Level 1 (Branch/Board) */}
+                                                 {hasL1 && (
+                                                     <div className={`flex items-start gap-4 p-4 rounded-lg bg-white border border-slate-100 hover:border-slate-200 transition-all shadow-sm relative ${showLevel1Branch ? 'z-[9999]' : 'z-auto'}`}>
+                                                         <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center text-[11px] font-black flex-shrink-0">02</div>
+                                                         <div className="flex-1 space-y-2">
+                                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">{selectedCatObj.level1Label || 'Branch'}*</label>
+                                                             <div className="relative">
+                                                                 <div onMouseDown={(e) => { e.preventDefault(); setShowLevel1Branch(!showLevel1Branch); setShowLevel2Branch(false); setShowSubCategories(false); setShowSubjects(false); }} className="w-full border border-slate-200 px-3 py-2 rounded text-[13px] transition-all cursor-pointer flex items-center justify-between hover:border-blue-400 bg-white font-medium">
+                                                                     <span className={level1Branch ? 'text-slate-900 font-bold' : 'text-slate-400'}>
+                                                                         {selectedCatObj.branchesL1.find((b: any) => b.slug === level1Branch)?.label || `Select ${selectedCatObj.level1Label || 'Branch'}`}
+                                                                     </span>
+                                                                     <span className={`material-symbols-outlined text-slate-400 transition-transform ${showLevel1Branch ? 'rotate-180' : ''} text-[18px]`}>expand_more</span>
+                                                                 </div>
+                                                                 {showLevel1Branch && (
+                                                                     <div className="absolute top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded shadow-xl z-[101] py-1">
+                                                                         {selectedCatObj.branchesL1.map((branch: any) => (
+                                                                             <div key={branch.slug} onMouseDown={(e) => {
+                                                                                 e.preventDefault();
+                                                                                 setLevel1Branch(branch.slug);
+                                                                                 setLevel2Branch('');
+                                                                                 setSelectedSubCategoryId('');
+                                                                                 setSelectedSubjectId('');
+                                                                                 setShowLevel1Branch(false);
+                                                                             }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-slate-50 flex items-center justify-between ${level1Branch === branch.slug ? 'text-blue-600 bg-blue-50 font-bold' : 'text-slate-600'}`}>
+                                                                                 {branch.label} {level1Branch === branch.slug && <span className="material-symbols-outlined text-[16px]">check_circle</span>}
+                                                                             </div>
+                                                                         ))}
+                                                                     </div>
+                                                                 )}
                                                              </div>
-                                                         );
-                                                     })}
+                                                         </div>
+                                                     </div>
+                                                 )}
+
+                                                 {/* STEP 3: Level 2 (Class) */}
+                                                 {hasL2 && (
+                                                     <div className={`flex items-start gap-4 p-4 rounded-lg bg-white border border-slate-100 hover:border-slate-200 transition-all shadow-sm relative ${showLevel2Branch ? 'z-[9999]' : 'z-auto'}`}>
+                                                         <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center text-[11px] font-black flex-shrink-0">03</div>
+                                                         <div className="flex-1 space-y-2">
+                                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">{selectedCatObj.level2Label || 'Class'}*</label>
+                                                             <div className="relative">
+                                                                 <div onMouseDown={(e) => { e.preventDefault(); setShowLevel2Branch(!showLevel2Branch); setShowLevel1Branch(false); setShowSubCategories(false); setShowSubjects(false); }} className="w-full border border-slate-200 px-3 py-2 rounded text-[13px] transition-all cursor-pointer flex items-center justify-between hover:border-blue-400 bg-white font-medium">
+                                                                     <span className={level2Branch ? 'text-slate-900 font-bold' : 'text-slate-400'}>
+                                                                         {selectedCatObj.branchesL2.find((b: any) => b.slug === level2Branch)?.label || `Select ${selectedCatObj.level2Label || 'Class'}`}
+                                                                     </span>
+                                                                     <span className={`material-symbols-outlined text-slate-400 transition-transform ${showLevel2Branch ? 'rotate-180' : ''} text-[18px]`}>expand_more</span>
+                                                                 </div>
+                                                                 {showLevel2Branch && (
+                                                                     <div className="absolute top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded shadow-xl z-[101] py-1">
+                                                                         {selectedCatObj.branchesL2.map((branch: any) => (
+                                                                             <div key={branch.slug} onMouseDown={(e) => {
+                                                                                 e.preventDefault();
+                                                                                 setLevel2Branch(branch.slug);
+                                                                                 setSelectedSubCategoryId('');
+                                                                                 setSelectedSubjectId('');
+                                                                                 setShowLevel2Branch(false);
+                                                                             }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-slate-50 flex items-center justify-between ${level2Branch === branch.slug ? 'text-blue-600 bg-blue-50 font-bold' : 'text-slate-600'}`}>
+                                                                                 {branch.label} {level2Branch === branch.slug && <span className="material-symbols-outlined text-[16px]">check_circle</span>}
+                                                                             </div>
+                                                                         ))}
+                                                                     </div>
+                                                                 )}
+                                                             </div>
+                                                         </div>
+                                                     </div>
+                                                 )}
+
+                                                 {/* STEP 4: Subcategory (Content Type) */}
+                                                 {(() => {
+                                                     const isPathValid = (!hasL1 || level1Branch) && (!hasL2 || (hasL2 && level2Branch));
+                                                     if (!isPathValid || !showSubCategoryStep) return null;
+
+                                                     let subStepCount = 1; if (hasL1) subStepCount++; if (hasL2) subStepCount++; subStepCount++;
+                                                     const stepNum = String(subStepCount).padStart(2, "0");
+
+                                                     return (
+                                                         <div className={`flex items-start gap-4 p-4 rounded-lg bg-white border border-slate-100 hover:border-slate-200 transition-all shadow-sm relative ${showSubCategories ? 'z-[9999]' : 'z-auto'}`}>
+                                                             <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center text-[11px] font-black flex-shrink-0">{stepNum}</div>
+                                                             <div className="flex-1 space-y-2">
+                                                                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Batch Type (Subcategory)*</label>
+                                                                 <div className="relative">
+                                                                     <div onMouseDown={(e) => { e.preventDefault(); setShowSubCategories(!showSubCategories); setShowLevel1Branch(false); setShowLevel2Branch(false); setShowSubjects(false); }} className="w-full border border-slate-200 px-3 py-2 rounded text-[13px] transition-all cursor-pointer flex items-center justify-between hover:border-blue-400 bg-white font-medium">
+                                                                         <span className={selectedSubCategoryId ? 'text-slate-900 font-bold' : 'text-slate-400'}>
+                                                                             {allSubCategories.find(s => String(s.id || s._id) === String(selectedSubCategoryId))?.title || 'Choose Subcategory'}
+                                                                         </span>
+                                                                         <span className={`material-symbols-outlined text-slate-400 transition-transform ${showSubCategories ? 'rotate-180' : ''} text-[18px]`}>expand_more</span>
+                                                                     </div>
+                                                                     {showSubCategories && (
+                                                                         <div className="absolute top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded shadow-xl z-[101] py-1">
+                                                                             <div className="max-h-[200px] overflow-y-auto">
+                                                                                 {filteredSubCategories.map((sub: any) => {
+                                                                                     const subId = sub.id || sub._id;
+                                                                                     return (
+                                                                                         <div key={String(subId)} onMouseDown={(e) => {
+                                                                                             e.preventDefault();
+                                                                                             setSelectedSubCategoryId(String(subId));
+                                                                                             setSelectedSubjectId('');
+                                                                                             setShowSubCategories(false);
+                                                                                         }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-slate-50 flex items-center justify-between ${String(selectedSubCategoryId) === String(subId) ? 'text-blue-600 bg-blue-50 font-bold' : 'text-slate-600'}`}>
+                                                                                             {sub.title} {String(selectedSubCategoryId) === String(subId) && <span className="material-symbols-outlined text-[16px]">check_circle</span>}
+                                                                                         </div>
+                                                                                     );
+                                                                                 })}
+                                                                             </div>
+                                                                         </div>
+                                                                     )}
+                                                                 </div>
+                                                             </div>
+                                                         </div>
+                                                     );
+                                                 })()}
+
+                                                  {/* STEP 5: Subjects */}
+                                                  {(() => {
+                                                       const isPathValid = (!hasL1 || level1Branch) && (!hasL2 || (hasL2 && level2Branch));
+                                                       if (!isPathValid) return null;
+                                                      const subObj = allSubCategories.find(s => String(s.id || s._id) === String(selectedSubCategoryId));
+                                                      const filteredSubjects = allSubjects.filter(subj => 
+                                                          String(subj.categoryId) === String(selectedCategoryId) &&
+                                                          (hasL1 ? subj.level1Branch === level1Branch : true) &&
+                                                          (hasL2 ? subj.level2Branch === level2Branch : true) &&
+                                                          (showSubCategoryStep ? (selectedSubCategoryId ? (String(subj.subcategoryId) === String(selectedSubCategoryId) || subj.course === subObj?.title) : true) : true)
+                                                      );
+
+                                                      if (filteredSubjects.length === 0) return null;
+                                                      
+                                                      // Dynamic step mapping based on visibility
+                                                      let subjectStepCount = 1; 
+                                                      if (hasL1) subjectStepCount++; 
+                                                      if (hasL2) subjectStepCount++; 
+                                                      if (showSubCategoryStep) subjectStepCount++; 
+                                                      subjectStepCount++; 
+                                                      const stepNum = String(subjectStepCount).padStart(2, "0");
+
+                                                      return (
+                                                          <div className={`flex items-start gap-4 p-4 rounded-lg bg-white border border-slate-100 hover:border-slate-200 transition-all shadow-sm relative ${showSubjects ? 'z-[9999]' : 'z-auto'}`}>
+                                                              <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center text-[11px] font-black flex-shrink-0">{stepNum}</div>
+                                                              <div className="flex-1 space-y-2">
+                                                                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">Subject*</label>
+                                                                  <div className="relative">
+                                                                      <div onMouseDown={(e) => { e.preventDefault(); setShowSubjects(!showSubjects); setShowLevel1Branch(false); setShowLevel2Branch(false); setShowSubCategories(false); }} className="w-full border border-slate-200 px-3 py-2 rounded text-[13px] transition-all cursor-pointer flex items-center justify-between hover:border-blue-400 bg-white font-medium">
+                                                                          <span className={selectedSubjectId ? 'text-slate-900 font-bold' : 'text-slate-400'}>
+                                                                              {allSubjects.find(s => String(s.id || s._id) === String(selectedSubjectId))?.name || 'Choose Subject'}
+                                                                          </span>
+                                                                          <span className={`material-symbols-outlined text-slate-400 transition-transform ${showSubjects ? 'rotate-180' : ''} text-[18px]`}>expand_more</span>
+                                                                      </div>
+                                                                      {showSubjects && (
+                                                                          <div className="absolute top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded shadow-xl z-[101] py-1">
+                                                                              <div className="max-h-[200px] overflow-y-auto">
+                                                                                  <div onMouseDown={(e) => { e.preventDefault(); setSelectedSubjectId(''); setShowSubjects(false); }} className="px-4 py-2 text-[13px] cursor-pointer hover:bg-slate-50 text-slate-400 italic">General / No Subject</div>
+                                                                                  {filteredSubjects.map((subj) => {
+                                                                                      const subjId = subj.id || subj._id;
+                                                                                      return (
+                                                                                          <div key={String(subjId)} onMouseDown={(e) => {
+                                                                                              e.preventDefault();
+                                                                                              setSelectedSubjectId(String(subjId));
+                                                                                              setShowSubjects(false);
+                                                                                          }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-slate-50 flex items-center justify-between ${String(selectedSubjectId) === String(subjId) ? 'text-blue-600 bg-blue-50 font-bold' : 'text-slate-600'}`}>
+                                                                                              {subj.name} {String(selectedSubjectId) === String(subjId) && <span className="material-symbols-outlined text-[16px]">check_circle</span>}
+                                                                                          </div>
+                                                                                      );
+                                                                                  })}
+                                                                              </div>
+                                                                          </div>
+                                                                      )}
+                                                                  </div>
+                                                              </div>
+                                                          </div>
+                                                      );
+                                                  })()}
+                                             </div>
+                                         );
+                                     })()}
+                                 </div>
+
+                                 {/* Validity Row */}
+                                 <div className="pt-8 border-t border-gray-100 mb-8 space-y-6">
+                                     <div className="flex items-center justify-between">
+                                         <div>
+                                             <h3 className="text-[15px] font-bold text-gray-900 tracking-tight">Batch Validity*</h3>
+                                             <p className="text-[11px] text-gray-400 font-medium">When will this batch expire for students?</p>
+                                         </div>
+                                         <div className="bg-gray-100/80 p-1 rounded-sm flex gap-1 transform scale-90 origin-right">
+                                             <button
+                                                 onClick={() => setValidityTab('set')}
+                                                 className={`px-4 py-1.5 rounded-sm text-[11px] font-black uppercase tracking-widest transition-all ${validityTab === 'set' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                             >Set Duration</button>
+                                             <button
+                                                 onClick={() => setValidityTab('end')}
+                                                 className={`px-4 py-1.5 rounded-sm text-[11px] font-black uppercase tracking-widest transition-all ${validityTab === 'end' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                             >Fixed Date</button>
+                                             <button
+                                                 onClick={() => setValidityTab('lifetime')}
+                                                 className={`px-4 py-1.5 rounded-sm text-[11px] font-black uppercase tracking-widest transition-all ${validityTab === 'lifetime' ? 'bg-white text-black shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                                             >Lifetime</button>
+                                         </div>
+                                     </div>
+
+                                     {validityTab === 'set' && (
+                                         <div className="grid grid-cols-2 gap-6 animate-in slide-in-from-top-2 duration-300">
+                                             <div className="space-y-1.5">
+                                                 <label className="text-[13px] font-semibold text-gray-700">Duration Count</label>
+                                                 <div className="relative">
+                                                     <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[20px]">timer</span>
+                                                     <input
+                                                         type="number"
+                                                         placeholder="Ex. 6"
+                                                         value={validityValue}
+                                                         onChange={(e) => setValidityValue(e.target.value)}
+                                                         className="w-full border border-gray-200 pl-10 pr-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 transition-all placeholder:text-gray-400"
+                                                     />
+                                                 </div>
+                                             </div>
+                                             <div className="space-y-1.5">
+                                                 <label className="text-[13px] font-semibold text-gray-700">Unit</label>
+                                                 <div className="relative">
+                                                    <div
+                                                         onClick={() => setShowValidityUnit(!showValidityUnit)}
+                                                         className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] cursor-pointer flex items-center justify-between hover:border-gray-300 bg-white font-medium"
+                                                     >
+                                                         {validityUnit}
+                                                         <span className={`material-symbols-outlined text-gray-400 transition-transform ${showValidityUnit ? 'rotate-180' : ''}`}>expand_more</span>
+                                                     </div>
+                                                     {showValidityUnit && (
+                                                         <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded shadow-lg z-[100] animate-in fade-in duration-200">
+                                                             {['Days', 'Weeks', 'Months', 'Years'].map((unit) => (
+                                                                 <div
+                                                                     key={unit}
+                                                                     onClick={() => { setValidityUnit(unit); setShowValidityUnit(false); }}
+                                                                     className="px-4 py-2 text-[13px] text-gray-600 hover:bg-gray-50 cursor-pointer"
+                                                                 >
+                                                                     {unit}
+                                                                 </div>
+                                                             ))}
+                                                         </div>
+                                                     )}
+                                                 </div>
+                                             </div>
+                                         </div>
+                                     )}
+
+                                     {validityTab === 'end' && (
+                                         <div className="animate-in slide-in-from-top-2 duration-300 space-y-4">
+                                             <div className="grid grid-cols-3 gap-3">
+                                                 <div className="space-y-1">
+                                                     <input
+                                                         type="text"
+                                                         placeholder="DD"
+                                                         maxLength={2}
+                                                         value={endDay}
+                                                         onChange={(e) => {
+                                                             const val = e.target.value.replace(/\D/g, '');
+                                                             if (val === '' || (parseInt(val) >= 0 && parseInt(val) <= 31)) {
+                                                                 setEndDay(val);
+                                                             }
+                                                         }}
+                                                         className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] text-center outline-none focus:border-gray-900 bg-white font-medium shadow-sm transition-all focus:ring-2 focus:ring-black/5"
+                                                     />
+                                                     <p className="text-[9px] text-center text-gray-400 font-bold uppercase tracking-widest">Day</p>
+                                                 </div>
+                                                 <div className="space-y-1">
+                                                     <input
+                                                         type="text"
+                                                         placeholder="MM"
+                                                         maxLength={2}
+                                                         value={endMonth}
+                                                         onChange={(e) => {
+                                                             const val = e.target.value.replace(/\D/g, '');
+                                                             if (val === '' || (parseInt(val) >= 0 && parseInt(val) <= 12)) {
+                                                                 setEndMonth(val);
+                                                             }
+                                                         }}
+                                                         className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] text-center outline-none focus:border-gray-900 bg-white font-medium shadow-sm transition-all focus:ring-2 focus:ring-black/5"
+                                                     />
+                                                     <p className="text-[9px] text-center text-gray-400 font-bold uppercase tracking-widest">Month</p>
+                                                 </div>
+                                                 <div className="space-y-1">
+                                                     <input
+                                                         type="text"
+                                                         placeholder="YYYY"
+                                                         maxLength={4}
+                                                         value={endYear}
+                                                         onChange={(e) => {
+                                                             const val = e.target.value.replace(/\D/g, '');
+                                                             setEndYear(val);
+                                                         }}
+                                                         className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] text-center outline-none focus:border-gray-900 bg-white font-medium shadow-sm transition-all focus:ring-2 focus:ring-black/5"
+                                                     />
+                                                     <p className="text-[9px] text-center text-gray-400 font-bold uppercase tracking-widest">Year</p>
+                                                 </div>
+                                             </div>
+                                             <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-sm border border-amber-100">
+                                                 <span className="material-symbols-outlined text-amber-500 text-[18px]">info</span>
+                                                 <p className="text-[11px] text-amber-700 font-medium">The course will automatically expire for all users on this date.</p>
+                                             </div>
+                                         </div>
+                                     )}
+
+                                     {validityTab === 'lifetime' && (
+                                         <div className="mt-4 p-5 bg-black rounded-sm border border-gray-800 animate-in zoom-in-95 duration-300 shadow-xl">
+                                             <div className="flex items-center gap-4">
+                                                 <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center shrink-0">
+                                                     <span className="material-symbols-outlined text-white text-[24px]">all_inclusive</span>
+                                                 </div>
+                                                 <div>
+                                                     <p className="text-[14px] font-black text-white uppercase tracking-wider">Lifetime Access</p>
+                                                     <p className="text-[11px] text-gray-400 font-medium">This course will never expire for enrolled students. They will have access as long as the platform exists.</p>
+                                                 </div>
+                                             </div>
+                                         </div>
+                                     )}
+                                 </div>
+                             </div>
+                         )}
+
+                         {/* Step 2: Pricing */}
+                         {activeStep === 2 && (
+                             <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-6">
+                                 <div className="grid grid-cols-2 gap-6 mb-6">
+                                      {/* Price Field */}
+                                      <div className="space-y-1.5">
+                                         <label className="text-[13px] font-semibold text-gray-700">Price*</label>
+                                         <div className="relative">
+                                             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[20px]">currency_rupee</span>
+                                             <input
+                                                 type="text"
+                                                 placeholder="Enter Price"
+                                                 value={price}
+                                                 onChange={(e) => setPrice(e.target.value)}
+                                                 className="w-full border border-gray-200 pl-10 pr-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 transition-all placeholder:text-gray-400"
+                                             />
+                                         </div>
+                                         <p className="text-[11px] text-gray-400 mt-1">
+                                              {gstIncluded && gstVal ? (
+                                                  <span className="text-gray-600 font-medium">Base Price: ₹{basePriceVal} + {gstVal}% GST = <span className="text-black font-bold">Final Price: ₹{finalPrice.toFixed(2)}</span></span>
+                                              ) : 'This is the final price student will pay'}
+                                         </p>
+                                     </div>
+
+                                      {/* MRP Field */}
+                                      <div className="space-y-1.5">
+                                         <label className="text-[13px] font-semibold text-gray-700">Market Price (MRP)</label>
+                                         <div className="relative">
+                                             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[20px]">currency_rupee</span>
+                                             <input
+                                                 type="text"
+                                                 placeholder="999"
+                                                 value={originalPrice}
+                                                 onChange={(e) => setOriginalPrice(e.target.value)}
+                                                 className="w-full border border-gray-200 pl-10 pr-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 transition-all placeholder:text-gray-400"
+                                             />
+                                         </div>
+                                         <p className="text-[11px] text-gray-400 mt-1">Display the maximum price to show internal discount percentages.</p>
+                                     </div>
+                                 </div>
+
+                                 <div className="grid grid-cols-2 gap-6 pb-2">
+                                      {/* GST Include Switch */}
+                                      <div className="space-y-1.5 flex flex-col justify-center">
+                                          <label className="text-[13px] font-semibold text-gray-700">Include GST</label>
+                                          <div className="flex items-center gap-3 mt-1">
+                                             <button onClick={() => setGstIncluded(!gstIncluded)} className={`w-10 h-6 rounded-full relative transition-all duration-300 ${gstIncluded ? 'bg-black' : 'bg-gray-200'}`}>
+                                                 <div className={`absolute top-[2px] transition-all duration-300 w-5 h-5 bg-white rounded-full shadow-sm border border-gray-200/50 ${gstIncluded ? 'left-[18px]' : 'left-[2px]'}`} />
+                                             </button>
+                                             <span className="text-[13px] font-medium text-gray-700">{gstIncluded ? 'Yes' : 'No'}</span>
+                                         </div>
+                                      </div>
+
+                                      {/* GST Percentage */}
+                                      {gstIncluded && (
+                                      <div className="space-y-1.5 animate-in fade-in zoom-in duration-300">
+                                          <label className="text-[13px] font-semibold text-gray-700">GST Percentage (%)</label>
+                                          <div className="relative">
+                                              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[20px]">percent</span>
+                                              <input
+                                                  type="number"
+                                                  placeholder="18"
+                                                  value={gstPercentage}
+                                                  onChange={(e) => setGstPercentage(e.target.value)}
+                                                  className="w-full border border-gray-200 pl-10 pr-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 transition-all placeholder:text-gray-400"
+                                              />
+                                          </div>
+                                      </div>
+                                      )}
+                                 </div>
+
+                                 <div className="grid grid-cols-1 gap-6">
+                                      {/* Discount Codes Field */}
+                                     <div className="space-y-1.5">
+                                         <label className="text-[13px] font-semibold text-gray-700">Select Discount Codes</label>
+                                         <div className="relative bg-white border border-gray-200 rounded-sm min-h-[44px] cursor-pointer hover:border-gray-300 transition-all" onClick={() => setShowCouponList(!showCouponList)}>
+                                             <div className="flex flex-wrap gap-1.5 p-2">
+                                                 {selectedCoupons.map(code => (
+                                                     <div key={code} className="bg-gray-100 text-gray-800 pl-2 pr-1 py-1 rounded flex items-center gap-1 border border-gray-200">
+                                                         <span className="text-[12px] font-medium">{code}</span>
+                                                         <button
+                                                             onClick={(e) => { e.stopPropagation(); setSelectedCoupons(selectedCoupons.filter(c => c !== code)); }}
+                                                             className="hover:text-red-500 transition-colors"
+                                                         >
+                                                             <span className="material-symbols-outlined text-[16px]">close</span>
+                                                         </button>
+                                                     </div>
+                                                 ))}
+                                                 <input
+                                                     type="text"
+                                                     placeholder={selectedCoupons.length === 0 ? "Search or select coupons" : ""}
+                                                     onFocus={(e) => { e.stopPropagation(); setShowCouponList(true); }}
+                                                     value={couponSearch}
+                                                     onChange={(e) => setCouponSearch(e.target.value)}
+                                                     className="flex-1 min-w-[120px] bg-transparent border-none outline-none py-1 text-[14px] text-gray-800 placeholder:text-gray-400"
+                                                 />
+                                             </div>
+
+                                             <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                 <span className={`material-symbols-outlined text-gray-400 transition-transform ${showCouponList ? 'rotate-180' : ''}`}>expand_more</span>
+                                             </div>
+
+                                             {showCouponList && (
+                                                 <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-[100] animate-in fade-in duration-200">
+                                                     <div className="max-h-[200px] overflow-y-auto">
+                                                         {loadingCoupons ? (
+                                                             <div className="p-4 text-center text-[12px] text-gray-400">Loading coupons...</div>
+                                                         ) : coupons.filter(c => c.code.toLowerCase().includes(couponSearch.toLowerCase())).map(coupon => (
+                                                             <div
+                                                                 key={coupon.code}
+                                                                 onClick={(e) => {
+                                                                     e.stopPropagation();
+                                                                     const newSelected = selectedCoupons.includes(coupon.code)
+                                                                         ? selectedCoupons.filter(c => c !== coupon.code)
+                                                                         : [...selectedCoupons, coupon.code];
+                                                                     setSelectedCoupons(newSelected);
+                                                                     setShowCouponList(false);
+                                                                 }}
+                                                                 className={`px-4 py-2 cursor-pointer flex items-center justify-between text-[13px] hover:bg-gray-50 ${selectedCoupons.includes(coupon.code) ? 'bg-gray-50 font-semibold' : 'text-gray-600'}`}
+                                                             >
+                                                                 <span>{coupon.code}</span>
+                                                                 {selectedCoupons.includes(coupon.code) && <span className="material-symbols-outlined text-[16px]">check</span>}
+                                                             </div>
+                                                         ))}
+                                                     </div>
+                                                 </div>
+                                             )}
+                                         </div>
+                                         <p className="text-[12px] text-gray-400 font-medium ml-1 mt-1 flex items-center gap-1.5">
+                                             <span className="material-symbols-outlined text-[16px] text-gray-300">info</span>
+                                             Selected codes will be available for checkout discount.
+                                         </p>
+                                     </div>
+                                 </div>
+                             </div>
+                         )}
+
+                         {/* Step 3: Content */}
+                         {activeStep === 3 && (
+                             <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-6">
+                                 {/* Attach Test Series */}
+                                 <div className="space-y-1.5">
+                                     <label className="text-[13px] font-semibold text-gray-700">Attach Test Series</label>
+                                     <div className="relative">
+                                         <div
+                                              onClick={() => setShowTestSeriesList(!showTestSeriesList)}
+                                              className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] cursor-pointer flex items-center justify-between hover:border-gray-300 bg-white"
+                                          >
+                                              <span className={selectedTestSeries.length ? 'text-gray-900 font-medium' : 'text-gray-400'}>
+                                                  {selectedTestSeries.length ? `${selectedTestSeries.length} Selected` : 'Select Test Series'}
+                                              </span>
+                                              <span className={`material-symbols-outlined text-gray-400 transition-transform ${showTestSeriesList ? 'rotate-180' : ''}`}>expand_more</span>
+                                          </div>
+
+                                         {showTestSeriesList && (
+                                             <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-[100] animate-in fade-in duration-200">
+                                                 <div className="p-2 border-b border-gray-100 flex gap-2">
+                                                     <input
+                                                         type="text"
+                                                         placeholder="Search"
+                                                         value={testSeriesSearch}
+                                                         onChange={(e) => setTestSeriesSearch(e.target.value)}
+                                                         className="flex-1 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded text-[12px] outline-none"
+                                                     />
+                                                 </div>
+                                                 <div className="max-h-[200px] overflow-y-auto">
+                                                     {testSeriesList.filter(tsObj => (tsObj.name || tsObj.title || '').toLowerCase().includes(testSeriesSearch.toLowerCase())).map((tsObj) => {
+                                                         const ts = tsObj.name || tsObj.title || '';
+                                                         return (
+                                                         <div
+                                                             key={tsObj._id || ts}
+                                                             onClick={() => {
+                                                                 const newSelected = selectedTestSeries.includes(ts)
+                                                                     ? selectedTestSeries.filter(t => t !== ts)
+                                                                     : [...selectedTestSeries, ts];
+                                                                 setSelectedTestSeries(newSelected);
+                                                                 setShowTestSeriesList(false);
+                                                             }}
+                                                             className={`px-4 py-2 cursor-pointer flex items-center justify-between text-[13px] hover:bg-gray-50 ${selectedTestSeries.includes(ts) ? 'bg-gray-50 font-semibold' : 'text-gray-600'}`}
+                                                         >
+                                                             <span>{ts}</span>
+                                                             {selectedTestSeries.includes(ts) && <span className="material-symbols-outlined text-[16px]">check</span>}
+                                                         </div>
+                                                     )})}
+                                                 </div>
+                                             </div>
+                                         )}
+                                     </div>
+                                     <p className="text-[11px] text-gray-400 mt-1">Students can access attached tests for free</p>
+                                 </div>
+
+                                 {/* Attach Book */}
+                                 <div className="space-y-1.5">
+                                     <label className="text-[13px] font-semibold text-gray-700">Attach Book</label>
+                                     <div className="relative">
+                                         <div
+                                              onClick={() => setShowBookList(!showBookList)}
+                                              className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] cursor-pointer flex items-center justify-between hover:border-gray-300 bg-white"
+                                          >
+                                              <span className={selectedBook ? 'text-gray-900 font-medium' : 'text-gray-400'}>
+                                                  {selectedBook || 'Select Book'}
+                                              </span>
+                                              <span className={`material-symbols-outlined text-gray-400 transition-transform ${showBookList ? 'rotate-180' : ''}`}>expand_more</span>
+                                          </div>
+
+                                         {showBookList && (
+                                             <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-[100] animate-in fade-in duration-200">
+                                                 <div className="max-h-[200px] overflow-y-auto">
+                                                     <div onClick={() => { setSelectedBook(''); setShowBookList(false); }} className="px-4 py-2 text-[13px] text-gray-400 hover:bg-gray-50 cursor-pointer">None</div>
+                                                     {booksList.map((bookObj) => {
+                                                         const book = bookObj.title || bookObj.name || '';
+                                                         return (
+                                                         <div key={bookObj._id || book} onClick={() => { setSelectedBook(book); setShowBookList(false); }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-gray-50 ${selectedBook === book ? 'bg-gray-50 font-semibold' : 'text-gray-600'}`}>
+                                                             {book}
+                                                         </div>
+                                                     )})}
                                                  </div>
                                              </div>
                                          )}
                                      </div>
                                  </div>
 
-                                {/* Dynamic Sub-Categories Row */}
-                                {selectedCategories.length > 0 && (() => {
-                                    // Find the internal ID (slug) for the selected category
-                                    const selectedCatObj = categories.find(c => selectedCategories.includes(c.name) || selectedCategories.includes(c.title) || selectedCategories.includes(c._id));
-                                    const activeCatId = selectedCatObj?.id || selectedCatObj?._id || '';
-                                    
-                                    const subCats = allSubCategories.filter(s => s.categoryId === activeCatId);
-                                    if (!subCats || subCats.length === 0) return null;
-
-                                    return (
-                                        <div className="space-y-1.5 mb-8 animate-in fade-in slide-in-from-top-2 duration-300">
-                                            <label className="text-[13px] font-semibold text-gray-700">Sub Category (Class/Section)*</label>
-                                            <div className="relative">
-                                                <div onMouseDown={(e) => { 
-                                                    e.preventDefault(); 
-                                                    setShowSubCategories(!showSubCategories);
-                                                    // Close main categories when toggling sub-categories
-                                                    setShowCategories(false);
-                                                }} className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] transition-all cursor-pointer flex items-center justify-between hover:border-gray-300 bg-gray-50/30">
-                                                    <span className={selectedSubCategoryId ? 'text-gray-900 font-bold' : 'text-gray-400'}>
-                                                        {subCats.find(s => s.id === selectedSubCategoryId)?.title || 'Select Subcategory'}
-                                                    </span>
-                                                    <span className={`material-symbols-outlined text-gray-400 transition-transform ${showSubCategories ? 'rotate-180' : ''}`}>expand_more</span>
-                                                </div>
-                                                {showSubCategories && (
-                                                    <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-sm shadow-xl z-[101] py-1">
-                                                        <div className="max-h-[200px] overflow-y-auto">
-                                                            {subCats.map((sub) => (
-                                                                <div key={sub.id} onMouseDown={(e) => {
-                                                                    e.preventDefault();
-                                                                    setSelectedSubCategoryId(sub.id);
-                                                                    setShowSubCategories(false);
-                                                                }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-gray-800 hover:text-white flex items-center justify-between ${selectedSubCategoryId === sub.id ? 'text-black bg-gray-100 font-bold' : 'text-gray-600'}`}>
-                                                                    {sub.title} {selectedSubCategoryId === sub.id && <span className="material-symbols-outlined text-[16px]">check</span>}
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <p className="text-[10px] text-gray-400 font-medium">This batch will appear ONLY in the selected subcategory (e.g. Class 10th).</p>
-                                        </div>
-                                    );
-                                })()}
-
-                                {/* Validity */}
-                                <div className="space-y-3">
-                                    <label className="text-[13px] font-semibold text-gray-700">Validity*</label>
-                                    <div className="flex gap-1 border border-gray-200 p-1.5 rounded-sm bg-gray-50/50">
-                                        {(['set', 'end', 'lifetime'] as const).map((tab) => (
-                                            <button key={tab} type="button" onClick={() => setValidityTab(tab)}
-                                                className={`flex-1 py-1.5 text-[12px] font-bold rounded-sm transition-all ${validityTab === tab ? 'bg-white text-black shadow-sm border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}>
-                                                {tab === 'set' ? 'Set Validity' : tab === 'end' ? 'End Date' : 'Lifetime Access'}
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    {validityTab === 'set' && (
-                                        <div className="mt-4 space-y-1.5 animate-in fade-in duration-300">
-                                            <label className="text-[13px] font-semibold text-gray-700">Set Validity*</label>
-                                            <div className="flex gap-4">
-                                                <div className="flex-1 relative">
-                                                    <div
-                                                        onClick={() => setShowValidityUnit(!showValidityUnit)}
-                                                        className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] cursor-pointer flex items-center justify-between hover:border-gray-300 bg-white"
-                                                    >
-                                                        <span className="font-medium text-gray-900">{validityUnit}</span>
-                                                        <span className={`material-symbols-outlined text-gray-400 transition-transform ${showValidityUnit ? 'rotate-180' : ''}`}>expand_more</span>
-                                                    </div>
-                                                    {showValidityUnit && (
-                                                        <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-[100] py-1">
-                                                            {['Days', 'Weeks', 'Months', 'Years'].map((unit) => (
-                                                                <div key={unit} onClick={() => { setValidityUnit(unit); setShowValidityUnit(false); }} className="px-4 py-2 text-[13px] cursor-pointer hover:bg-gray-50">
-                                                                    {unit}
-                                                                </div>
-                                                            ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <input
-                                                    type="number"
-                                                    min={1}
-                                                    value={validityValue}
-                                                    onChange={(e) => setValidityValue(e.target.value)}
-                                                    className="w-24 border border-gray-200 px-4 py-2 rounded-md text-[14px] text-center outline-none focus:border-gray-900"
-                                                />
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {validityTab === 'end' && (
-                                        <div className="mt-4 space-y-3 animate-in fade-in duration-300">
-                                            <label className="text-[13px] font-semibold text-gray-700">Batch End Date*</label>
-                                            <div className="grid grid-cols-3 gap-3">
-                                                <div className="space-y-1">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="DD"
-                                                        maxLength={2}
-                                                        value={endDay}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value.replace(/\D/g, '');
-                                                            if (val === '' || (parseInt(val) >= 0 && parseInt(val) <= 31)) {
-                                                                setEndDay(val);
-                                                            }
-                                                        }}
-                                                        className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] text-center outline-none focus:border-gray-900 bg-white font-medium shadow-sm transition-all focus:ring-2 focus:ring-black/5"
-                                                    />
-                                                    <p className="text-[9px] text-center text-gray-400 font-bold uppercase tracking-widest">Day</p>
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="MM"
-                                                        maxLength={2}
-                                                        value={endMonth}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value.replace(/\D/g, '');
-                                                            if (val === '' || (parseInt(val) >= 0 && parseInt(val) <= 12)) {
-                                                                setEndMonth(val);
-                                                            }
-                                                        }}
-                                                        className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] text-center outline-none focus:border-gray-900 bg-white font-medium shadow-sm transition-all focus:ring-2 focus:ring-black/5"
-                                                    />
-                                                    <p className="text-[9px] text-center text-gray-400 font-bold uppercase tracking-widest">Month</p>
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="YYYY"
-                                                        maxLength={4}
-                                                        value={endYear}
-                                                        onChange={(e) => {
-                                                            const val = e.target.value.replace(/\D/g, '');
-                                                            setEndYear(val);
-                                                        }}
-                                                        className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] text-center outline-none focus:border-gray-900 bg-white font-medium shadow-sm transition-all focus:ring-2 focus:ring-black/5"
-                                                    />
-                                                    <p className="text-[9px] text-center text-gray-400 font-bold uppercase tracking-widest">Year</p>
-                                                </div>
-                                            </div>
-                                            <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-sm border border-amber-100">
-                                                <span className="material-symbols-outlined text-amber-500 text-[18px]">info</span>
-                                                <p className="text-[11px] text-amber-700 font-medium">The course will automatically expire for all users on this date.</p>
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {validityTab === 'lifetime' && (
-                                        <div className="mt-4 p-5 bg-black rounded-sm border border-gray-800 animate-in zoom-in-95 duration-300 shadow-xl">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center shrink-0">
-                                                    <span className="material-symbols-outlined text-white text-[24px]">all_inclusive</span>
-                                                </div>
-                                                <div>
-                                                    <p className="text-[14px] font-black text-white uppercase tracking-wider">Lifetime Access</p>
-                                                    <p className="text-[11px] text-gray-400 font-medium">This course will never expire for enrolled students. They will have access as long as the platform exists.</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Step 2: Pricing */}
-                        {activeStep === 2 && (
-                            <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-6">
-                                <div className="grid grid-cols-2 gap-6 mb-6">
-                                     {/* Price Field */}
-                                     <div className="space-y-1.5">
-                                        <label className="text-[13px] font-semibold text-gray-700">Price*</label>
-                                        <div className="relative">
-                                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[20px]">currency_rupee</span>
-                                            <input
-                                                type="text"
-                                                placeholder="Enter Price"
-                                                value={price}
-                                                onChange={(e) => setPrice(e.target.value)}
-                                                className="w-full border border-gray-200 pl-10 pr-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 transition-all placeholder:text-gray-400"
-                                            />
-                                        </div>
-                                        <p className="text-[11px] text-gray-400 mt-1">
-                                             {gstIncluded && gstVal ? (
-                                                 <span className="text-gray-600 font-medium">Base Price: ₹{basePriceVal} + {gstVal}% GST = <span className="text-black font-bold">Final Price: ₹{finalPrice.toFixed(2)}</span></span>
-                                             ) : 'This is the final price student will pay'}
-                                        </p>
-                                    </div>
-
-                                     {/* MRP Field */}
-                                     <div className="space-y-1.5">
-                                        <label className="text-[13px] font-semibold text-gray-700">Market Price (MRP)</label>
-                                        <div className="relative">
-                                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[20px]">currency_rupee</span>
-                                            <input
-                                                type="text"
-                                                placeholder="999"
-                                                value={originalPrice}
-                                                onChange={(e) => setOriginalPrice(e.target.value)}
-                                                className="w-full border border-gray-200 pl-10 pr-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 transition-all placeholder:text-gray-400"
-                                            />
-                                        </div>
-                                        <p className="text-[11px] text-gray-400 mt-1">Display the maximum price to show internal discount percentages.</p>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-6 pb-2">
-                                     {/* GST Include Switch */}
-                                     <div className="space-y-1.5 flex flex-col justify-center">
-                                         <label className="text-[13px] font-semibold text-gray-700">Include GST</label>
-                                         <div className="flex items-center gap-3 mt-1">
-                                            <button onClick={() => setGstIncluded(!gstIncluded)} className={`w-10 h-6 rounded-full relative transition-all duration-300 ${gstIncluded ? 'bg-black' : 'bg-gray-200'}`}>
-                                                <div className={`absolute top-[2px] transition-all duration-300 w-5 h-5 bg-white rounded-full shadow-sm border border-gray-200/50 ${gstIncluded ? 'left-[18px]' : 'left-[2px]'}`} />
-                                            </button>
-                                            <span className="text-[13px] font-medium text-gray-700">{gstIncluded ? 'Yes' : 'No'}</span>
-                                        </div>
+                                 {/* Upsell Courses */}
+                                 <div className="pt-4 space-y-4">
+                                     <div className="flex items-center justify-between">
+                                         <div>
+                                             <h4 className="text-[14px] font-semibold text-gray-900">Upsell Courses</h4>
+                                             <p className="text-[11px] text-gray-400">Recommend other courses at purchase</p>
+                                         </div>
+                                         <button onClick={() => setUpsellCourses(!upsellCourses)} className={`w-10 h-5 rounded-full relative transition-all duration-300 ${upsellCourses ? 'bg-green-500' : 'bg-gray-200'}`}>
+                                             <div className={`absolute top-[2px] transition-all duration-300 w-4 h-4 bg-white rounded-full ${upsellCourses ? 'left-[22px]' : 'left-[2px]'}`} />
+                                         </button>
                                      </div>
 
-                                     {/* GST Percentage */}
-                                     {gstIncluded && (
-                                     <div className="space-y-1.5 animate-in fade-in zoom-in duration-300">
-                                         <label className="text-[13px] font-semibold text-gray-700">GST Percentage (%)</label>
-                                         <div className="relative">
-                                             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[20px]">percent</span>
+                                      {upsellCourses && (
+                                         <div className="relative border border-gray-200 rounded-sm p-2 min-h-[44px] animate-in fade-in slide-in-from-top-2 duration-300 bg-white hover:border-gray-300 transition-all cursor-pointer" onClick={() => setShowUpsellList(!showUpsellList)}>
+                                             <div className="flex flex-wrap gap-1.5">
+                                                 {selectedUpsellCourses.map(courseTitle => (
+                                                     <div key={courseTitle} className="bg-gray-100 text-gray-800 pl-2 pr-1 py-1 rounded flex items-center gap-1 border border-gray-200">
+                                                         <span className="text-[12px] font-medium">{courseTitle}</span>
+                                                         <button onClick={(e) => { e.stopPropagation(); setSelectedUpsellCourses(selectedUpsellCourses.filter(c => c !== courseTitle)); }}>
+                                                             <span className="material-symbols-outlined text-[16px]">close</span>
+                                                         </button>
+                                                     </div>
+                                                 ))}
+                                                 <input
+                                                     type="text"
+                                                     placeholder={selectedUpsellCourses.length === 0 ? "Search courses..." : ""}
+                                                     value={upsellSearch}
+                                                     onChange={(e) => setUpsellSearch(e.target.value)}
+                                                     className="flex-1 bg-transparent border-none outline-none py-1 text-[14px] text-gray-800"
+                                                 />
+                                             </div>
+                                             {showUpsellList && (
+                                                 <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-[100]">
+                                                     <div className="max-h-[200px] overflow-y-auto">
+                                                         {allCourses.filter(c => (c.title || c.name || "").toLowerCase().includes(upsellSearch.toLowerCase())).map(course => {
+                                                             const title = course.title || course.name;
+                                                             return (
+                                                                 <div key={title} onClick={(e) => {
+                                                                     e.stopPropagation();
+                                                                     const newSelected = selectedUpsellCourses.includes(title) ? selectedUpsellCourses.filter(c => c !== title) : [...selectedUpsellCourses, title];
+                                                                     setSelectedUpsellCourses(newSelected);
+                                                                     setShowUpsellList(false);
+                                                                 }} className={`px-4 py-2 cursor-pointer flex items-center justify-between text-[13px] hover:bg-gray-50 ${selectedUpsellCourses.includes(title) ? 'bg-gray-50 font-semibold' : 'text-gray-600'}`}>
+                                                                     <span>{title}</span>
+                                                                     {selectedUpsellCourses.includes(title) && <span className="material-symbols-outlined text-[16px]">check</span>}
+                                                                 </div>
+                                                             );
+                                                         })}
+                                                     </div>
+                                                 </div>
+                                             )}
+                                         </div>
+                                     )}
+                                 </div>
+                             </div>
+                         )}
+
+                         {/* Step 4: Additional Settings */}
+                         {activeStep === 4 && (
+                             <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-6">
+                                 {/* Top Inputs: Sorting & Badge */}
+                                 <div className="grid grid-cols-2 gap-6">
+                                     <div className="space-y-1.5">
+                                         <label className="text-[13px] font-semibold text-gray-700">Sorting Order</label>
+                                         <input
+                                             type="number"
+                                             placeholder="0"
+                                             value={sortingOrder}
+                                             onChange={(e) => setSortingOrder(e.target.value)}
+                                             className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 transition-all bg-white"
+                                         />
+                                     </div>
+                                     <div className="space-y-1.5">
+                                         <label className="text-[13px] font-semibold text-gray-700">Display Custom Badge</label>
+                                         <input
+                                             type="text"
+                                             placeholder="Enter Custom Badge"
+                                             value={customBadge}
+                                             onChange={(e) => setCustomBadge(e.target.value)}
+                                             className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 transition-all bg-white"
+                                         />
+                                     </div>
+                                 </div>
+
+                                 {/* Toggle Sections */}
+                                 <div className="space-y-4">
+                                     {[
+                                         { title: 'Choose Tabs to Show on Course Page', state: showTabs, setState: setShowTabs },
+                                         { title: 'Mark As New Batch', state: markNewBatch, setState: setMarkNewBatch },
+                                     ].map((row, i) => (
+                                         <div key={i} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
+                                             <span className="text-[13px] font-medium text-gray-700">{row.title}</span>
+                                             <button onClick={() => row.setState(!row.state)} className={`w-10 h-5 rounded-full relative transition-all duration-300 ${row.state ? 'bg-green-500' : 'bg-gray-200'}`}>
+                                                 <div className={`absolute top-[2px] transition-all duration-300 w-4 h-4 bg-white rounded-full ${row.state ? 'left-[22px]' : 'left-[2px]'}`} />
+                                             </button>
+                                         </div>
+                                     ))}
+                                 </div>
+
+                                 {/* SEO Settings */}
+                                 <div className="space-y-4 pt-4">
+                                     <h3 className="text-[14px] font-semibold text-gray-900">SEO Settings</h3>
+                                     <div className="space-y-4">
+                                         <div className="space-y-1.5">
+                                             <label className="text-[13px] font-semibold text-gray-700">Meta Title</label>
                                              <input
-                                                 type="number"
-                                                 placeholder="18"
-                                                 value={gstPercentage}
-                                                 onChange={(e) => setGstPercentage(e.target.value)}
-                                                 className="w-full border border-gray-200 pl-10 pr-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 transition-all placeholder:text-gray-400"
+                                                 type="text"
+                                                 value={metaTitle}
+                                                 onChange={(e) => setMetaTitle(e.target.value)}
+                                                 className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 transition-all bg-white"
+                                             />
+                                         </div>
+                                         <div className="space-y-1.5">
+                                             <label className="text-[13px] font-semibold text-gray-700">Meta Description</label>
+                                             <textarea
+                                                 placeholder="Enter Meta Description"
+                                                 value={metaDescription}
+                                                 onChange={(e) => setMetaDescription(e.target.value)}
+                                                 rows={2}
+                                                 className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 transition-all resize-none bg-white"
                                              />
                                          </div>
                                      </div>
-                                     )}
-                                </div>
+                                 </div>
 
-                                <div className="grid grid-cols-1 gap-6">
-                                     {/* Discount Codes Field */}
-                                    <div className="space-y-1.5">
-                                        <label className="text-[13px] font-semibold text-gray-700">Select Discount Codes</label>
-                                        <div className="relative bg-white border border-gray-200 rounded-sm min-h-[44px] cursor-pointer hover:border-gray-300 transition-all" onClick={() => setShowCouponList(!showCouponList)}>
-                                            <div className="flex flex-wrap gap-1.5 p-2">
-                                                {selectedCoupons.map(code => (
-                                                    <div key={code} className="bg-gray-100 text-gray-800 pl-2 pr-1 py-1 rounded flex items-center gap-1 border border-gray-200">
-                                                        <span className="text-[12px] font-medium">{code}</span>
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setSelectedCoupons(selectedCoupons.filter(c => c !== code)); }}
-                                                            className="hover:text-red-500 transition-colors"
-                                                        >
-                                                            <span className="material-symbols-outlined text-[16px]">close</span>
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                                <input
-                                                    type="text"
-                                                    placeholder={selectedCoupons.length === 0 ? "Search or select coupons" : ""}
-                                                    onFocus={(e) => { e.stopPropagation(); setShowCouponList(true); }}
-                                                    value={couponSearch}
-                                                    onChange={(e) => setCouponSearch(e.target.value)}
-                                                    className="flex-1 min-w-[120px] bg-transparent border-none outline-none py-1 text-[14px] text-gray-800 placeholder:text-gray-400"
-                                                />
-                                            </div>
-
-                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                                <span className={`material-symbols-outlined text-gray-400 transition-transform ${showCouponList ? 'rotate-180' : ''}`}>expand_more</span>
-                                            </div>
-
-                                            {showCouponList && (
-                                                <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-[100] animate-in fade-in duration-200">
-                                                    <div className="max-h-[200px] overflow-y-auto">
-                                                        {loadingCoupons ? (
-                                                            <div className="p-4 text-center text-[12px] text-gray-400">Loading coupons...</div>
-                                                        ) : coupons.filter(c => c.code.toLowerCase().includes(couponSearch.toLowerCase())).map(coupon => (
-                                                            <div
-                                                                key={coupon.code}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    const newSelected = selectedCoupons.includes(coupon.code)
-                                                                        ? selectedCoupons.filter(c => c !== coupon.code)
-                                                                        : [...selectedCoupons, coupon.code];
-                                                                    setSelectedCoupons(newSelected);
-                                                                    setShowCouponList(false);
-                                                                }}
-                                                                className={`px-4 py-2 cursor-pointer flex items-center justify-between text-[13px] hover:bg-gray-50 ${selectedCoupons.includes(coupon.code) ? 'bg-gray-50 font-semibold' : 'text-gray-600'}`}
-                                                            >
-                                                                <span>{coupon.code}</span>
-                                                                {selectedCoupons.includes(coupon.code) && <span className="material-symbols-outlined text-[16px]">check</span>}
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <p className="text-[12px] text-gray-400 font-medium ml-1 mt-1 flex items-center gap-1.5">
-                                            <span className="material-symbols-outlined text-[16px] text-gray-300">info</span>
-                                            Selected codes will be available for checkout discount.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Step 3: Content */}
-                        {activeStep === 3 && (
-                            <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-6">
-                                {/* Attach Test Series */}
-                                <div className="space-y-1.5">
-                                    <label className="text-[13px] font-semibold text-gray-700">Attach Test Series</label>
-                                    <div className="relative">
-                                        <div
-                                             onClick={() => setShowTestSeriesList(!showTestSeriesList)}
-                                             className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] cursor-pointer flex items-center justify-between hover:border-gray-300 bg-white"
-                                         >
-                                             <span className={selectedTestSeries.length ? 'text-gray-900 font-medium' : 'text-gray-400'}>
-                                                 {selectedTestSeries.length ? `${selectedTestSeries.length} Selected` : 'Select Test Series'}
-                                             </span>
-                                             <span className={`material-symbols-outlined text-gray-400 transition-transform ${showTestSeriesList ? 'rotate-180' : ''}`}>expand_more</span>
+                                 {/* Language and Terms */}
+                                 <div className="grid grid-cols-2 gap-6 pt-4">
+                                     <div className="space-y-1.5">
+                                         <label className="text-[13px] font-semibold text-gray-700">Language</label>
+                                         <div className="relative">
+                                             <select
+                                                 value={courseLanguage}
+                                                 onChange={(e) => setCourseLanguage(e.target.value)}
+                                                 className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 appearance-none bg-white font-medium"
+                                             >
+                                                 <option value="English">English</option>
+                                                 <option value="Hindi">Hindi</option>
+                                             </select>
+                                             <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">expand_more</span>
                                          </div>
-
-                                        {showTestSeriesList && (
-                                            <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-[100] animate-in fade-in duration-200">
-                                                <div className="p-2 border-b border-gray-100 flex gap-2">
-                                                    <input
-                                                        type="text"
-                                                        placeholder="Search"
-                                                        value={testSeriesSearch}
-                                                        onChange={(e) => setTestSeriesSearch(e.target.value)}
-                                                        className="flex-1 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded text-[12px] outline-none"
-                                                    />
-                                                </div>
-                                                <div className="max-h-[200px] overflow-y-auto">
-                                                    {testSeriesList.filter(tsObj => (tsObj.name || tsObj.title || '').toLowerCase().includes(testSeriesSearch.toLowerCase())).map((tsObj) => {
-                                                        const ts = tsObj.name || tsObj.title || '';
-                                                        return (
-                                                        <div
-                                                            key={tsObj._id || ts}
-                                                            onClick={() => {
-                                                                const newSelected = selectedTestSeries.includes(ts)
-                                                                    ? selectedTestSeries.filter(t => t !== ts)
-                                                                    : [...selectedTestSeries, ts];
-                                                                setSelectedTestSeries(newSelected);
-                                                                setShowTestSeriesList(false);
-                                                            }}
-                                                            className={`px-4 py-2 cursor-pointer flex items-center justify-between text-[13px] hover:bg-gray-50 ${selectedTestSeries.includes(ts) ? 'bg-gray-50 font-semibold' : 'text-gray-600'}`}
-                                                        >
-                                                            <span>{ts}</span>
-                                                            {selectedTestSeries.includes(ts) && <span className="material-symbols-outlined text-[16px]">check</span>}
-                                                        </div>
-                                                    )})}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <p className="text-[11px] text-gray-400 mt-1">Students can access attached tests for free</p>
-                                </div>
-
-                                {/* Attach Book */}
-                                <div className="space-y-1.5">
-                                    <label className="text-[13px] font-semibold text-gray-700">Attach Book</label>
-                                    <div className="relative">
-                                        <div
-                                             onClick={() => setShowBookList(!showBookList)}
-                                             className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] cursor-pointer flex items-center justify-between hover:border-gray-300 bg-white"
-                                         >
-                                             <span className={selectedBook ? 'text-gray-900 font-medium' : 'text-gray-400'}>
-                                                 {selectedBook || 'Select Book'}
-                                             </span>
-                                             <span className={`material-symbols-outlined text-gray-400 transition-transform ${showBookList ? 'rotate-180' : ''}`}>expand_more</span>
+                                     </div>
+                                     <div className="space-y-1.5">
+                                         <label className="text-[13px] font-semibold text-gray-700">Terms & Conditions (PDF)</label>
+                                         <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={(e) => setUploadedPdf(e.target.files?.[0] || null)} />
+                                         <div onClick={() => fileInputRef.current?.click()} className="border border-dashed border-gray-300 rounded-sm p-2 flex items-center justify-center cursor-pointer hover:bg-gray-50 text-[12px] font-bold text-gray-500 h-[42px] bg-white transition-all shadow-sm">
+                                             {uploadedPdf ? uploadedPdf.name : 'Upload PDF'}
                                          </div>
-
-                                        {showBookList && (
-                                            <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-[100] animate-in fade-in duration-200">
-                                                <div className="max-h-[200px] overflow-y-auto">
-                                                    <div onClick={() => { setSelectedBook(''); setShowBookList(false); }} className="px-4 py-2 text-[13px] text-gray-400 hover:bg-gray-50 cursor-pointer">None</div>
-                                                    {booksList.map((bookObj) => {
-                                                        const book = bookObj.title || bookObj.name || '';
-                                                        return (
-                                                        <div key={bookObj._id || book} onClick={() => { setSelectedBook(book); setShowBookList(false); }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-gray-50 ${selectedBook === book ? 'bg-gray-50 font-semibold' : 'text-gray-600'}`}>
-                                                            {book}
-                                                        </div>
-                                                    )})}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Upsell Courses */}
-                                <div className="pt-4 space-y-4">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <h4 className="text-[14px] font-semibold text-gray-900">Upsell Courses</h4>
-                                            <p className="text-[11px] text-gray-400">Recommend other courses at purchase</p>
-                                        </div>
-                                        <button onClick={() => setUpsellCourses(!upsellCourses)} className={`w-10 h-5 rounded-full relative transition-all duration-300 ${upsellCourses ? 'bg-green-500' : 'bg-gray-200'}`}>
-                                            <div className={`absolute top-[2px] transition-all duration-300 w-4 h-4 bg-white rounded-full ${upsellCourses ? 'left-[22px]' : 'left-[2px]'}`} />
-                                        </button>
-                                    </div>
-
-                                     {upsellCourses && (
-                                        <div className="relative border border-gray-200 rounded-sm p-2 min-h-[44px] animate-in fade-in slide-in-from-top-2 duration-300 bg-white hover:border-gray-300 transition-all cursor-pointer" onClick={() => setShowUpsellList(!showUpsellList)}>
-                                            <div className="flex flex-wrap gap-1.5">
-                                                {selectedUpsellCourses.map(courseTitle => (
-                                                    <div key={courseTitle} className="bg-gray-100 text-gray-800 pl-2 pr-1 py-1 rounded flex items-center gap-1 border border-gray-200">
-                                                        <span className="text-[12px] font-medium">{courseTitle}</span>
-                                                        <button onClick={(e) => { e.stopPropagation(); setSelectedUpsellCourses(selectedUpsellCourses.filter(c => c !== courseTitle)); }}>
-                                                            <span className="material-symbols-outlined text-[16px]">close</span>
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                                <input
-                                                    type="text"
-                                                    placeholder={selectedUpsellCourses.length === 0 ? "Search courses..." : ""}
-                                                    value={upsellSearch}
-                                                    onChange={(e) => setUpsellSearch(e.target.value)}
-                                                    className="flex-1 bg-transparent border-none outline-none py-1 text-[14px] text-gray-800"
-                                                />
-                                            </div>
-                                            {showUpsellList && (
-                                                <div className="absolute top-full left-0 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg z-[100]">
-                                                    <div className="max-h-[200px] overflow-y-auto">
-                                                        {allCourses.filter(c => (c.title || c.name || "").toLowerCase().includes(upsellSearch.toLowerCase())).map(course => {
-                                                            const title = course.title || course.name;
-                                                            return (
-                                                                <div key={title} onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    const newSelected = selectedUpsellCourses.includes(title) ? selectedUpsellCourses.filter(c => c !== title) : [...selectedUpsellCourses, title];
-                                                                    setSelectedUpsellCourses(newSelected);
-                                                                    setShowUpsellList(false);
-                                                                }} className={`px-4 py-2 cursor-pointer flex items-center justify-between text-[13px] hover:bg-gray-50 ${selectedUpsellCourses.includes(title) ? 'bg-gray-50 font-semibold' : 'text-gray-600'}`}>
-                                                                    <span>{title}</span>
-                                                                    {selectedUpsellCourses.includes(title) && <span className="material-symbols-outlined text-[16px]">check</span>}
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Step 4: Additional Settings */}
-                        {activeStep === 4 && (
-                            <div className="animate-in fade-in slide-in-from-right-4 duration-500 space-y-6">
-                                {/* Top Inputs: Sorting & Badge */}
-                                <div className="grid grid-cols-2 gap-6">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[13px] font-semibold text-gray-700">Sorting Order</label>
-                                        <input
-                                            type="number"
-                                            placeholder="0"
-                                            value={sortingOrder}
-                                            onChange={(e) => setSortingOrder(e.target.value)}
-                                            className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 transition-all bg-white"
-                                        />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-[13px] font-semibold text-gray-700">Display Custom Badge</label>
-                                        <input
-                                            type="text"
-                                            placeholder="Enter Custom Badge"
-                                            value={customBadge}
-                                            onChange={(e) => setCustomBadge(e.target.value)}
-                                            className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 transition-all bg-white"
-                                        />
-                                    </div>
-                                </div>
-
-                                {/* Toggle Sections */}
-                                <div className="space-y-4">
-                                    {[
-                                        { title: 'Choose Tabs to Show on Course Page', state: showTabs, setState: setShowTabs },
-                                        { title: 'Mark As New Batch', state: markNewBatch, setState: setMarkNewBatch },
-                                    ].map((row, i) => (
-                                        <div key={i} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-0">
-                                            <span className="text-[13px] font-medium text-gray-700">{row.title}</span>
-                                            <button onClick={() => row.setState(!row.state)} className={`w-10 h-5 rounded-full relative transition-all duration-300 ${row.state ? 'bg-green-500' : 'bg-gray-200'}`}>
-                                                <div className={`absolute top-[2px] transition-all duration-300 w-4 h-4 bg-white rounded-full ${row.state ? 'left-[22px]' : 'left-[2px]'}`} />
-                                            </button>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                {/* SEO Settings */}
-                                <div className="space-y-4 pt-4">
-                                    <h3 className="text-[14px] font-semibold text-gray-900">SEO Settings</h3>
-                                    <div className="space-y-4">
-                                        <div className="space-y-1.5">
-                                            <label className="text-[13px] font-semibold text-gray-700">Meta Title</label>
-                                            <input
-                                                type="text"
-                                                value={metaTitle}
-                                                onChange={(e) => setMetaTitle(e.target.value)}
-                                                className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 transition-all bg-white"
-                                            />
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <label className="text-[13px] font-semibold text-gray-700">Meta Description</label>
-                                            <textarea
-                                                placeholder="Enter Meta Description"
-                                                value={metaDescription}
-                                                onChange={(e) => setMetaDescription(e.target.value)}
-                                                rows={2}
-                                                className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 transition-all resize-none bg-white"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Language and Terms */}
-                                <div className="grid grid-cols-2 gap-6 pt-4">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[13px] font-semibold text-gray-700">Language</label>
-                                        <div className="relative">
-                                            <select
-                                                value={courseLanguage}
-                                                onChange={(e) => setCourseLanguage(e.target.value)}
-                                                className="w-full border border-gray-200 px-4 py-2.5 rounded-sm text-[14px] outline-none focus:border-gray-900 appearance-none bg-white font-medium"
-                                            >
-                                                <option value="English">English</option>
-                                                <option value="Hindi">Hindi</option>
-                                            </select>
-                                            <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">expand_more</span>
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-[13px] font-semibold text-gray-700">Terms & Conditions (PDF)</label>
-                                        <input type="file" ref={fileInputRef} className="hidden" accept=".pdf" onChange={(e) => setUploadedPdf(e.target.files?.[0] || null)} />
-                                        <div onClick={() => fileInputRef.current?.click()} className="border border-dashed border-gray-300 rounded-sm p-2 flex items-center justify-center cursor-pointer hover:bg-gray-50 text-[12px] font-bold text-gray-500 h-[42px] bg-white transition-all shadow-sm">
-                                            {uploadedPdf ? uploadedPdf.name : 'Upload PDF'}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+                                     </div>
+                                 </div>
+                             </div>
+                         )}
 
                         {/* Navigation Buttons */}
                         <div className="flex items-center justify-between pt-8">
@@ -1256,4 +1631,3 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
 };
 
 export default AddCourse;
-

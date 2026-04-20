@@ -82,7 +82,6 @@ export const getCourses = async (req, res) => {
       {
         $project: {
           videoCount: 0,
-          description: 0,
           longDescription: 0,
           syllabus: 0,
           curriculum: 0

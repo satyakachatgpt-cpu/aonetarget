@@ -46,6 +46,23 @@ interface ContentItem {
   status?: string;
 }
 
+function normalizeSubcategoryId(val: string = "") {
+  if (!val) return "";
+  const id = String(val).toLowerCase();
+  
+  // Explicit mappings for known buckets
+  if (id.includes('recorded_batch') || id.includes('recorded-batch')) return 'recorded_batch';
+  if (id.includes('live_classroom') || id.includes('live_class')) return 'live_classroom';
+  if (id.includes('crash_course') || id.includes('crash-course')) return 'crash_course';
+  if (id.includes('mock_test') || id.includes('mock-test')) return 'mock_test';
+
+  return id
+    .replace(/neet_|iit_jee_|iit-jee_|nursing_cet_|foundation_/g, "")
+    .replace(/batches/g, "batch")
+    .replace(/-/g, "_")
+    .trim();
+}
+
 const SubCategoryDetail: React.FC = () => {
   const navigate = useNavigate();
   const { categoryId, subId } = useParams<{ categoryId: string; subId: string }>();
@@ -86,7 +103,7 @@ const SubCategoryDetail: React.FC = () => {
 
       // Strict Batch Filtering: Only show courses that match subId AND (guest or student-enrolled)
       const matchingCourses = allCourses.filter((c: Course) => {
-        const matchesSub = c.subcategoryId === subId;
+        const matchesSub = normalizeSubcategoryId(c.subcategoryId || "") === normalizeSubcategoryId(subId || "");
         if (!matchesSub) return false;
         
         if (studentId) {
@@ -129,14 +146,14 @@ const SubCategoryDetail: React.FC = () => {
   };
 
   const filteredCourses = courses.filter(c => {
-    const matchesSub = c.subcategoryId === subId;
+    const matchesSub = normalizeSubcategoryId(c.subcategoryId || "") === normalizeSubcategoryId(subId || "");
     if (!matchesSub) return false;
     if (activeTab === 'recorded') return c.type === 'recorded' || (!c.type && !c.isLive);
     if (activeTab === 'live') return c.type === 'live' || c.isLive;
     return true;
   });
 
-  const allMatchingCourses = courses.filter(c => c.subcategoryId === subId);
+  const allMatchingCourses = courses.filter(c => normalizeSubcategoryId(c.subcategoryId || "") === normalizeSubcategoryId(subId || ""));
   const recordedCount = allMatchingCourses.filter(c => c.type === 'recorded' || (!c.type && !c.isLive)).length;
   const liveCount = allMatchingCourses.filter(c => c.type === 'live' || c.isLive).length;
 

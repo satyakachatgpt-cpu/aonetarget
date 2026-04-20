@@ -1,24 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { RightSideDrawer, DrawerHeader, DrawerBody, DrawerFooter, FormLabel, FormInput, FormSelect, PrimaryButton } from './DrawerSystem';
 
-const iconOptions = [
-  'biotech', 'groups', 'medical_services', 'menu_book', 'school', 'science',
-  'calculate', 'public', 'language', 'bolt', 'video_library', 'cast_for_education',
-  'edit_note', 'help_center', 'medical_information', 'shield_person', 'vaccines',
-  'local_pharmacy', 'book_2', 'translate', 'workspace_premium', 'psychology',
-  'architecture', 'sports_esports', 'palette', 'music_note'
-];
+import { CATEGORY_VISUALS } from '../../config/visualConfig';
 
-const gradientOptions = [
-  { value: 'from-blue-600 to-indigo-700', label: 'Blue to Indigo' },
-  { value: 'from-orange-500 to-red-600', label: 'Orange to Red' },
-  { value: 'from-teal-500 to-emerald-600', label: 'Teal to Emerald' },
-  { value: 'from-purple-500 to-violet-600', label: 'Purple to Violet' },
-  { value: 'from-indigo-800 to-blue-900', label: 'Dark blue' },
-  { value: 'from-cyan-500 to-blue-600', label: 'Cyan to Blue' },
-  { value: 'from-amber-500 to-orange-600', label: 'Amber to Orange' },
-  { value: 'from-green-500 to-teal-600', label: 'Green to Teal' },
-];
+const iconOptions = CATEGORY_VISUALS.iconOptions;
+const gradientOptions = CATEGORY_VISUALS.gradientOptions;
+
 
 interface AddCategoryDrawerProps {
   isOpen: boolean;
@@ -40,6 +27,11 @@ const AddCategoryDrawer: React.FC<AddCategoryDrawerProps> = ({ isOpen, onClose, 
     order: nextOrder,
     isActive: true,
     imageUrl: '',
+    hierarchyMode: 'simple',
+    level1Label: '',
+    level2Label: '',
+    branchesL1: [] as { label: string; slug: string }[],
+    branchesL2: [] as { label: string; slug: string }[],
   });
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -58,6 +50,11 @@ const AddCategoryDrawer: React.FC<AddCategoryDrawerProps> = ({ isOpen, onClose, 
           order: editingCategory.order || nextOrder,
           isActive: editingCategory.isActive ?? true,
           imageUrl: editingCategory.imageUrl || '',
+          hierarchyMode: editingCategory.hierarchyMode || 'simple',
+          level1Label: editingCategory.level1Label || '',
+          level2Label: editingCategory.level2Label || '',
+          branchesL1: editingCategory.branchesL1 || [],
+          branchesL2: editingCategory.branchesL2 || [],
         });
       } else {
         setFormData({
@@ -71,6 +68,11 @@ const AddCategoryDrawer: React.FC<AddCategoryDrawerProps> = ({ isOpen, onClose, 
           order: nextOrder,
           isActive: true,
           imageUrl: '',
+          hierarchyMode: 'simple',
+          level1Label: '',
+          level2Label: '',
+          branchesL1: [],
+          branchesL2: [],
         });
       }
     }
@@ -110,64 +112,64 @@ const AddCategoryDrawer: React.FC<AddCategoryDrawerProps> = ({ isOpen, onClose, 
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-[11px] font-black text-slate-500 mb-2 uppercase tracking-wider">Category ID</label>
+              <FormLabel label="Category ID" required />
               <FormInput
                 value={formData.id}
                 onChange={(e) => setFormData({ ...formData, id: e.target.value })}
                 placeholder="e.g. neet"
-                className="bg-white border-slate-200 placeholder:text-slate-300"
+                className="bg-white border-slate-200"
               />
             </div>
             <div>
-              <label className="block text-[11px] font-black text-slate-500 mb-2 uppercase tracking-wider">Order</label>
+              <FormLabel label="Order" />
               <FormInput
                 type="number"
                 value={formData.order}
                 onChange={(e) => setFormData({ ...formData, order: parseInt(e.target.value) || 0 })}
                 placeholder="7"
-                className="bg-white border-slate-200 placeholder:text-slate-300"
+                className="bg-white border-slate-200"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-[11px] font-black text-slate-500 mb-2 uppercase tracking-wider">Title</label>
+            <FormLabel label="Title" required />
             <FormInput
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
               placeholder="e.g. NEET"
-              className="bg-white border-slate-200 placeholder:text-slate-300"
+              className="bg-white border-slate-200"
             />
           </div>
 
           <div>
-            <label className="block text-[11px] font-black text-slate-500 mb-2 uppercase tracking-wider">Subtitle</label>
+            <FormLabel label="Subtitle" />
             <FormInput
               value={formData.subtitle}
               onChange={(e) => setFormData({ ...formData, subtitle: e.target.value })}
               placeholder="e.g. Medical Entrance"
-              className="bg-white border-slate-200 placeholder:text-slate-300"
+              className="bg-white border-slate-200"
             />
           </div>
 
           <div>
-            <label className="block text-[11px] font-black text-slate-500 mb-2 uppercase tracking-wider">Description</label>
+            <FormLabel label="Description" />
             <FormInput
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               placeholder="e.g. Biology, Chemistry, Physics"
-              className="bg-white border-slate-200 placeholder:text-slate-300"
+              className="bg-white border-slate-200"
             />
           </div>
 
           <div className="flex items-center justify-between gap-4">
             <div className="flex-1">
-              <label className="block text-[11px] font-black text-slate-500 mb-2 uppercase tracking-wider">Tag</label>
+              <FormLabel label="Tag" />
               <FormInput
                 value={formData.tag}
                 onChange={(e) => setFormData({ ...formData, tag: e.target.value })}
                 placeholder="e.g. Most Popular"
-                className="bg-white border-slate-200 placeholder:text-slate-300"
+                className="bg-white border-slate-200"
               />
             </div>
             <div className="pt-6">
@@ -184,7 +186,7 @@ const AddCategoryDrawer: React.FC<AddCategoryDrawerProps> = ({ isOpen, onClose, 
           </div>
 
           <div>
-            <label className="block text-[11px] font-black text-slate-500 mb-2 uppercase tracking-wider">Icon</label>
+            <FormLabel label="Icon" />
             <div className="grid grid-cols-9 gap-2">
               {iconOptions.map(icon => (
                 <button
@@ -199,7 +201,7 @@ const AddCategoryDrawer: React.FC<AddCategoryDrawerProps> = ({ isOpen, onClose, 
           </div>
 
           <div>
-            <label className="block text-[11px] font-black text-slate-500 mb-2 uppercase tracking-wider">Gradient</label>
+            <FormLabel label="Gradient" />
             <div className="grid grid-cols-5 gap-3">
               {gradientOptions.map(opt => (
                 <button
@@ -211,8 +213,159 @@ const AddCategoryDrawer: React.FC<AddCategoryDrawerProps> = ({ isOpen, onClose, 
             </div>
           </div>
 
+          <div className="pt-6 border-t border-slate-100">
+            <h4 className="text-[13px] font-black text-slate-800 mb-4 uppercase tracking-tight flex items-center gap-2">
+              <span className="material-symbols-outlined text-[18px] text-blue-600">account_tree</span>
+              Academic Hierarchy
+            </h4>
+            
+            <div className="space-y-4">
+              <div>
+                <FormLabel label="Hierarchy Mode" />
+                <FormSelect
+                  value={formData.hierarchyMode}
+                  onChange={(val) => {
+                    let level1Label = '';
+                    let level2Label = '';
+                    let branchesL1 = [] as { label: string; slug: string }[];
+                    let branchesL2 = [] as { label: string; slug: string }[];
+                    
+                    if (val === 'exam-branch') {
+                      level1Label = 'Exam';
+                      branchesL1 = [{ label: 'NEET', slug: 'neet' }, { label: 'IIT-JEE', slug: 'iit-jee' }];
+                    } else if (val === 'board-class') {
+                      level1Label = 'Board';
+                      level2Label = 'Class';
+                      branchesL1 = [{ label: 'CBSE', slug: 'cbse' }, { label: 'HBSE', slug: 'hbse' }];
+                      branchesL2 = [{ label: '11th', slug: '11th' }, { label: '12th', slug: '12th' }];
+                    }
+                    
+                    setFormData({ ...formData, hierarchyMode: val, level1Label, level2Label, branchesL1, branchesL2 });
+                  }}
+                  options={[
+                    { value: 'simple', label: 'Simple (No Branches)' },
+                    { value: 'exam-branch', label: 'Exam Branches (e.g. NEET/IIT)' },
+                    { value: 'board-class', label: 'Board & Class Branches' },
+                  ]}
+                />
+              </div>
+
+              {formData.hierarchyMode !== 'simple' && (
+                <div className="space-y-4 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                  <div>
+                    <FormLabel label="Level 1 Label (e.g. Exam, Board)" />
+                    <FormInput
+                      value={formData.level1Label}
+                      onChange={(e) => setFormData({ ...formData, level1Label: e.target.value })}
+                      placeholder="e.g. Exam"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-black text-slate-500 mb-1 uppercase tracking-wider">Level 1 Branches</label>
+                    {formData.branchesL1.map((b, idx) => (
+                      <div key={idx} className="flex gap-2">
+                        <FormInput
+                          value={b.label}
+                          onChange={(e) => {
+                            const newB = [...formData.branchesL1];
+                            newB[idx].label = e.target.value;
+                            setFormData({ ...formData, branchesL1: newB });
+                          }}
+                          placeholder="Label"
+                          className="flex-1"
+                        />
+                        <FormInput
+                          value={b.slug}
+                          onChange={(e) => {
+                            const newB = [...formData.branchesL1];
+                            newB[idx].slug = e.target.value;
+                            setFormData({ ...formData, branchesL1: newB });
+                          }}
+                          placeholder="Slug"
+                          className="flex-1"
+                        />
+                        <button
+                          onClick={() => {
+                            const newB = formData.branchesL1.filter((_, i) => i !== idx);
+                            setFormData({ ...formData, branchesL1: newB });
+                          }}
+                          className="bg-red-50 text-red-500 w-10 h-10 rounded-xl flex items-center justify-center"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      onClick={() => setFormData({ ...formData, branchesL1: [...formData.branchesL1, { label: '', slug: '' }] })}
+                      className="text-[11px] font-bold text-blue-600 uppercase flex items-center gap-1"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">add</span> Add Branch
+                    </button>
+                  </div>
+
+                  {formData.hierarchyMode === 'board-class' && (
+                    <>
+                      <div className="pt-2 border-t border-slate-200 mt-4">
+                        <FormLabel label="Level 2 Label (e.g. Class)" />
+                        <FormInput
+                          value={formData.level2Label}
+                          onChange={(e) => setFormData({ ...formData, level2Label: e.target.value })}
+                          placeholder="e.g. Class"
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <label className="block text-[11px] font-black text-slate-500 mb-1 uppercase tracking-wider">Level 2 Branches</label>
+                        {formData.branchesL2.map((b, idx) => (
+                          <div key={idx} className="flex gap-2">
+                            <FormInput
+                              value={b.label}
+                              onChange={(e) => {
+                                const newB = [...formData.branchesL2];
+                                newB[idx].label = e.target.value;
+                                setFormData({ ...formData, branchesL2: newB });
+                              }}
+                              placeholder="Label"
+                              className="flex-1"
+                            />
+                            <FormInput
+                              value={b.slug}
+                              onChange={(e) => {
+                                const newB = [...formData.branchesL2];
+                                newB[idx].slug = e.target.value;
+                                setFormData({ ...formData, branchesL2: newB });
+                              }}
+                              placeholder="Slug"
+                              className="flex-1"
+                            />
+                            <button
+                              onClick={() => {
+                                const newB = formData.branchesL2.filter((_, i) => i !== idx);
+                                setFormData({ ...formData, branchesL2: newB });
+                              }}
+                              className="bg-red-50 text-red-500 w-10 h-10 rounded-xl flex items-center justify-center"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          onClick={() => setFormData({ ...formData, branchesL2: [...formData.branchesL2, { label: '', slug: '' }] })}
+                          className="text-[11px] font-bold text-blue-600 uppercase flex items-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">add</span> Add Class Branch
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div>
-            <label className="block text-[11px] font-black text-slate-500 mb-2 uppercase tracking-wider">Category Image</label>
+            <FormLabel label="Category Image" />
             <div className="flex gap-2">
               <FormInput
                 value={formData.imageUrl}
