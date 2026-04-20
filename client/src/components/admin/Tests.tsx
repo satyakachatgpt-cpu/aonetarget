@@ -416,14 +416,16 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     field: string; // "question" | "A" | "B" | "C" | "D"
   } | null>(null);
 
-  const handleImageSelect = (dataUrl: string) => {
-    if (!activeImageAssignment) return;
-    const { questionId, field } = activeImageAssignment;
+  const handleImageSelect = (dataUrl: string, explicitAssignment?: { questionId: number | string, field: string }) => {
+    const assignment = explicitAssignment || activeImageAssignment;
+    if (!assignment) return;
+    const { questionId, field } = assignment;
     setBulkUploadData(prev => ({
       ...prev,
       parsedQuestions: prev.parsedQuestions.map(q => {
         if (q.id === questionId) {
           if (field === "question") return { ...q, questionImage: dataUrl, hasDiagramOptions: false };
+          if (field === "solution") return { ...q, solutionImage: dataUrl };
           
           // Handle option images
           const oIdx = field.charCodeAt(0) - 65; // A=0, B=1...
@@ -1057,25 +1059,15 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       if (!isEditable) return null;
       return (
         <div className="mt-2 flex items-center gap-2 justify-start">
-          <button 
-            onClick={() => setActiveImageAssignment({ questionId: q.id, field })}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 border-dashed transition-all ${activeImageAssignment?.questionId === q.id && activeImageAssignment?.field === field ? 'border-amber-400 bg-amber-50 text-amber-700 animate-pulse' : 'border-gray-200 text-gray-400 hover:border-amber-500 hover:text-amber-600'}`}
-          >
-            <span className="material-symbols-outlined text-[16px]">collections</span>
-            <span className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
-              Map from Gallery
-            </span>
-          </button>
-          <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 border-dashed border-gray-200 text-gray-400 hover:border-black hover:text-black cursor-pointer transition-all">
+          <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 border-dashed border-gray-200 text-gray-400 hover:border-black hover:text-black cursor-pointer transition-all bg-white">
             <span className="material-symbols-outlined text-[16px]">upload_file</span>
-            <span className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Upload Manual</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Upload Image</span>
             <input type="file" accept="image/*" className="hidden" onChange={(e) => {
               const file = e.target.files?.[0];
               if (file) {
                 const reader = new FileReader();
                 reader.onload = (ev) => {
-                  setActiveImageAssignment({ questionId: q.id, field });
-                  setTimeout(() => handleImageSelect(ev.target?.result as string), 0);
+                  setTimeout(() => handleImageSelect(ev.target?.result as string, { questionId: q.id, field }), 0);
                 };
                 reader.readAsDataURL(file);
               }
@@ -1109,18 +1101,14 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           <img src={dataUrl} alt="Diagram" className={`w-full h-auto rounded-lg object-contain ${field === 'question' ? 'max-h-64' : 'max-h-32'}`} loading="lazy" />
           {isEditable && (
             <div className="flex items-center gap-4 mt-3">
-              <button onClick={() => setActiveImageAssignment({ questionId: q.id, field })} className="text-[10px] font-bold text-gray-500 hover:text-black flex items-center gap-1 transition-colors">
-                <span className="material-symbols-outlined text-[14px]">collections</span> Change (Gallery)
-              </button>
-              <label className="text-[10px] font-bold text-gray-500 hover:text-black flex items-center gap-1 transition-colors cursor-pointer">
-                <span className="material-symbols-outlined text-[14px]">upload_file</span> Change (Upload)
+              <label className="text-[10px] font-bold text-gray-500 hover:text-black flex items-center gap-1 transition-colors cursor-pointer bg-white px-2 py-1 rounded">
+                <span className="material-symbols-outlined text-[14px]">upload_file</span> Change Image
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => {
                   const file = e.target.files?.[0];
                   if (file) {
                     const reader = new FileReader();
                     reader.onload = (ev) => {
-                      setActiveImageAssignment({ questionId: q.id, field });
-                      setTimeout(() => handleImageSelect(ev.target?.result as string), 0);
+                      setTimeout(() => handleImageSelect(ev.target?.result as string, { questionId: q.id, field }), 0);
                     };
                     reader.readAsDataURL(file);
                   }
