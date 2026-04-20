@@ -21,8 +21,8 @@ export default defineConfig(({ mode }) => {
           configure: (proxy) => {
             const bootTime = Date.now();
             proxy.on('error', (err: any, req, res) => {
-              // Suppress connection errors during the first 10 seconds of startup (expected race condition)
-              if (err.code === 'ECONNREFUSED' && (Date.now() - bootTime) < 10000) {
+              // Suppress connection errors during the first 30 seconds of startup (expected race condition)
+              if (err.code === 'ECONNREFUSED' && (Date.now() - bootTime) < 30000) {
                 return;
               }
               console.log('[proxy error]', req.url, err.message);

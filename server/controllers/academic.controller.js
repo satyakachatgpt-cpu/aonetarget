@@ -132,8 +132,12 @@ export const seedCategories = async (req, res) => {
 
 export const getSubcategories = async (req, res) => {
   try {
-    const { categoryId } = req.query;
-    const query = categoryId ? { categoryId } : {};
+    const { categoryId, level1Branch, level2Branch } = req.query;
+    const query = {};
+    if (categoryId) query.categoryId = categoryId;
+    if (level1Branch) query.level1Branch = level1Branch;
+    if (level2Branch) query.level2Branch = level2Branch;
+    
     const subcategories = await db.collection('subcategories').find(query).sort({ order: 1 }).toArray();
     res.json(subcategories);
   } catch (error) {
@@ -188,7 +192,14 @@ export const deleteSubcategory = async (req, res) => {
 
 export const getSubjects = async (req, res) => {
   try {
-    const subjects = await db.collection('subjects').find({}).toArray();
+    const { categoryId, subcategoryId, level1Branch, level2Branch } = req.query;
+    const query = {};
+    if (categoryId) query.categoryId = categoryId;
+    if (subcategoryId) query.subcategoryId = subcategoryId;
+    if (level1Branch) query.level1Branch = level1Branch;
+    if (level2Branch) query.level2Branch = level2Branch;
+
+    const subjects = await db.collection('subjects').find(query).toArray();
     res.json(subjects);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch subjects' });
@@ -417,7 +428,7 @@ export const getPackages = async (req, res) => {
           }
         }
       },
-      { $project: { description: 0, content: 0, features: 0 } },
+      { $project: { content: 0, features: 0 } },
       { $sort: { sortOrder: 1, createdAt: -1 } }
     ]).toArray();
     res.json(packages);

@@ -44,8 +44,7 @@ import * as XLSX from "xlsx";
 import * as pdfjsLib from "pdfjs-dist";
 import { generateDOCX } from "./DOCXGenerator";
 
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || "5.5.207"}/build/pdf.worker.min.mjs`;
+// pdfjsLib worker configured in @/utils/testUtils/questionParser
 
 const tabs = ["Tests", "Results", "Bulk Uploader", "Reported Questions"];
 const detailSubTabs = [
@@ -835,8 +834,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       }
     }
 
-    return questions;
-  }
   const [viewingFormatModal, setViewingFormatModal] = useState<string | null>(
     null,
   );
@@ -1433,21 +1430,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     }
   };
 
-  const getCourseName = (test: any) => {
-    if (test.courseName) return test.courseName;
-    if (test.courseId) {
-      const course = courses.find(
-        (c) => c.id === test.courseId || (c as any)._id === test.courseId,
-      );
-      if (course) return course.name || course.title;
-      const parentSeries = tests.find(
-        (t) => t.id === test.courseId || (t as any)._id === test.courseId,
-      );
-      if (parentSeries) return parentSeries.name || parentSeries.title;
-      return test.courseId;
-    }
-    return test.course || "Unlinked";
-  };
+  // getCourseName and formatTime moved to @/utils/testUtils/testHelpers
 
   const filteredTests = tests.filter((test) => {
     const matchesSearch =
@@ -1465,11 +1448,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     const isMainSeries = test.isSeries === true;
 
     return matchesSearch && matchesCourse && matchesStatus && isMainSeries;
-  }).sort((a, b) => {
-    const sortA = parseFloat(String(a.sortBy || "0")) || 0;
-    const sortB = parseFloat(String(b.sortBy || "0")) || 0;
-    return sortB - sortA;
-  });
+  }).sort(testSortComparator);
 
   const totalPages = Math.ceil(filteredTests.length / itemsPerPage);
   const paginatedTests = filteredTests.slice(
@@ -1796,6 +1775,234 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     }
   }, [reportedSearchQuery, reportedFilters, reportedPageSize, activeTab]);
 
+  const handleBulkUploadFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    if (file) {
+      setBulkUploadData({
+        ...bulkUploadData,
+        file,
+        parsedQuestions: [],
+      });
+      setIsParsing(true);
+      showToast(`Preparing to parse ${file.name}...`, "success");
+      try {
+        const { questions, extractedImages } = await parseFile(file);
+        setBulkUploadData((prev) => ({
+          ...prev,
+          file,
+          parsedQuestions: questions,
+          extractedImages: extractedImages || [],
+        }));
+        if (questions.length === 0) {
+          showToast(
+            "No questions could be extracted. Please check the document format.",
+            "error",
+          );
+        } else {
+          showToast(
+            `Successfully extracted ${questions.length} questions and ${extractedImages?.length || 0} images!`,
+            "success",
+          );
+        }
+      } catch (err) {
+        console.error("File parsing error:", err);
+        showToast(
+          "Error parsing file. Ensure it is a valid document.",
+          "error",
+        );
+      } finally {
+        setIsParsing(false);
+      }
+    }
+    if (e.target) e.target.value = "";
+  };
+
+  const handleBulkUploadProceed = async () => {
+    const testId =
+      bulkUploadData.testTitle ||
+      viewingQuestionEditor?.id ||
+      (viewingQuestionEditor as any)?._id;
+    if (!bulkUploadData.testSeries && !viewingQuestionEditor) {
+      showToast("Please select Test Series", "error");
+      return;
+    }
+    if (!testId) {
+      showToast("Please select Test Title", "error");
+      return;
+    }
+    if (
+      !bulkUploadData.file ||
+      (bulkUploadData.parsedQuestions || []).length === 0
+    ) {
+      showToast(
+        "No questions to upload. Please parse a file first.",
+        "error",
+      );
+      return;
+    }
+
+    try {
+      // 1. Fetch current questions for duplicate check and limit enforcement
+      const existingQuestions =
+        await testsAPI.getQuestions(testId);
+      const existingTexts = new Set(
+        existingQuestions.map((q: any) =>
+          (q.questionEn || q.question || "").trim().toLowerCase(),
+        ),
+      );
+
+      // Get the limit for this test
+      const targetTestMatch =
+        tests.find((t) => (t.id || (t as any)._id) === testId) ||
+        detailTests.find(
+          (t) => (t.id || (t as any)._id) === testId,
+        );
+      const limit = targetTestMatch?.noOfQuestions || 0;
+      const currentCount = existingQuestions.length;
+
+      if (limit > 0 && currentCount >= limit) {
+        showToast(
+          `Test already has ${currentCount} questions. Limit is ${limit}.`,
+          "error",
+        );
+        return;
+      }
+
+      // 2. Prepare payload - Standardization to displayOptions
+      const uploadBase64Image = async (base64Str: string) => {
+        if (!base64Str || !base64Str.startsWith("data:image")) return base64Str;
+        try {
+          const r = await fetch("/api/v2/upload/image/base64", {
+            method: "POST",
+            headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify({ image: base64Str }),
+          });
+          if (!r.ok) return base64Str;
+          const data = await r.json();
+          return data.url || base64Str;
+        } catch (e) {
+          return base64Str;
+        }
+      };
+
+      let filteredList = (bulkUploadData.parsedQuestions || []).filter(
+        (q) => !existingTexts.has((q.questionEn || "").trim().toLowerCase()),
+      );
+
+      let questionsToUpload = await Promise.all(
+        filteredList.map(async (q) => {
+          const qImageUrl = await uploadBase64Image(q.questionImage || "");
+          
+          const processedOptions = await Promise.all(
+            (q.options || []).map(async (opt: string, i: number) => {
+              const optImageUrl = await uploadBase64Image(q.optionImages?.[i] || "");
+              return {
+                id: i + 1,
+                text: opt,
+                image: optImageUrl,
+                isCorrect: String(q.correctAnswer).toUpperCase() === String.fromCharCode(65 + i),
+              };
+            })
+          );
+
+          return {
+            testId: testId,
+            courseId:
+              bulkUploadData.testSeries ||
+              viewingTestSeries?.id ||
+              (viewingTestSeries as any)?._id,
+            questionEn: q.questionEn,
+            questionHi: q.questionHi || "",
+            questionImage: qImageUrl,
+            type: "Multiple Choice Question",
+            marks: q.positiveMarks || 4,
+            negative: q.negativeMarks || -1,
+            displayOptions: processedOptions,
+            hasDiagramOptions: q.hasDiagramOptions || false,
+            solution: {
+              heading: "Full Solution",
+              text: q.solution || "",
+            },
+            format: bulkUploadData.format || "default",
+          };
+        })
+      );
+
+
+      if (questionsToUpload.length === 0) {
+        showToast(
+          "All questions in this file already exist in the test.",
+          "error",
+        );
+        return;
+      }
+
+      // Enforce the limit
+      if (
+        limit > 0 &&
+        currentCount + questionsToUpload.length > limit
+      ) {
+        const allowed = limit - currentCount;
+        showToast(
+          `Only ${allowed} out of ${questionsToUpload.length} new questions will be uploaded as per the limit (${limit}).`,
+          "error",
+        );
+        questionsToUpload = questionsToUpload.slice(0, allowed);
+      }
+
+      showToast(
+        `Uploading ${questionsToUpload.length} new questions...`,
+        "success",
+      );
+
+      // 3. Bulk upload
+      const res = await fetch("/api/questions/bulk", {
+        method: "POST",
+        headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ questions: questionsToUpload }),
+      });
+
+      if (!res.ok) throw new Error("Upload failed");
+
+      invalidateCache("tests");
+      showToast(
+        `${questionsToUpload.length} questions uploaded successfully!`,
+        "success",
+      );
+
+      // 4. Update the test's viewFormat if needed
+      const formatVal = bulkUploadData.format || "default";
+      await fetch(`/api/tests/${testId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ viewFormat: formatVal }),
+      });
+
+      // 5. Cleanup and Sync
+      setBulkUploadData({
+        ...bulkUploadData,
+        file: null,
+        parsedQuestions: [],
+      });
+
+      // Sync the editor view if we are in it
+      const updatedQs = await testsAPI.getQuestions(testId);
+      setEditorQuestions(updatedQs);
+
+      // 6. Redirect to view results
+      if (targetTestMatch) {
+        setViewingQuestionEditor(targetTestMatch);
+        setActiveTab("Tests");
+      }
+      loadData();
+    } catch (err: any) {
+      showToast(
+        err.message || "Failed to upload questions",
+        "error",
+      );
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -1804,114 +2011,84 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     );
   }
 
-  const renderResultsTab = () => {
-    const filteredResults = results.filter((res) => {
-      const matchSeries =
-        !resultFilters.series || res.testName.includes(resultFilters.series);
-      const matchTest =
-        !resultFilters.test || res.testName.includes(resultFilters.test);
-      return matchSeries && matchTest;
-    });
+  const renderTestSeriesDetail = () => {
+    if (!viewingTestSeries && !viewingQuestionEditor) return null;
 
-    const totalResults = filteredResults.length;
-    const totalResultsPages = Math.ceil(totalResults / resultsPageSize);
-    const resultsStartIndex = (resultsCurrentPage - 1) * resultsPageSize;
-    const resultsEndIndex = Math.min(resultsStartIndex + resultsPageSize, totalResults);
-    const paginatedResults = filteredResults.slice(resultsStartIndex, resultsEndIndex);
-    const resultsShowingStart = totalResults === 0 ? 0 : resultsStartIndex + 1;
+    const mockDetailTests: any[] = [];
+    const mockPDFs: any[] = [];
+    const mockSubjectives: any[] = [];
+    const mockUsers: any[] = [];
 
+    // Question Editor View (Full Page)
+    if (viewingQuestionEditor) {
+      const qeTests = editorQuestions;
 
-    const formatTime = (seconds: number) => {
-      if (!seconds) return "-";
-      const h = Math.floor(seconds / 3600);
-      const m = Math.floor((seconds % 3600) / 60);
-      return h > 0 ? `${h}h ${m}m` : `${m}m ${seconds % 60}s`;
-    };
+      return (
+        <div className="w-full bg-[#f8f9fa] min-h-screen pb-20 animate-in fade-in duration-500">
+          <QuestionEditorHeader
+            testName={viewingQuestionEditor?.name || viewingQuestionEditor?.title || viewingTestSeries?.name || "Unnamed Test"}
+            seriesName={viewingTestSeries?.name || "Test"}
+            onBack={() => setViewingQuestionEditor(null)}
+            onPublish={async () => {
+              const testId = viewingQuestionEditor?.id || viewingQuestionEditor?._id;
+              if (!testId) return;
+              try {
+                showToast("Publish changes...");
+                await testsAPI.publish(testId);
+                showToast("Test published successfully!");
+              } catch (error: any) {
+                showToast(error.message || "Failed to publish test", "error");
+              }
+            }}
+          />
 
-    return (
-      <div className="space-y-6 animate-in fade-in duration-500">
-        {/* Search/Filter Card */}
-        <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
-            <div className="space-y-2">
-              <label className="text-[12px] font-medium text-gray-500">
-                Test Series Title
-              </label>
-              <CustomDropdown
-                options={courses.map((c) => ({
-                  value: c.name || c.title || "",
-                  label: c.name || c.title || "",
-                }))}
-                value={resultFilters.series}
-                onChange={(val: any) =>
-                  setResultFilters({ ...resultFilters, series: val, test: "" })
-                }
-                placeholder="--Select--"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[12px] font-medium text-gray-500">
-                Test Subject
-              </label>
-              <CustomDropdown
-                options={[
-                  "General Knowledge",
-                  "Mathematics",
-                  "Reasoning",
-                  "English",
-                ].map((s) => ({ value: s, label: s }))}
-                value={resultFilters.subject}
-                onChange={(val: any) =>
-                  setResultFilters({ ...resultFilters, subject: val })
-                }
-                placeholder="Select Subject"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[12px] font-medium text-gray-500">
-                Test Type
-              </label>
-              <CustomDropdown
-                options={["Mock Test", "Practice Test", "Previous Year"].map(
-                  (t) => ({ value: t, label: t }),
-                )}
-                value={resultFilters.type}
-                onChange={(val: any) =>
-                  setResultFilters({ ...resultFilters, type: val })
-                }
-                placeholder="Test Title"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[12px] font-medium text-gray-500">
-                Test Title
-              </label>
-              <CustomDropdown
-                options={tests
-                  .filter(
-                    (t) =>
-                      !resultFilters.series ||
-                      t.courseName === resultFilters.series ||
-                      t.courseId === resultFilters.series,
-                  )
-                  .map((t) => ({
-                    value: t.name || "Unnamed Test",
-                    label: t.name || "Unnamed Test",
-                  }))}
-                value={resultFilters.test}
-                onChange={(val: any) =>
-                  setResultFilters({ ...resultFilters, test: val })
-                }
-                placeholder="Select Test"
-              />
-            </div>
+          <div className="max-w-[1400px] mx-auto p-6 space-y-6">
+            <QuestionEditorToolbar
+              marks={viewingQuestionEditor.marks}
+              time={viewingQuestionEditor.time}
+              lastPublished={viewingQuestionEditor.published}
+              testName={viewingQuestionEditor.name}
+              showFloatingAddMenu={showFloatingAddMenu}
+              setShowFloatingAddMenu={setShowFloatingAddMenu}
+              showFloatingMoreMenu={showFloatingMoreMenu}
+              setShowFloatingMoreMenu={setShowFloatingMoreMenu}
+              setActiveActionMenuId={setActiveActionMenuId}
+              onAddQuestion={() => setViewingAddQuestionForm({})}
+              onBulkUpload={() => {
+                setViewingTestSeries(null);
+                setActiveTab("Bulk Uploader");
+              }}
+              onBulkDelete={() => {
+                setShowBulkDeleteModal(true);
+                setSelectedBulkDeleteQuestions([]);
+              }}
+              onSort={() => setShowSortModal(true)}
+            />
+
+            <QuestionEditorList
+              questions={qeTests}
+              renderQuestionText={renderQuestionText}
+              onEditQuestion={(q) => setViewingAddQuestionForm(q)}
+              onDeleteQuestion={(id) => handleDeleteQuestion(id)}
+            />
           </div>
-          <div className="flex justify-end mt-6">
+        </div>
+      );
+    }
+
+    // Detail Header
+    return (
+      <div className="flex flex-col h-full bg-[#fafafa] animate-in fade-in duration-500 min-h-screen">
+        {/* Detail Header */}
+        <div className="bg-white px-8 py-3 border-b border-gray-100 flex items-center sticky top-0 z-30 shadow-sm">
+          <div className="flex items-center gap-5">
             <button
-              onClick={() => showToast("Exporting data...")}
-              className="bg-[#5C67F2] text-white px-8 py-2.5 rounded-xl font-bold text-[14px] hover:bg-[#4B53D3] transition-colors flex items-center gap-2"
+              onClick={() => handleSetViewingTestSeries(null)}
+              className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-gray-50 text-gray-400 hover:text-black transition-all"
             >
-              Export
+              <span className="material-symbols-outlined text-[24px]">
+                arrow_back
+              </span>
             </button>
           </div>
         </div>
@@ -4847,247 +5024,322 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 </button>
               </div>
             </div>
-          </div>
+          )}
 
-          <div className="bg-white rounded-xl border border-gray-100 mb-6 shadow-sm">
-            <div className="">
+          {viewingTestSeriesTab === "Users" && (
+            <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden text-[#1a202c]">
               <table className="w-full text-left border-collapse">
-                <thead className="bg-[#f1f3f5] text-gray-500">
+                <thead className="bg-[#FAFAFA]">
                   <tr>
-                    <th className="px-6 py-3.5 text-[12px] font-bold tracking-tight">
-                      <div className="flex items-center gap-2 cursor-pointer group uppercase">
-                        S. No.{" "}
-                        <span className="material-symbols-outlined text-[16px] text-gray-300 group-hover:text-gray-400">
-                          unfold_more
-                        </span>
-                      </div>
+                    <th className="px-8 py-5 text-[12px] font-black text-gray-400 uppercase tracking-widest text-[#1a202c]">
+                      User Details
                     </th>
-                    <th className="px-6 py-3.5 text-[12px] font-bold tracking-tight">
-                      <div className="flex items-center gap-2 cursor-pointer group uppercase">
-                        Logo{" "}
-                        <span className="material-symbols-outlined text-[16px] text-gray-300 group-hover:text-gray-400">
-                          unfold_more
-                        </span>
-                      </div>
+                    <th className="px-8 py-5 text-[12px] font-black text-gray-400 uppercase tracking-widest text-[#1a202c]">
+                      Transaction ID
                     </th>
-                    <th className="px-6 py-3.5 text-[12px] font-bold tracking-tight">
-                      <div className="flex items-center gap-2 cursor-pointer group uppercase">
-                        Title{" "}
-                        <span className="material-symbols-outlined text-[16px] text-gray-300 group-hover:text-gray-400">
-                          unfold_more
-                        </span>
-                      </div>
+                    <th className="px-8 py-5 text-[12px] font-black text-gray-400 uppercase tracking-widest text-center text-[#1a202c]">
+                      Date & Time
                     </th>
-                    <th className="px-6 py-3.5 text-[12px] font-bold tracking-tight">
-                      <div className="flex items-center gap-2 cursor-pointer group uppercase">
-                        Price{" "}
-                        <span className="material-symbols-outlined text-[16px] text-gray-300 group-hover:text-gray-400">
-                          unfold_more
-                        </span>
-                      </div>
+                    <th className="px-8 py-5 text-[12px] font-black text-gray-400 uppercase tracking-widest text-center text-[#1a202c]">
+                      Expiry Date
                     </th>
-                    <th className="px-6 py-3.5 text-[12px] font-bold tracking-tight">
-                      <div className="flex items-center gap-2 cursor-pointer group uppercase">
-                        Sort By{" "}
-                        <span className="material-symbols-outlined text-[16px] text-gray-300 group-hover:text-gray-400">
-                          unfold_more
-                        </span>
-                      </div>
-                    </th>
-                    <th className="px-6 py-3.5 text-[12px] font-bold tracking-tight text-center uppercase">
+                    <th className="px-8 py-5 text-[12px] font-black text-gray-400 uppercase tracking-widest text-right text-[#1a202c]">
                       Actions
                     </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {paginatedTests.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-8 py-20 text-center">
-                        <span className="material-symbols-outlined text-6xl text-gray-200 mb-2 block">
-                          quiz
-                        </span>
-                        <p className="text-gray-400 font-medium font-bold italic">
-                          No records found
-                        </p>
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedTests.map((test, index) => (
+                  {mockUsers.length > 0 ? (
+                    mockUsers.map((user, idx) => (
                       <tr
-                        key={test.id || index}
-                        className="hover:bg-gray-50/30 transition-colors group"
+                        key={user.id || idx}
+                        className="hover:bg-gray-50/50 transition-colors"
                       >
-                        <td className="px-6 py-5 text-[13px] text-gray-700 font-medium">
-                          {test.id
-                            ? String(test.id).length > 8
-                              ? index + 1
-                              : String(test.id).replace("test_", "")
-                            : index + 1}
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="w-[84px] h-[48px] bg-white rounded-md overflow-hidden border border-gray-100 flex items-center justify-center p-0.5 group-hover:border-gray-200 transition-all">
-                            {test.logo || test.image ? (
-                              <img
-                                src={test.logo || test.image}
-                                alt="Logo"
-                                className="w-full h-full object-cover rounded-[3px]"
-                              />
-                            ) : (
-                              <div className="bg-gray-50 w-full h-full flex items-center justify-center rounded-[3px]">
-                                <span className="material-symbols-outlined text-gray-200 text-[20px]">
-                                  image
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-5 text-[14px] font-medium text-[#1a202c]">
-                          <button
-                            onClick={() => handleSetViewingTestSeries(test)}
-                            className="hover:text-blue-600 transition-all text-left leading-snug"
-                          >
-                            {test.name || test.title}
-                          </button>
-                        </td>
-                        <td className="px-6 py-5 font-medium text-gray-700 text-[14px]">
-                          ₹{test.price || "0"}
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="bg-[#eff1f3] rounded-3xl h-6 px-4 inline-flex items-center justify-center min-w-[80px]">
-                            <span className="text-[12px] font-medium text-gray-600">
-                              {Number(test.sortBy || 0).toFixed(2)}
+                        <td className="px-8 py-5">
+                          <div className="flex flex-col">
+                            <span className="text-[14px] font-bold text-gray-700">
+                              {user.name}
+                            </span>
+                            <span className="text-[11px] font-medium text-gray-400 whitespace-nowrap">
+                              {user.phone}
                             </span>
                           </div>
                         </td>
-                        <td className="px-6 py-5 text-center">
+                        <td className="px-8 py-5">
+                          <span className="text-[14px] font-mono font-medium text-gray-600">
+                            {user.transactionId}
+                          </span>
+                        </td>
+                        <td className="px-8 py-5 text-center text-[13px] font-medium text-gray-500 whitespace-nowrap">
+                          {user.dateTime}
+                        </td>
+                        <td className="px-8 py-5 text-center text-[13px] font-medium text-gray-500 whitespace-nowrap">
+                          {user.expiryDate}
+                        </td>
+                        <td className="px-8 py-5 text-right">
                           <div className="relative inline-block action-menu-container">
                             <button
-                              onClick={() => setActiveMenu(activeMenu === test.id ? null : test.id)}
-                              className={`flex items-center justify-between gap-2 px-4 h-9 border rounded-lg text-[13px] font-bold transition-all shadow-sm w-[110px] ${activeMenu === test.id ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+                              onClick={() => setActiveActionMenuId(activeActionMenuId === (user.id || idx) + 50000 ? null : (user.id || idx) + 50000)}
+                              className={`flex items-center justify-between gap-2 px-4 h-9 border rounded-lg text-[13px] font-bold transition-all shadow-sm w-[110px] ${activeActionMenuId === (user.id || idx) + 50000 ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
                             >
                               Actions
-                              <span className={`material-symbols-outlined text-[18px] transition-all duration-200 ${activeMenu === test.id ? "rotate-180 text-blue-500" : "text-gray-400 group-hover:text-gray-600"}`}>
+                              <span className={`material-symbols-outlined text-[18px] transition-all duration-200 ${activeActionMenuId === (user.id || idx) + 50000 ? "rotate-180 text-blue-500" : "text-gray-400 group-hover:text-gray-600"}`}>
                                 expand_more
                               </span>
                             </button>
-
-                            {activeMenu === test.id && (
-                              <div className={`absolute right-0 ${paginatedTests.length > 3 ? (index >= paginatedTests.length - 2 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right") : index >= paginatedTests.length - 1 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right"} w-[180px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[9999] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right`}>
+                            {activeActionMenuId === (user.id || idx) + 50000 && (
+                              <div className={`absolute right-0 top-full mt-1 w-[160px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[101] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right`}>
                                 {[
-                                  { id: "view", label: "View Tests", icon: "folder_open", onClick: () => { handleSetViewingTestSeries(test); setActiveMenu(null); } },
-                                  { id: "edit", label: "Edit", icon: "edit", onClick: () => { handleOpenModal(test); setActiveMenu(null); } },
-                                  { id: "duplicate", label: "Duplicate", icon: "content_copy", onClick: () => { handleDuplicateTest(test); setActiveMenu(null); } },
-                                  { id: "publish", label: "Publish Changes", icon: "sync", onClick: () => { handlePublish(test.id || (test as any)._id); setActiveMenu(null); } },
-                                ].map((item) => (
+                                  { id: "view", label: "View Details", icon: "visibility", onClick: () => { setActiveActionMenuId(null); } },
+                                  { id: "remove", label: "Remove", icon: "person_remove", color: "text-red-500", onClick: () => { setActiveActionMenuId(null); } },
+                                ].map(item => (
                                   <button
                                     key={item.id}
                                     onClick={() => item.onClick()}
                                     className="w-full px-5 py-2 flex items-center gap-3 hover:bg-gray-50 transition-colors group text-left"
                                   >
-                                    <span className="material-symbols-outlined text-[20px] text-gray-400 group-hover:text-black">
+                                    <span className={`material-symbols-outlined text-[20px] ${item.color || "text-gray-400 group-hover:text-black"}`}>
                                       {item.icon}
                                     </span>
-                                    <span className="text-[13px] font-bold text-gray-600 group-hover:text-black">
+                                    <span className={`text-[13px] font-bold ${item.color || "text-gray-600 group-hover:text-black"}`}>
                                       {item.label}
                                     </span>
                                   </button>
                                 ))}
-
-                                <div className="w-full flex items-center justify-between px-5 py-2 hover:bg-gray-50 transition-all group">
-                                  <div className="flex items-center gap-3">
-                                    <span className="material-symbols-outlined text-[20px] text-gray-400 group-hover:text-black">
-                                      check_circle
-                                    </span>
-                                    <span className="text-[13px] font-bold text-gray-600 group-hover:text-black">
-                                      Enabled
-                                    </span>
-                                  </div>
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); toggleStatus(test); }}
-                                    className={`w-8 h-4.5 rounded-full relative transition-all duration-300 ${test.status === "active" ? "bg-black" : "bg-gray-200"}`}
-                                  >
-                                    <div className={`absolute top-0.5 w-3.5 h-3.5 bg-white rounded-full transition-all duration-300 ${test.status === "active" ? "left-4" : "left-0.5"}`} />
-                                  </button>
-                                </div>
-
-                                <div className="h-[1px] bg-gray-50 my-1 mx-2"></div>
-
-                                <button
-                                  onClick={() => { handleDelete(test.id || (test as any)._id); setActiveMenu(null); }}
-                                  className="w-full px-5 py-2 flex items-center gap-3 hover:bg-red-50 transition-colors group text-left"
-                                >
-                                  <span className="material-symbols-outlined text-[20px] text-red-500">
-                                    delete
-                                  </span>
-                                  <span className="text-[13px] font-bold text-red-600">
-                                    Delete
-                                  </span>
-                                </button>
                               </div>
                             )}
                           </div>
                         </td>
                       </tr>
                     ))
+                  ) : (
+                    <tr>
+                      <td
+                        colSpan={5}
+                        className="py-20 text-center text-gray-400 font-medium"
+                      >
+                        No users enrolled yet.
+                      </td>
+                    </tr>
                   )}
                 </tbody>
               </table>
-            </div>
-
-            {/* Standardized Pagination Footer */}
-            {!loading && filteredTests.length > 0 && (
-              <div className="p-6 border-t border-gray-50 flex items-center justify-between bg-white rounded-b-2xl">
-                <div className="flex items-center gap-3">
-                  <div className="relative flex items-center group">
-                    <select
-                      value={itemsPerPage}
-                      onChange={(e) => {
-                        setItemsPerPage(Number(e.target.value));
-                        setCurrentPage(1);
-                      }}
-                      className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
-                    >
-                      <option value={10}>10</option>
-                      <option value={20}>20</option>
-                      <option value={50}>50</option>
-                      <option value={100}>100</option>
-                    </select>
-                    <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400 flex items-center justify-center h-full top-0 group-focus-within:text-black">
-                      expand_more
+              <div className="px-8 py-4 bg-[#FAFAFA] border-t border-gray-100 flex items-center justify-between">
+                <span className="text-[12px] font-bold text-gray-400 italic">
+                  Showing {mockUsers.length} users
+                </span>
+                <div className="flex items-center gap-2">
+                  <button className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-100 text-gray-400 hover:bg-gray-50 transition-all disabled:opacity-30">
+                    <span className="material-symbols-outlined text-[18px]">
+                      chevron_left
                     </span>
-                  </div>
-                  <span className="text-[13px] font-medium text-gray-400 italic">
-                    Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-                    {Math.min(currentPage * itemsPerPage, filteredTests.length)} of{" "}
-                    {filteredTests.length} entries
-                  </span>
-                </div>
-
-                <div className="flex items-center p-1.5 bg-white border border-gray-200 rounded-2xl shadow-sm">
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
-                  >
-                    Previous
                   </button>
-                  <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
-                  <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
-                    {currentPage}
+                  <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-black text-white text-[13px] font-bold shadow-sm">
+                    1
                   </button>
-                  <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages || totalPages === 0}
-                    className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
-                  >
-                    Next
+                  <button className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-100 text-gray-400 hover:bg-gray-50 transition-all disabled:opacity-30">
+                    <span className="material-symbols-outlined text-[18px]">
+                      chevron_right
+                    </span>
                   </button>
                 </div>
               </div>
-            )}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+
+
+
+
+
+  return (
+    <div className="w-full bg-[#fafafa]">
+      {/* Top Tabs Navigation as a Card - Hidden when viewing Test Series Details */}
+      {!viewingTestSeries && (
+        <div className="mb-6">
+          <div className="bg-white rounded-xl shadow-[0_2px_15px_rgba(0,0,0,0.03)] border border-gray-100 h-[52px] flex items-center px-2">
+            <div className="flex items-center h-full">
+              {tabs.map((tab, idx) => (
+                <div key={tab} className="flex items-center h-full">
+                  <button
+                    onClick={() => setActiveTab(tab)}
+                    className={`h-full px-6 text-[13px] transition-all relative flex items-center whitespace-nowrap ${activeTab === tab ? "text-[#1a202c] font-bold" : "text-[#718096] font-medium hover:text-gray-800"}`}
+                  >
+                    {tab}
+                    {activeTab === tab && (
+                      <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 w-5 h-[3px] bg-[#1a202c] rounded-full"></div>
+                    )}
+                  </button>
+                  {idx < tabs.length - 1 && (
+                    <div className="w-[1px] h-4 bg-gray-100 opacity-60"></div>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
-        </>
+        </div>
+      )}
+
+      {activeTab === "Results" ? (
+        <TestsResultsTab
+          filteredResults={results.filter((res) => {
+            const matchSeries = !resultFilters.series || res.batchSeries.includes(resultFilters.series);
+            const matchTest = !resultFilters.test || res.testName.includes(resultFilters.test);
+            return matchSeries && matchTest;
+          })}
+          courses={courses}
+          resultFilters={resultFilters}
+          setResultFilters={setResultFilters}
+          loading={loading}
+          totalResults={results.filter((res) => {
+            const matchSeries = !resultFilters.series || res.batchSeries.includes(resultFilters.series);
+            const matchTest = !resultFilters.test || res.testName.includes(resultFilters.test);
+            return matchSeries && matchTest;
+          }).length}
+          resultsPageSize={resultsPageSize}
+          setResultsPageSize={setResultsPageSize}
+          resultsCurrentPage={resultsCurrentPage}
+          setResultsCurrentPage={setResultsCurrentPage}
+          totalResultsPages={Math.ceil(results.filter((res) => {
+            const matchSeries = !resultFilters.series || res.batchSeries.includes(resultFilters.series);
+            const matchTest = !resultFilters.test || res.testName.includes(resultFilters.test);
+            return matchSeries && matchTest;
+          }).length / resultsPageSize)}
+          resultsShowingStart={results.filter((res) => {
+            const matchSeries = !resultFilters.series || res.batchSeries.includes(resultFilters.series);
+            const matchTest = !resultFilters.test || res.testName.includes(resultFilters.test);
+            return matchSeries && matchTest;
+          }).length === 0 ? 0 : (resultsCurrentPage - 1) * resultsPageSize + 1}
+          resultsEndIndex={Math.min(resultsCurrentPage * resultsPageSize, results.filter((res) => {
+            const matchSeries = !resultFilters.series || res.batchSeries.includes(resultFilters.series);
+            const matchTest = !resultFilters.test || res.testName.includes(resultFilters.test);
+            return matchSeries && matchTest;
+          }).length)}
+          setViewingStudentAnalysis={setViewingStudentAnalysis}
+        />
+      ) : activeTab === "Bulk Uploader" ? (
+        <TestsBulkUploaderTab
+          bulkUploadData={bulkUploadData}
+          setBulkUploadData={setBulkUploadData}
+          courses={courses}
+          tests={tests}
+          isParsing={isParsing}
+          previewQuestions={
+            bulkUploadData.parsedQuestions &&
+            bulkUploadData.parsedQuestions.length > 0
+              ? bulkUploadData.parsedQuestions
+              : []
+          }
+          onFileUpload={handleBulkUploadFileUpload}
+          onProceedToUpload={handleBulkUploadProceed}
+          onDownloadDOCX={() =>
+            generateDOCX(
+              bulkUploadData.parsedQuestions || [],
+              bulkUploadData.format,
+              `Paper_${bulkUploadData.file?.name}.docx`,
+            )
+          }
+          setViewingPaperQuestions={setViewingPaperQuestions}
+          renderQuestionText={renderQuestionText}
+          renderDiagram={renderDiagram}
+        />
+      ) : activeTab === "Reported Questions" ? (
+        <ReportedQuestionsTab
+          paginatedReported={reportedQuestions.filter((rq) => {
+            const query = reportedSearchQuery.toLowerCase();
+            const matchSearch =
+              (rq.studentName || "").toLowerCase().includes(query) ||
+              (rq.testTitle || "").toLowerCase().includes(query) ||
+              (rq.questionEn || "").toLowerCase().includes(query) ||
+              (rq.questionHi || "").toLowerCase().includes(query);
+            const matchIssue = !reportedFilters.issue || rq.issue === reportedFilters.issue;
+            return matchSearch && matchIssue;
+          }).slice((reportedCurrentPage - 1) * reportedPageSize, reportedCurrentPage * reportedPageSize)}
+          reportedSearchQuery={reportedSearchQuery}
+          setReportedSearchQuery={setReportedSearchQuery}
+          reportedFilters={reportedFilters}
+          setReportedFilters={setReportedFilters}
+          isReportedFilterOpen={isReportedFilterOpen}
+          setIsReportedFilterOpen={setIsReportedFilterOpen}
+          reportedQuestions={reportedQuestions}
+          reportedPageSize={reportedPageSize}
+          setReportedPageSize={setReportedPageSize}
+          reportedShowingStart={reportedQuestions.filter((rq) => {
+            const query = reportedSearchQuery.toLowerCase();
+            const matchSearch =
+              (rq.studentName || "").toLowerCase().includes(query) ||
+              (rq.testTitle || "").toLowerCase().includes(query) ||
+              (rq.questionEn || "").toLowerCase().includes(query) ||
+              (rq.questionHi || "").toLowerCase().includes(query);
+            const matchIssue = !reportedFilters.issue || rq.issue === reportedFilters.issue;
+            return matchSearch && matchIssue;
+          }).length === 0 ? 0 : (reportedCurrentPage - 1) * reportedPageSize + 1}
+          reportedEndIndex={Math.min(reportedCurrentPage * reportedPageSize, reportedQuestions.filter((rq) => {
+            const query = reportedSearchQuery.toLowerCase();
+            const matchSearch =
+              (rq.studentName || "").toLowerCase().includes(query) ||
+              (rq.testTitle || "").toLowerCase().includes(query) ||
+              (rq.questionEn || "").toLowerCase().includes(query) ||
+              (rq.questionHi || "").toLowerCase().includes(query);
+            const matchIssue = !reportedFilters.issue || rq.issue === reportedFilters.issue;
+            return matchSearch && matchIssue;
+          }).length)}
+          totalReported={reportedQuestions.filter((rq) => {
+            const query = reportedSearchQuery.toLowerCase();
+            const matchSearch =
+              (rq.studentName || "").toLowerCase().includes(query) ||
+              (rq.testTitle || "").toLowerCase().includes(query) ||
+              (rq.questionEn || "").toLowerCase().includes(query) ||
+              (rq.questionHi || "").toLowerCase().includes(query);
+            const matchIssue = !reportedFilters.issue || rq.issue === reportedFilters.issue;
+            return matchSearch && matchIssue;
+          }).length}
+          reportedCurrentPage={reportedCurrentPage}
+          setReportedCurrentPage={setReportedCurrentPage}
+          totalReportedPages={Math.ceil(reportedQuestions.filter((rq) => {
+            const query = reportedSearchQuery.toLowerCase();
+            const matchSearch =
+              (rq.studentName || "").toLowerCase().includes(query) ||
+              (rq.testTitle || "").toLowerCase().includes(query) ||
+              (rq.questionEn || "").toLowerCase().includes(query) ||
+              (rq.questionHi || "").toLowerCase().includes(query);
+            const matchIssue = !reportedFilters.issue || rq.issue === reportedFilters.issue;
+            return matchSearch && matchIssue;
+          }).length / reportedPageSize)}
+          updateReportStatus={updateReportStatus}
+          loading={loading}
+        />
+      ) : viewingTestSeries ? (
+        renderTestSeriesDetail()
+      ) : (
+        <TestsListTab
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          setCurrentPage={setCurrentPage}
+          isFilterOpen={isFilterOpen}
+          setIsFilterOpen={setIsFilterOpen}
+          filterStatus={filterStatus}
+          setFilterStatus={setFilterStatus}
+          itemsPerPage={itemsPerPage}
+          setItemsPerPage={setItemsPerPage}
+          handleOpenModal={handleOpenModal}
+          paginatedTests={paginatedTests}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          filteredTests={filteredTests}
+          loading={loading}
+          activeMenu={activeMenu}
+          setActiveMenu={setActiveMenu}
+          handleSetViewingTestSeries={handleSetViewingTestSeries}
+          toggleStatus={toggleStatus}
+          handleDelete={handleDelete}
+          handleDuplicateTest={handleDuplicateTest}
+          handlePublish={handlePublish}
+        />
       )}
 
       <AddTestDrawer
@@ -5827,54 +6079,19 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
 
       {/* Add Question Drawer */}
-      <AddQuestionDrawer
+      <AddQuestionEditorDrawer
         isOpen={!!viewingAddQuestionForm}
         test={viewingQuestionEditor}
         onClose={() => setViewingAddQuestionForm(null)}
-        onSubmit={(data) => {
-          handleSaveQuestion(data);
-        }}
-        editingQuestion={
-          viewingAddQuestionForm &&
-            typeof viewingAddQuestionForm === "object" &&
-            Object.keys(viewingAddQuestionForm).length > 0
-            ? viewingAddQuestionForm
-            : null
-        }
+        onSubmit={handleSaveQuestion}
+        viewingQuestion={viewingAddQuestionForm}
+        setViewingQuestion={setViewingAddQuestionForm}
+        questions={editorQuestions}
         sections={[
           { id: "default", name: viewingQuestionEditor?.name || "Default" },
         ]}
         testId={viewingQuestionEditor?.id || viewingQuestionEditor?._id || ""}
-        onSaveAndGoToPrevious={(data) => {
-          handleSaveQuestion(data).then(() => {
-            // Find current question index and go to previous
-            const currentId = data.id || data._id;
-            const currentIdx = editorQuestions.findIndex(
-              (q: any) => (q.id || q._id) === currentId,
-            );
-            if (currentIdx > 0) {
-              setViewingAddQuestionForm(editorQuestions[currentIdx - 1]);
-            } else {
-              showToast("This is the first question", "error");
-              setViewingAddQuestionForm(null);
-            }
-          });
-        }}
-        onSaveAndGoToNext={(data) => {
-          handleSaveQuestion(data).then(() => {
-            // Find current question index and go to next
-            const currentId = data.id || data._id;
-            const currentIdx = editorQuestions.findIndex(
-              (q: any) => (q.id || q._id) === currentId,
-            );
-            if (currentIdx < editorQuestions.length - 1) {
-              setViewingAddQuestionForm(editorQuestions[currentIdx + 1]);
-            } else {
-              showToast("This is the last question", "error");
-              setViewingAddQuestionForm(null);
-            }
-          });
-        }}
+        showToast={showToast}
       />
 
 

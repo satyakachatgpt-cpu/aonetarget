@@ -13,6 +13,11 @@ interface Category {
   description: string;
   tag: string;
   isActive: boolean;
+  hierarchyMode?: 'simple' | 'exam-branch' | 'board-class';
+  level1Label?: string;
+  level2Label?: string;
+  branchesL1?: { label: string; slug: string }[];
+  branchesL2?: { label: string; slug: string }[];
 }
 
 interface SubCategory {
@@ -23,18 +28,27 @@ interface SubCategory {
   parentPath: string;
   icon: string;
   color: string;
+  gradient?: string;
   description?: string;
   order: number;
   isActive: boolean;
+  level1Branch?: string;
+  level2Branch?: string;
 }
 
 interface Subject {
   _id?: string;
   id: string;
+  categoryId: string;
+  subcategoryId?: string;
   name: string;
+  label?: string; // Optional label for robust matching
   course: string;
   icon: string;
+  gradient?: string;
   status: string;
+  level1Branch?: string;
+  level2Branch?: string;
 }
 
 interface Course {
@@ -52,9 +66,12 @@ interface Course {
   examType?: string;
   contentType?: string;
   subject?: string;
+  subjectId?: string;
   boardType?: string;
   categoryId?: string;
   subcategoryId?: string;
+  level1Branch?: string; // Strict isolation field
+  level2Branch?: string; // Strict isolation field
   isLive?: boolean;
   videos?: number;
   tests?: number;
@@ -80,66 +97,112 @@ const gradientColors: Record<string, string> = {
   'bg-violet-500': 'from-violet-500 to-violet-600',
 };
 
-const getSubGradient = (color: string) => {
-  if (color && color.startsWith('from-')) return color;
-  return gradientColors[color] || 'from-[#303F9F] to-[#1A237E]';
+const getVisualGradient = (item: { gradient?: string; color?: string }) => {
+  if (item.gradient) return item.gradient;
+  if (item.color && item.color.startsWith('from-')) return item.color;
+  return gradientColors[item.color || ''] || 'from-[#303F9F] to-[#1A237E]';
 };
+
+const getSubGradient = (color: string) => getVisualGradient({ color });
+function normalizeSubcategoryId(val: string = "") {
+  if (!val) return "";
+  return String(val)
+    .toLowerCase()
+    .replace(/neet_|iit_jee_|iit-jee_/g, "")
+    .replace(/batches/g, "batch")
+    .replace(/-/g, "_")
+    .trim();
+}
+
+function isCategoryMatch(courseCatId: string, targetCatId: string) {
+  const cId = String(courseCatId || "").toLowerCase();
+  const tId = String(targetCatId || "").toLowerCase();
+  if (cId === tId) return true;
+  // Handle aliases
+  if (tId === 'neet-iitjee') return cId === 'neet' || cId === 'iit-jee' || cId === 'iit_jee';
+  if (tId === 'nursing-cet') return cId === 'nursing';
+  return false;
+}
+
 
 
 
 const NeetIitJeePage: React.FC<{ 
-  categoryId: string; 
+  category: Category; 
   courses: Course[]; 
   loading: boolean; 
-  enrolledCourseIds: string[];
   subcategories: SubCategory[];
   subjects: Subject[];
-}> = ({ categoryId, courses, loading, enrolledCourseIds, subcategories, subjects: allSubjects }) => {
+}> = ({ category, courses, loading, subcategories, subjects: allSubjects }) => {
   const navigate = useNavigate();
-  const [activeExam, setActiveExam] = useState<'neet' | 'iit-jee'>('neet');
+  const branches = category.branchesL1 || [];
+  const [activeBranch, setActiveBranch] = useState<string>(branches[0]?.slug || '');
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
+
   const subjects = useMemo(() => {
-    return allSubjects.filter(s => s.course === activeExam);
-  }, [allSubjects, activeExam]);
+    return allSubjects.filter(s => 
+        isCategoryMatch(s.categoryId || "", category.id) && 
+        (String(s.level1Branch || "").toLowerCase() === String(activeBranch || "").toLowerCase() || s.course === activeBranch) &&
+        !s.subcategoryId // ONLY category-level/global subjects
+    ).map(s => ({
+       ...s,
+       id: s.id || s._id || "" // Normalize ID
+    }));
+  }, [allSubjects, activeBranch, category.id]);
 
   const categorySubcategories = useMemo(() => {
-    return subcategories.filter(s => s.categoryId === activeExam || (activeExam === 'neet' && s.categoryId === 'neet') || (activeExam === 'iit-jee' && s.categoryId === 'iit-jee'));
-  }, [subcategories, activeExam]);
+    return subcategories.filter(s => s.categoryId === category.id && (s.level1Branch === activeBranch || !s.level1Branch));
+  }, [subcategories, activeBranch, category.id]);
 
   const filteredCourses = useMemo(() => {
     return courses.filter(c => {
-      if (c.examType && c.examType !== activeExam) return false;
-      if (!c.examType) {
-        if (activeExam === 'neet' && c.categoryId !== 'neet') return false;
-        if (activeExam === 'iit-jee' && c.categoryId !== 'iit-jee') return false;
+      const matchesCat = isCategoryMatch(c.categoryId || "", category.id);
+      if (!matchesCat) return false;
+      
+      const cL1 = String(c.level1Branch || c.examType || c.boardType || "").toLowerCase().trim();
+      const aL1 = String(activeBranch || "").toLowerCase().trim();
+      if (cL1 !== aL1) return false;
+
+      // Robust Subject Matching
+      if (selectedSubject && selectedSubject !== 'all' && selectedSubject !== '') {
+        const selectedObj = subjects.find(
+          s => String(s.id || s._id) === String(selectedSubject)
+        );
+
+        const selectedId = selectedObj ? String(selectedObj.id || selectedObj._id) : "";
+        const selectedName = selectedObj
+          ? String(selectedObj.label || selectedObj.name || "").trim().toLowerCase()
+          : "";
+
+        const courseSubjectId = String(c.subjectId || "");
+        const courseSubjectName = String(c.subject || "").trim().toLowerCase();
+
+        const matchesSubject =
+          (selectedId && courseSubjectId === selectedId) ||
+          (selectedName && courseSubjectName === selectedName);
+
+        if (!matchesSubject) return false;
       }
-      if (selectedSubject && c.subject !== selectedSubject) return false;
+
       return true;
     });
-  }, [courses, activeExam, selectedSubject]);
+  }, [courses, activeBranch, selectedSubject, subjects, category.id]);
 
-  const getContentCount = (subcategoryId: string) => {
+  const getContentCount = (subId: string) => {
+    const requested = normalizeSubcategoryId(subId);
     return courses.filter(c => {
-      if (c.examType && c.examType !== activeExam) return false;
-      if (!c.examType) {
-        if (activeExam === 'neet' && c.categoryId !== 'neet') return false;
-        if (activeExam === 'iit-jee' && c.categoryId !== 'iit-jee') return false;
-      }
-      return c.subcategoryId === subcategoryId;
+      const matchesCat = isCategoryMatch(c.categoryId || "", category.id);
+      
+      const cL1 = String(c.level1Branch || c.examType || "").toLowerCase().trim();
+      const aL1 = String(activeBranch || "").toLowerCase().trim();
+      const matchesBranch = cL1 === aL1;
+
+      const courseSub = normalizeSubcategoryId(c.subcategoryId || "");
+      const courseType = normalizeSubcategoryId(c.contentType || "");
+      const matchesSub = (courseSub === requested) || (courseType === requested);
+
+      return matchesCat && matchesBranch && matchesSub;
     }).length;
-  };
-
-  const contentTypeCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    categorySubcategories.forEach(ct => {
-      counts[ct.id] = getContentCount(ct.id);
-    });
-    return counts;
-  }, [courses, activeExam, categorySubcategories]);
-
-  const handleExamSwitch = (exam: 'neet' | 'iit-jee') => {
-    setActiveExam(exam);
-    setSelectedSubject(null);
   };
 
   return (
@@ -155,32 +218,25 @@ const NeetIitJeePage: React.FC<{
               <span className="material-symbols-rounded">arrow_back</span>
             </button>
             <div>
-              <h1 className="text-xl font-black tracking-tight">NEET / IIT-JEE</h1>
+              <h1 className="text-xl font-black tracking-tight">{category.title}</h1>
               <p className="text-white/60 text-xs mt-0.5">Aone Target Institute</p>
             </div>
           </div>
 
           <div className="flex bg-white/15 rounded-2xl p-1 backdrop-blur-sm">
-            <button
-              onClick={() => handleExamSwitch('neet')}
-              className={`flex-1 py-3 rounded-xl text-center transition-all font-bold text-sm ${activeExam === 'neet'
-                ? 'bg-white text-[#1A237E] shadow-lg'
-                : 'text-white/80 hover:text-white'
-                }`}
-            >
-              <span className="material-symbols-rounded text-lg align-middle mr-1">medical_services</span>
-              NEET
-            </button>
-            <button
-              onClick={() => handleExamSwitch('iit-jee')}
-              className={`flex-1 py-3 rounded-xl text-center transition-all font-bold text-sm ${activeExam === 'iit-jee'
-                ? 'bg-white text-[#D32F2F] shadow-lg'
-                : 'text-white/80 hover:text-white'
-                }`}
-            >
-              <span className="material-symbols-rounded text-lg align-middle mr-1">engineering</span>
-              IIT-JEE
-            </button>
+            {branches.map(b => (
+              <button
+                key={b.slug}
+                onClick={() => { setActiveBranch(b.slug); setSelectedSubject(null); }}
+                className={`flex-1 py-3 rounded-xl text-center transition-all font-bold text-sm flex items-center justify-center gap-2 ${activeBranch === b.slug
+                  ? 'bg-white text-[#1A237E] shadow-lg'
+                  : 'text-white/80 hover:text-white'
+                  }`}
+              >
+                <span className="material-symbols-rounded text-lg">{b.slug === 'neet' ? 'medical_services' : 'engineering'}</span>
+                {b.label}
+              </button>
+            ))}
           </div>
         </div>
       </header>
@@ -194,14 +250,14 @@ const NeetIitJeePage: React.FC<{
               </div>
             ))
           ) : categorySubcategories.map(ct => {
-            const count = contentTypeCounts[ct.id] || 0;
+            const count = getContentCount(ct.id);
             return (
               <button
                 key={ct.id}
-                onClick={() => navigate(`/content/${ct.id}?exam=${activeExam}`)}
+                onClick={() => navigate(`/content/${ct.id}?branch=${activeBranch}&categoryId=${category.id}`)}
                 className="relative rounded-2xl p-4 text-left transition-all active:scale-95 overflow-hidden shadow-md hover:shadow-lg"
               >
-                <div className={`absolute inset-0 bg-gradient-to-br ${ct.color}`}></div>
+                <div className={`absolute inset-0 bg-gradient-to-br ${getVisualGradient(ct)}`}></div>
                 <div className="relative z-10">
                   <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mb-3">
                     <span className="material-symbols-rounded text-white text-2xl">{ct.icon}</span>
@@ -228,7 +284,7 @@ const NeetIitJeePage: React.FC<{
                 key={subj.id}
                 onClick={() => setSelectedSubject(selectedSubject === subj.id ? null : subj.id)}
                 className={`flex-1 min-w-[80px] py-3 rounded-xl text-center transition-all active:scale-95 flex flex-col items-center gap-1.5 ${selectedSubject === subj.id
-                  ? 'bg-gradient-to-br from-[#303F9F] to-[#1A237E] text-white shadow-md'
+                  ? `bg-gradient-to-br ${subj.gradient || 'from-[#303F9F] to-[#1A237E]'} text-white shadow-md`
                   : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100'
                   }`}
               >
@@ -267,7 +323,7 @@ const NeetIitJeePage: React.FC<{
                     onClick={() => navigate(`/course/${cId}`)}
                     className="w-full bg-white rounded-2xl p-4 shadow-sm flex gap-4 text-left active:scale-[0.98] transition-all border border-gray-100 hover:shadow-md"
                   >
-                    <div className={`w-16 h-16 bg-gradient-to-br ${ct?.color || 'from-[#303F9F] to-[#1A237E]'} rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden relative`}>
+                    <div className={`w-16 h-16 bg-gradient-to-br ${getVisualGradient(ct || {})} rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden relative shadow-sm`}>
                       {course.settings?.markNewBatch && (
                         <div className="absolute inset-0 z-10 flex items-center justify-center bg-red-600/90 animate-pulse">
                           <span className="text-[7px] text-white font-black uppercase tracking-tighter">NEW</span>
@@ -323,36 +379,76 @@ const NeetIitJeePage: React.FC<{
 
 
 const GeneralClassPage: React.FC<{ 
-  categoryId: string; 
+  category: Category; 
   courses: Course[]; 
   loading: boolean; 
-  enrolledCourseIds: string[];
   subcategories: SubCategory[];
   subjects: Subject[];
-}> = ({ categoryId, courses, loading, enrolledCourseIds, subcategories, subjects: allSubjects }) => {
+}> = ({ category, courses, loading, subcategories, subjects: allSubjects }) => {
   const navigate = useNavigate();
-  const [activeBoard, setActiveBoard] = useState<'cbse' | 'hbse'>('cbse');
-  const [activeClass, setActiveClass] = useState<'9th' | '10th'>('9th');
+  const branchesL1 = category.branchesL1 || [];
+  const branchesL2 = category.branchesL2 || [];
+  
+  const [activeL1, setActiveL1] = useState<string>(branchesL1[0]?.slug || '');
+  const [activeL2, setActiveL2] = useState<string>(branchesL2[0]?.slug || '');
   const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
-  const subjects = useMemo(() => {
-    return allSubjects.filter(s => s.course === 'foundation');
-  }, [allSubjects]);
 
-  const classes = useMemo(() => {
-    return subcategories.filter(s => s.categoryId === 'foundation');
-  }, [subcategories]);
+  const subjects = useMemo(() => {
+    return allSubjects.filter(s => 
+        isCategoryMatch(s.categoryId || "", category.id) && 
+        String(s.level1Branch || "").toLowerCase() === String(activeL1 || "").toLowerCase() &&
+        String(s.level2Branch || "").toLowerCase() === String(activeL2 || "").toLowerCase() &&
+        !s.subcategoryId // ONLY category-level/global subjects
+    ).map(s => ({
+       ...s,
+       id: s.id || s._id || "" // Normalize ID
+    }));
+  }, [allSubjects, activeL1, activeL2, category.id]);
+
+  const categorySubcategories = useMemo(() => {
+    return subcategories.filter(s => s.categoryId === category.id && (s.level1Branch === activeL1 || !s.level1Branch));
+  }, [subcategories, activeL1, category.id]);
 
   const filteredCourses = useMemo(() => {
     return courses.filter(c => {
-      const matchesCategory = c.categoryId === categoryId || c.categoryId === 'general';
-      if (!matchesCategory) return false;
-      if (c.boardType && c.boardType !== activeBoard) return false;
-      if (c.subcategoryId && c.subcategoryId !== `class-${activeClass.replace('th', '')}`) return false;
-      if (!c.subcategoryId && c.examType && !c.examType.includes(`class-${activeClass.replace('th', '')}`)) return false;
-      if (selectedSubject && c.subject !== selectedSubject) return false;
+      const matchesCat = isCategoryMatch(c.categoryId || "", category.id);
+      if (!matchesCat) return false;
+      
+      const cL1 = String(c.level1Branch || c.boardType || "").toLowerCase().trim();
+      const aL1 = String(activeL1 || "").toLowerCase().trim();
+      
+      const cL2 = String(c.level2Branch || "").toLowerCase().trim();
+      const aL2 = String(activeL2 || "").toLowerCase().trim();
+      
+      // Class matching also supports simple numeric match for legacy (e.g. "12" matching "12th")
+      const matchesL2 = cL2 === aL2 || (c.subcategoryId && c.subcategoryId.includes(aL2.replace('th', '')));
+      
+      if (cL1 !== aL1 || !matchesL2) return false;
+
+      // Robust Subject Matching
+      if (selectedSubject && selectedSubject !== 'all' && selectedSubject !== '') {
+        const selectedObj = subjects.find(
+          s => String(s.id || s._id) === String(selectedSubject)
+        );
+
+        const selectedId = selectedObj ? String(selectedObj.id || selectedObj._id) : "";
+        const selectedName = selectedObj
+          ? String(selectedObj.label || selectedObj.name || "").trim().toLowerCase()
+          : "";
+
+        const courseSubjectId = String(c.subjectId || "");
+        const courseSubjectName = String(c.subject || "").trim().toLowerCase();
+
+        const matchesSubject =
+          (selectedId && courseSubjectId === selectedId) ||
+          (selectedName && courseSubjectName === selectedName);
+
+        if (!matchesSubject) return false;
+      }
+
       return true;
     });
-  }, [courses, activeBoard, activeClass, selectedSubject, categoryId]);
+  }, [courses, activeL1, activeL2, selectedSubject, subjects, category.id]);
 
   return (
     <div className="flex flex-col w-full min-h-screen bg-gray-50">
@@ -367,57 +463,50 @@ const GeneralClassPage: React.FC<{
               <span className="material-symbols-rounded">arrow_back</span>
             </button>
             <div>
-              <h1 className="text-xl font-black tracking-tight">9th - 10th</h1>
-              <p className="text-white/60 text-xs mt-0.5">Aone Target Institute</p>
+              <h1 className="text-xl font-black tracking-tight">{category.title}</h1>
+              <p className="text-white/60 text-xs mt-0.5">{category.subtitle || 'Aone Target Institute'}</p>
             </div>
           </div>
 
           <div className="flex bg-white/15 rounded-2xl p-1 backdrop-blur-sm">
-            <button
-              onClick={() => setActiveBoard('cbse')}
-              className={`flex-1 py-3 rounded-xl text-center transition-all font-bold text-sm ${activeBoard === 'cbse'
-                ? 'bg-white text-[#1A237E] shadow-lg'
-                : 'text-white/80 hover:text-white'
-                }`}
-            >
-              <span className="material-symbols-rounded text-lg align-middle mr-1">school</span>
-              CBSE Board
-            </button>
-            <button
-              onClick={() => setActiveBoard('hbse')}
-              className={`flex-1 py-3 rounded-xl text-center transition-all font-bold text-sm ${activeBoard === 'hbse'
-                ? 'bg-white text-[#D32F2F] shadow-lg'
-                : 'text-white/80 hover:text-white'
-                }`}
-            >
-              <span className="material-symbols-rounded text-lg align-middle mr-1">account_balance</span>
-              HBSE Board
-            </button>
+            {branchesL1.map(b => (
+              <button
+                key={b.slug}
+                onClick={() => { setActiveL1(b.slug); setSelectedSubject(null); }}
+                className={`flex-1 py-3 rounded-xl text-center transition-all font-bold text-sm flex items-center justify-center gap-2 ${activeL1 === b.slug
+                  ? 'bg-white text-[#1A237E] shadow-lg'
+                  : 'text-white/80 hover:text-white'
+                  }`}
+              >
+                <span className="material-symbols-rounded text-lg">{b.slug === 'cbse' ? 'school' : 'account_balance'}</span>
+                {b.label}
+              </button>
+            ))}
           </div>
         </div>
       </header>
 
       <main className="px-4 -mt-6 space-y-5 pb-20">
         <div className="grid grid-cols-2 gap-3">
-          {classes.map(cls => (
+          {branchesL2.map(b => (
             <button
-              key={cls.id}
-              onClick={() => setActiveClass(cls.id.includes('9') ? '9th' : '10th')}
+              key={b.slug}
+              onClick={() => { setActiveL2(b.slug); setSelectedSubject(null); }}
               className={`relative rounded-3xl p-5 text-left transition-all active:scale-95 overflow-hidden h-40 shadow-sm ${
-                (cls.id.includes('9') ? activeClass === '9th' : activeClass === '10th') ? 'ring-2 ring-white border-transparent' : 'border border-gray-100'
+                activeL2 === b.slug ? 'ring-2 ring-white border-transparent' : 'border border-gray-100'
               }`}
             >
-              <div className={`absolute inset-0 bg-gradient-to-br ${cls.color}`}></div>
+              <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-violet-700"></div>
               <div className="relative z-10 flex flex-col h-full justify-between">
                 <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg bg-white/20">
-                  <span className="text-2xl font-black text-white">{cls.id.includes('9') ? '9' : '10'}</span>
+                  <span className="text-2xl font-black text-white">{b.slug.replace(/\D/g, '')}</span>
                 </div>
                 <div>
-                  <h3 className="font-black text-lg text-white">{cls.title}</h3>
-                  <p className="text-white/60 text-xs font-medium">{cls.description || 'Board Foundation'}</p>
+                  <h3 className="font-black text-lg text-white">{b.label}</h3>
+                  <p className="text-white/60 text-xs font-medium">{category.subtitle || 'Academic Success'}</p>
                 </div>
               </div>
-              {(cls.id.includes('9') ? activeClass === '9th' : activeClass === '10th') && (
+              {activeL2 === b.slug && (
                 <div className="absolute top-2 right-2 w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
                   <span className="material-symbols-rounded text-white text-xs">check</span>
                 </div>
@@ -426,19 +515,45 @@ const GeneralClassPage: React.FC<{
           ))}
         </div>
 
+        <div className="grid grid-cols-2 gap-3">
+          {categorySubcategories.map(ct => {
+            return (
+              <button
+                key={ct.id}
+                onClick={() => navigate(`/content/${ct.id}?branch=${activeL1}&class=${activeL2}&categoryId=${category.id}`)}
+                className="relative rounded-2xl p-4 text-left transition-all active:scale-95 overflow-hidden shadow-md hover:shadow-lg"
+              >
+                <div className={`absolute inset-0 bg-gradient-to-br ${getVisualGradient(ct)}`}></div>
+                <div className="relative z-10 flex flex-col h-full justify-between">
+                  <div>
+                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-3">
+                      <span className="material-symbols-rounded text-white text-xl">{ct.icon}</span>
+                    </div>
+                    <h3 className="text-white font-bold text-sm leading-tight">{ct.title}</h3>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between">
+                    <span className="text-white/60 text-[10px] uppercase font-black tracking-widest">{activeL1} • {activeL2}</span>
+                    <span className="material-symbols-rounded text-white text-sm">arrow_forward</span>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
             <span className="material-symbols-rounded text-[#303F9F] text-sm">filter_list</span>
             Select Subject
           </h3>
-          <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
+          <div className="grid grid-cols-3 gap-2">
             {subjects.map(subj => (
               <button
                 key={subj.id}
                 onClick={() => setSelectedSubject(selectedSubject === subj.id ? null : subj.id)}
-                className={`flex-1 min-w-[80px] py-4 rounded-xl text-center transition-all active:scale-95 flex flex-col items-center gap-1.5 ${
+                className={`py-3 rounded-xl text-center transition-all active:scale-95 flex flex-col items-center gap-1 ${
                   selectedSubject === subj.id
-                    ? 'bg-gradient-to-br from-[#1A237E] to-[#303F9F] text-white shadow-md'
+                    ? `bg-gradient-to-br ${subj.gradient || 'from-[#1A237E] to-[#303F9F]'} text-white shadow-md`
                     : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100'
                 }`}
               >
@@ -477,7 +592,7 @@ const GeneralClassPage: React.FC<{
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="text-sm font-bold text-gray-800 line-clamp-2 leading-tight group-hover:text-[#1A237E] transition-colors">{course.name || course.title}</h4>
-                    <p className="text-[9px] text-gray-400 mt-1 uppercase font-bold tracking-wider">{activeBoard} • {activeClass} • {course.subject}</p>
+                    <p className="text-[9px] text-gray-400 mt-1 uppercase font-bold tracking-wider">{activeL1} • {activeL2} • {course.subject}</p>
                     <div className="flex items-center justify-between mt-3">
                        <span className="text-xs font-black text-[#1A237E]">{course.price ? `₹${course.price}` : 'Free'}</span>
                        <span className="text-[9px] bg-green-50 text-green-600 font-bold px-2 py-0.5 rounded-full">New Batch</span>
@@ -493,7 +608,7 @@ const GeneralClassPage: React.FC<{
                 <span className="material-symbols-rounded text-4xl text-gray-200">menu_book</span>
               </div>
               <h3 className="text-sm font-bold text-gray-700">Content Coming Soon</h3>
-              <p className="text-[10px] text-gray-400 mt-2 max-w-[200px] mx-auto">Courses for {activeBoard.toUpperCase()} {activeClass} {selectedSubject || 'subjects'} will be available soon.</p>
+              <p className="text-[10px] text-gray-400 mt-2 max-w-[200px] mx-auto">Courses for {activeL1.toUpperCase()} {activeL2} {selectedSubject || 'subjects'} will be available soon.</p>
             </div>
           )}
         </div>
@@ -505,159 +620,13 @@ const GeneralClassPage: React.FC<{
 
 
 const Class11_12Page: React.FC<{ 
-  categoryId: string; 
+  category: Category; 
   courses: Course[]; 
   loading: boolean; 
-  enrolledCourseIds: string[];
   subcategories: SubCategory[];
   subjects: Subject[];
-}> = ({ categoryId, courses, loading, enrolledCourseIds, subcategories, subjects: allSubjects }) => {
-  const navigate = useNavigate();
-  const [activeBoard, setActiveBoard] = useState<'cbse' | 'hbse'>('cbse');
-
-  const subjects = useMemo(() => {
-    return allSubjects.filter(s => s.course === 'foundation' || s.course === 'neet' || s.course === 'iit-jee');
-  }, [allSubjects]);
-
-  const categorySubcategories = useMemo(() => {
-    return subcategories.filter(s => s.categoryId === categoryId);
-  }, [subcategories, categoryId]);
-
-  const contentTypeCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    categorySubcategories.forEach(ct => {
-      counts[ct.id] = courses.filter(c => {
-        if (c.categoryId !== categoryId && c.categoryId !== 'iit-jee') return false;
-        if (c.boardType && c.boardType !== activeBoard) return false;
-        return c.subcategoryId === ct.id;
-      }).length;
-    });
-    return counts;
-  }, [courses, activeBoard, categoryId]);
-
-  const subjectCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    subjects.forEach(subj => {
-      counts[subj.id] = courses.filter(c => 
-        (c.categoryId === categoryId || c.categoryId === 'iit-jee') && 
-        c.subject === subj.id && 
-        (!c.boardType || c.boardType === activeBoard)
-      ).length;
-    });
-    return counts;
-  }, [courses, activeBoard, categoryId, subjects]);
-
-  const handleBoardSwitch = (board: 'cbse' | 'hbse') => {
-    setActiveBoard(board);
-  };
-
-  return (
-    <div className="flex flex-col w-full min-h-screen bg-gray-50 pb-20">
-      <header className="bg-gradient-to-br from-[#1A237E] to-[#303F9F] text-white pt-6 pb-10 px-4 rounded-b-[2rem] relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-4 right-4 w-32 h-32 rounded-full bg-white/20"></div>
-          <div className="absolute bottom-0 left-8 w-20 h-20 rounded-full bg-white/10"></div>
-        </div>
-        <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-5">
-            <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-white/20 transition-all">
-              <span className="material-symbols-rounded">arrow_back</span>
-            </button>
-            <div>
-              <h1 className="text-xl font-black tracking-tight">11th - 12th</h1>
-              <p className="text-white/60 text-xs mt-0.5">Aone Target Institute</p>
-            </div>
-          </div>
-
-          <div className="flex bg-white/15 rounded-2xl p-1 backdrop-blur-sm">
-            <button
-              onClick={() => handleBoardSwitch('cbse')}
-              className={`flex-1 py-3 rounded-xl text-center transition-all font-bold text-sm ${activeBoard === 'cbse'
-                ? 'bg-white text-[#1A237E] shadow-lg'
-                : 'text-white/80 hover:text-white'
-                }`}
-            >
-              <span className="material-symbols-rounded text-lg align-middle mr-1">school</span>
-              CBSE
-            </button>
-            <button
-              onClick={() => handleBoardSwitch('hbse')}
-              className={`flex-1 py-3 rounded-xl text-center transition-all font-bold text-sm ${activeBoard === 'hbse'
-                ? 'bg-white text-[#D32F2F] shadow-lg'
-                : 'text-white/80 hover:text-white'
-                }`}
-            >
-              <span className="material-symbols-rounded text-lg align-middle mr-1">account_balance</span>
-              HBSE
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <main className="px-4 -mt-5 space-y-5">
-        <div className="grid grid-cols-2 gap-3">
-          {loading ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="animate-pulse">
-                <div className="bg-gray-200 rounded-2xl h-32 w-full"></div>
-              </div>
-            ))
-          ) : categorySubcategories.map(ct => {
-            const count = contentTypeCounts[ct.id] || 0;
-            return (
-              <button
-                key={ct.id}
-                onClick={() => navigate(`/content/${ct.id}?board=${activeBoard}&category=11-12`)}
-                className="relative rounded-2xl p-4 text-left transition-all active:scale-95 overflow-hidden shadow-md hover:shadow-lg"
-              >
-                <div className={`absolute inset-0 bg-gradient-to-br ${ct.color}`}></div>
-                <div className="relative z-10">
-                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mb-3">
-                    <span className="material-symbols-rounded text-white text-2xl">{ct.icon}</span>
-                  </div>
-                  <h3 className="text-white font-bold text-sm leading-tight">{ct.title}</h3>
-                  <p className="text-white/60 text-[10px] mt-1">{count} {count === 1 ? 'Course' : 'Courses'}</p>
-                </div>
-                <div className="absolute top-2 right-2 w-6 h-6 bg-white/20 rounded-full flex items-center justify-center z-10">
-                  <span className="material-symbols-rounded text-white text-sm">arrow_forward</span>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-            <span className="material-symbols-rounded text-[#303F9F] text-sm">filter_list</span>
-            Browse by Subject
-          </h3>
-          <div className="grid grid-cols-3 gap-2">
-            {subjects.map(subj => (
-              <button
-                key={subj.id}
-                onClick={() => {
-                  const matchingCourse = courses.find(c => (c.categoryId === categoryId || c.categoryId === 'iit-jee') && c.subject === subj.id && (!c.boardType || c.boardType === activeBoard));
-                  if (matchingCourse) {
-                    const cId = matchingCourse.id || matchingCourse._id || '';
-                    navigate(`/course/${cId}`);
-                  } else {
-                    navigate(`/content/recorded_batch?board=${activeBoard}&category=11-12&subject=${subj.id}`);
-                  }
-                }}
-                className="py-3 rounded-xl text-center transition-all active:scale-95 flex flex-col items-center gap-1.5 bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100 hover:border-[#303F9F]/30"
-              >
-                <span className="material-symbols-rounded text-lg">{subj.icon}</span>
-                <span className="text-[9px] font-bold">{subj.name}</span>
-                <span className="text-[8px] text-gray-400">
-                  {subjectCounts[subj.id] || 0} courses
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </main>
-    </div>
-  );
+}> = ({ category, courses, loading, subcategories, subjects: allSubjects }) => {
+  return <GeneralClassPage category={category} courses={courses} loading={loading} subcategories={subcategories} subjects={allSubjects} />;
 };
 
 
@@ -711,9 +680,9 @@ const NursingPage: React.FC<{ categoryId: string; subcategories: SubCategory[]; 
                 }}
                 className={`group bg-white rounded-3xl p-4 shadow-sm border border-gray-100 flex flex-col justify-between h-40 text-left active:scale-[0.97] transition-all hover:shadow-card-hover hover:-translate-y-1 relative overflow-hidden ${item.id === 'mock-tests' || item.id === 'ebooks' ? 'col-span-1' : ''}`}
               >
-                <div className={`absolute top-0 right-0 w-16 h-16 bg-gradient-to-br ${item.color.startsWith('bg-') ? getSubGradient(item.color) : item.color} opacity-[0.03] rounded-bl-full`}></div>
+                <div className={`absolute top-0 right-0 w-16 h-16 bg-gradient-to-br ${getVisualGradient(item)} opacity-[0.03] rounded-bl-full`}></div>
                 
-                <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${item.color.startsWith('bg-') ? getSubGradient(item.color) : item.color} flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform duration-300`}>
+                <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${getVisualGradient(item)} flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform duration-300`}>
                   <span className="material-symbols-rounded text-[22px]">{item.icon}</span>
                 </div>
                 
@@ -740,7 +709,6 @@ const CategoryPage: React.FC = () => {
   const navigate = useNavigate();
   const { categoryId } = useParams<{ categoryId: string }>();
   
-  // 1. STATE HOOKS (Always first)
   const [category, setCategory] = useState<Category | null>(null);
   const [subcategories, setSubcategories] = useState<SubCategory[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
@@ -750,7 +718,6 @@ const CategoryPage: React.FC = () => {
   const [selectedSubFilter, setSelectedSubFilter] = useState<string | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<string | null>(null);
 
-  // 2. EFFECT HOOKS (Always middle)
   useEffect(() => {
     const load = async () => {
       try {
@@ -773,9 +740,7 @@ const CategoryPage: React.FC = () => {
         
         const purchasedIds = Array.isArray(enrolledRes) ? enrolledRes.map((c: any) => c.id || c._id) : [];
         setEnrolledCourseIds(purchasedIds);
-
-        const allCourses = Array.isArray(coursesRes) ? coursesRes : [];
-        setCourses(allCourses); // Fixed exploration visibility bug
+        setCourses(Array.isArray(coursesRes) ? coursesRes : []);
       } catch (error) {
         console.error('Error loading category:', error);
       } finally {
@@ -785,17 +750,16 @@ const CategoryPage: React.FC = () => {
     load();
   }, [categoryId]);
 
-  // 3. MEMO HOOKS (Always before any return)
   const categoryCourses = useMemo(() => {
     if (categoryId === 'mock-test') {
       return courses.filter(c =>
-        c.categoryId === 'mock-test' ||
-        c.contentType === 'mock_test' ||
+        isCategoryMatch(c.categoryId || "", 'mock-test') ||
+        normalizeSubcategoryId(c.contentType || "") === 'mock_test' ||
         (c.name || c.title || '').toLowerCase().includes('mock test') ||
         (c.name || c.title || '').toLowerCase().includes('test series')
       );
     }
-    return courses.filter(c => c.categoryId === categoryId);
+    return courses.filter(c => isCategoryMatch(c.categoryId || "", categoryId || ""));
   }, [courses, categoryId]);
 
   const subcategoryCounts = useMemo(() => {
@@ -826,7 +790,6 @@ const CategoryPage: React.FC = () => {
     return subcategories.filter(s => !s.parentPath);
   }, [subcategories]);
 
-  // 4. DERIVED VALUES & HELPERS
   const isNeetId = categoryId?.toLowerCase().includes('neet');
   const isJeeId = categoryId?.toLowerCase().includes('iit') || categoryId?.toLowerCase().includes('jee');
   const isBoardId = categoryId?.toLowerCase().includes('11') || categoryId?.toLowerCase().includes('12');
@@ -839,49 +802,42 @@ const CategoryPage: React.FC = () => {
     navigate(`/explore/${categoryId}/${subId}?label=${encodeURIComponent(sub.title)}`);
   };
 
-  // 5. FINAL RENDERING (Order matters: Loading -> Not Found -> Specialized -> Generic)
-
-  // 5. FINAL RENDERING (Order matters: Loading -> Not Found -> Specialized -> Generic)
-  if (loading || !category) {
-    if (!loading && !category) {
-      return (
-        <div className="min-h-screen flex items-center justify-center">
-          <p className="text-gray-500">Category not found</p>
-        </div>
-      );
-    }
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 pb-20">
-        <div className="animate-pulse">
-          <div className="bg-gray-200 pt-6 pb-8 px-4 rounded-b-[2rem] h-40"></div>
-          <div className="px-4 mt-4 space-y-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-gray-200 rounded-2xl h-24 w-full"></div>
-            ))}
-          </div>
-        </div>
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="animate-spin w-10 h-10 border-4 border-brandBlue border-t-transparent rounded-full"></div>
+      </div>
+    );
+  }
+
+  if (!category) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 px-6 text-center">
+        <span className="material-symbols-rounded text-6xl text-gray-300 mb-4">error</span>
+        <h2 className="text-xl font-bold text-gray-800">Category Not Found</h2>
+        <p className="text-gray-500 mt-2">The category you are looking for does not exist or has been moved.</p>
+        <button onClick={() => navigate('/')} className="mt-6 bg-[#1A237E] text-white px-6 py-3 rounded-2xl font-bold">Go to Home</button>
       </div>
     );
   }
 
   // Specialized Layout Returns
-  if (isNeetId) {
-    return <NeetIitJeePage categoryId={categoryId || 'neet'} courses={courses} loading={loading} enrolledCourseIds={enrolledCourseIds} subcategories={subcategories} subjects={subjects} />;
+  if (isNeetId || category.hierarchyMode === 'exam-branch') {
+     return <NeetIitJeePage category={category} courses={courses} loading={loading} subcategories={subcategories} subjects={subjects} />;
   }
 
-  if (isJeeId || isBoardId) {
-    return <Class11_12Page categoryId={categoryId || 'iit-jee'} courses={courses} loading={loading} enrolledCourseIds={enrolledCourseIds} subcategories={subcategories} subjects={subjects} />;
+  if (isJeeId || isBoardId || category.hierarchyMode === 'board-class') {
+     return <GeneralClassPage category={category} courses={courses} loading={loading} subcategories={subcategories} subjects={subjects} />;
   }
 
   if (isGeneralId) {
-    return <GeneralClassPage categoryId={categoryId || 'general'} courses={courses} loading={loading} enrolledCourseIds={enrolledCourseIds} subcategories={subcategories} subjects={subjects} />;
+    return <GeneralClassPage category={category} courses={courses} loading={loading} subcategories={subcategories} subjects={subjects} />;
   }
 
   if (isNursingId) {
     return <NursingPage categoryId={categoryId || 'nursing'} subcategories={subcategories} courses={courses} loading={loading} enrolledCourseIds={enrolledCourseIds} />;
   }
 
-  // Final Generic Layout Return
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
       <header className={`bg-gradient-to-br ${category.gradient} text-white pt-6 pb-8 px-4 rounded-b-[2rem]`}>
@@ -913,59 +869,55 @@ const CategoryPage: React.FC = () => {
 
       <main className="px-4 mt-4 relative z-10 space-y-5">
         {hasGroups && (
-          <>
-            <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
-              {parentGroups.map((group, idx) => {
-                if (typeof group !== 'string') return null;
-                const parts = group.split(' > ');
-                const shortLabel = parts[parts.length - 1] || group;
-                return (
-                  <button
-                    key={group}
-                    onClick={() => setSelectedGroup(selectedGroup === group ? null : group)}
-                    className={`rounded-2xl px-5 py-3 text-center transition-all active:scale-95 whitespace-nowrap shrink-0 ${selectedGroup === group
-                      ? 'bg-white shadow-lg border-2 border-[#303F9F] text-[#303F9F]'
-                      : 'bg-white shadow-sm border border-gray-100 text-gray-700'
-                      }`}
-                  >
-                    <p className="text-xs font-bold">{shortLabel}</p>
-                    <p className="text-[9px] text-gray-400 mt-0.5">{group !== shortLabel ? group : ''}</p>
-                  </button>
-                );
-              })}
-            </div>
+          <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
+            {parentGroups.map((group) => {
+              if (typeof group !== 'string') return null;
+              const parts = group.split(' > ');
+              const shortLabel = parts[parts.length - 1] || group;
+              return (
+                <button
+                  key={group}
+                  onClick={() => setSelectedGroup(selectedGroup === group ? null : group)}
+                  className={`rounded-2xl px-5 py-3 text-center transition-all active:scale-95 whitespace-nowrap shrink-0 ${selectedGroup === group
+                    ? 'bg-white shadow-lg border-2 border-[#303F9F] text-[#303F9F]'
+                    : 'bg-white shadow-sm border border-gray-100 text-gray-700'
+                    }`}
+                >
+                  <p className="text-xs font-bold">{shortLabel}</p>
+                  <p className="text-[9px] text-gray-400 mt-0.5">{group !== shortLabel ? group : ''}</p>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-            {selectedGroup && filteredGroupSubs.length > 0 && (
-              <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 animate-fade-in">
-                <h3 className="text-sm font-black text-gray-800 mb-4 flex items-center gap-2">
-                  <span className="material-icons-outlined text-[#303F9F] text-lg">category</span>
-                  {selectedGroup}
-                </h3>
-                <div className="grid grid-cols-2 gap-3">
-                  {filteredGroupSubs.map(sub => {
-                    return (
-                      <button
-                        key={sub.id}
-                        onClick={() => handleSubClick(sub)}
-                        className="bg-gradient-to-br from-gray-50 to-white hover:from-gray-100 hover:to-gray-50 rounded-xl p-4 text-left transition-all active:scale-95 flex items-center gap-3 border border-gray-100 hover:border-gray-200 hover:shadow-md"
-                      >
-                        <div className={`w-11 h-11 bg-gradient-to-br ${getSubGradient(sub.color)} rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm`}>
-                          <span className="material-icons-outlined text-white text-lg">{sub.icon}</span>
-                        </div>
-                        <div className="min-w-0">
-                          <span className="text-xs font-bold text-gray-700 line-clamp-2">{sub.title.replace(sub.parentPath + ' - ', '').replace(sub.parentPath + ' ', '')}</span>
-                          <p className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
-                            <span className="material-icons-outlined" style={{ fontSize: '10px' }}>menu_book</span>
-                            {subcategoryCounts[sub.id] || 0} {subcategoryCounts[sub.id] === 1 ? 'Course' : 'Courses'}
-                          </p>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-          </>
+        {selectedGroup && filteredGroupSubs.length > 0 && (
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 animate-fade-in">
+             <h3 className="text-sm font-black text-gray-800 mb-4 flex items-center gap-2">
+               <span className="material-icons-outlined text-[#303F9F] text-lg">category</span>
+               {selectedGroup}
+             </h3>
+             <div className="grid grid-cols-2 gap-3">
+               {filteredGroupSubs.map(sub => (
+                 <button
+                   key={sub.id}
+                   onClick={() => handleSubClick(sub)}
+                   className="bg-gradient-to-br from-gray-50 to-white hover:from-gray-100 hover:to-gray-50 rounded-xl p-4 text-left transition-all active:scale-95 flex items-center gap-3 border border-gray-100 hover:border-gray-200 hover:shadow-md"
+                 >
+                   <div className={`w-11 h-11 bg-gradient-to-br ${getVisualGradient(sub)} rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm`}>
+                     <span className="material-icons-outlined text-white text-lg">{sub.icon}</span>
+                   </div>
+                   <div className="min-w-0">
+                     <span className="text-xs font-bold text-gray-700 line-clamp-2">{sub.title.replace(sub.parentPath + ' - ', '').replace(sub.parentPath + ' ', '')}</span>
+                     <p className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
+                       <span className="material-icons-outlined" style={{ fontSize: '10px' }}>menu_book</span>
+                       {subcategoryCounts[sub.id] || 0} {subcategoryCounts[sub.id] === 1 ? 'Course' : 'Courses'}
+                     </p>
+                   </div>
+                 </button>
+               ))}
+             </div>
+          </div>
         )}
 
         {directSubs.length > 0 && (
@@ -975,34 +927,32 @@ const CategoryPage: React.FC = () => {
               Course Categories
             </h3>
             <div className="grid grid-cols-2 gap-3">
-              {directSubs.map(sub => {
-                return (
-                  <button
-                    key={sub.id}
-                    onClick={() => handleSubClick(sub)}
-                    className="bg-gradient-to-br from-gray-50 to-white hover:from-gray-100 hover:to-gray-50 rounded-xl p-4 text-left transition-all active:scale-95 border border-gray-100 hover:border-gray-200 hover:shadow-md group"
-                  >
-                    <div className={`w-12 h-12 bg-gradient-to-br ${getSubGradient(sub.color)} rounded-xl flex items-center justify-center mb-3 shadow-sm group-hover:shadow-md transition-shadow`}>
-                      <span className="material-icons-outlined text-white text-xl">{sub.icon}</span>
-                    </div>
-                    <p className="text-xs font-bold text-gray-800">{sub.title}</p>
-                    <div className="flex items-center gap-1 mt-1">
-                      <span className="material-icons-outlined text-gray-400" style={{ fontSize: '10px' }}>menu_book</span>
-                      <p className="text-[10px] text-gray-400">{subcategoryCounts[sub.id] || 0} {subcategoryCounts[sub.id] === 1 ? 'Course' : 'Courses'}</p>
-                    </div>
-                    {sub.description && (
-                      <p className="text-[10px] text-gray-400 mt-1 line-clamp-2">{sub.description}</p>
-                    )}
-                  </button>
-                );
-              })}
+              {directSubs.map(sub => (
+                <button
+                  key={sub.id}
+                  onClick={() => handleSubClick(sub)}
+                  className="bg-gradient-to-br from-gray-50 to-white hover:from-gray-100 hover:to-gray-50 rounded-xl p-4 text-left transition-all active:scale-95 border border-gray-100 hover:border-gray-200 hover:shadow-md group"
+                >
+                  <div className={`w-12 h-12 bg-gradient-to-br ${getVisualGradient(sub)} rounded-xl flex items-center justify-center mb-3 shadow-sm group-hover:shadow-md transition-shadow`}>
+                    <span className="material-icons-outlined text-white text-xl">{sub.icon}</span>
+                  </div>
+                  <p className="text-xs font-bold text-gray-800">{sub.title}</p>
+                  <div className="flex items-center gap-1 mt-1">
+                    <span className="material-icons-outlined text-gray-400" style={{ fontSize: '10px' }}>menu_book</span>
+                    <p className="text-[10px] text-gray-400">{subcategoryCounts[sub.id] || 0} {subcategoryCounts[sub.id] === 1 ? 'Course' : 'Courses'}</p>
+                  </div>
+                  {sub.description && (
+                    <p className="text-[10px] text-gray-400 mt-1 line-clamp-2">{sub.description}</p>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
         )}
 
         {categoryCourses.length > 0 && (
-          <div>
-            <h3 className="text-sm font-black text-gray-700 uppercase tracking-wider mb-3">Available Courses</h3>
+          <div className="space-y-4">
+            <h3 className="text-sm font-black text-gray-700 uppercase tracking-wider">Available Courses</h3>
 
             {subcategories.length > 0 && (
               <div className="flex gap-2 overflow-x-auto pb-3 hide-scrollbar">
@@ -1015,22 +965,20 @@ const CategoryPage: React.FC = () => {
                 >
                   All Courses ({categoryCourses.length})
                 </button>
-                {subcategories.map(sub => {
-                  return (
-                    <button
-                      key={sub.id}
-                      onClick={() => setSelectedSubFilter(selectedSubFilter === sub.id ? null : sub.id)}
-                      className={`rounded-full px-4 py-2 text-xs font-bold whitespace-nowrap shrink-0 transition-all active:scale-95 flex items-center gap-1.5 ${selectedSubFilter === sub.id
-                        ? 'bg-[#303F9F] text-white shadow-md'
-                        : 'bg-white text-gray-600 border border-gray-200'
-                        }`}
-                    >
-                      <span className="material-icons-outlined" style={{ fontSize: '14px' }}>{sub.icon}</span>
-                      {sub.title.replace(sub.parentPath ? sub.parentPath + ' - ' : '', '').replace(sub.parentPath ? sub.parentPath + ' ' : '', '')}
-                      {(subcategoryCounts[sub.id] || 0) > 0 && <span className="opacity-70">({subcategoryCounts[sub.id]})</span>}
-                    </button>
-                  );
-                })}
+                {subcategories.map(sub => (
+                  <button
+                    key={sub.id}
+                    onClick={() => setSelectedSubFilter(selectedSubFilter === sub.id ? null : sub.id)}
+                    className={`rounded-full px-4 py-2 text-xs font-bold whitespace-nowrap shrink-0 transition-all active:scale-95 flex items-center gap-1.5 ${selectedSubFilter === sub.id
+                      ? 'bg-[#303F9F] text-white shadow-md'
+                      : 'bg-white text-gray-600 border border-gray-200'
+                      }`}
+                  >
+                    <span className="material-icons-outlined" style={{ fontSize: '14px' }}>{sub.icon}</span>
+                    <span className="truncate">{sub.title.replace(sub.parentPath ? sub.parentPath + ' - ' : '', '').replace(sub.parentPath ? sub.parentPath + ' ' : '', '')}</span>
+                    {(subcategoryCounts[sub.id] || 0) > 0 && <span className="opacity-70">({subcategoryCounts[sub.id]})</span>}
+                  </button>
+                ))}
               </div>
             )}
 
@@ -1039,23 +987,17 @@ const CategoryPage: React.FC = () => {
                 <button
                   key={idx}
                   onClick={() => navigate(`/course/${course._id || course.id}`)}
-                  className="w-full bg-white rounded-xl p-4 shadow-sm flex gap-4 text-left active:scale-[0.98] transition-transform border border-gray-100 hover:shadow-md"
+                  className="w-full bg-white rounded-xl p-4 shadow-sm flex gap-4 text-left active:scale-[0.98] transition-all border border-gray-100 hover:shadow-md group"
                 >
-                  <div className={`w-16 h-16 bg-gradient-to-br ${category.gradient} rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden relative`}>
-                    {course.settings?.markNewBatch && (
-                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-red-600/90 animate-pulse">
-                        <span className="text-[7px] text-white font-black uppercase tracking-tighter">NEW</span>
-                      </div>
-                    )}
+                  <div className={`w-16 h-16 bg-gradient-to-br ${category.gradient} rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden relative shadow-inner`}>
                     {(course.imageUrl || course.thumbnail) ? (
-                      <img src={getImageUrl(course.imageUrl || course.thumbnail)} alt="" className="w-full h-full object-cover" loading="lazy" onError={(e: any) => { e.currentTarget.style.display = 'none'; const parent = e.currentTarget.parentElement; if (parent) { const span = document.createElement('span'); span.className = 'text-white text-xl font-bold opacity-60'; span.textContent = (course.name || course.title || '?').charAt(0).toUpperCase(); parent.appendChild(span); } }} />
+                      <img src={getImageUrl(course.imageUrl || course.thumbnail)} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" />
                     ) : (
                       <span className="text-white text-xl font-bold opacity-60">{(course.name || course.title || '?').charAt(0).toUpperCase()}</span>
                     )}
                   </div>
-                  <div className="flex-1">
-                    <h4 className="text-sm font-bold text-gray-800">{course.name || course.title}</h4>
-                    <p className="text-[10px] text-gray-400 mt-1 line-clamp-1">{(course.description || 'Complete preparation course').replace(/<[^>]*>?/gm, '').replace(/&nbsp;/g, ' ')}</p>
+                  <div className="flex-1 min-w-0 flex flex-col justify-center">
+                    <h4 className="text-sm font-bold text-gray-800 line-clamp-2 leading-tight group-hover:text-brandBlue transition-colors">{course.name || course.title}</h4>
                     <div className="flex items-center gap-3 mt-2 text-[10px] text-gray-500">
                       <span className="flex items-center gap-1">
                         <span className="material-icons-outlined text-xs">{(course.contentType === 'mock_test' || course.categoryId === 'mock-test') ? 'quiz' : 'play_circle'}</span>
@@ -1071,7 +1013,6 @@ const CategoryPage: React.FC = () => {
                 <div className="text-center py-8 bg-white rounded-2xl border border-gray-100">
                   <span className="material-icons-outlined text-5xl text-gray-200">search_off</span>
                   <p className="text-sm font-bold text-gray-400 mt-3">No courses found</p>
-                  <p className="text-xs text-gray-300 mt-1">Try selecting a different filter</p>
                 </div>
               )}
             </div>
@@ -1081,10 +1022,10 @@ const CategoryPage: React.FC = () => {
         {categoryCourses.length === 0 && subcategories.length === 0 && (
           <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 shadow-sm mt-8 animate-fade-in">
             <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="material-icons-outlined text-6xl text-gray-300">menu_book</span>
+              <span className="material-icons-outlined text-6xl text-gray-200">auto_stories</span>
             </div>
             <h3 className="text-base font-bold text-gray-700">Content Coming Soon</h3>
-            <p className="text-xs text-gray-400 mt-2 max-w-[250px] mx-auto">We are organizing the best materials for this section. Please check back shortly.</p>
+            <p className="text-xs text-gray-400 mt-2 max-w-[250px] mx-auto font-medium">We are organizing the best materials for this section. Check back shortly!</p>
           </div>
         )}
       </main>

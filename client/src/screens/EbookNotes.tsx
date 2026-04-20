@@ -9,10 +9,11 @@ const EbookNotes: React.FC = () => {
   const [student, setStudent] = useState<any>(null);
   const [ebooks, setEbooks] = useState<any[]>([]);
   const [examDocs, setExamDocs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
+  const [dbSubjects, setDbSubjects] = useState<any[]>([]);
   const [toastMsg, setToastMsg] = useState('');
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -35,12 +36,14 @@ const EbookNotes: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [ebooksRes, docsRes] = await Promise.all([
+      const [ebooksRes, docsRes, subjectsRes] = await Promise.all([
         fetch('/api/ebooks').then(r => r.json()),
-        fetch('/api/exam-documents').then(r => r.json())
+        fetch('/api/exam-documents').then(r => r.json()),
+        fetch('/api/subjects').then(r => r.json())
       ]);
       setEbooks(Array.isArray(ebooksRes) ? ebooksRes.filter((e: any) => !e.isFree) : []);
       setExamDocs(Array.isArray(docsRes) ? docsRes.filter((d: any) => d.status === 'active' && !d.isFree) : []);
+      setDbSubjects(Array.isArray(subjectsRes) ? subjectsRes : []);
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -54,27 +57,37 @@ const EbookNotes: React.FC = () => {
   ];
 
   const filteredItems = allItems.filter(item => {
-    if (activeTab === 'all') return true;
-    if (activeTab === 'exam') return item.type === 'examdoc';
-    return item.subject?.toLowerCase() === activeTab;
+    const itemSubj = String(item.subject || '').trim().toLowerCase();
+    const activeTabLower = String(activeTab || 'all').trim().toLowerCase();
+    
+    if (activeTabLower === 'all') return true;
+    if (activeTabLower === 'exam') return item.type === 'examdoc';
+    return itemSubj === activeTabLower || itemSubj === activeTabLower.replace(/ /g, '_');
   });
 
-  const getSubjectIcon = (subject: string) => {
-    switch (subject?.toLowerCase()) {
-      case 'physics': return 'bolt';
-      case 'chemistry': return 'science';
-      case 'biology': return 'biotech';
-      case 'exam': return 'assignment';
-      default: return 'menu_book';
-    }
+  const getSubjectIcon = (item: any) => {
+    if (item.type === 'examdoc') return 'assignment';
+    // Find subject from dbSubjects to get its icon
+    const subj = dbSubjects.find(s => 
+      s.id === item.subject || 
+      String(s.name || "").trim().toLowerCase() === String(item.subject || "").trim().toLowerCase()
+    );
+    return subj?.icon || 'menu_book';
   };
 
-  const getSubjectColor = (subject: string) => {
-    switch (subject?.toLowerCase()) {
+  const getSubjectColor = (item: any) => {
+    if (item.type === 'examdoc') return 'from-teal-600 to-teal-800';
+    const subj = dbSubjects.find(s => 
+      s.id === item.subject || 
+      String(s.name || "").trim().toLowerCase() === String(item.subject || "").trim().toLowerCase()
+    );
+    if (subj?.gradient) return subj.gradient;
+    
+    // Safety switch for common subjects if gradient is missing in DB
+    switch (String(item.subject || "").trim().toLowerCase()) {
       case 'physics': return 'from-blue-500 to-blue-700';
       case 'chemistry': return 'from-green-500 to-green-700';
       case 'biology': return 'from-orange-500 to-orange-700';
-      case 'exam': return 'from-teal-600 to-teal-800';
       default: return 'from-purple-500 to-purple-700';
     }
   };
@@ -93,15 +106,19 @@ const EbookNotes: React.FC = () => {
       </header>
 
       <div className="p-4">
-        <div className="flex bg-gray-100 rounded-xl p-1 mb-6 overflow-x-auto">
-          {['all', 'physics', 'chemistry', 'biology', 'exam'].map((tab) => (
+        <div className="flex bg-gray-100 rounded-xl p-1 mb-6 overflow-x-auto hide-scrollbar">
+          {[
+            { id: 'all', label: 'All' },
+            ...dbSubjects.slice(0, 10).map(s => ({ id: s.id || s.name?.toLowerCase(), label: s.name })),
+            { id: 'exam', label: 'Exam Docs' }
+          ].map((tab) => (
             <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-2 px-3 rounded-lg font-bold text-xs whitespace-nowrap transition-all ${activeTab === tab ? 'bg-white text-teal-600 shadow-sm' : 'text-gray-500'
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id || 'all')}
+              className={`flex-1 py-2 px-4 rounded-lg font-bold text-[11px] whitespace-nowrap transition-all ${activeTab === tab.id ? 'bg-white text-teal-600 shadow-sm' : 'text-gray-500'
                 }`}
             >
-              {tab === 'exam' ? 'Exam Docs' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+              {tab.label}
             </button>
           ))}
         </div>
@@ -114,8 +131,8 @@ const EbookNotes: React.FC = () => {
           <div className="grid grid-cols-2 gap-4">
             {filteredItems.map((item, idx) => (
               <div key={idx} className="bg-white rounded-xl shadow-sm overflow-hidden">
-                <div className={`h-24 bg-gradient-to-br ${getSubjectColor(item.subject)} flex items-center justify-center`}>
-                  <span className="material-symbols-rounded text-white text-4xl">{getSubjectIcon(item.subject)}</span>
+                <div className={`h-24 bg-gradient-to-br ${getSubjectColor(item)} flex items-center justify-center`}>
+                  <span className="material-symbols-rounded text-white text-4xl">{getSubjectIcon(item)}</span>
                 </div>
                 <div className="p-3">
                   <div className="flex justify-between items-start gap-1">

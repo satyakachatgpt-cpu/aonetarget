@@ -16,7 +16,11 @@ interface Course {
   imageUrl?: string;
   examType?: string;
   contentType?: string;
+  subcategoryId?: string;
+  level1Branch?: string;
+  level2Branch?: string;
   subject?: string;
+  subjectId?: string;
   boardType?: string;
   categoryId?: string;
   videos?: number;
@@ -26,6 +30,46 @@ interface Course {
     showTabs?: boolean;
     sortingOrder?: number;
   };
+}
+
+interface Subject {
+  _id?: string;
+  id: string;
+  name: string;
+  label?: string; // for compatibility with hardcoded list
+  icon: string;
+  gradient?: string;
+  categoryId?: string;
+  subcategoryId?: string;
+  level1Branch?: string;
+  level2Branch?: string;
+}
+
+function normalizeSubcategoryId(val: string = "") {
+  if (!val) return "";
+  const id = String(val).toLowerCase();
+  
+  // Explicit mappings for known buckets (matching AddCourse.tsx)
+  if (id.includes('recorded_batch') || id.includes('recorded-batch')) return 'recorded_batch';
+  if (id.includes('live_classroom') || id.includes('live_class')) return 'live_classroom';
+  if (id.includes('crash_course') || id.includes('crash-course')) return 'crash_course';
+  if (id.includes('mock_test') || id.includes('mock-test')) return 'mock_test';
+
+  return id
+    .replace(/neet_|iit_jee_|iit-jee_|nursing_cet_|foundation_/g, "")
+    .replace(/batches/g, "batch")
+    .replace(/-/g, "_")
+    .trim();
+}
+
+function isCategoryMatch(courseCatId: string, targetCatId: string) {
+  const cId = String(courseCatId || "").toLowerCase();
+  const tId = String(targetCatId || "").toLowerCase();
+  if (cId === tId) return true;
+  // Handle aliases
+  if (tId === 'neet-iitjee') return cId === 'neet' || cId === 'iit-jee' || cId === 'iit_jee';
+  if (tId === 'nursing-cet') return cId === 'nursing';
+  return false;
 }
 
 const contentTypeConfig: Record<string, { label: string; icon: string; gradient: string }> = {
@@ -39,12 +83,20 @@ const ContentTypeDetail: React.FC = () => {
   const navigate = useNavigate();
   const { contentType } = useParams<{ contentType: string }>();
   const [searchParams] = useSearchParams();
-  const examType = searchParams.get('exam') || '';
-  const boardType = searchParams.get('board') || '';
+  
+  // New Hierarchy Params
+  const branchParam = searchParams.get('branch') || '';
+  const classParam = searchParams.get('class') || '';
+  const categoryIdParam = searchParams.get('categoryId') || '';
+
+  // Legacy Fallbacks
+  const examType = searchParams.get('exam') || branchParam;
+  const boardType = searchParams.get('board') || branchParam;
   const subjectParam = searchParams.get('subject') || '';
   const categorySource = searchParams.get('category') || '';
 
   const [courses, setCourses] = useState<Course[]>([]);
+  const [dbSubjects, setDbSubjects] = useState<Subject[]>([]);
   const [enrolledCourseIds, setEnrolledCourseIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSubject, setSelectedSubject] = useState<string>(subjectParam);
@@ -62,54 +114,132 @@ const ContentTypeDetail: React.FC = () => {
   const studentId = getStudentId();
   const config = contentTypeConfig[contentType || ''] || contentTypeConfig.recorded_batch;
 
-  const neetSubjects = [
-    { id: 'biology', label: 'Biology', icon: 'biotech' },
-    { id: 'chemistry', label: 'Chemistry', icon: 'science' },
-    { id: 'physics', label: 'Physics', icon: 'electric_bolt' },
-  ];
-
-  const jeeSubjects = [
-    { id: 'chemistry', label: 'Chemistry', icon: 'science' },
-    { id: 'physics', label: 'Physics', icon: 'electric_bolt' },
-    { id: 'math', label: 'Mathematics', icon: 'calculate' },
-  ];
-
-  const boardSubjects = [
-    { id: 'hindi', label: 'Hindi', icon: 'translate' },
-    { id: 'english', label: 'English', icon: 'menu_book' },
-    { id: 'math', label: 'Mathematics', icon: 'calculate' },
-    { id: 'science', label: 'Science', icon: 'science' },
-    { id: 'social_science', label: 'Social Sci.', icon: 'public' },
-    { id: 'sanskrit', label: 'Sanskrit', icon: 'auto_stories' },
-  ];
-
-  const getSubjects = () => {
-    if (categorySource === '11-12') return boardSubjects;
-    if (examType === 'neet') return neetSubjects;
-    if (examType === 'iit-jee') return jeeSubjects;
-    return neetSubjects;
-  };
-
-  const subjects = getSubjects();
+  const subjectsList = dbSubjects.map(s => ({
+    id: s.id || s._id || "", // Normalize ID
+    label: s.name || s.label || '',
+    icon: s.icon
+  }));
 
   useEffect(() => {
     fetchData();
-  }, [contentType, examType, boardType]);
+  }, [contentType, examType, boardType, branchParam, classParam]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
+      // Build a strict hierarchy query
       let url = '/api/courses?';
-      if (contentType) url += `contentType=${contentType}&`;
-      if (examType) url += `examType=${examType}&`;
-      if (boardType) url += `boardType=${boardType}&`;
-      if (categorySource === '11-12') url += `categoryId=iit-jee&`;
-      else if (examType === 'neet') url += `categoryId=neet&`;
-      else if (examType === 'iit-jee') url += `categoryId=iit-jee&`;
+      
+      // Determine the canonical category ID for query
+      let finalCatId = categoryIdParam;
+      if (!finalCatId) {
+        if (categorySource === '11-12') finalCatId = 'iit-jee';
+        else if (examType === 'neet' || examType === 'iit-jee') finalCatId = 'neet-iitjee';
+      }
+
+      // If we have a specific category, prioritize it, but allow neet-iitjee fallback for legacy
+      if (finalCatId) url += `categoryId=${finalCatId}&`;
+      if (branchParam) url += `level1Branch=${branchParam}&`;
+      if (classParam) url += `level2Branch=${classParam}&`;
+      
+      // Safety fallbacks for narrow query optimization
+      if (!branchParam && examType) url += `examType=${examType}&`;
+      if (!branchParam && boardType) url += `boardType=${boardType}&`;
 
       const coursesRes = await fetch(url);
       const allCourses: Course[] = await coursesRes.json();
-      setCourses(Array.isArray(allCourses) ? allCourses : []);
+      
+      // If no courses found for neet-iitjee, try fetching with neet or iit-jee based on branch context
+      // This solves the backend strict categoryId filter issue for alias categories
+      if (Array.isArray(allCourses) && allCourses.length === 0 && finalCatId === 'neet-iitjee' && branchParam) {
+        const fallbackCatId = (branchParam === 'neet' || branchParam === 'iit-jee') ? branchParam : '';
+        if (fallbackCatId) {
+          const fallbackUrl = url.replace('categoryId=neet-iitjee', `categoryId=${fallbackCatId}`);
+          const fallbackRes = await fetch(fallbackUrl);
+          const fallbackCourses = await fallbackRes.json();
+          if (Array.isArray(fallbackCourses) && fallbackCourses.length > 0) {
+            setCourses(fallbackCourses);
+            setLoading(false); // return early after second fetch
+            // Proceed to fetch subjects below
+          } else {
+            setCourses([]);
+          }
+        } else {
+          setCourses([]);
+        }
+      } else {
+        setCourses(Array.isArray(allCourses) ? allCourses : []);
+      }
+
+      // FETCH SUBJECTS for this subcategory
+      try {
+        // Broad Fetch for the category context to perform strict local filtering
+        // This handles cases like 'neet' vs 'neet-iitjee' mismatches safely
+        let fetchCatId = categoryIdParam || (examType === 'neet' || examType === 'iit-jee' ? 'neet-iitjee' : finalCatId);
+        
+        // If it's a known multi-category exam, fetch by branch primarily to avoid category mismatch
+        let subjUrl = `/api/subjects?`;
+        if (examType === 'neet' || examType === 'iit-jee') {
+          // Broad fetch for these exams
+          if (branchParam) subjUrl += `level1Branch=${branchParam}`;
+        } else {
+          if (fetchCatId) subjUrl += `categoryId=${fetchCatId}&`;
+          if (branchParam) subjUrl += `level1Branch=${branchParam}`;
+        }
+        if (classParam) subjUrl += `${subjUrl.endsWith('?') || subjUrl.endsWith('&') ? '' : '&'}level2Branch=${classParam}`;
+
+        const subjRes = await fetch(subjUrl);
+        const allContextSubjs = await subjRes.json();
+
+        if (Array.isArray(allContextSubjs)) {
+          const requestedSub = normalizeSubcategoryId(contentType || "");
+          const branchVal = (branchParam || "").toLowerCase();
+          const classVal = (classParam || "").toLowerCase();
+
+          // Try strict path match (normalized)
+          const exactSubjects = allContextSubjs.filter(s => {
+            const subjectSub = normalizeSubcategoryId(s.subcategoryId || "");
+            const isExactMatch = !!subjectSub && subjectSub === requestedSub;
+            const isGlobal = !s.subcategoryId;
+
+            const matchesBranch = !branchVal || String(s.level1Branch || "").toLowerCase() === branchVal;
+            const matchesClass = !classVal || String(s.level2Branch || "").toLowerCase() === classVal;
+            
+            // Category Match: treat 'neet' and 'iit-jee' as compatible with 'neet-iitjee' context
+            const matchesCat = isCategoryMatch(s.categoryId || "", finalCatId || "");
+
+            return (
+              (isExactMatch || isGlobal) &&
+              matchesBranch &&
+              matchesClass &&
+              matchesCat
+            );
+          });
+
+          const hasAnySubcategorySubjects = allContextSubjs.some(s => s.subcategoryId);
+
+          console.log("SUBJECT DEBUG", {
+            requestedSub,
+            rawUrl: contentType,
+            subjectsFromDB: allContextSubjs.map(s => ({
+              name: s.name,
+              sub: s.subcategoryId
+            }))
+          });
+
+          if (exactSubjects.length > 0) {
+            setDbSubjects(exactSubjects);
+          } else if (!hasAnySubcategorySubjects) {
+            // legacy mode only
+            setDbSubjects(allContextSubjs.filter(s => !s.subcategoryId));
+          } else {
+            // STRICT: do not fallback to wrong data
+            setDbSubjects([]);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching subjects:', err);
+      }
 
       if (studentId) {
         try {
@@ -126,8 +256,58 @@ const ContentTypeDetail: React.FC = () => {
   };
 
   const getFilteredCourses = () => {
-    if (!selectedSubject) return courses;
-    return courses.filter(c => c.subject === selectedSubject);
+    // Determine target category ID for local filtering
+    let targetCatId = categoryIdParam;
+    if (!targetCatId) {
+      if (categorySource === '11-12') targetCatId = 'iit-jee';
+      else if (examType === 'neet' || examType === 'iit-jee') targetCatId = 'neet-iitjee';
+    }
+
+    return courses.filter(c => {
+      // 1. Strict-but-Compatible Hierarchy (STOPS LEAKAGE)
+      const matchesCat = isCategoryMatch(c.categoryId || "", targetCatId || "");
+      if (!matchesCat) return false;
+
+      const cL1 = String(c.level1Branch || c.examType || c.boardType || "").toLowerCase().trim();
+      const pL1 = String(branchParam || "").toLowerCase().trim();
+      if (pL1 && cL1 !== pL1) return false;
+
+      const cL2 = String(c.level2Branch || "").toLowerCase().trim();
+      const pL2 = String(classParam || "").toLowerCase().trim();
+      if (pL2 && cL2 !== pL2) return false;
+
+      // 2. Primary Subcategory Match (with legacy fallback and normalization)
+      const requestedId = normalizeSubcategoryId(contentType || '');
+      const courseSubId = normalizeSubcategoryId(c.subcategoryId || '');
+      const courseContentType = normalizeSubcategoryId(c.contentType || '');
+      
+      const matchesSubcategory = (courseSubId === requestedId) || (courseContentType === requestedId);
+
+      if (!matchesSubcategory) return false;
+
+      // 3. Robust Subject Matching
+      if (selectedSubject && selectedSubject !== 'all' && selectedSubject !== '') {
+        const selectedObj = dbSubjects.find(
+          s => String(s.id || s._id) === String(selectedSubject)
+        );
+
+        const selectedId = selectedObj ? String(selectedObj.id || selectedObj._id) : "";
+        const selectedName = selectedObj
+          ? String(selectedObj.label || selectedObj.name || "").trim().toLowerCase()
+          : "";
+
+        const courseSubjectId = String(c.subjectId || "");
+        const courseSubjectName = String(c.subject || "").trim().toLowerCase();
+
+        const matchesSubject =
+          (selectedId && courseSubjectId === selectedId) ||
+          (selectedName && courseSubjectName === selectedName);
+
+        if (!matchesSubject) return false;
+      }
+
+      return true;
+    });
   };
 
   const filteredCourses = getFilteredCourses();
@@ -182,7 +362,8 @@ const ContentTypeDetail: React.FC = () => {
             <div className="flex-1">
               <h1 className="text-lg font-black tracking-tight">{config.label}</h1>
               <p className="text-white/60 text-xs mt-0.5">
-                {examType ? examType.toUpperCase() : boardType ? boardType.toUpperCase() : ''}
+                {branchParam ? branchParam.toUpperCase() : examType ? examType.toUpperCase() : boardType ? boardType.toUpperCase() : ''}
+                {classParam ? ` | ${classParam}` : ''}
                 {categorySource === '11-12' ? ' | 11th-12th' : ''}
               </p>
             </div>
@@ -203,12 +384,12 @@ const ContentTypeDetail: React.FC = () => {
             <span className="material-symbols-rounded text-[#303F9F] text-sm">filter_list</span>
             Filter by Subject
           </h3>
-          <div className={`grid gap-2 ${subjects.length > 4 ? 'grid-cols-3' : `grid-cols-${subjects.length}`}`}>
-            {subjects.map(subj => (
+          <div className="grid grid-cols-3 gap-2">
+            {subjectsList.map(subj => (
               <button
                 key={subj.id}
                 onClick={() => setSelectedSubject(selectedSubject === subj.id ? '' : subj.id)}
-                className={`py-2.5 rounded-xl text-center transition-all active:scale-95 flex flex-col items-center gap-1 ${selectedSubject === subj.id
+                className={`py-2 rounded-xl text-center transition-all active:scale-95 flex flex-col items-center gap-0.5 ${selectedSubject === subj.id
                     ? `bg-gradient-to-br ${config.gradient} text-white shadow-md`
                     : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100'
                   }`}
