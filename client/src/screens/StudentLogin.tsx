@@ -24,6 +24,7 @@ const profileSchema = z.object({
   confirmPassword: z.string().min(6, 'Confirm your password'),
   target: z.string().optional().or(z.literal('')),
   referralCode: z.string().optional().or(z.literal('')),
+  higherEducation: z.string().optional().or(z.literal('')),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
@@ -52,7 +53,7 @@ const getDeviceId = () => {
 
 interface SelectionModalProps {
   isOpen: boolean;
-  type: 'state' | 'district' | 'class' | null;
+  type: 'state' | 'district' | 'class' | 'higherEducation' | null;
   onClose: () => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
@@ -227,6 +228,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       gender: '',
       dob: '',
       class: '',
+      higherEducation: '',
       target: '',
       referralCode: ''
     }
@@ -272,7 +274,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   const [dobMonth, setDobMonth] = useState('');
   const [dobYear, setDobYear] = useState('');
 
-  const [selectionModal, setSelectionModal] = useState<{ isOpen: boolean, type: 'state' | 'district' | 'class' | null }>({ isOpen: false, type: null });
+  const [selectionModal, setSelectionModal] = useState<{ isOpen: boolean, type: 'state' | 'district' | 'class' | 'higherEducation' | null }>({ isOpen: false, type: null });
   const [searchQuery, setSearchQuery] = useState('');
   
   // New States for Password & Forgot Password
@@ -280,7 +282,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   const [resetPhone, setResetPhone] = useState('');
   const [newPasswordData, setNewPasswordData] = useState({ password: '', confirm: '' });
 
-  const openSelection = (type: 'state' | 'district' | 'class') => {
+  const openSelection = (type: 'state' | 'district' | 'class' | 'higherEducation') => {
     if (type === 'district' && !selectedState) {
       toast.error('Please select a state first');
       return;
@@ -297,6 +299,8 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       setProfileValue('district', value);
     } else if (selectionModal.type === 'class') {
       setProfileValue('class', value);
+    } else if (selectionModal.type === 'higherEducation') {
+      setProfileValue('higherEducation', value);
     }
     setSelectionModal({ isOpen: false, type: null });
   };
@@ -1209,6 +1213,21 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
           </div>
 
           <div>
+            <label className="text-xs font-semibold text-gray-600 block mb-1">Higher Education</label>
+            <button
+              type="button"
+              onClick={() => openSelection('higherEducation')}
+              className={`w-full px-4 py-3.5 border rounded-xl flex items-center justify-between text-sm transition-all ${
+                profileWatch('higherEducation') ? 'text-gray-800 font-bold' : 'text-gray-400 hover:border-gray-300'
+              }`}
+            >
+              <span>{profileWatch('higherEducation') || 'Select Qualification'}</span>
+              <span className="material-symbols-rounded text-gray-400">expand_more</span>
+            </button>
+            <input type="hidden" {...profileReg('higherEducation')} />
+          </div>
+
+          <div>
             <label className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-1">Create Password *</label>
             <div className="relative">
               <input
@@ -1326,9 +1345,11 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
           ? Object.keys(indiaStateDistrictMap).sort()
           : selectionModal.type === 'district'
             ? availableDistricts.sort()
-            : ['9th', '10th', '11th', '12th', 'Dropper']
+            : selectionModal.type === 'higherEducation'
+              ? ['10th Pass', '12th Pass', 'Graduate', 'Post Graduate', 'Other']
+              : ['9th', '10th', '11th', '12th', 'Neet','iit-Jee','Nursing-CET', 'Dropper']
         }
-        selectedValue={selectionModal.type === 'state' ? selectedState : selectionModal.type === 'district' ? profileWatch('district') : profileWatch('class')}
+        selectedValue={selectionModal.type === 'state' ? selectedState : selectionModal.type === 'district' ? profileWatch('district') : selectionModal.type === 'higherEducation' ? profileWatch('higherEducation') : profileWatch('class')}
         onSelect={handleSelection}
       />
     </div>
