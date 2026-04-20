@@ -897,88 +897,8 @@ const Home: React.FC = () => {
           );
         })()}
 
-        {testSeries.length > 0 && (
-          <section className="animate-fade-in-up" style={{ animationDelay: '0.25s' }}>
-            <div className="flex justify-between items-center mb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-1.5 h-7 bg-gradient-to-b from-primary to-primary-600 rounded-full shadow-sm"></div>
-                <div>
-                  <h2 className="section-title">Popular Test Series</h2>
-                  <p className="section-subtitle">Practice & improve your score</p>
-                </div>
-              </div>
-              <button onClick={() => navigate('/mock-tests')} className="btn-primary text-xs px-4 py-1.5 flex items-center gap-1 hover:gap-2 transition-all duration-200 active:scale-[0.97]">
-                View All
-                <span className="material-symbols-rounded text-sm">arrow_forward</span>
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {testSeries.slice(0, 4).map((ts: any, i: number) => (
-                <div
-                  key={ts._id || ts.id || i}
-                  onClick={() => navigate('/mock-tests')}
-                  className="card-premium p-3 rounded-2xl border border-gray-100/50 cursor-pointer hover:-translate-y-0.5 transition-all duration-200 group"
-                >
-                  <div className="w-12 h-12 bg-gradient-to-br from-primary-100 to-primary-200 rounded-2xl flex items-center justify-center mb-3 group-hover:from-primary-200 group-hover:to-primary-300 transition-all duration-200">
-                    <span className="material-symbols-rounded text-primary text-xl">quiz</span>
-                  </div>
-                  <h4 className="font-medium text-sm text-gray-800 leading-tight line-clamp-2">{ts.title || ts.name || 'Test Series'}</h4>
-                  <div className="flex items-center gap-1.5 mt-2">
-                    <span className="material-symbols-rounded text-[12px] text-gray-400">subject</span>
-                    <span className="text-[11px] text-gray-400">{ts.subject || ts.category || 'General'}</span>
-                  </div>
-                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100/80">
-                    <span className="text-[11px] text-gray-400 flex items-center gap-1">
-                      <span className="material-symbols-rounded text-[12px]">description</span>
-                      {ts.totalTests || ts.tests?.length || 0} Tests
-                    </span>
-                    {(ts.price !== undefined && ts.price !== null) && (
-                      <span className="text-xs font-medium text-primary bg-primary-50 px-2.5 py-0.5 rounded-full">
-                        {ts.price === 0 ? 'Free' : `₹${ts.price}`}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {examDocs.length > 0 && (
-          <section className="animate-fade-in-up" style={{ animationDelay: '0.28s' }}>
-            <div className="flex justify-between items-center mb-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-1.5 h-7 bg-gradient-to-b from-teal-500 to-teal-700 rounded-full shadow-sm"></div>
-                <div>
-                  <h2 className="section-title text-sm">Exam Documents</h2>
-                  <p className="section-subtitle">Important PDFs & Materials</p>
-                </div>
-              </div>
-              <button onClick={() => navigate('/ebook-notes')} className="btn-primary text-xs px-4 py-1.5 flex items-center gap-1 hover:gap-2 transition-all duration-200 active:scale-[0.97] bg-teal-600 border-teal-500">
-                View All
-                <span className="material-symbols-rounded text-sm">arrow_forward</span>
-              </button>
-            </div>
-            <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2">
-              {examDocs.slice(0, 5).map((doc: any, i: number) => (
-                <div
-                  key={doc._id || doc.id || i}
-                  onClick={() => doc.fileUrl && window.open(getPdfUrl(doc.fileUrl), '_blank')}
-                  className="w-36 flex-shrink-0 card-premium p-2.5 rounded-2xl border border-gray-100/50 cursor-pointer hover:shadow-lg transition-all"
-                >
-                  <div className="w-9 h-9 bg-teal-50 rounded-xl flex items-center justify-center mb-2.5">
-                    <span className="material-symbols-rounded text-teal-600 text-lg">description</span>
-                  </div>
-                  <h4 className="font-medium text-[11px] text-navy line-clamp-2 h-7">{doc.title}</h4>
-                  <p className="text-[8px] text-gray-400 mt-1.5 uppercase font-semibold tracking-wider">{doc.exam || 'General'}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
         {courses.length > 0 && (
-          <section className="animate-fade-in-up" style={{ animationDelay: '0.3s' }}>
+          <section className="animate-fade-in-up" style={{ animationDelay: '0.22s' }}>
             <div className="flex justify-between items-center mb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-1.5 h-7 bg-gradient-to-b from-primary to-primary-600 rounded-full shadow-sm"></div>
@@ -1073,6 +993,86 @@ const Home: React.FC = () => {
                   </div>
                 );
               })}
+            </div>
+          </section>
+        )}
+
+        {testSeries.length > 0 && (
+          <section className="animate-fade-in-up" style={{ animationDelay: '0.25s' }}>
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-1.5 h-7 bg-gradient-to-b from-primary to-primary-600 rounded-full shadow-sm"></div>
+                <div>
+                  <h2 className="section-title">Popular Test Series</h2>
+                  <p className="section-subtitle">Practice & improve your score</p>
+                </div>
+              </div>
+              <button onClick={() => navigate('/mock-tests')} className="btn-primary text-xs px-4 py-1.5 flex items-center gap-1 hover:gap-2 transition-all duration-200 active:scale-[0.97]">
+                View All
+                <span className="material-symbols-rounded text-sm">arrow_forward</span>
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {testSeries.slice(0, 4).map((ts: any, i: number) => (
+                <div
+                  key={ts._id || ts.id || i}
+                  onClick={() => navigate('/mock-tests')}
+                  className="card-premium p-3 rounded-2xl border border-gray-100/50 cursor-pointer hover:-translate-y-0.5 transition-all duration-200 group"
+                >
+                  <div className="w-12 h-12 bg-gradient-to-br from-primary-100 to-primary-200 rounded-2xl flex items-center justify-center mb-3 group-hover:from-primary-200 group-hover:to-primary-300 transition-all duration-200">
+                    <span className="material-symbols-rounded text-primary text-xl">quiz</span>
+                  </div>
+                  <h4 className="font-medium text-sm text-gray-800 leading-tight line-clamp-2">{ts.title || ts.name || 'Test Series'}</h4>
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <span className="material-symbols-rounded text-[12px] text-gray-400">subject</span>
+                    <span className="text-[11px] text-gray-400">{ts.subject || ts.category || 'General'}</span>
+                  </div>
+                  <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100/80">
+                    <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                      <span className="material-symbols-rounded text-[12px]">description</span>
+                      {ts.totalTests || ts.tests?.length || 0} Tests
+                    </span>
+                    {(ts.price !== undefined && ts.price !== null) && (
+                      <span className="text-xs font-medium text-primary bg-primary-50 px-2.5 py-0.5 rounded-full">
+                        {ts.price === 0 ? 'Free' : `₹${ts.price}`}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {examDocs.length > 0 && (
+          <section className="animate-fade-in-up" style={{ animationDelay: '0.28s' }}>
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-1.5 h-7 bg-gradient-to-b from-teal-500 to-teal-700 rounded-full shadow-sm"></div>
+                <div>
+                  <h2 className="section-title text-sm">Exam Documents</h2>
+                  <p className="section-subtitle">Important PDFs & Materials</p>
+                </div>
+              </div>
+              <button onClick={() => navigate('/ebook-notes')} className="btn-primary text-xs px-4 py-1.5 flex items-center gap-1 hover:gap-2 transition-all duration-200 active:scale-[0.97] bg-teal-600 border-teal-500">
+                View All
+                <span className="material-symbols-rounded text-sm">arrow_forward</span>
+              </button>
+            </div>
+            <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2">
+              {examDocs.slice(0, 5).map((doc: any, i: number) => (
+                <div
+                  key={doc._id || doc.id || i}
+                  onClick={() => doc.fileUrl && window.open(getPdfUrl(doc.fileUrl), '_blank')}
+                  className="w-36 flex-shrink-0 card-premium p-2.5 rounded-2xl border border-gray-100/50 cursor-pointer hover:shadow-lg transition-all"
+                >
+                  <div className="w-9 h-9 bg-teal-50 rounded-xl flex items-center justify-center mb-2.5">
+                    <span className="material-symbols-rounded text-teal-600 text-lg">description</span>
+                  </div>
+                  <h4 className="font-medium text-[11px] text-navy line-clamp-2 h-7">{doc.title}</h4>
+                  <p className="text-[8px] text-gray-400 mt-1.5 uppercase font-semibold tracking-wider">{doc.exam || 'General'}</p>
+                </div>
+              ))}
             </div>
           </section>
         )}
