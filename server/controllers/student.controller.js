@@ -181,12 +181,32 @@ export const updateStudent = async (req, res) => {
     console.log('PUT /api/students/:id - Updating student:', req.params.id, req.body);
     const { _id, ...body } = req.body;
 
+    const isAdmin = req.admin || req.user?.isAdmin || req.user?.role === 'admin' || req.user?.role === 'superadmin';
+
+    // Phase 1: Field-level Allowlist for Student self-updates
+    const studentSafeFields = [
+      'name', 'phone', 'email', 'dob', 'city', 'state', 'district', 'gender',
+      'whatsAppNumber', 'alternateNumber', 'alternateWhatsAppNumber', 'class', 'target',
+      'fatherName', 'motherName', 'fullAddress', 'address', 'password',
+      'previousClass', 'schoolName', 'marksPercentage', 'passingYear', 'profilePhoto',
+      'notes', 'tag'
+    ];
+
+    // Block non-admins from updating sensitive fields
+    if (!isAdmin) {
+      Object.keys(body).forEach(field => {
+        if (!studentSafeFields.includes(field)) {
+          delete body[field];
+        }
+      });
+    }
+
     const updateData = {};
     const stringFields = [
       'name', 'phone', 'userId', 'highQualification', 'dob', 'city', 'state', 
       'course', 'status', 'registrationType', 'registrationDate', 'district', 
       'gender', 'whatsAppNumber', 'alternateNumber', 'alternateWhatsAppNumber', 
-      'class', 'notes', 'paymentStatus', 'banReason'
+      'class', 'notes', 'paymentStatus', 'banReason', 'target', 'tag'
     ];
 
     stringFields.forEach(field => {
@@ -203,19 +223,19 @@ export const updateStudent = async (req, res) => {
       updateData.email = (body.email && body.email.trim()) ? body.email.toLowerCase().trim() : null;
     }
 
-    if (body.isBanned !== undefined) updateData.isBanned = body.isBanned;
+    if (isAdmin && body.isBanned !== undefined) updateData.isBanned = body.isBanned;
 
     // Handle Nested Objects (Preserve existing data if not provided)
     if (body.fatherName !== undefined) updateData['admission.fatherName'] = body.fatherName.trim();
     if (body.motherName !== undefined) updateData['admission.motherName'] = body.motherName.trim();
-    if (body.admissionDate !== undefined) updateData['admission.admissionDate'] = body.admissionDate;
-    if (body.batchTiming !== undefined) updateData['admission.batchTiming'] = body.batchTiming;
+    if (isAdmin && body.admissionDate !== undefined) updateData['admission.admissionDate'] = body.admissionDate;
+    if (isAdmin && body.batchTiming !== undefined) updateData['admission.batchTiming'] = body.batchTiming;
     if (body.fullAddress !== undefined || body.address !== undefined) {
-      updateData['admission.fullAddress'] = body.fullAddress || body.address;
+      updateData['admission.fullAddress'] = (body.fullAddress || body.address).trim();
     }
 
-    if (body.totalFees !== undefined) updateData['fees.totalFees'] = Number(body.totalFees);
-    if (body.paidAmount !== undefined) updateData['fees.paidAmount'] = Number(body.paidAmount);
+    if (isAdmin && body.totalFees !== undefined) updateData['fees.totalFees'] = Number(body.totalFees);
+    if (isAdmin && body.paidAmount !== undefined) updateData['fees.paidAmount'] = Number(body.paidAmount);
     if (body.totalFees !== undefined || body.paidAmount !== undefined) {
       // Logic for remaining amount needs careful handling if only one is updated
       // but for simplicity in partial updates, we'll let Mongoose handle specific paths

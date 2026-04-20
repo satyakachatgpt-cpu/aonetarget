@@ -10,8 +10,8 @@ const router = express.Router();
  * Mounted at /api via app.js
  */
 
-// Global Verify (Standard Header Check)
-router.get('/admin/verify', adminController.verifyAdmin);
+// Global Verify (Requires Admin Middleware)
+router.get('/admin/verify', adminMiddleware, adminController.verifyAdmin);
 
 // Security Dashboard (Direct matches for frontend)
 router.post('/security-admin/ban-user', adminMiddleware, banStudent);

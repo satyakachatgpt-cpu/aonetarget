@@ -22,8 +22,8 @@ const router = express.Router();
 router.get('/settings', getSettings);
 router.put('/settings', adminMiddleware, updateSettings);
 
-// Dashboard
-router.get('/dashboard/stats', getDashboardStats);
+// Dashboard (Requires Admin Middleware)
+router.get('/dashboard/stats', adminMiddleware, getDashboardStats);
 
 // Infrastructure (Standardized for /api mount)
 router.get('/ping', ping);

@@ -19,32 +19,24 @@ import AddTestPDFDrawer from "./AddTestPDFDrawer";
 import SubjectiveTestDrawer from "./SubjectiveTestDrawer";
 import AddTestPDFBulkDrawer from "./AddTestPDFBulkDrawer";
 import ViewFormatModal from "./ViewFormatModal";
-import AddQuestionDrawer from "./AddQuestionDrawer";
+import AddQuestionEditorDrawer from "./tests/AddQuestionEditorDrawer";
 
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import * as pdfjsLib from "pdfjs-dist";
+import { parseFile } from "../../utils/testUtils/questionParser";
+import { formatTime, getCourseName, testSortComparator } from "../../utils/testUtils/testHelpers";
 import { generateDOCX } from "./DOCXGenerator";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import TestsResultsTab from "./tests/TestsResultsTab";
+import ReportedQuestionsTab from "./tests/ReportedQuestionsTab";
+import TestsListTab from "./tests/TestsListTab";
+import TestsBulkUploaderTab from "./tests/TestsBulkUploaderTab";
+import QuestionEditorHeader from "./tests/QuestionEditorHeader";
+import QuestionEditorToolbar from "./tests/QuestionEditorToolbar";
+import QuestionEditorList from "./tests/QuestionEditorList";
+import QuestionSortModal from "./tests/QuestionSortModal";
 
-// Configure PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || "5.5.207"}/build/pdf.worker.min.mjs`;
+// pdfjsLib worker configured in @/utils/testUtils/questionParser
 
 const tabs = ["Tests", "Results", "Bulk Uploader", "Reported Questions"];
 const detailSubTabs = [
@@ -290,49 +282,6 @@ const CustomDropdown = ({
   );
 };
 
-const SortableQuestionItem = ({ id, question, index }: any) => {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    zIndex: isDragging ? 1000 : "auto",
-    opacity: isDragging ? 0.5 : 1,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      className={`flex items-center gap-6 p-4 border rounded-xl bg-white transition-all group ${isDragging ? "border-primary-400 shadow-xl scale-[1.02] cursor-grabbing" : "border-gray-100 hover:border-gray-200 hover:shadow-sm cursor-move"}`}
-      {...attributes}
-      {...listeners}
-    >
-      <div className="flex items-center justify-center text-gray-300 group-hover:text-gray-400 transition-colors">
-        <span className="material-symbols-outlined text-[20px]">
-          drag_indicator
-        </span>
-      </div>
-      <div className="flex-1 min-w-0 text-left">
-        <p className="text-[14px] font-bold text-gray-700 truncate">
-          {index + 1}. {question.questionEn || "No question text available"}
-        </p>
-        {question.subject && (
-          <span className="text-[10px] text-primary-500 font-bold uppercase tracking-wider">
-            {question.subject}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-};
 
 const Tests: React.FC<Props> = ({ showToast }) => {
   const { "*": routeId } = useParams();
@@ -419,381 +368,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     }));
   };
 
-  async function parseFile(file: File): Promise<{ questions: any[], extractedImages: string[] }> {
-    const extension = file.name.split(".").pop()?.toLowerCase();
-    const arrayBuffer = await file.arrayBuffer();
+  // parseFile and extractQuestionsFromText moved to @/utils/testUtils/questionParser
 
-    if (extension === "docx") {
-      try {
-        const result = await mammoth.extractRawText({ arrayBuffer });
-        return { questions: extractQuestionsFromText(result.value), extractedImages: [] };
-      } catch (err) {
-        console.error("DOCX parsing error:", err);
-        return { questions: [], extractedImages: [] };
-      }
-    } else if (extension === "xlsx" || extension === "xls") {
-      try {
-        const workbook = XLSX.read(arrayBuffer);
-        const firstSheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[firstSheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-        const parsedQuestions = jsonData.map((row: any, idx) => ({
-          id: idx + 1,
-          questionEn:
-            row.Question || row.question || row.text || "No question text",
-          questionHi: row.QuestionHi || row.question_hindi || "",
-          type: "Multiple Choice",
-          options: [
-            row.OptionA || row.A || row.option1 || "",
-            row.OptionB || row.B || row.option2 || "",
-            row.OptionC || row.C || row.option3 || "",
-            row.OptionD || row.D || row.option4 || "",
-          ].filter(Boolean),
-          correctAnswer:
-            row.CorrectAnswer || row.correct || row.Answer || row.answer,
-          solution: row.Solution || row.solution || row.Explanation || "",
-          positiveMarks: Number(row.Marks || row.marks || 4),
-          negativeMarks: Number(row.Negative || row.negative || 1),
-        }));
-        
-        return { questions: parsedQuestions, extractedImages: [] };
-      } catch (err) {
-        console.error("Excel parsing error:", err);
-        return { questions: [], extractedImages: [] };
-      }
-    } else if (extension === "pdf") {
-      try {
-        console.log("Starting PDF parsing for:", file.name);
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        let fullText = "";
-        // pageMap: stores start char index per page for question-to-page mapping
-        const pageMap: { startIndex: number; pageNumber: number; embeddedImages: { dataUrl: string; y: number }[]; pageDataUrl: string }[] = [];
-        const allExtractedImages: string[] = [];
-
-        for (let i = 1; i <= pdf.numPages; i++) {
-          const page = await pdf.getPage(i);
-          const textContent = await page.getTextContent();
-
-          let lastY = -1;
-          let pageText = "";
-
-          // Use Y coordinate to detect new lines in PDF
-          for (const item of textContent.items as any[]) {
-            const currentY = item.transform[5];
-            if (lastY !== -1 && Math.abs(currentY - lastY) > 5) {
-              pageText += "\n";
-            }
-            pageText += item.str + " ";
-            lastY = currentY;
-          }
-
-          // Extract embedded images (XObjects) from PDF page using operator list
-          const embeddedImages: { dataUrl: string; y: number }[] = [];
-          try {
-            const opList = await (page as any).getOperatorList();
-            const commonObjs = (page as any).commonObjs;
-            const objs = (page as any).objs;
-
-            // Track current transform matrix to get image Y position
-            const fnArray = opList.fnArray as number[];
-            const argsArray = opList.argsArray as any[][];
-            let currentY = 0;
-
-            for (let opIdx = 0; opIdx < fnArray.length; opIdx++) {
-              const fn = fnArray[opIdx];
-              const args = argsArray[opIdx];
-
-              // OPS.transform = 12, captures current matrix [a,b,c,d,e,f] → f is Y
-              if (fn === 12 && args && args.length >= 6) {
-                currentY = args[5];
-              }
-
-              // OPS.paintImageXObject = 85 or paintImageMaskXObject = 84
-              if ((fn === 85 || fn === 84) && args && args[0]) {
-                const imgName = args[0];
-                // Try to get image from page objects
-                const imgObj = objs.has && objs.has(imgName) ? objs.get(imgName) :
-                               (commonObjs.has && commonObjs.has(imgName) ? commonObjs.get(imgName) : null);
-
-                if (imgObj && imgObj.data && imgObj.width && imgObj.height) {
-                  try {
-                    // Render this image to a small canvas
-                    const imgCanvas = document.createElement('canvas');
-                    imgCanvas.width = imgObj.width;
-                    imgCanvas.height = imgObj.height;
-                    const imgCtx = imgCanvas.getContext('2d');
-                    if (imgCtx) {
-                      const imageData = imgCtx.createImageData(imgObj.width, imgObj.height);
-                      // pdfjs image data is RGBA or grayscale — handle both
-                      if (imgObj.data.length === imgObj.width * imgObj.height * 4) {
-                        imageData.data.set(imgObj.data);
-                      } else if (imgObj.data.length === imgObj.width * imgObj.height) {
-                        // Grayscale → RGBA
-                        for (let px = 0; px < imgObj.width * imgObj.height; px++) {
-                          const v = imgObj.data[px];
-                          imageData.data[px * 4] = v;
-                          imageData.data[px * 4 + 1] = v;
-                          imageData.data[px * 4 + 2] = v;
-                          imageData.data[px * 4 + 3] = 255;
-                        }
-                      } else if (imgObj.data.length === imgObj.width * imgObj.height * 3) {
-                        // RGB → RGBA
-                        for (let px = 0; px < imgObj.width * imgObj.height; px++) {
-                          imageData.data[px * 4] = imgObj.data[px * 3];
-                          imageData.data[px * 4 + 1] = imgObj.data[px * 3 + 1];
-                          imageData.data[px * 4 + 2] = imgObj.data[px * 3 + 2];
-                          imageData.data[px * 4 + 3] = 255;
-                        }
-                      }
-                      imgCtx.putImageData(imageData, 0, 0);
-                      // Only keep images large enough to be a real diagram (skip tiny icons/bullets)
-                      if (imgObj.width > 60 && imgObj.height > 60) {
-                        const dataUrl = imgCanvas.toDataURL('image/jpeg', 0.75);
-                        embeddedImages.push({
-                          dataUrl,
-                          y: currentY
-                        });
-                        if (!allExtractedImages.includes(dataUrl)) {
-                          allExtractedImages.push(dataUrl);
-                        }
-                      }
-                    }
-                  } catch (imgErr) {
-                    // skip this image silently
-                  }
-                }
-              }
-            }
-          } catch (opErr) {
-            console.warn(`Could not extract images from page ${i}:`, opErr);
-          }
-
-          // Normalize page text to ensure indexing consistency with extractQuestionsFromText
-          const normalizedPageText = pageText.replace(/\r\n/g, "\n").replace(/[ \t]+/g, " ");
-
-          // Render page to a small compressed JPEG for diagram-option questions
-          // (scale 1.0, JPEG 50% quality → ~100-200KB per page)
-          let pageDataUrl = "";
-          try {
-            const viewport = page.getViewport({ scale: 1.0 });
-            const renderCanvas = document.createElement('canvas');
-            renderCanvas.width = viewport.width;
-            renderCanvas.height = viewport.height;
-            const renderCtx = renderCanvas.getContext('2d');
-            if (renderCtx) {
-              await (page as any).render({ canvasContext: renderCtx, viewport, canvas: renderCanvas }).promise;
-              pageDataUrl = renderCanvas.toDataURL('image/jpeg', 0.50);
-            }
-          } catch (renderErr) {
-            console.warn(`Could not render page ${i} for diagram detection:`, renderErr);
-          }
-          
-          pageMap.push({
-            startIndex: fullText.length,
-            pageNumber: i,
-            embeddedImages,
-            pageDataUrl
-          });
-          fullText += normalizedPageText + "\n\n";
-        }
-
-        const totalImgs = pageMap.reduce((acc, p) => acc + p.embeddedImages.length, 0);
-        console.log(`Extracted PDF text length: ${fullText.length}, Embedded images found: ${totalImgs}`);
-        const questions = extractQuestionsFromText(fullText, pageMap);
-        console.log("Extracted questions count:", questions.length);
-        return { questions, extractedImages: allExtractedImages };
-      } catch (err) {
-        console.error("PDF parsing error:", err);
-        return { questions: [], extractedImages: [] };
-      }
-    }
-    return { questions: [], extractedImages: [] };
-  }
-
-  function extractQuestionsFromText(text: string, pageMap: any[] = []): any[] {
-    const questions: any[] = [];
-
-    // Normalize text: handle various newline formats and multi-spaces
-    // NOTE: This normalization matches the one used in parseFile for index consistency
-    const normalizedText = text.replace(/\r\n/g, "\n").replace(/[ \t]+/g, " ");
-
-    // Split into question blocks strictly by "1. ", "2. " etc at start of line
-    const qSplitRegex = /^\s*(\d+)[\.|\)]\s+/gm;
-    let match;
-    const blockInfos: { start: number; text: string }[] = [];
-
-    while ((match = qSplitRegex.exec(normalizedText)) !== null) {
-      const start = match.index;
-      if (blockInfos.length > 0) {
-        blockInfos[blockInfos.length - 1].text = normalizedText.substring(blockInfos[blockInfos.length - 1].start, start);
-      }
-      blockInfos.push({ start, text: "" });
-    }
-
-    if (blockInfos.length > 0) {
-      blockInfos[blockInfos.length - 1].text = normalizedText.substring(blockInfos[blockInfos.length - 1].start);
-    }
-
-    const validBlockInfos = blockInfos.filter(b => b.text.trim().length > 0);
-    const blocks = validBlockInfos.map(b => b.text);
-    const blockStarts = validBlockInfos.map(b => b.start);
-
-    console.log(`Split text into ${blocks.length} potential question blocks.`);
-
-    for (let bIdx = 0; bIdx < blocks.length; bIdx++) {
-      const block = blocks[bIdx];
-
-      // Filtering per Problem 1
-      const firstLine = block.split('\n')[0];
-      if (/Unit-|Assignment-|ELECTRONIC DEVICES|CHAPTER/i.test(firstLine)) continue;
-      
-      const hasOptions = /\([a-dA-D]\)|[A-D][\.|\)]\s/i.test(block);
-      if (!hasOptions) continue;
-
-      // Find options: (A), A., A), [A], Option A:
-      const optionMarkerRegex =
-        /(?:\n|[ \t])(?:\(?([A-Da-d])[\s\).\]:]|Option\s*([A-Da-d])[\s.:])(?!\w)/gi;
-
-      let matchOpt;
-      const optionMatches = [];
-      const tempGlobalRegex = new RegExp(optionMarkerRegex);
-      while ((matchOpt = tempGlobalRegex.exec(block)) !== null) {
-        optionMatches.push({
-          index: matchOpt.index,
-          marker: matchOpt[0],
-          label: (matchOpt[1] || matchOpt[2]).toUpperCase(),
-        });
-      }
-
-      let questionPart = "";
-      let optionsArray: string[] = [];
-      let answer = "A";
-      let solution = "";
-
-      if (optionMatches.length > 0) {
-        questionPart = block.substring(0, optionMatches[0].index).trim();
-        for (let i = 0; i < optionMatches.length; i++) {
-          const start = optionMatches[i].index + optionMatches[i].marker.length;
-          const end = i + 1 < optionMatches.length ? optionMatches[i + 1].index : block.length;
-          let optText = block.substring(start, end).trim();
-
-          const ansMatch = optText.match(/(?:Ans(?:wer)?|Correct|उत्तर)[:.\s]*([A-D])/i);
-          if (ansMatch) {
-            answer = ansMatch[1].toUpperCase();
-            optText = optText.substring(0, ansMatch.index).trim();
-          }
-
-          const solMatch = optText.match(/(?:Sol(?:ution)?|Expl(?:anation)?|हल)[:.\s]*([\s\S]*)/i);
-          if (solMatch) {
-            solution = solMatch[1].trim();
-            optText = optText.substring(0, solMatch.index).trim();
-          }
-          if (optText) optionsArray.push(optText);
-        }
-      } else {
-        questionPart = block.trim();
-      }
-
-      let questionEn = questionPart.replace(/^\s*\d+[\.|\)]\s*/i, "").trim();
-      let questionHi = "";
-
-      const hindiRegex = /[\u0900-\u097F]/;
-      if (hindiRegex.test(questionEn)) {
-        const lines = questionEn.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
-        if (lines.length >= 2) {
-          const hasHindi0 = hindiRegex.test(lines[0]);
-          const hasHindi1 = hindiRegex.test(lines[1]);
-          if (hasHindi0 && !hasHindi1) {
-            questionHi = lines[0];
-            questionEn = lines.slice(1).join(" ");
-          } else if (!hasHindi0 && hasHindi1) {
-            questionEn = lines[0];
-            questionHi = lines.slice(1).join(" ");
-          } else if (hasHindi0 && hasHindi1) {
-            questionHi = questionEn;
-            questionEn = "";
-          }
-        } else if (hindiRegex.test(questionEn)) {
-          questionHi = questionEn;
-          questionEn = "";
-        }
-      }
-
-      if (answer === "A") {
-        const globalAns = block.match(/(?:Ans(?:wer)?|Correct|उत्तर)[:.\s]*([A-D])\b/i);
-        if (globalAns) answer = globalAns[1].toUpperCase();
-      }
-
-      const globalSol = block.match(/(?:Sol(?:ution)?|Expl(?:anation)?|हल)[:.\s]*([\s\S]{5,})/i);
-      if (globalSol) solution = globalSol[1].trim();
-
-      // ==== Diagram-Option Detection ====
-      // If < 2 options have meaningful text (>5 chars), options are likely diagrams
-      const realTextOptions = optionsArray.filter(o => o.trim().replace(/^[a-d][\s\)\.:]/i, '').trim().length > 5);
-      const hasDiagramOptions = realTextOptions.length < 2;
-
-      // Find page mapping for diagram association
-      let qPageNum = 1;
-      let questionImage = "";
-      let hasDiagramOptionsFlag = false;
-
-      if (pageMap && pageMap.length > 0) {
-        const startIdx = blockStarts[bIdx];
-        let matchedPage: any = null;
-        for (const p of pageMap) {
-          if (startIdx >= p.startIndex) {
-            qPageNum = p.pageNumber;
-            matchedPage = p;
-          } else {
-            break;
-          }
-        }
-
-        if (matchedPage) {
-          const questionText = (questionEn + questionHi + block).toLowerCase();
-          const hasFigureRef = /fig(ure)?[\s.]*\d|diagram|circuit|graph|wave|shown below|given below|following figure|refer to|arrangement/i.test(questionText);
-
-          if (hasDiagramOptions) {
-            // Options are diagrams → use compressed page image so student can see the diagrams
-            questionImage = matchedPage.pageDataUrl || "";
-            hasDiagramOptionsFlag = true;
-          } else if (matchedPage.embeddedImages && matchedPage.embeddedImages.length > 0) {
-            // Text options but question references a figure → attach embedded image
-            if (hasFigureRef) {
-              questionImage = matchedPage.embeddedImages[0].dataUrl;
-            } else if (matchedPage.embeddedImages.length === 1) {
-              questionImage = matchedPage.embeddedImages[0].dataUrl;
-            }
-          }
-        }
-      }
-
-      // For diagram-option questions: replace fake placeholders with clean labels
-      const finalOptions = hasDiagramOptionsFlag
-        ? ["A", "B", "C", "D"]
-        : (optionsArray.length >= 2 ? optionsArray.slice(0, 4) : ["Option A", "Option B", "Option C", "Option D"]);
-
-      if (questionEn || questionHi) {
-        questions.push({
-          id: questions.length + 1,
-          questionEn: questionEn || questionHi,
-          questionHi: questionEn ? questionHi : "",
-          type: "Multiple Choice",
-          options: finalOptions,
-          correctAnswer: answer,
-          positiveMarks: 4,
-          negativeMarks: -1,
-          solution: solution || "Extracted from document",
-          pageNumber: qPageNum,
-          hasDiagramOptions: hasDiagramOptionsFlag,
-          questionImage,
-        });
-      }
-    }
-
-    return questions;
-  }
   const [viewingFormatModal, setViewingFormatModal] = useState<string | null>(
     null,
   );
@@ -872,33 +448,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const [showSortModal, setShowSortModal] = useState(false);
 
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 5,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    }),
-  );
-
-  const handleDragEnd = (event: DragEndEvent) => {
-    const { active, over } = event;
-
-    if (over && active.id !== over.id) {
-      setEditorQuestions((items) => {
-        const oldIndex = items.findIndex(
-          (i) => (i.id || i._id) === active.id,
-        );
-        const newIndex = items.findIndex(
-          (i) => (i.id || i._id) === over.id,
-        );
-
-        return arrayMove(items, oldIndex, newIndex);
-      });
-    }
-  };
   // Results Tab States
   const [results, setResults] = useState<any[]>([]);
   const [resultFilters, setResultFilters] = useState({
@@ -1023,6 +572,87 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         <span key={i} dangerouslySetInnerHTML={{ __html: String(part) }} />
       );
     });
+  };
+
+  // Helper to render question diagram — handles both inline diagrams and diagram-option questions
+  const renderDiagram = (q: any, field: string = "question") => {
+    const dataUrl =
+      field === "question"
+        ? q.questionImage
+        : q.optionImages?.[field.charCodeAt(0) - 65] || "";
+
+    if (!dataUrl) {
+      return (
+        <div className="mt-2 text-center">
+          <button
+            onClick={() =>
+              setActiveImageAssignment({ questionId: q.id, field })
+            }
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 border-dashed transition-all ${activeImageAssignment?.questionId === q.id && activeImageAssignment?.field === field ? "border-amber-400 bg-amber-50 text-amber-700 animate-pulse" : "border-gray-200 text-gray-400 hover:border-black hover:text-black"}`}
+          >
+            <span className="material-symbols-outlined text-[16px]">
+              add_photo_alternate
+            </span>
+            <span className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
+              {activeImageAssignment?.questionId === q.id &&
+              activeImageAssignment?.field === field
+                ? "Select from Gallery"
+                : `Add ${field === "question" ? "Diagram" : `Image`}`}
+            </span>
+          </button>
+        </div>
+      );
+    }
+
+    const isPageLevel = field === "question" && q.hasDiagramOptions;
+
+    return (
+      <div
+        className={`mt-3 border rounded-xl overflow-hidden relative group ${isPageLevel ? "border-amber-200 bg-amber-50/40" : "border-blue-100 bg-blue-50/40"}`}
+      >
+        <div
+          className={`px-3 py-1.5 border-b flex items-center justify-between gap-1.5 ${isPageLevel ? "bg-amber-50 border-amber-200" : "bg-blue-50 border-blue-100"}`}
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[14px]">
+              {isPageLevel ? "schema" : "image"}
+            </span>
+            <span
+              className={`text-[10px] font-bold uppercase tracking-wider ${isPageLevel ? "text-amber-600" : "text-blue-500"}`}
+            >
+              {isPageLevel
+                ? "Options as Diagrams"
+                : field === "question"
+                  ? "Question Diagram"
+                  : `Option ${field} Image`}
+            </span>
+          </div>
+          <button
+            onClick={() => handleRemoveImage(q.id, field)}
+            className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700"
+          >
+            <span className="material-symbols-outlined text-[16px]">delete</span>
+          </button>
+        </div>
+        <div className="p-2 flex flex-col items-center">
+          <img
+            src={dataUrl}
+            alt="Diagram"
+            className={`w-full h-auto rounded-lg object-contain ${field === "question" ? "max-h-64" : "max-h-32"}`}
+            loading="lazy"
+          />
+          <button
+            onClick={() =>
+              setActiveImageAssignment({ questionId: q.id, field })
+            }
+            className="mt-2 text-[10px] font-bold text-gray-400 hover:text-black flex items-center gap-1 transition-colors"
+          >
+            <span className="material-symbols-outlined text-[14px]">sync</span>
+            Change
+          </button>
+        </div>
+      </div>
+    );
   };
 
   const handleSaveQuestion = async (data?: any) => {
@@ -1337,21 +967,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     }
   };
 
-  const getCourseName = (test: any) => {
-    if (test.courseName) return test.courseName;
-    if (test.courseId) {
-      const course = courses.find(
-        (c) => c.id === test.courseId || (c as any)._id === test.courseId,
-      );
-      if (course) return course.name || course.title;
-      const parentSeries = tests.find(
-        (t) => t.id === test.courseId || (t as any)._id === test.courseId,
-      );
-      if (parentSeries) return parentSeries.name || parentSeries.title;
-      return test.courseId;
-    }
-    return test.course || "Unlinked";
-  };
+  // getCourseName and formatTime moved to @/utils/testUtils/testHelpers
 
   const filteredTests = tests.filter((test) => {
     const matchesSearch =
@@ -1369,11 +985,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     const isMainSeries = test.isSeries === true;
 
     return matchesSearch && matchesCourse && matchesStatus && isMainSeries;
-  }).sort((a, b) => {
-    const sortA = parseFloat(String(a.sortBy || "0")) || 0;
-    const sortB = parseFloat(String(b.sortBy || "0")) || 0;
-    return sortB - sortA;
-  });
+  }).sort(testSortComparator);
 
   const totalPages = Math.ceil(filteredTests.length / itemsPerPage);
   const paginatedTests = filteredTests.slice(
@@ -1700,6 +1312,234 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     }
   }, [reportedSearchQuery, reportedFilters, reportedPageSize, activeTab]);
 
+  const handleBulkUploadFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null;
+    if (file) {
+      setBulkUploadData({
+        ...bulkUploadData,
+        file,
+        parsedQuestions: [],
+      });
+      setIsParsing(true);
+      showToast(`Preparing to parse ${file.name}...`, "success");
+      try {
+        const { questions, extractedImages } = await parseFile(file);
+        setBulkUploadData((prev) => ({
+          ...prev,
+          file,
+          parsedQuestions: questions,
+          extractedImages: extractedImages || [],
+        }));
+        if (questions.length === 0) {
+          showToast(
+            "No questions could be extracted. Please check the document format.",
+            "error",
+          );
+        } else {
+          showToast(
+            `Successfully extracted ${questions.length} questions and ${extractedImages?.length || 0} images!`,
+            "success",
+          );
+        }
+      } catch (err) {
+        console.error("File parsing error:", err);
+        showToast(
+          "Error parsing file. Ensure it is a valid document.",
+          "error",
+        );
+      } finally {
+        setIsParsing(false);
+      }
+    }
+    if (e.target) e.target.value = "";
+  };
+
+  const handleBulkUploadProceed = async () => {
+    const testId =
+      bulkUploadData.testTitle ||
+      viewingQuestionEditor?.id ||
+      (viewingQuestionEditor as any)?._id;
+    if (!bulkUploadData.testSeries && !viewingQuestionEditor) {
+      showToast("Please select Test Series", "error");
+      return;
+    }
+    if (!testId) {
+      showToast("Please select Test Title", "error");
+      return;
+    }
+    if (
+      !bulkUploadData.file ||
+      (bulkUploadData.parsedQuestions || []).length === 0
+    ) {
+      showToast(
+        "No questions to upload. Please parse a file first.",
+        "error",
+      );
+      return;
+    }
+
+    try {
+      // 1. Fetch current questions for duplicate check and limit enforcement
+      const existingQuestions =
+        await testsAPI.getQuestions(testId);
+      const existingTexts = new Set(
+        existingQuestions.map((q: any) =>
+          (q.questionEn || q.question || "").trim().toLowerCase(),
+        ),
+      );
+
+      // Get the limit for this test
+      const targetTestMatch =
+        tests.find((t) => (t.id || (t as any)._id) === testId) ||
+        detailTests.find(
+          (t) => (t.id || (t as any)._id) === testId,
+        );
+      const limit = targetTestMatch?.noOfQuestions || 0;
+      const currentCount = existingQuestions.length;
+
+      if (limit > 0 && currentCount >= limit) {
+        showToast(
+          `Test already has ${currentCount} questions. Limit is ${limit}.`,
+          "error",
+        );
+        return;
+      }
+
+      // 2. Prepare payload - Standardization to displayOptions
+      const uploadBase64Image = async (base64Str: string) => {
+        if (!base64Str || !base64Str.startsWith("data:image")) return base64Str;
+        try {
+          const r = await fetch("/api/v2/upload/image/base64", {
+            method: "POST",
+            headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
+            body: JSON.stringify({ image: base64Str }),
+          });
+          if (!r.ok) return base64Str;
+          const data = await r.json();
+          return data.url || base64Str;
+        } catch (e) {
+          return base64Str;
+        }
+      };
+
+      let filteredList = (bulkUploadData.parsedQuestions || []).filter(
+        (q) => !existingTexts.has((q.questionEn || "").trim().toLowerCase()),
+      );
+
+      let questionsToUpload = await Promise.all(
+        filteredList.map(async (q) => {
+          const qImageUrl = await uploadBase64Image(q.questionImage || "");
+          
+          const processedOptions = await Promise.all(
+            (q.options || []).map(async (opt: string, i: number) => {
+              const optImageUrl = await uploadBase64Image(q.optionImages?.[i] || "");
+              return {
+                id: i + 1,
+                text: opt,
+                image: optImageUrl,
+                isCorrect: String(q.correctAnswer).toUpperCase() === String.fromCharCode(65 + i),
+              };
+            })
+          );
+
+          return {
+            testId: testId,
+            courseId:
+              bulkUploadData.testSeries ||
+              viewingTestSeries?.id ||
+              (viewingTestSeries as any)?._id,
+            questionEn: q.questionEn,
+            questionHi: q.questionHi || "",
+            questionImage: qImageUrl,
+            type: "Multiple Choice Question",
+            marks: q.positiveMarks || 4,
+            negative: q.negativeMarks || -1,
+            displayOptions: processedOptions,
+            hasDiagramOptions: q.hasDiagramOptions || false,
+            solution: {
+              heading: "Full Solution",
+              text: q.solution || "",
+            },
+            format: bulkUploadData.format || "default",
+          };
+        })
+      );
+
+
+      if (questionsToUpload.length === 0) {
+        showToast(
+          "All questions in this file already exist in the test.",
+          "error",
+        );
+        return;
+      }
+
+      // Enforce the limit
+      if (
+        limit > 0 &&
+        currentCount + questionsToUpload.length > limit
+      ) {
+        const allowed = limit - currentCount;
+        showToast(
+          `Only ${allowed} out of ${questionsToUpload.length} new questions will be uploaded as per the limit (${limit}).`,
+          "error",
+        );
+        questionsToUpload = questionsToUpload.slice(0, allowed);
+      }
+
+      showToast(
+        `Uploading ${questionsToUpload.length} new questions...`,
+        "success",
+      );
+
+      // 3. Bulk upload
+      const res = await fetch("/api/questions/bulk", {
+        method: "POST",
+        headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ questions: questionsToUpload }),
+      });
+
+      if (!res.ok) throw new Error("Upload failed");
+
+      invalidateCache("tests");
+      showToast(
+        `${questionsToUpload.length} questions uploaded successfully!`,
+        "success",
+      );
+
+      // 4. Update the test's viewFormat if needed
+      const formatVal = bulkUploadData.format || "default";
+      await fetch(`/api/tests/${testId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ viewFormat: formatVal }),
+      });
+
+      // 5. Cleanup and Sync
+      setBulkUploadData({
+        ...bulkUploadData,
+        file: null,
+        parsedQuestions: [],
+      });
+
+      // Sync the editor view if we are in it
+      const updatedQs = await testsAPI.getQuestions(testId);
+      setEditorQuestions(updatedQs);
+
+      // 6. Redirect to view results
+      if (targetTestMatch) {
+        setViewingQuestionEditor(targetTestMatch);
+        setActiveTab("Tests");
+      }
+      loadData();
+    } catch (err: any) {
+      showToast(
+        err.message || "Failed to upload questions",
+        "error",
+      );
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -1707,590 +1547,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       </div>
     );
   }
-
-  const renderResultsTab = () => {
-    const filteredResults = results.filter((res) => {
-      const matchSeries =
-        !resultFilters.series || res.testName.includes(resultFilters.series);
-      const matchTest =
-        !resultFilters.test || res.testName.includes(resultFilters.test);
-      return matchSeries && matchTest;
-    });
-
-    const totalResults = filteredResults.length;
-    const totalResultsPages = Math.ceil(totalResults / resultsPageSize);
-    const resultsStartIndex = (resultsCurrentPage - 1) * resultsPageSize;
-    const resultsEndIndex = Math.min(resultsStartIndex + resultsPageSize, totalResults);
-    const paginatedResults = filteredResults.slice(resultsStartIndex, resultsEndIndex);
-    const resultsShowingStart = totalResults === 0 ? 0 : resultsStartIndex + 1;
-
-
-    const formatTime = (seconds: number) => {
-      if (!seconds) return "-";
-      const h = Math.floor(seconds / 3600);
-      const m = Math.floor((seconds % 3600) / 60);
-      return h > 0 ? `${h}h ${m}m` : `${m}m ${seconds % 60}s`;
-    };
-
-    return (
-      <div className="space-y-6 animate-in fade-in duration-500">
-        {/* Search/Filter Card */}
-        <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 p-8">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 items-end">
-            <div className="space-y-2">
-              <label className="text-[12px] font-medium text-gray-500">
-                Test Series Title
-              </label>
-              <CustomDropdown
-                options={courses.map((c) => ({
-                  value: c.name || c.title || "",
-                  label: c.name || c.title || "",
-                }))}
-                value={resultFilters.series}
-                onChange={(val: any) =>
-                  setResultFilters({ ...resultFilters, series: val, test: "" })
-                }
-                placeholder="--Select--"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[12px] font-medium text-gray-500">
-                Test Subject
-              </label>
-              <CustomDropdown
-                options={[
-                  "General Knowledge",
-                  "Mathematics",
-                  "Reasoning",
-                  "English",
-                ].map((s) => ({ value: s, label: s }))}
-                value={resultFilters.subject}
-                onChange={(val: any) =>
-                  setResultFilters({ ...resultFilters, subject: val })
-                }
-                placeholder="Select Subject"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[12px] font-medium text-gray-500">
-                Test Type
-              </label>
-              <CustomDropdown
-                options={["Mock Test", "Practice Test", "Previous Year"].map(
-                  (t) => ({ value: t, label: t }),
-                )}
-                value={resultFilters.type}
-                onChange={(val: any) =>
-                  setResultFilters({ ...resultFilters, type: val })
-                }
-                placeholder="Test Title"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-[12px] font-medium text-gray-500">
-                Test Title
-              </label>
-              <CustomDropdown
-                options={tests
-                  .filter(
-                    (t) =>
-                      !resultFilters.series ||
-                      t.courseName === resultFilters.series ||
-                      t.courseId === resultFilters.series,
-                  )
-                  .map((t) => ({
-                    value: t.name || "Unnamed Test",
-                    label: t.name || "Unnamed Test",
-                  }))}
-                value={resultFilters.test}
-                onChange={(val: any) =>
-                  setResultFilters({ ...resultFilters, test: val })
-                }
-                placeholder="Select Test"
-              />
-            </div>
-          </div>
-          <div className="flex justify-end mt-6">
-            <button
-              onClick={() => showToast("Exporting data...")}
-              className="bg-[#5C67F2] text-white px-8 py-2.5 rounded-xl font-bold text-[14px] hover:bg-[#4B53D3] transition-colors flex items-center gap-2"
-            >
-              Export
-            </button>
-          </div>
-        </div>
-
-        {/* Results Table */}
-        <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead className="bg-[#F8F9FB] border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-4 w-12 text-center">
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4 rounded border-gray-300"
-                    />
-                  </th>
-                  <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                    <div className="flex items-center gap-1">
-                      S. NO.{" "}
-                      <span className="material-symbols-outlined text-[14px]">
-                        unfold_more
-                      </span>
-                    </div>
-                  </th>
-                  <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                    <div className="flex items-center gap-1">
-                      STUDENT DETAILS{" "}
-                      <span className="material-symbols-outlined text-[14px]">
-                        unfold_more
-                      </span>
-                    </div>
-                  </th>
-                  <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                    <div className="flex items-center gap-1">
-                      TIME TAKEN{" "}
-                      <span className="material-symbols-outlined text-[14px]">
-                        unfold_more
-                      </span>
-                    </div>
-                  </th>
-                  <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                    <div className="flex items-center gap-1">
-                      MARKS{" "}
-                      <span className="material-symbols-outlined text-[14px]">
-                        unfold_more
-                      </span>
-                    </div>
-                  </th>
-                  <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                    <div className="flex items-center gap-1">
-                      RE-EVALUATED MARKS{" "}
-                      <span className="material-symbols-outlined text-[14px]">
-                        unfold_more
-                      </span>
-                    </div>
-                  </th>
-                  <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                    <div className="flex items-center gap-1">
-                      DATE & TIME{" "}
-                      <span className="material-symbols-outlined text-[14px]">
-                        unfold_more
-                      </span>
-                    </div>
-                  </th>
-                  <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap text-center">
-                    ACTIONS{" "}
-                    <span className="material-symbols-outlined text-[14px]">
-                      unfold_more
-                    </span>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filteredResults.length === 0 ? (
-                  <tr>
-                    <td colSpan={8} className="px-8 py-20 text-center">
-                      <p className="text-gray-400 font-medium">
-                        No data available in table
-                      </p>
-                    </td>
-                  </tr>
-                ) : (
-                  filteredResults.map((r, idx) => (
-                    <tr
-                      key={r.id}
-                      className="hover:bg-gray-50/50 transition-colors"
-                    >
-                      <td className="px-6 py-4 text-center">
-                        <input
-                          type="checkbox"
-                          className="w-4 h-4 rounded border-gray-300"
-                        />
-                      </td>
-                      <td className="px-6 py-4 text-[14px] font-bold text-gray-600">
-                        {idx + 1}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div>
-                          <p className="text-[14px] font-bold text-gray-800">
-                            {r.studentName || "Student Name"}
-                          </p>
-                          <p className="text-[12px] text-gray-400">
-                            {r.studentId || "ID#12345"}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-[14px] font-medium text-gray-600">
-                        {formatTime(r.timeTaken || 3600)}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className="px-4 py-1.5 bg-[#E9F7EF] text-[#155724] rounded-full text-[12px] font-black border border-[#D4EDDA] shadow-sm italic">
-                          {r.obtainedMarks || 0} / {r.totalMarks || 8}
-                        </span>
-                      </td>
-                      <td className="px-6 py-6 text-[14px] font-bold text-blue-600 text-center">
-                        {r.reevaluatedMarks !== undefined ? (
-                          <span className="px-4 py-1.5 bg-blue-50 text-blue-700 rounded-full text-[12px] font-black border border-blue-100 shadow-sm italic animate-pulse">
-                            {r.reevaluatedMarks} / {r.totalMarks || 8}
-                          </span>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-                      <td className="px-6 py-6">
-                        <p className="text-[14px] font-bold text-gray-600">
-                          {r.submittedAt
-                            ? new Date(r.submittedAt).toLocaleDateString(
-                              "en-US",
-                              {
-                                year: "numeric",
-                                month: "2-digit",
-                                day: "2-digit",
-                              },
-                            )
-                            : "N/A"}
-                        </p>
-                        <p className="text-[12px] font-medium text-gray-400">
-                          {r.submittedAt
-                            ? new Date(r.submittedAt).toLocaleTimeString([], {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              hour12: true,
-                            })
-                            : ""}
-                        </p>
-                      </td>
-                      <td className="px-6 py-6 text-center">
-                        <button
-                          onClick={() => {
-                            setViewingStudentAnalysis(r);
-                          }}
-                          className="w-10 h-10 flex items-center justify-center border border-gray-100 rounded-xl text-gray-400 hover:text-blue-500 hover:bg-blue-50 transition-all shadow-sm"
-                        >
-                          <span className="material-symbols-outlined text-[22px]">
-                            visibility
-                          </span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Standardized Pagination Footer for Results */}
-        {!loading && filteredResults.length > 0 && (
-          <div className="p-6 border-t border-gray-50 flex items-center justify-between bg-white rounded-b-2xl">
-            <div className="flex items-center gap-3">
-              <div className="relative flex items-center group">
-                <select
-                  value={resultsPageSize}
-                  onChange={(e) => setResultsPageSize(Number(e.target.value))}
-                  className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
-                >
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-                <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400 flex items-center justify-center h-full top-0 group-focus-within:text-black">
-                  expand_more
-                </span>
-              </div>
-              <span className="text-[13px] font-medium text-gray-400 italic">
-                Showing {resultsShowingStart} to {resultsEndIndex} of {totalResults} entries
-              </span>
-            </div>
-
-            <div className="flex items-center p-1.5 bg-white border border-gray-200 rounded-2xl shadow-sm">
-              <button
-                onClick={() => setResultsCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={resultsCurrentPage === 1}
-                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
-              <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
-                {resultsCurrentPage}
-              </button>
-              <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
-              <button
-                onClick={() => setResultsCurrentPage((p) => Math.min(totalResultsPages, p + 1))}
-                disabled={resultsCurrentPage === totalResultsPages || totalResultsPages === 0}
-                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  const renderReportedQuestionsTab = () => {
-    const filteredReported = reportedQuestions.filter((rq) => {
-      const query = reportedSearchQuery.toLowerCase();
-      const matchSearch =
-        (rq.studentName || "").toLowerCase().includes(query) ||
-        (rq.testTitle || "").toLowerCase().includes(query) ||
-        (rq.questionEn || "").toLowerCase().includes(query) ||
-        (rq.questionHi || "").toLowerCase().includes(query);
-      const matchIssue =
-        !reportedFilters.issue || rq.issue === reportedFilters.issue;
-      return matchSearch && matchIssue;
-    });
-
-    const totalReported = filteredReported.length;
-    const totalReportedPages = Math.ceil(totalReported / reportedPageSize);
-    const reportedStartIndex = (reportedCurrentPage - 1) * reportedPageSize;
-    const reportedEndIndex = Math.min(
-      reportedStartIndex + reportedPageSize,
-      totalReported
-    );
-    const paginatedReported = filteredReported.slice(
-      reportedStartIndex,
-      reportedEndIndex
-    );
-    const reportedShowingStart = totalReported === 0 ? 0 : reportedStartIndex + 1;
-
-    const tableRows = paginatedReported.length === 0
-      ? [(
-        <tr key="empty">
-          <td colSpan={9} className="px-8 py-20 text-center">
-            <p className="text-gray-400 font-medium">No reported questions found</p>
-          </td>
-        </tr>
-      )]
-      : paginatedReported.map((rq: any, idx: number) => {
-        const issueClass = rq.status === "resolved"
-          ? "bg-green-50 text-green-600"
-          : "bg-red-50 text-red-600";
-        return (
-          <tr key={String(rq.id || idx)} className="hover:bg-gray-50/50 transition-colors group">
-            <td className="px-4 py-8 text-center align-top border-b border-gray-50/50">
-              <input type="checkbox" className="w-4 h-4 rounded border-gray-300 mt-1" />
-            </td>
-            <td className="px-4 py-8 text-[14px] font-bold text-gray-600 align-top border-b border-gray-50/50 text-center">
-              {reportedStartIndex + idx + 1}
-            </td>
-            <td className="px-4 py-8 align-top border-b border-gray-50/50 overflow-hidden">
-              <p className="text-[14px] font-bold text-gray-800 leading-tight mb-0.5 truncate">{rq.studentName}</p>
-              <p className="text-[12px] font-medium text-gray-500 mb-0.5 truncate">{rq.studentPhone}</p>
-              <p className="text-[12px] font-medium text-gray-400 truncate">{rq.studentEmail}</p>
-            </td>
-            <td className="px-4 py-8 align-top border-b border-gray-50/50 overflow-hidden">
-              <p className="text-[14px] font-bold text-gray-800 uppercase tracking-tight leading-tight mb-1 line-clamp-2">{rq.testTitle}</p>
-              <p className="text-[12px] font-medium text-gray-400 leading-tight line-clamp-2">{rq.batchSeries}</p>
-            </td>
-            <td className="px-4 py-8 align-top border-b border-gray-50/50 overflow-hidden">
-              <p className="text-[14px] font-bold text-gray-800 leading-relaxed line-clamp-3 pr-4">
-                {rq.questionNumber ? `${rq.questionNumber}. ` : ""}{rq.questionEn}
-              </p>
-              {rq.questionHi && (
-                <p className="text-[14px] font-medium text-gray-600 leading-relaxed line-clamp-3 pr-4">{rq.questionHi}</p>
-              )}
-            </td>
-            <td className="px-4 py-8 align-top text-center border-b border-gray-50/50">
-              <span className={"px-3 py-1.5 rounded-full text-[11px] font-bold inline-block shadow-sm whitespace-nowrap " + issueClass}>
-                {rq.issue}
-              </span>
-            </td>
-            <td className="px-4 py-8 align-top text-center border-b border-gray-50/50">
-              {rq.comment
-                ? <button onClick={() => alert("Comment: " + rq.comment)} title={rq.comment} className="p-2 bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"><span className="material-symbols-outlined text-[18px]">comment</span></button>
-                : <span className="text-gray-300 text-xs">&#8212;</span>
-              }
-            </td>
-            <td className="px-4 py-8 align-top text-center border-b border-gray-50/50 text-gray-500 text-[12px] whitespace-nowrap">
-              {new Date(rq.reportedDate).toLocaleString()}
-            </td>
-            <td className="px-4 py-8 align-top text-center border-b border-gray-50/50">
-              {rq.status !== "resolved"
-                ? <button onClick={() => updateReportStatus(rq.id, "resolved")} className="h-9 px-4 bg-black text-white rounded-xl text-[12px] font-bold hover:bg-gray-800 transition-colors shadow-sm">Resolve</button>
-                : <span className="text-green-600 flex items-center justify-center gap-1 text-[12px] font-bold"><span className="material-symbols-outlined text-[16px]">check_circle</span>Resolved</span>
-              }
-            </td>
-          </tr>
-        );
-      });
-
-    return (
-      <div className="space-y-6 animate-in fade-in duration-500">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className="text-[18px] font-bold text-gray-800 tracking-tight">
-              Reported Questions
-            </h2>
-          </div>
-          <div className="flex gap-3 items-center w-full sm:w-auto">
-            <div className="relative group flex-1 sm:w-[280px]">
-              <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-[20px] transition-colors group-focus-within:text-black">
-                search
-              </span>
-              <input
-                type="text"
-                placeholder="Search report..."
-                value={reportedSearchQuery}
-                onChange={(e) => setReportedSearchQuery(e.target.value)}
-                className="w-full h-11 pl-11 pr-4 bg-[#f8f9fa] border border-gray-200 rounded-xl text-[14px] font-medium text-gray-800 outline-none transition-all placeholder:text-gray-400 focus:bg-white focus:border-black focus:shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
-              />
-            </div>
-
-            <div className="relative">
-              <button
-                onClick={() => setIsReportedFilterOpen(!isReportedFilterOpen)}
-                className={`flex items-center gap-2 px-5 h-11 rounded-xl border text-[13px] font-bold transition-all ${isReportedFilterOpen ? "bg-black text-white border-black shadow-md" : "bg-white border-gray-200 text-gray-700 hover:border-black hover:bg-gray-50"}`}
-              >
-                <span className="material-symbols-outlined text-[18px]">
-                  tune
-                </span>
-                Filters
-              </button>
-
-              {isReportedFilterOpen && (
-                <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-gray-50 p-5 z-[100] animate-in fade-in zoom-in-95 duration-200 origin-top-right">
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2 block">
-                        Issue Type
-                      </label>
-                      <select
-                        value={reportedFilters.issue}
-                        onChange={(e) =>
-                          setReportedFilters({
-                            ...reportedFilters,
-                            issue: e.target.value,
-                          })
-                        }
-                        className="w-full h-9 px-3 bg-gray-50 border border-gray-100 rounded-lg text-[13px] outline-none focus:border-black"
-                      >
-                        <option value="">All Issues</option>
-                        {Array.from(
-                          new Set(
-                            reportedQuestions
-                              .map((rq) => rq.issue)
-                              .filter(Boolean),
-                          ),
-                        ).map((issue) => (
-                          <option key={issue} value={issue}>
-                            {issue}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-visible">
-          <div className="">
-            <table className="w-full text-left border-separate border-spacing-0">
-              <thead className="bg-[#F8F9FB] border-b border-gray-200">
-                <tr>
-                  <th className="px-4 py-4 w-[40px] text-center">
-                    <input
-                      type="checkbox"
-                      className="w-4 h-4 rounded border-gray-300"
-                    />
-                  </th>
-                  <th className="px-4 py-4 w-[50px] text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap text-center">
-                    S. NO.
-                  </th>
-                  <th className="px-4 py-4 w-[160px] text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                    STUDENT DETAILS
-                  </th>
-                  <th className="px-4 py-4 w-[130px] text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                    TITLE
-                  </th>
-                  <th className="px-4 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                    QUESTION
-                  </th>
-                  <th className="px-4 py-4 w-[110px] text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap text-center">
-                    ISSUE
-                  </th>
-                  <th className="px-4 py-4 w-[80px] text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap text-center">
-                    COMMENT
-                  </th>
-                  <th className="px-4 py-4 w-[140px] text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap text-center">
-                    DATE & TIME
-                  </th>
-                  <th className="px-4 py-4 w-[130px] text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap text-center">
-                    ACTIONS
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {tableRows}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Standardized Pagination Footer for Reported Questions */}
-        {!loading && filteredReported.length > 0 && (
-          <div className="p-6 border-t border-gray-50 flex items-center justify-between bg-white rounded-b-2xl">
-            <div className="flex items-center gap-3">
-              <div className="relative flex items-center group">
-                <select
-                  value={reportedPageSize}
-                  onChange={(e) => setReportedPageSize(Number(e.target.value))}
-                  className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
-                >
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-                <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400 flex items-center justify-center h-full top-0 group-focus-within:text-black">
-                  expand_more
-                </span>
-              </div>
-              <span className="text-[13px] font-medium text-gray-400 italic">
-                Showing {reportedShowingStart} to {reportedEndIndex} of{" "}
-                {totalReported} entries
-              </span>
-            </div>
-
-            <div className="flex items-center p-1.5 bg-white border border-gray-200 rounded-2xl shadow-sm">
-              <button
-                onClick={() => setReportedCurrentPage((p) => Math.max(1, p - 1))}
-                disabled={reportedCurrentPage === 1}
-                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
-              >
-                Previous
-              </button>
-              <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
-              <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
-                {reportedCurrentPage}
-              </button>
-              <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
-              <button
-                onClick={() =>
-                  setReportedCurrentPage((p) =>
-                    Math.min(totalReportedPages, p + 1)
-                  )
-                }
-                disabled={
-                  reportedCurrentPage === totalReportedPages ||
-                  totalReportedPages === 0
-                }
-                className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  };
 
   const renderTestSeriesDetail = () => {
     if (!viewingTestSeries && !viewingQuestionEditor) return null;
@@ -2306,305 +1562,52 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
       return (
         <div className="w-full bg-[#f8f9fa] min-h-screen pb-20 animate-in fade-in duration-500">
-          {/* Top Header */}
-          <div className="bg-white px-8 py-5 border-b border-gray-100 flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setViewingQuestionEditor(null)}
-                className="text-gray-900 flex items-center justify-center p-1 hover:bg-gray-50 rounded-full transition-all"
-              >
-                <span className="material-symbols-outlined font-black text-[22px]">
-                  arrow_back_ios_new
-                </span>
-              </button>
-              <div>
-                <h2 className="text-[18px] font-black text-gray-900 leading-tight">
-                  {viewingQuestionEditor?.name ||
-                    viewingQuestionEditor?.title ||
-                    viewingTestSeries?.name ||
-                    "Unnamed Test"}
-                </h2>
-                <p className="text-[12px] font-medium text-gray-400">
-                  {viewingTestSeries?.name || "Test"} Series
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={async () => {
-                const testId = viewingQuestionEditor?.id || viewingQuestionEditor?._id;
-                if (!testId) return;
-                try {
-                  // showToast is available in the component
-                  showToast("Publish changes...");
-                  await testsAPI.publish(testId);
-                  showToast("Test published successfully!");
-                } catch (error: any) {
-                  showToast(error.message || "Failed to publish test", "error");
-                }
-              }}
-              className="flex items-center gap-2 px-6 py-2.5 bg-[#4361EE] text-white rounded-xl text-[13px] font-bold shadow-[0_4px_14px_0_rgba(67,97,238,0.39)] hover:bg-[#3451DE] transition-all active:scale-95"
-            >
-              <span className="material-symbols-outlined text-[19px]">
-                sync
-              </span>
-              Publish Changes
-            </button>
-          </div>
+          <QuestionEditorHeader
+            testName={viewingQuestionEditor?.name || viewingQuestionEditor?.title || viewingTestSeries?.name || "Unnamed Test"}
+            seriesName={viewingTestSeries?.name || "Test"}
+            onBack={() => setViewingQuestionEditor(null)}
+            onPublish={async () => {
+              const testId = viewingQuestionEditor?.id || viewingQuestionEditor?._id;
+              if (!testId) return;
+              try {
+                showToast("Publish changes...");
+                await testsAPI.publish(testId);
+                showToast("Test published successfully!");
+              } catch (error: any) {
+                showToast(error.message || "Failed to publish test", "error");
+              }
+            }}
+          />
 
           <div className="max-w-[1400px] mx-auto p-6 space-y-6">
-            {/* Stats Bar */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6 flex items-center justify-between shadow-sm">
-              <div className="flex items-center gap-6">
-                <span className="text-[13px] font-bold text-gray-600">
-                  {viewingQuestionEditor.marks || 0} Marks
-                </span>
-                <span className="text-[13px] font-bold text-gray-600">
-                  {viewingQuestionEditor.time || 0} Minutes
-                </span>
-                <span className="text-[13px] font-bold text-gray-600">
-                  {viewingQuestionEditor.time || 0} Minutes
-                </span>
-              </div>
-              <p className="text-[12px] font-medium text-gray-400">
-                Last Published:{" "}
-                {viewingQuestionEditor.published ||
-                  "October 30, 2025, 12:43 pm"}
-              </p>
-            </div>
+            <QuestionEditorToolbar
+              marks={viewingQuestionEditor.marks}
+              time={viewingQuestionEditor.time}
+              lastPublished={viewingQuestionEditor.published}
+              testName={viewingQuestionEditor.name}
+              showFloatingAddMenu={showFloatingAddMenu}
+              setShowFloatingAddMenu={setShowFloatingAddMenu}
+              showFloatingMoreMenu={showFloatingMoreMenu}
+              setShowFloatingMoreMenu={setShowFloatingMoreMenu}
+              setActiveActionMenuId={setActiveActionMenuId}
+              onAddQuestion={() => setViewingAddQuestionForm({})}
+              onBulkUpload={() => {
+                setViewingTestSeries(null);
+                setActiveTab("Bulk Uploader");
+              }}
+              onBulkDelete={() => {
+                setShowBulkDeleteModal(true);
+                setSelectedBulkDeleteQuestions([]);
+              }}
+              onSort={() => setShowSortModal(true)}
+            />
 
-            {/* Tabs Bar & Actions */}
-            <div className="bg-white rounded-xl border border-gray-100 h-14 flex items-center justify-between px-2 shadow-sm">
-              <div className="flex h-full">
-                <button className="px-6 h-full text-[13px] font-bold border-b-[3px] border-black">
-                  {viewingQuestionEditor.name}
-                </button>
-                <button className="px-6 h-full text-[13px] font-bold text-gray-400 hover:text-gray-600 transition-colors">
-                  All
-                </button>
-              </div>
-
-              <div className="flex items-center gap-3 pr-2">
-                <div className="relative add-menu-container">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const next = !showFloatingAddMenu;
-                      setShowFloatingAddMenu(next);
-                      if (next) {
-                        setShowFloatingMoreMenu(false);
-                        setActiveActionMenuId(null);
-                      }
-                    }}
-                    className="flex items-center justify-center w-10 h-10 bg-black text-white rounded-full hover:bg-gray-800 transition-all active:scale-95 shadow-lg"
-                  >
-                    <span
-                      className="material-symbols-outlined text-[24px]"
-                      style={{
-                        transform: showFloatingAddMenu
-                          ? "rotate(45deg)"
-                          : "rotate(0)",
-                      }}
-                    >
-                      add
-                    </span>
-                  </button>
-                  {showFloatingAddMenu && (
-                    <div className="absolute right-0 top-full mt-2 w-[300px] bg-white rounded-2xl shadow-2xl border border-gray-100 py-3 animate-in fade-in zoom-in-95 duration-200 origin-top-right z-[101]">
-                      {[
-                        {
-                          id: "create",
-                          label: "Create Question",
-                          icon: "edit_square",
-                          color: "text-blue-500",
-                          bg: "bg-blue-50",
-                        },
-                        {
-                          id: "word",
-                          label: "Bulk Upload from Word Doc",
-                          icon: "description",
-                          color: "text-amber-500",
-                          bg: "bg-amber-50",
-                        },
-                      ].map((item) => (
-                        <button
-                          key={item.id}
-                          onClick={() => {
-                            if (item.id === "create")
-                              setViewingAddQuestionForm({});
-                            if (item.id === "word") {
-                              setViewingTestSeries(null);
-                              setActiveTab("Bulk Uploader");
-                            }
-
-                            setShowFloatingAddMenu(false);
-                          }}
-                          className="w-full flex items-center gap-4 px-5 py-3 hover:bg-gray-50 transition-all group"
-                        >
-                          <div
-                            className={`w-9 h-9 rounded-xl ${item.bg} flex items-center justify-center group-hover:scale-110 transition-transform shadow-sm`}
-                          >
-                            <span
-                              className={`material-symbols-outlined text-[20px] ${item.color}`}
-                            >
-                              {item.icon}
-                            </span>
-                          </div>
-                          <span className="text-[14px] font-bold text-gray-700 group-hover:text-black">
-                            {item.label}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="relative more-menu-container">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      const next = !showFloatingMoreMenu;
-                      setShowFloatingMoreMenu(next);
-                      if (next) {
-                        setShowFloatingAddMenu(false);
-                        setActiveActionMenuId(null);
-                      }
-                    }}
-                    className="w-10 h-10 bg-white border border-gray-200 text-gray-400 rounded-full flex items-center justify-center hover:bg-gray-50 transition-all shadow-sm"
-                  >
-                    <span className="material-symbols-outlined text-[22px]">
-                      more_horiz
-                    </span>
-                  </button>
-                  {showFloatingMoreMenu && (
-                    <div className="absolute right-0 top-full mt-2 w-[220px] bg-white rounded-xl shadow-2xl border border-gray-100 py-2 animate-in fade-in zoom-in-95 duration-200 origin-top-right z-[101]">
-                      {[
-                        {
-                          label: "Bulk Delete",
-                          icon: "delete",
-                          onClick: () => {
-                            setShowBulkDeleteModal(true);
-                            setSelectedBulkDeleteQuestions([]);
-                          },
-                        },
-                        {
-                          label: "Sort Questions",
-                          icon: "sort",
-                          onClick: () => { setShowSortModal(true); },
-                        },
-                      ].map((item, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => {
-                            if (item.onClick) item.onClick();
-                            setShowFloatingMoreMenu(false);
-                          }}
-                          className="w-full flex items-center gap-3 px-5 py-2.5 hover:bg-gray-50 transition-colors text-left"
-                        >
-                          <span className="material-symbols-outlined text-[18px] text-gray-400">
-                            {item.icon}
-                          </span>
-                          <span className="text-[13px] font-bold text-gray-700">
-                            {item.label}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Question List */}
-            <div className="space-y-6">
-              {(qeTests || []).map((q, idx) => (
-                <div
-                  key={idx}
-                  className="bg-white rounded-xl border border-gray-100 shadow-sm p-10 relative"
-                >
-                  {/* Top Right Buttons inside card */}
-                  <div className="absolute top-8 right-8 flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-1 bg-[#E8F5E9] text-[#2E7D32] rounded-sm uppercase text-[10px] font-black tracking-wider border border-[#C8E6C9]">
-                        +{Number(q?.marks || 1).toFixed(2)}
-                      </span>
-                      <span className="px-2.5 py-1 bg-[#FFEBEE] text-[#C62828] rounded-sm uppercase text-[10px] font-black tracking-wider border border-[#FFCDD2]">
-                        -{Number(q?.negative || 0).toFixed(2)}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => setViewingAddQuestionForm(q)}
-                      className="flex items-center gap-2 px-4 py-1.5 border border-gray-100 rounded-lg text-[13px] font-bold text-gray-600 hover:bg-gray-50"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">
-                        edit_note
-                      </span>
-                      Edit
-                    </button>
-                    <button
-                      onClick={() =>
-                        handleDeleteQuestion(q.id || (q as any)._id)
-                      }
-                      className="w-9 h-9 border border-gray-100 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500"
-                    >
-                      <span className="material-symbols-outlined text-[20px]">
-                        delete
-                      </span>
-                    </button>
-                  </div>
-
-                  <div className="space-y-8">
-                    <div className="flex items-start gap-4">
-                      <span className="text-[16px] font-black text-gray-800 shrink-0 leading-[1.6]">
-                        {idx + 1}.
-                      </span>
-                      <div className="flex-1">
-                        <div className="text-[16px] font-bold text-gray-800 leading-[1.6] pr-64">
-                          {renderQuestionText(
-                            q?.questionEn || "No question text",
-                          )}
-                        </div>
-                        {q?.questionHi && (
-                          <div className="text-[16px] font-medium text-gray-500 mt-2 leading-[1.6]">
-                            {renderQuestionText(q.questionHi)}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Options Grid */}
-                    <div className="pl-10 grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {(q?.displayOptions || []).map(
-                        (opt: any, oidx: number) => {
-                          const optionLabel = String.fromCharCode(65 + oidx);
-                          return (
-                            <div
-                              key={oidx}
-                              className={`rounded-xl border shadow-sm overflow-hidden transition-all hover:shadow-md flex flex-col ${opt?.isCorrect ? "border-[#82B366] ring-1 ring-[#82B366]/20" : "border-gray-100"}`}
-                            >
-                              <div
-                                className={`px-4 py-2.5 border-b flex items-center justify-between gap-2 ${opt?.isCorrect ? "bg-[#D5E8D4]/40 border-[#82B366] text-[#2E7D32]" : "bg-[#fcfcfc] border-gray-100 text-gray-500"}`}
-                              >
-                                <span className="text-[11px] font-black uppercase tracking-widest">
-                                  Option {optionLabel}
-                                </span>
-                                {opt?.isCorrect && (
-                                  <span className="material-symbols-outlined text-[18px] font-black">
-                                    check_circle
-                                  </span>
-                                )}
-                              </div>
-                              <div className="p-8 flex-1 flex items-center justify-center min-h-[100px] text-[15px] font-bold text-gray-700 text-center leading-relaxed">
-                                {renderQuestionText(opt?.text || "Option Text")}
-                              </div>
-                            </div>
-                          );
-                        },
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <QuestionEditorList
+              questions={qeTests}
+              renderQuestionText={renderQuestionText}
+              onEditQuestion={(q) => setViewingAddQuestionForm(q)}
+              onDeleteQuestion={(id) => handleDeleteQuestion(id)}
+            />
           </div>
         </div>
       );
@@ -3350,1114 +2353,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
 
 
-  const renderBulkUploaderTab = () => {
-    const previewQuestions =
-      bulkUploadData.parsedQuestions &&
-        bulkUploadData.parsedQuestions.length > 0
-        ? bulkUploadData.parsedQuestions
-        : [];
-
-    const extractedImages = bulkUploadData.extractedImages || [];
-
-    // Helper to render question diagram — handles both inline diagrams and diagram-option questions
-    const renderDiagram = (q: any, field: string = "question") => {
-      const dataUrl = field === "question" ? q.questionImage : (q.optionImages?.[field.charCodeAt(0) - 65] || "");
-      
-      if (!dataUrl) {
-        return (
-          <div className="mt-2 text-center">
-            <button 
-              onClick={() => setActiveImageAssignment({ questionId: q.id, field })}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 border-dashed transition-all ${activeImageAssignment?.questionId === q.id && activeImageAssignment?.field === field ? 'border-amber-400 bg-amber-50 text-amber-700 animate-pulse' : 'border-gray-200 text-gray-400 hover:border-black hover:text-black'}`}
-            >
-              <span className="material-symbols-outlined text-[16px]">add_photo_alternate</span>
-              <span className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">
-                {activeImageAssignment?.questionId === q.id && activeImageAssignment?.field === field ? 'Select from Gallery' : `Add ${field === 'question' ? 'Diagram' : `Image`}`}
-              </span>
-            </button>
-          </div>
-        );
-      }
-
-      const isPageLevel = field === "question" && q.hasDiagramOptions;
-
-      return (
-        <div className={`mt-3 border rounded-xl overflow-hidden relative group ${isPageLevel ? 'border-amber-200 bg-amber-50/40' : 'border-blue-100 bg-blue-50/40'}`}>
-          <div className={`px-3 py-1.5 border-b flex items-center justify-between gap-1.5 ${isPageLevel ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-100'}`}>
-            <div className="flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[14px]">{isPageLevel ? 'schema' : 'image'}</span>
-              <span className={`text-[10px] font-bold uppercase tracking-wider ${isPageLevel ? 'text-amber-600' : 'text-blue-500'}`}>
-                {isPageLevel ? 'Options as Diagrams' : field === 'question' ? 'Question Diagram' : `Option ${field} Image`}
-              </span>
-            </div>
-            <button 
-              onClick={() => handleRemoveImage(q.id, field)}
-              className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700"
-            >
-              <span className="material-symbols-outlined text-[16px]">delete</span>
-            </button>
-          </div>
-          <div className="p-2 flex flex-col items-center">
-            <img
-              src={dataUrl}
-              alt="Diagram"
-              className={`w-full h-auto rounded-lg object-contain ${field === 'question' ? 'max-h-64' : 'max-h-32'}`}
-              loading="lazy"
-            />
-            <button 
-              onClick={() => setActiveImageAssignment({ questionId: q.id, field })}
-              className="mt-2 text-[10px] font-bold text-gray-400 hover:text-black flex items-center gap-1 transition-colors"
-            >
-              <span className="material-symbols-outlined text-[14px]">sync</span>
-              Change
-            </button>
-          </div>
-        </div>
-      );
-    };
-
-    const formats = [
-      {
-        key: "default",
-        label: "Default",
-        image: "/attach-assist/default.jpg",
-        download: "/attach-assist/format-default.docx"
-      },
-      {
-        key: "format1",
-        label: "Format 1",
-        image: "/attach-assist/format1.jpg",
-        download: "/attach-assist/format-1.docx"
-      },
-      {
-        key: "format2",
-        label: "Format 2",
-        image: "/attach-assist/format2.jpg",
-        download: "/attach-assist/format-2.docx"
-      }
-    ];
-
-    return (
-      <div className="animate-in fade-in duration-500 pb-20">
-        {/* Extracted Image Gallery */}
-        {extractedImages.length > 0 && (
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-black">collections</span>
-                <h3 className="text-[16px] font-bold text-gray-800">Extracted Image Gallery</h3>
-                <span className="px-2.5 py-0.5 bg-gray-100 rounded-full text-[11px] font-bold text-gray-500">
-                  {extractedImages.length} Images Found
-                </span>
-              </div>
-              <p className="text-[11px] text-gray-400 font-medium italic">Click an image to view full size</p>
-            </div>
-            <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
-              {extractedImages.map((img, idx) => (
-                <div 
-                  key={idx} 
-                  className="flex-shrink-0 w-32 h-32 rounded-xl border-2 border-gray-100 overflow-hidden bg-gray-50 hover:border-black transition-all cursor-pointer relative group"
-                  onClick={() => {
-                    // Logic to preview full size or use for active assignment
-                    if (activeImageAssignment) {
-                      handleImageSelect(img);
-                    }
-                  }}
-                >
-                  <img src={img} alt={`Extracted ${idx}`} className="w-full h-full object-contain p-2" />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                    <span className="text-white text-[10px] font-black uppercase tracking-widest">Select</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {activeImageAssignment && (
-              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between animate-pulse">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-amber-600">info</span>
-                  <span className="text-[12px] font-bold text-amber-700 uppercase tracking-tight">
-                    Select an image from gallery for Question {activeImageAssignment.questionId} - {activeImageAssignment.field === 'question' ? 'Main Diagram' : `Option ${activeImageAssignment.field}`}
-                  </span>
-                </div>
-                <button 
-                  onClick={() => setActiveImageAssignment(null)}
-                  className="text-[11px] font-black text-amber-600 hover:text-amber-800 underline"
-                >
-                  Cancel
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className={`flex gap-5 items-start`}>
-          {/* LEFT: Form Card */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200/60 p-6 space-y-5 flex-1 min-w-0">
-            {/* Select Test Series */}
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-[#1a7a5e]">
-                Select Test Series *
-              </label>
-              <CustomDropdown
-                options={tests
-                  .filter((t: any) => t.isSeries === true)
-                  .map((t: any) => ({
-                    value: t.id || (t as any)._id,
-                    label: t.name || t.title || "",
-                  }))}
-                value={bulkUploadData.testSeries}
-                onChange={(val: any) =>
-                  setBulkUploadData({
-                    ...bulkUploadData,
-                    testSeries: val,
-                    testTitle: "",
-                  })
-                }
-                placeholder="Select Test Series"
-                searchPlaceholder="Search"
-              />
-            </div>
-
-            {/* Select Test Title */}
-            <div className="space-y-1">
-              <label className="text-[12px] font-semibold text-[#1a7a5e]">
-                Select Test Title *
-              </label>
-              <CustomDropdown
-                options={tests
-                  .filter((t) => {
-                    const testSeriesId =
-                      t.courseId ||
-                      (t as any).testSeriesId ||
-                      (t.course &&
-                        (typeof t.course === "object"
-                          ? (t.course as any)._id || (t.course as any).id
-                          : t.course));
-                    return (
-                      (!bulkUploadData.testSeries ||
-                        testSeriesId === bulkUploadData.testSeries) &&
-                      t.isSeries !== true
-                    );
-                  })
-                  .map((t) => ({
-                    value: t.id || (t as any)._id,
-                    label: t.name || t.title || "Unnamed Test",
-                  }))}
-                value={bulkUploadData.testTitle}
-                onChange={(val: any) =>
-                  setBulkUploadData({ ...bulkUploadData, testTitle: val })
-                }
-                placeholder=""
-                searchPlaceholder="Search"
-              />
-            </div>
-
-            {/* Format Selection Cards */}
-            <div className="space-y-2 mt-2">
-              <div className="flex justify-between items-center">
-                <label className="text-[12px] font-semibold text-[#1a7a5e]">Select Format *</label>
-                <a
-                  href={formats.find(f => f.key === (bulkUploadData.format || "default"))?.download}
-                  download
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-black text-white text-[11px] font-bold uppercase rounded-lg hover:bg-gray-800 transition-all shadow-sm"
-                >
-                  <span className="material-symbols-outlined text-[16px]">download</span>
-                  Download Format
-                </a>
-              </div>
-              <div className="flex gap-4 pt-1">
-                {formats.map((fmt) => {
-                  const isSelected = (bulkUploadData.format || "default") === fmt.key;
-                  return (
-                    <div
-                      key={fmt.key}
-                      onClick={() =>
-                        setBulkUploadData({ ...bulkUploadData, format: fmt.key })
-                      }
-                      className={`relative cursor-pointer rounded-lg border-2 transition-all duration-200 overflow-hidden select-none flex-shrink-0 flex flex-col ${isSelected
-                        ? "border-black shadow-md"
-                        : "border-gray-200 hover:border-gray-300 opacity-70 hover:opacity-100 bg-gray-50"
-                        }`}
-                      style={{ width: "145px", height: "180px" }}
-                    >
-                      <div className="flex-1 bg-white flex items-center justify-center p-2 relative">
-                        <img src={fmt.image} alt={fmt.label} className="w-full h-full object-contain" />
-                      </div>
-                      <div className={`py-2 px-2 text-center border-t border-gray-200 ${isSelected ? "bg-black text-white" : "bg-white text-gray-700"}`}>
-                        <p className={`text-[12px] font-bold`}>
-                          {fmt.label}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* modern file uploader */}
-            <div className="space-y-4 mt-6">
-              <div className="flex justify-between items-center px-1">
-                <span className="text-[12px] font-semibold text-[#1a7a5e]">Select File *</span>
-              </div>
-              <div className="flex flex-col gap-2 -mt-2">
-                <label className="group h-12 border border-gray-200 rounded-lg flex items-center overflow-hidden bg-white hover:border-gray-300 transition-all cursor-pointer">
-                  <div
-                    className={`px-4 text-[13px] flex-1 flex items-center gap-2 ${bulkUploadData.file ? "text-gray-700 font-medium" : "text-gray-500"}`}
-                  >
-                    <span className="truncate">
-                      {bulkUploadData.file
-                        ? bulkUploadData.file.name
-                        : "Upload file"}
-                    </span>
-                  </div>
-                  <div className="h-full px-6 flex items-center bg-[#f5f5f5] text-gray-600 border-l border-gray-200 hover:bg-gray-200 transition-all">
-                    <span className="text-[13px] font-medium">
-                      Browse
-                    </span>
-                  </div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    style={{ display: "none" }}
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0] || null;
-                      if (file) {
-                        setBulkUploadData({
-                          ...bulkUploadData,
-                          file,
-                          parsedQuestions: [],
-                        });
-                        setIsParsing(true);
-                        showToast(
-                          `Preparing to parse ${file.name}...`,
-                          "success",
-                        );
-                        try {
-                          const { questions, extractedImages } = await parseFile(file);
-                          setBulkUploadData((prev) => ({
-                            ...prev,
-                            file,
-                            parsedQuestions: questions,
-                            extractedImages: extractedImages || [],
-                          }));
-                          if (questions.length === 0) {
-                            showToast(
-                              "No questions could be extracted. Please check the document format.",
-                              "error",
-                            );
-                          } else {
-                            showToast(
-                              `Successfully extracted ${questions.length} questions and ${extractedImages?.length || 0} images!`,
-                              "success",
-                            );
-                          }
-                        } catch (err) {
-                          console.error("File parsing error:", err);
-                          showToast(
-                            "Error parsing file. Ensure it is a valid document.",
-                            "error",
-                          );
-                        } finally {
-                          setIsParsing(false);
-                        }
-                      }
-                      if (e.target) e.target.value = "";
-                    }}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div className="pt-6 flex items-center gap-4">
-              <button
-                onClick={async () => {
-                  const testId =
-                    bulkUploadData.testTitle ||
-                    viewingQuestionEditor?.id ||
-                    (viewingQuestionEditor as any)?._id;
-                  if (!bulkUploadData.testSeries && !viewingQuestionEditor) {
-                    showToast("Please select Test Series", "error");
-                    return;
-                  }
-                  if (!testId) {
-                    showToast("Please select Test Title", "error");
-                    return;
-                  }
-                  if (
-                    !bulkUploadData.file ||
-                    (bulkUploadData.parsedQuestions || []).length === 0
-                  ) {
-                    showToast(
-                      "No questions to upload. Please parse a file first.",
-                      "error",
-                    );
-                    return;
-                  }
-
-                  try {
-                    // 1. Fetch current questions for duplicate check and limit enforcement
-                    const existingQuestions =
-                      await testsAPI.getQuestions(testId);
-                    const existingTexts = new Set(
-                      existingQuestions.map((q: any) =>
-                        (q.questionEn || q.question || "").trim().toLowerCase(),
-                      ),
-                    );
-
-                    // Get the limit for this test
-                    const targetTestMatch =
-                      tests.find((t) => (t.id || (t as any)._id) === testId) ||
-                      detailTests.find(
-                        (t) => (t.id || (t as any)._id) === testId,
-                      );
-                    const limit = targetTestMatch?.noOfQuestions || 0;
-                    const currentCount = existingQuestions.length;
-
-                    if (limit > 0 && currentCount >= limit) {
-                      showToast(
-                        `Test already has ${currentCount} questions. Limit is ${limit}.`,
-                        "error",
-                      );
-                      return;
-                    }
-
-                    // 2. Prepare payload - Standardization to displayOptions
-                    const uploadBase64Image = async (base64Str: string) => {
-                      if (!base64Str || !base64Str.startsWith("data:image")) return base64Str;
-                      try {
-                        const r = await fetch("/api/v2/upload/image/base64", {
-                          method: "POST",
-                          headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
-                          body: JSON.stringify({ image: base64Str }),
-                        });
-                        if (!r.ok) return base64Str;
-                        const data = await r.json();
-                        return data.url || base64Str;
-                      } catch (e) {
-                        return base64Str;
-                      }
-                    };
-
-                    let filteredList = (bulkUploadData.parsedQuestions || []).filter(
-                      (q) => !existingTexts.has((q.questionEn || "").trim().toLowerCase()),
-                    );
-
-                    let questionsToUpload = await Promise.all(
-                      filteredList.map(async (q) => {
-                        const qImageUrl = await uploadBase64Image(q.questionImage || "");
-                        
-                        const processedOptions = await Promise.all(
-                          (q.options || []).map(async (opt: string, i: number) => {
-                            const optImageUrl = await uploadBase64Image(q.optionImages?.[i] || "");
-                            return {
-                              id: i + 1,
-                              text: opt,
-                              image: optImageUrl,
-                              isCorrect: String(q.correctAnswer).toUpperCase() === String.fromCharCode(65 + i),
-                            };
-                          })
-                        );
-
-                        return {
-                          testId: testId,
-                          courseId:
-                            bulkUploadData.testSeries ||
-                            viewingTestSeries?.id ||
-                            (viewingTestSeries as any)?._id,
-                          questionEn: q.questionEn,
-                          questionHi: q.questionHi || "",
-                          questionImage: qImageUrl,
-                          type: "Multiple Choice Question",
-                          marks: q.positiveMarks || 4,
-                          negative: q.negativeMarks || -1,
-                          displayOptions: processedOptions,
-                          hasDiagramOptions: q.hasDiagramOptions || false,
-                          solution: {
-                            heading: "Full Solution",
-                            text: q.solution || "",
-                          },
-                          format: bulkUploadData.format || "default",
-                        };
-                      })
-                    );
-
-
-                    if (questionsToUpload.length === 0) {
-                      showToast(
-                        "All questions in this file already exist in the test.",
-                        "error",
-                      );
-                      return;
-                    }
-
-                    // Enforce the limit
-                    if (
-                      limit > 0 &&
-                      currentCount + questionsToUpload.length > limit
-                    ) {
-                      const allowed = limit - currentCount;
-                      showToast(
-                        `Only ${allowed} out of ${questionsToUpload.length} new questions will be uploaded as per the limit (${limit}).`,
-                        "error",
-                      );
-                      questionsToUpload = questionsToUpload.slice(0, allowed);
-                    }
-
-                    showToast(
-                      `Uploading ${questionsToUpload.length} new questions...`,
-                      "success",
-                    );
-
-                    // 3. Bulk upload
-                    const res = await fetch("/api/questions/bulk", {
-                      method: "POST",
-                      headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
-                      body: JSON.stringify({ questions: questionsToUpload }),
-                    });
-
-                    if (!res.ok) throw new Error("Upload failed");
-
-                    invalidateCache("tests");
-                    showToast(
-                      `${questionsToUpload.length} questions uploaded successfully!`,
-                      "success",
-                    );
-
-                    // 4. Update the test's viewFormat if needed
-                    const formatVal = bulkUploadData.format || "default";
-                    await fetch(`/api/tests/${testId}`, {
-                      method: "PUT",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ viewFormat: formatVal }),
-                    });
-
-                    // 5. Cleanup and Sync
-                    setBulkUploadData({
-                      ...bulkUploadData,
-                      file: null,
-                      parsedQuestions: [],
-                    });
-
-                    // Sync the editor view if we are in it
-                    const updatedQs = await testsAPI.getQuestions(testId);
-                    setEditorQuestions(updatedQs);
-
-                    // 6. Redirect to view results
-                    if (targetTestMatch) {
-                      setViewingQuestionEditor(targetTestMatch);
-                      setActiveTab("Tests");
-                    }
-                    loadData();
-                  } catch (err: any) {
-                    showToast(
-                      err.message || "Failed to upload questions",
-                      "error",
-                    );
-                  }
-                }}
-                className="px-8 h-10 bg-[#12A5B8] hover:bg-[#0E8A9A] text-white rounded-lg font-medium text-[14px] transition-all active:scale-95 flex items-center justify-center w-[120px]"
-              >
-                Upload
-              </button>
-            </div>
-          </div>
-
-          {/* RIGHT: Preview Panel — appears when file is selected */}
-          {bulkUploadData.file && (
-            <div className="w-[420px] flex-shrink-0 bg-white rounded-xl shadow-sm border border-gray-200/60 overflow-hidden animate-in slide-in-from-right-4 duration-400 sticky top-4">
-              {/* Header */}
-              <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between bg-[#f8fffe]">
-                <div className="flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[#1a7a5e] text-[20px]">
-                    table_view
-                  </span>
-                  <div>
-                    <h3 className="text-[13px] font-bold text-gray-800">
-                      File Preview
-                    </h3>
-                    <p className="text-[10px] text-gray-400">
-                      {previewQuestions.length} questions ·{" "}
-                      {bulkUploadData.file.name.slice(0, 20)}
-                      {bulkUploadData.file.name.length > 20 ? "…" : ""}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 bg-green-50 text-green-600 text-[10px] font-bold rounded-full border border-green-100">
-                    ✓ Valid
-                  </span>
-                  <button
-                    onClick={() =>
-                      setBulkUploadData({ ...bulkUploadData, file: null })
-                    }
-                    className="text-gray-400 hover:text-gray-600 transition-colors"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">
-                      close
-                    </span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Questions list */}
-              <div className="divide-y divide-gray-50 max-h-[420px] overflow-y-auto relative">
-                {isParsing && (
-                  <div className="absolute inset-0 bg-white/80 backdrop-blur-[1px] z-10 flex flex-col items-center justify-center gap-3">
-                    <div className="w-10 h-10 border-4 border-[#1a7a5e] border-t-transparent rounded-full animate-spin"></div>
-                    <p className="text-[13px] font-bold text-[#1a7a5e]">
-                      Extracting Questions...
-                    </p>
-                  </div>
-                )}
-                {previewQuestions.length > 0
-                  ? previewQuestions.map((q, idx) => {
-                    const format = bulkUploadData.format;
-
-                    // Format 1 & 2 Style (More like a document)
-                    if (format === "format1") {
-                      return (
-                        <div
-                          key={idx}
-                          className="px-5 py-6 hover:bg-gray-50/50 transition-colors border-l-4 border-transparent hover:border-black space-y-3 font-serif"
-                        >
-                          <div className="flex gap-2">
-                            <span className="font-bold text-[13px] text-gray-900 shrink-0">
-                              Question:
-                            </span>
-                            <p className="text-[12px] font-medium text-gray-800 leading-relaxed flex-1">
-                              {renderQuestionText(q.questionEn)}
-                            </p>
-                          </div>
-                          <div className="pl-16 space-y-1 font-sans">
-                            {q.options.map((opt: string, i: number) => {
-                               const label = String.fromCharCode(65 + i);
-                               return (
-                                <div key={i} className="space-y-2 mb-3">
-                                  <div className="flex gap-2 text-[11px] text-gray-500">
-                                    <span className="font-bold">({label.toLowerCase()})</span>
-                                    <span>{renderQuestionText(opt)}</span>
-                                  </div>
-                                  {renderDiagram(q, label)}
-                                </div>
-                               );
-                            })}
-                          </div>
-                          <div className="pl-16 space-y-1 text-[11px] text-gray-700 pt-2 font-sans">
-                            <p>
-                              <span className="font-bold">Answer:</span>{" "}
-                              {q.correctAnswer.toLowerCase()}
-                            </p>
-                            {q.solution && (
-                              <p>
-                                <span className="font-bold">Solution:</span>{" "}
-                                <span className="text-gray-400 italic line-clamp-1">
-                                  {renderQuestionText(q.solution)}
-                                </span>
-                              </p>
-                            )}
-                            <p>
-                              <span className="font-bold text-[#1a7a5e]">
-                                Positive Marks:
-                              </span>{" "}
-                              {q.positiveMarks}
-                            </p>
-                            <p>
-                              <span className="font-bold text-red-500">
-                                Negative Marks:
-                              </span>{" "}
-                              {q.negativeMarks || 0}
-                            </p>
-                          </div>
-                          {renderDiagram(q)}
-                        </div>
-                      );
-                    }
-
-                    if (format === "format2") {
-                      return (
-                        <div
-                          key={idx}
-                          className="px-5 py-6 hover:bg-gray-50/50 transition-colors border-l-4 border-transparent hover:border-black space-y-3 font-serif"
-                        >
-                          <div className="flex gap-2">
-                            <span className="font-bold text-[13px] text-gray-900 shrink-0">
-                              {idx + 1}.
-                            </span>
-                            <div className="space-y-1 flex-1">
-                              <p className="text-[12px] font-medium text-gray-800 leading-relaxed">
-                                {renderQuestionText(q.questionEn)}
-                              </p>
-                              <p className="text-[12px] font-medium text-gray-600 leading-relaxed">
-                                {renderQuestionText(q.questionHi)}
-                              </p>
-                            </div>
-                          </div>
-                          <div className="pl-8 space-y-1 font-sans">
-                            {q.options.map((opt: string, i: number) => {
-                               const label = String.fromCharCode(65 + i);
-                               return (
-                                <div key={i} className="mb-4">
-                                  <div className="flex gap-2 text-[11px] text-gray-500">
-                                    <span className="font-bold">{label}.</span>
-                                    <span>{renderQuestionText(opt)}</span>
-                                  </div>
-                                  <div className="pl-4">
-                                    {renderDiagram(q, label)}
-                                  </div>
-                                </div>
-                               );
-                            })}
-                          </div>
-                          <div className="pl-8 space-y-2 text-[11px] text-gray-700 pt-2 font-sans">
-                            <p>
-                              <span className="font-bold">Answer</span>{" "}
-                              {q.correctAnswer}
-                            </p>
-                            <p className="font-bold">Solution.</p>
-                            <div className="text-[11px] text-gray-500 space-y-1">
-                              {q.solution
-                                ?.split("\n")
-                                .map((line: string, li: number) => (
-                                  <p
-                                    key={li}
-                                    className="line-clamp-1 opacity-70"
-                                  >
-                                    • {line}
-                                  </p>
-                                ))}
-                            </div>
-                          </div>
-                          {renderDiagram(q)}
-                        </div>
-                      );
-                    }
-
-                    if (format === "format3") {
-                      return (
-                        <div
-                          key={idx}
-                          className="px-5 py-4 hover:bg-blue-50/30 transition-colors border-b border-gray-100"
-                        >
-                          <div className="bg-gray-50 px-3 py-1.5 rounded-md flex justify-between items-center mb-3">
-                            <span className="text-[10px] font-black text-gray-400 uppercase">
-                              Question {idx + 1}
-                            </span>
-                            <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full">
-                              GRID STYLE
-                            </span>
-                          </div>
-                          <p className="text-[13px] font-bold text-gray-800 mb-4">
-                            {renderQuestionText(q.questionEn)}
-                          </p>
-                          <div className="grid grid-cols-2 gap-3">
-                            {q.options.map((o: string, i: number) => {
-                              const label = String.fromCharCode(65 + i);
-                              return (
-                              <div
-                                key={i}
-                                className="flex flex-col gap-2 p-2 border border-gray-100 rounded-lg bg-white shadow-sm"
-                              >
-                                <div className="flex items-center gap-2">
-                                  <span className="w-5 h-5 flex items-center justify-center bg-gray-100 rounded text-[10px] font-bold text-gray-500 shrink-0">
-                                    {label}
-                                  </span>
-                                  <span className="text-[11px] text-gray-600 font-medium truncate">
-                                    {renderQuestionText(o)}
-                                  </span>
-                                </div>
-                                {renderDiagram(q, label)}
-                              </div>
-                            )})}
-                          </div>
-                          <div className="mt-4 flex items-center gap-4 text-[10px]">
-                            <span className="font-bold text-emerald-600 px-2 py-1 bg-emerald-50 rounded">
-                              ANS: {q.correctAnswer}
-                            </span>
-                            <span className="text-gray-400 italic shrink-0">
-                              Solution:{" "}
-                              {renderQuestionText(q.solution).slice(0, 30)}...
-                            </span>
-                          </div>
-                          {renderDiagram(q)}
-                        </div>
-                      );
-                    }
-
-                    if (format === "format4") {
-                      return (
-                        <div
-                          key={idx}
-                          className="px-5 py-6 hover:bg-gray-50 transition-colors border-l-4 border-blue-500 bg-white"
-                        >
-                          <div className="flex gap-4">
-                            <div className="w-16 h-16 bg-gray-100 rounded-xl flex items-center justify-center shrink-0 border border-gray-200 shadow-inner">
-                              <span className="material-symbols-outlined text-gray-300">
-                                image
-                              </span>
-                            </div>
-                            <div className="flex-1 space-y-2">
-                              <p className="text-[13px] font-black text-gray-900 leading-tight line-clamp-2">
-                                {renderQuestionText(q.questionEn)}
-                              </p>
-                              <div className="space-y-1">
-                                {q.options.map((o: string, i: number) => {
-                                  const label = String.fromCharCode(65 + i);
-                                  return (
-                                  <div
-                                    key={i}
-                                    className="flex flex-col gap-2 text-[11px] text-gray-500 font-medium mb-2"
-                                  >
-                                    <div className="flex gap-2">
-                                      <span className="text-blue-500 shrink-0">
-                                        {String.fromCharCode(97 + i)}.
-                                      </span>
-                                      <span>{renderQuestionText(o)}</span>
-                                    </div>
-                                    <div>{renderDiagram(q, label)}</div>
-                                  </div>
-                                )})}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="mt-4 pt-3 border-t border-gray-50 flex items-center justify-between text-[10px]">
-                            <span className="font-bold text-gray-800 uppercase tracking-widest">
-                              Answer Key: {q.correctAnswer}
-                            </span>
-                            <span className="text-[#1a7a5e] font-black">
-                              +{q.positiveMarks} Marks
-                            </span>
-                          </div>
-                          {renderDiagram(q)}
-                        </div>
-                      );
-                    }
-
-                    if (format === "format5") {
-                      return (
-                        <div
-                          key={idx}
-                          className="m-3 bg-[#ecfdf5]/30 border border-emerald-100 rounded-2xl overflow-hidden hover:shadow-md transition-all"
-                        >
-                          <div className="bg-emerald-600 px-4 py-2 flex justify-between items-center text-white">
-                            <span className="text-[11px] font-black uppercase tracking-tighter">
-                              EXPERT SOLUTION #{idx + 1}
-                            </span>
-                            <span className="text-[10px] font-bold opacity-80">
-                              {q.type || "MCQ"}
-                            </span>
-                          </div>
-                          <div className="p-4 space-y-4">
-                            <div className="space-y-1">
-                              <p className="text-[12px] font-bold text-emerald-950">
-                                {renderQuestionText(q.questionEn)}
-                              </p>
-                              <p className="text-[10px] text-emerald-600/70 font-medium italic">
-                                {renderQuestionText(q.questionHi)}
-                              </p>
-                            </div>
-                            <div className="space-y-1">
-                              {q.options.map((o: string, i: number) => {
-                                const label = String.fromCharCode(65 + i);
-                                return (
-                                <div
-                                  key={i}
-                                  className="flex flex-col gap-2 py-1.5 px-3 bg-white/50 rounded-lg text-[11px] text-emerald-800 font-bold border border-emerald-50"
-                                >
-                                  <div className="flex gap-3 items-center">
-                                    <span className="w-4 text-emerald-300 shrink-0">
-                                      {label}
-                                    </span>
-                                    <span>{renderQuestionText(o)}</span>
-                                  </div>
-                                  {renderDiagram(q, label)}
-                                </div>
-                              )})}
-                            </div>
-                            <div className="bg-white p-3 rounded-xl border border-emerald-100 space-y-2">
-                              <p className="text-[10px] font-black text-emerald-800 flex items-center gap-1">
-                                <span className="material-symbols-outlined text-[14px]">
-                                  psychology
-                                </span>
-                                DETAILED EXPLANATION
-                              </p>
-                              <p className="text-[11px] text-gray-500 leading-relaxed italic">
-                                {renderQuestionText(q.solution)}
-                              </p>
-                              <div className="pt-2 flex gap-4 text-[10px] font-black text-emerald-600">
-                                <span>CORRECT: {q.correctAnswer}</span>
-                                <span>WEIGHTAGE: {q.positiveMarks}M</span>
-                              </div>
-                            </div>
-                            {renderDiagram(q)}
-                          </div>
-                        </div>
-                      );
-                    }
-
-                    // Default (Table Style)
-                    return (
-                      <div
-                        key={idx}
-                        className="px-4 py-3 hover:bg-gray-50/50 transition-colors group"
-                      >
-                        <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm bg-white">
-                          <div className="flex border-b border-gray-100">
-                            <div className="w-24 bg-gray-50 p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0">
-                              Question
-                            </div>
-                            <div className="p-2.5 text-[12px] font-bold text-gray-800 flex-1 leading-relaxed">
-                              {renderQuestionText(q.questionEn)}
-                            </div>
-                          </div>
-                          <div className="flex border-b border-gray-100">
-                            <div className="w-24 bg-gray-50 p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0">
-                              Type
-                            </div>
-                            <div className="p-2.5 text-[11px] text-gray-600 font-bold">
-                              {q.type || "multiple_choice"}
-                            </div>
-                          </div>
-                          {q.options.map((o: string, i: number) => {
-                            const label = String.fromCharCode(65 + i);
-                            return (
-                            <div
-                              key={i}
-                              className="flex border-b border-gray-100 last:border-b-0"
-                            >
-                              <div className="w-24 bg-gray-50 p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0">
-                                Option {label}
-                              </div>
-                              <div className="p-2.5 text-[11px] text-gray-700 font-bold flex-1 flex flex-col gap-2">
-                                <div className="flex gap-2">
-                                  <span className="text-gray-300 shrink-0">
-                                    {label}.
-                                  </span>
-                                  {renderQuestionText(o)}
-                                </div>
-                                {renderDiagram(q, label)}
-                              </div>
-                            </div>
-                          )})}
-                          <div className="flex border-t border-gray-100 bg-[#f8fffe]">
-                            <div className="w-24 bg-[#f0f9f7] p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0">
-                              Answer
-                            </div>
-                            <div className="p-2.5 text-[11px] text-emerald-700 font-black">
-                              {q.correctAnswer}
-                            </div>
-                          </div>
-                          <div className="flex border-t border-gray-100">
-                            <div className="w-24 bg-gray-50 p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0">
-                              Solution
-                            </div>
-                            <div className="p-2.5 text-[11px] text-gray-500 italic flex-1">
-                              {renderQuestionText(q.solution)}
-                            </div>
-                          </div>
-                          <div className="flex border-t border-gray-100">
-                            <div className="flex-1 flex border-r border-gray-100">
-                              <div className="w-24 bg-gray-50 p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0 whitespace-nowrap">
-                                Positive Marks
-                              </div>
-                              <div className="p-2.5 text-[11px] text-green-600 font-black">
-                                {q.positiveMarks}
-                              </div>
-                            </div>
-                            <div className="flex-1 flex">
-                              <div className="w-24 bg-gray-50 p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0 whitespace-nowrap">
-                                Negative Marks
-                              </div>
-                              <div className="p-2.5 text-[11px] text-red-500 font-black">
-                                {q.negativeMarks}
-                              </div>
-                            </div>
-                          </div>
-                          {renderDiagram(q)}
-                        </div>
-                      </div>
-                    );
-                  })
-                  : !isParsing && (
-                    <div className="py-20 text-center space-y-3">
-                      <span className="material-symbols-outlined text-[48px] text-gray-200">
-                        find_in_page
-                      </span>
-                      <p className="text-[13px] font-medium text-gray-400">
-                        No questions found in this file.
-                        <br />
-                        Try DOCX or Excel format.
-                      </p>
-                    </div>
-                  )}
-              </div>
-
-              {/* Footer action */}
-              <div className="px-4 py-4 border-t border-gray-100 bg-white grid grid-cols-2 gap-3">
-                <button
-                  onClick={async () => {
-                    const testId = bulkUploadData.testTitle;
-                    if (!bulkUploadData.testSeries) {
-                      showToast("Please select Test Series", "error");
-                      return;
-                    }
-                    if (!testId) {
-                      showToast("Please select Test Title", "error");
-                      return;
-                    }
-                    if (!bulkUploadData.file) {
-                      showToast("Please select a file to upload", "error");
-                      return;
-                    }
-
-                    try {
-                      // Fetch existing questions for duplicate check
-                      const existingQuestions =
-                        await testsAPI.getQuestions(testId);
-                      const existingTexts = new Set(
-                        existingQuestions.map((q: any) =>
-                          (q.questionEn || q.question || "")
-                            .trim()
-                            .toLowerCase(),
-                        ),
-                      );
-
-                      const selectedFormat = bulkUploadData.format || "default";
-                      const questionsToUpload = previewQuestions
-                        .filter(
-                          (q) =>
-                            !existingTexts.has(
-                              (q.questionEn || "").trim().toLowerCase(),
-                            ),
-                        )
-                        .map((q) => ({
-                          testId: testId,
-                          courseId: bulkUploadData.testSeries,
-                          questionEn: q.questionEn,
-                          questionHi: q.questionHi || "",
-                          type: "Multiple Choice Question",
-                          marks: q.positiveMarks || 4,
-                          negative: q.negativeMarks || -1,
-                          displayOptions: (q.options || []).map(
-                            (opt: string, i: number) => ({
-                              id: i + 1,
-                              text: opt,
-                              isCorrect:
-                                q.correctAnswer === String.fromCharCode(65 + i),
-                            }),
-                          ),
-                          solution: {
-                            heading: "Full Solution",
-                            text: q.solution || "",
-                          },
-                          format: selectedFormat,
-                        }));
-
-                      if (
-                        questionsToUpload.length === 0 &&
-                        previewQuestions.length > 0
-                      ) {
-                        showToast(
-                          "All parsed questions already exist in this test.",
-                          "error",
-                        );
-                        return;
-                      }
-
-                      const res = await fetch("/api/questions/bulk", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ questions: questionsToUpload }),
-                      });
-
-                      if (!res.ok) throw new Error("Upload failed");
-
-                      // Update the Test document to save the selected viewFormat
-                      try {
-                        await fetch(`/api/tests/${testId}`, {
-                          method: "PUT",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ viewFormat: selectedFormat }),
-                        });
-                      } catch (err) {
-                        console.warn("Could not update test format:", err);
-                      }
-
-                      // Invalidate local cache to force refresh
-                      invalidateCache("tests");
-                      showToast(
-                        `Successfully uploaded ${questionsToUpload.length} new questions!`,
-                      );
-                      if (questionsToUpload.length < previewQuestions.length) {
-                        showToast(
-                          `${previewQuestions.length - questionsToUpload.length} duplicates were skipped.`,
-                          "success",
-                        );
-                      }
-
-                      setBulkUploadData({ ...bulkUploadData, file: null });
-
-                      // Auto-redirect to the Test to show newly uploaded questions
-                      const targetTest = tests.find(
-                        (t) => (t.id || (t as any)._id) === testId,
-                      );
-                      if (targetTest) {
-                        const targetSeries = courses.find(
-                          (c) =>
-                            (c.id || (c as any)._id) ===
-                            bulkUploadData.testSeries,
-                        );
-                        if (targetSeries) setViewingTestSeries(targetSeries);
-                        setViewingQuestionEditor(targetTest);
-                        setActiveTab("Tests");
-                      }
-
-                      loadData();
-                    } catch (e) {
-                      console.error("Final upload error:", e);
-                      showToast("Failed to upload questions", "error");
-                    }
-                  }}
-                  className="w-full bg-gray-900 hover:bg-black text-white py-3 rounded-xl font-bold text-[12px] uppercase tracking-tighter transition-all active:scale-[0.98]"
-                >
-                  PROCEED TO UPLOAD ({previewQuestions.length} Questions)
-                </button>
-
-                <button
-                  onClick={() =>
-                    generateDOCX(
-                      previewQuestions,
-                      bulkUploadData.format,
-                      `Paper_${bulkUploadData.file?.name}.docx`,
-                    )
-                  }
-                  className="w-full flex items-center justify-center gap-2 py-3.5 border-2 border-gray-100 text-[#1a7a5e] hover:bg-[#1a7a5e]/5 transition-all duration-300 font-bold text-[12px] rounded-xl uppercase tracking-tighter active:scale-95"
-                >
-                  <span className="material-symbols-outlined text-[20px]">
-                    file_download
-                  </span>
-                  DOWNLOAD
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {viewingPaperQuestions && (
-          <div className="fixed inset-0 z-[1000] bg-white">
-            <QuestionPaperRenderer
-              questions={viewingPaperQuestions}
-              onClose={() => setViewingPaperQuestions(null)}
-              initialFormat={
-                (activeTab === "Bulk Uploader"
-                  ? bulkUploadData.format
-                  : "default") as any
-              }
-            />
-          </div>
-        )}
-      </div>
-    );
-  };
 
 
 
@@ -4490,347 +2385,161 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       )}
 
       {activeTab === "Results" ? (
-        renderResultsTab()
+        <TestsResultsTab
+          filteredResults={results.filter((res) => {
+            const matchSeries = !resultFilters.series || res.batchSeries.includes(resultFilters.series);
+            const matchTest = !resultFilters.test || res.testName.includes(resultFilters.test);
+            return matchSeries && matchTest;
+          })}
+          courses={courses}
+          resultFilters={resultFilters}
+          setResultFilters={setResultFilters}
+          loading={loading}
+          totalResults={results.filter((res) => {
+            const matchSeries = !resultFilters.series || res.batchSeries.includes(resultFilters.series);
+            const matchTest = !resultFilters.test || res.testName.includes(resultFilters.test);
+            return matchSeries && matchTest;
+          }).length}
+          resultsPageSize={resultsPageSize}
+          setResultsPageSize={setResultsPageSize}
+          resultsCurrentPage={resultsCurrentPage}
+          setResultsCurrentPage={setResultsCurrentPage}
+          totalResultsPages={Math.ceil(results.filter((res) => {
+            const matchSeries = !resultFilters.series || res.batchSeries.includes(resultFilters.series);
+            const matchTest = !resultFilters.test || res.testName.includes(resultFilters.test);
+            return matchSeries && matchTest;
+          }).length / resultsPageSize)}
+          resultsShowingStart={results.filter((res) => {
+            const matchSeries = !resultFilters.series || res.batchSeries.includes(resultFilters.series);
+            const matchTest = !resultFilters.test || res.testName.includes(resultFilters.test);
+            return matchSeries && matchTest;
+          }).length === 0 ? 0 : (resultsCurrentPage - 1) * resultsPageSize + 1}
+          resultsEndIndex={Math.min(resultsCurrentPage * resultsPageSize, results.filter((res) => {
+            const matchSeries = !resultFilters.series || res.batchSeries.includes(resultFilters.series);
+            const matchTest = !resultFilters.test || res.testName.includes(resultFilters.test);
+            return matchSeries && matchTest;
+          }).length)}
+          setViewingStudentAnalysis={setViewingStudentAnalysis}
+        />
       ) : activeTab === "Bulk Uploader" ? (
-        renderBulkUploaderTab()
+        <TestsBulkUploaderTab
+          bulkUploadData={bulkUploadData}
+          setBulkUploadData={setBulkUploadData}
+          courses={courses}
+          tests={tests}
+          isParsing={isParsing}
+          previewQuestions={
+            bulkUploadData.parsedQuestions &&
+            bulkUploadData.parsedQuestions.length > 0
+              ? bulkUploadData.parsedQuestions
+              : []
+          }
+          onFileUpload={handleBulkUploadFileUpload}
+          onProceedToUpload={handleBulkUploadProceed}
+          onDownloadDOCX={() =>
+            generateDOCX(
+              bulkUploadData.parsedQuestions || [],
+              bulkUploadData.format,
+              `Paper_${bulkUploadData.file?.name}.docx`,
+            )
+          }
+          setViewingPaperQuestions={setViewingPaperQuestions}
+          renderQuestionText={renderQuestionText}
+          renderDiagram={renderDiagram}
+        />
       ) : activeTab === "Reported Questions" ? (
-        renderReportedQuestionsTab()
+        <ReportedQuestionsTab
+          paginatedReported={reportedQuestions.filter((rq) => {
+            const query = reportedSearchQuery.toLowerCase();
+            const matchSearch =
+              (rq.studentName || "").toLowerCase().includes(query) ||
+              (rq.testTitle || "").toLowerCase().includes(query) ||
+              (rq.questionEn || "").toLowerCase().includes(query) ||
+              (rq.questionHi || "").toLowerCase().includes(query);
+            const matchIssue = !reportedFilters.issue || rq.issue === reportedFilters.issue;
+            return matchSearch && matchIssue;
+          }).slice((reportedCurrentPage - 1) * reportedPageSize, reportedCurrentPage * reportedPageSize)}
+          reportedSearchQuery={reportedSearchQuery}
+          setReportedSearchQuery={setReportedSearchQuery}
+          reportedFilters={reportedFilters}
+          setReportedFilters={setReportedFilters}
+          isReportedFilterOpen={isReportedFilterOpen}
+          setIsReportedFilterOpen={setIsReportedFilterOpen}
+          reportedQuestions={reportedQuestions}
+          reportedPageSize={reportedPageSize}
+          setReportedPageSize={setReportedPageSize}
+          reportedShowingStart={reportedQuestions.filter((rq) => {
+            const query = reportedSearchQuery.toLowerCase();
+            const matchSearch =
+              (rq.studentName || "").toLowerCase().includes(query) ||
+              (rq.testTitle || "").toLowerCase().includes(query) ||
+              (rq.questionEn || "").toLowerCase().includes(query) ||
+              (rq.questionHi || "").toLowerCase().includes(query);
+            const matchIssue = !reportedFilters.issue || rq.issue === reportedFilters.issue;
+            return matchSearch && matchIssue;
+          }).length === 0 ? 0 : (reportedCurrentPage - 1) * reportedPageSize + 1}
+          reportedEndIndex={Math.min(reportedCurrentPage * reportedPageSize, reportedQuestions.filter((rq) => {
+            const query = reportedSearchQuery.toLowerCase();
+            const matchSearch =
+              (rq.studentName || "").toLowerCase().includes(query) ||
+              (rq.testTitle || "").toLowerCase().includes(query) ||
+              (rq.questionEn || "").toLowerCase().includes(query) ||
+              (rq.questionHi || "").toLowerCase().includes(query);
+            const matchIssue = !reportedFilters.issue || rq.issue === reportedFilters.issue;
+            return matchSearch && matchIssue;
+          }).length)}
+          totalReported={reportedQuestions.filter((rq) => {
+            const query = reportedSearchQuery.toLowerCase();
+            const matchSearch =
+              (rq.studentName || "").toLowerCase().includes(query) ||
+              (rq.testTitle || "").toLowerCase().includes(query) ||
+              (rq.questionEn || "").toLowerCase().includes(query) ||
+              (rq.questionHi || "").toLowerCase().includes(query);
+            const matchIssue = !reportedFilters.issue || rq.issue === reportedFilters.issue;
+            return matchSearch && matchIssue;
+          }).length}
+          reportedCurrentPage={reportedCurrentPage}
+          setReportedCurrentPage={setReportedCurrentPage}
+          totalReportedPages={Math.ceil(reportedQuestions.filter((rq) => {
+            const query = reportedSearchQuery.toLowerCase();
+            const matchSearch =
+              (rq.studentName || "").toLowerCase().includes(query) ||
+              (rq.testTitle || "").toLowerCase().includes(query) ||
+              (rq.questionEn || "").toLowerCase().includes(query) ||
+              (rq.questionHi || "").toLowerCase().includes(query);
+            const matchIssue = !reportedFilters.issue || rq.issue === reportedFilters.issue;
+            return matchSearch && matchIssue;
+          }).length / reportedPageSize)}
+          updateReportStatus={updateReportStatus}
+          loading={loading}
+        />
       ) : viewingTestSeries ? (
         renderTestSeriesDetail()
       ) : (
-        <>
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
-            <div>
-              <h2 className="text-[22px] font-bold text-[#1a202c] tracking-tight">
-                Tests
-              </h2>
-            </div>
-            <div className="flex gap-3 items-center w-full md:w-auto">
-              <div className="relative group w-full md:w-[280px]">
-                <span className="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-[20px] transition-colors group-focus-within:text-black">
-                  search
-                </span>
-                <input
-                  type="text"
-                  placeholder="Search tests..."
-                  value={searchQuery}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setCurrentPage(1);
-                  }}
-                  className="w-full h-11 pl-11 pr-4 bg-[#f8f9fa] border border-gray-200 rounded-xl text-[14px] font-medium text-gray-800 outline-none transition-all placeholder:text-gray-400 focus:bg-white focus:border-black focus:shadow-[0_8px_30px_rgb(0,0,0,0.04)]"
-                />
-              </div>
-
-              <div className="relative">
-                <button
-                  onClick={() => setIsFilterOpen(!isFilterOpen)}
-                  className={`flex items-center gap-2 h-11 px-6 rounded-xl border text-[13px] font-bold transition-all ${isFilterOpen ? "bg-black text-white border-black shadow-md" : "bg-white border-gray-200 text-gray-600 hover:border-black hover:bg-gray-50"}`}
-                >
-                  <span className="material-symbols-outlined text-[18px]">
-                    tune
-                  </span>
-                  Filters
-                </button>
-
-                {isFilterOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-[280px] bg-white rounded-2xl shadow-2xl border border-gray-100 p-5 z-[101] animate-in fade-in zoom-in-95 duration-200 origin-top-right">
-                    <div className="space-y-5">
-                      <div>
-                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 block">
-                          Status
-                        </label>
-                        <div className="grid grid-cols-2 gap-2">
-                          {["all", "published", "draft"].map((s) => (
-                            <button
-                              key={s}
-                              onClick={() => {
-                                setFilterStatus(s === "all" ? "" : s);
-                                setIsFilterOpen(false);
-                              }}
-                              className={`h-9 rounded-lg text-[11px] font-bold capitalize border transition-all ${(!filterStatus && s === "all") || filterStatus === s ? "bg-black text-white border-black shadow-sm" : "bg-gray-50 border-gray-100 text-gray-500 hover:border-gray-300"}`}
-                            >
-                              {s}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2.5 block">
-                          Items Per Page
-                        </label>
-                        <div className="grid grid-cols-3 gap-2">
-                          {[10, 20, 50].map((n) => (
-                            <button
-                              key={n}
-                              onClick={() => {
-                                setItemsPerPage(n);
-                                setIsFilterOpen(false);
-                              }}
-                              className={`h-9 rounded-lg text-[11px] font-bold border transition-all ${itemsPerPage === n ? "bg-black text-white border-black shadow-sm" : "bg-gray-50 border-gray-100 text-gray-500 hover:border-gray-300"}`}
-                            >
-                              {n}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="relative">
-                <button
-                  onClick={() => handleOpenModal()}
-                  className="flex items-center justify-center w-11 h-11 bg-[#1a202c] text-white rounded-full transition-all hover:bg-black active:scale-95 shadow-md"
-                >
-                  <span className="material-symbols-outlined text-[26px]">
-                    add
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-100 mb-6 shadow-sm">
-            <div className="">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-[#f1f3f5] text-gray-500">
-                  <tr>
-                    <th className="px-6 py-3.5 text-[12px] font-bold tracking-tight">
-                      <div className="flex items-center gap-2 cursor-pointer group uppercase">
-                        S. No.{" "}
-                        <span className="material-symbols-outlined text-[16px] text-gray-300 group-hover:text-gray-400">
-                          unfold_more
-                        </span>
-                      </div>
-                    </th>
-                    <th className="px-6 py-3.5 text-[12px] font-bold tracking-tight">
-                      <div className="flex items-center gap-2 cursor-pointer group uppercase">
-                        Logo{" "}
-                        <span className="material-symbols-outlined text-[16px] text-gray-300 group-hover:text-gray-400">
-                          unfold_more
-                        </span>
-                      </div>
-                    </th>
-                    <th className="px-6 py-3.5 text-[12px] font-bold tracking-tight">
-                      <div className="flex items-center gap-2 cursor-pointer group uppercase">
-                        Title{" "}
-                        <span className="material-symbols-outlined text-[16px] text-gray-300 group-hover:text-gray-400">
-                          unfold_more
-                        </span>
-                      </div>
-                    </th>
-                    <th className="px-6 py-3.5 text-[12px] font-bold tracking-tight">
-                      <div className="flex items-center gap-2 cursor-pointer group uppercase">
-                        Price{" "}
-                        <span className="material-symbols-outlined text-[16px] text-gray-300 group-hover:text-gray-400">
-                          unfold_more
-                        </span>
-                      </div>
-                    </th>
-                    <th className="px-6 py-3.5 text-[12px] font-bold tracking-tight">
-                      <div className="flex items-center gap-2 cursor-pointer group uppercase">
-                        Sort By{" "}
-                        <span className="material-symbols-outlined text-[16px] text-gray-300 group-hover:text-gray-400">
-                          unfold_more
-                        </span>
-                      </div>
-                    </th>
-                    <th className="px-6 py-3.5 text-[12px] font-bold tracking-tight text-center uppercase">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {paginatedTests.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-8 py-20 text-center">
-                        <span className="material-symbols-outlined text-6xl text-gray-200 mb-2 block">
-                          quiz
-                        </span>
-                        <p className="text-gray-400 font-medium font-bold italic">
-                          No records found
-                        </p>
-                      </td>
-                    </tr>
-                  ) : (
-                    paginatedTests.map((test, index) => (
-                      <tr
-                        key={test.id || index}
-                        className="hover:bg-gray-50/30 transition-colors group"
-                      >
-                        <td className="px-6 py-5 text-[13px] text-gray-700 font-medium">
-                          {test.id
-                            ? String(test.id).length > 8
-                              ? index + 1
-                              : String(test.id).replace("test_", "")
-                            : index + 1}
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="w-[84px] h-[48px] bg-white rounded-md overflow-hidden border border-gray-100 flex items-center justify-center p-0.5 group-hover:border-gray-200 transition-all">
-                            {test.logo || test.image ? (
-                              <img
-                                src={test.logo || test.image}
-                                alt="Logo"
-                                className="w-full h-full object-cover rounded-[3px]"
-                              />
-                            ) : (
-                              <div className="bg-gray-50 w-full h-full flex items-center justify-center rounded-[3px]">
-                                <span className="material-symbols-outlined text-gray-200 text-[20px]">
-                                  image
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-5 text-[14px] font-medium text-[#1a202c]">
-                          <button
-                            onClick={() => handleSetViewingTestSeries(test)}
-                            className="hover:text-blue-600 transition-all text-left leading-snug"
-                          >
-                            {test.name || test.title}
-                          </button>
-                        </td>
-                        <td className="px-6 py-5 font-medium text-gray-700 text-[14px]">
-                          ₹{test.price || "0"}
-                        </td>
-                        <td className="px-6 py-5">
-                          <div className="bg-[#eff1f3] rounded-3xl h-6 px-4 inline-flex items-center justify-center min-w-[80px]">
-                            <span className="text-[12px] font-medium text-gray-600">
-                              {Number(test.sortBy || 0).toFixed(2)}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-5 text-center">
-                          <div className="relative inline-block action-menu-container">
-                            <button
-                              onClick={() => setActiveMenu(activeMenu === test.id ? null : test.id)}
-                              className={`flex items-center justify-between gap-2 px-4 h-9 border rounded-lg text-[13px] font-bold transition-all shadow-sm w-[110px] ${activeMenu === test.id ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
-                            >
-                              Actions
-                              <span className={`material-symbols-outlined text-[18px] transition-all duration-200 ${activeMenu === test.id ? "rotate-180 text-blue-500" : "text-gray-400 group-hover:text-gray-600"}`}>
-                                expand_more
-                              </span>
-                            </button>
-
-                            {activeMenu === test.id && (
-                              <div className={`absolute right-0 ${paginatedTests.length > 3 ? (index >= paginatedTests.length - 2 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right") : index >= paginatedTests.length - 1 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right"} w-[180px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[9999] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right`}>
-                                {[
-                                  { id: "view", label: "View Tests", icon: "folder_open", onClick: () => { handleSetViewingTestSeries(test); setActiveMenu(null); } },
-                                  { id: "edit", label: "Edit", icon: "edit", onClick: () => { handleOpenModal(test); setActiveMenu(null); } },
-                                  { id: "duplicate", label: "Duplicate", icon: "content_copy", onClick: () => { handleDuplicateTest(test); setActiveMenu(null); } },
-                                  { id: "publish", label: "Publish Changes", icon: "sync", onClick: () => { handlePublish(test.id || (test as any)._id); setActiveMenu(null); } },
-                                ].map((item) => (
-                                  <button
-                                    key={item.id}
-                                    onClick={() => item.onClick()}
-                                    className="w-full px-5 py-2 flex items-center gap-3 hover:bg-gray-50 transition-colors group text-left"
-                                  >
-                                    <span className="material-symbols-outlined text-[20px] text-gray-400 group-hover:text-black">
-                                      {item.icon}
-                                    </span>
-                                    <span className="text-[13px] font-bold text-gray-600 group-hover:text-black">
-                                      {item.label}
-                                    </span>
-                                  </button>
-                                ))}
-
-                                <div className="w-full flex items-center justify-between px-5 py-2 hover:bg-gray-50 transition-all group">
-                                  <div className="flex items-center gap-3">
-                                    <span className="material-symbols-outlined text-[20px] text-gray-400 group-hover:text-black">
-                                      check_circle
-                                    </span>
-                                    <span className="text-[13px] font-bold text-gray-600 group-hover:text-black">
-                                      Enabled
-                                    </span>
-                                  </div>
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); toggleStatus(test); }}
-                                    className={`w-8 h-4.5 rounded-full relative transition-all duration-300 ${test.status === "active" ? "bg-black" : "bg-gray-200"}`}
-                                  >
-                                    <div className={`absolute top-0.5 w-3.5 h-3.5 bg-white rounded-full transition-all duration-300 ${test.status === "active" ? "left-4" : "left-0.5"}`} />
-                                  </button>
-                                </div>
-
-                                <div className="h-[1px] bg-gray-50 my-1 mx-2"></div>
-
-                                <button
-                                  onClick={() => { handleDelete(test.id || (test as any)._id); setActiveMenu(null); }}
-                                  className="w-full px-5 py-2 flex items-center gap-3 hover:bg-red-50 transition-colors group text-left"
-                                >
-                                  <span className="material-symbols-outlined text-[20px] text-red-500">
-                                    delete
-                                  </span>
-                                  <span className="text-[13px] font-bold text-red-600">
-                                    Delete
-                                  </span>
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Standardized Pagination Footer */}
-            {!loading && filteredTests.length > 0 && (
-              <div className="p-6 border-t border-gray-50 flex items-center justify-between bg-white rounded-b-2xl">
-                <div className="flex items-center gap-3">
-                  <div className="relative flex items-center group">
-                    <select
-                      value={itemsPerPage}
-                      onChange={(e) => {
-                        setItemsPerPage(Number(e.target.value));
-                        setCurrentPage(1);
-                      }}
-                      className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
-                    >
-                      <option value={10}>10</option>
-                      <option value={20}>20</option>
-                      <option value={50}>50</option>
-                      <option value={100}>100</option>
-                    </select>
-                    <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400 flex items-center justify-center h-full top-0 group-focus-within:text-black">
-                      expand_more
-                    </span>
-                  </div>
-                  <span className="text-[13px] font-medium text-gray-400 italic">
-                    Showing {(currentPage - 1) * itemsPerPage + 1} to{" "}
-                    {Math.min(currentPage * itemsPerPage, filteredTests.length)} of{" "}
-                    {filteredTests.length} entries
-                  </span>
-                </div>
-
-                <div className="flex items-center p-1.5 bg-white border border-gray-200 rounded-2xl shadow-sm">
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
-                  >
-                    Previous
-                  </button>
-                  <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
-                  <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
-                    {currentPage}
-                  </button>
-                  <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages || totalPages === 0}
-                    className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
-                  >
-                    Next
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </>
+        <TestsListTab
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          setCurrentPage={setCurrentPage}
+          isFilterOpen={isFilterOpen}
+          setIsFilterOpen={setIsFilterOpen}
+          filterStatus={filterStatus}
+          setFilterStatus={setFilterStatus}
+          itemsPerPage={itemsPerPage}
+          setItemsPerPage={setItemsPerPage}
+          handleOpenModal={handleOpenModal}
+          paginatedTests={paginatedTests}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          filteredTests={filteredTests}
+          loading={loading}
+          activeMenu={activeMenu}
+          setActiveMenu={setActiveMenu}
+          handleSetViewingTestSeries={handleSetViewingTestSeries}
+          toggleStatus={toggleStatus}
+          handleDelete={handleDelete}
+          handleDuplicateTest={handleDuplicateTest}
+          handlePublish={handlePublish}
+        />
       )}
 
       <AddTestDrawer
@@ -5537,144 +3246,44 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       )}
 
       {/* Sort Question Order Modal */}
-      {showSortModal && (
-        <div className="fixed inset-0 bg-black/40 z-[100000] flex items-center justify-center backdrop-blur-[2px] animate-in fade-in duration-300 p-6">
-          <div className="w-full max-w-[750px] bg-white rounded-2xl shadow-2xl flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-300">
-            {/* Header */}
-            <div className="flex items-center justify-between px-8 py-5 border-b border-gray-100">
-              <h3 className="text-[17px] font-bold text-gray-800 tracking-tight">
-                Sort Question Order
-              </h3>
-              <button
-                onClick={() => setShowSortModal(false)}
-                className="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-black hover:bg-gray-50 rounded-full transition-all"
-              >
-                <span className="material-symbols-outlined font-bold">
-                  close
-                </span>
-              </button>
-            </div>
+      <QuestionSortModal
+        isOpen={showSortModal}
+        onClose={() => setShowSortModal(false)}
+        questions={editorQuestions}
+        setQuestions={setEditorQuestions}
+        onSave={async () => {
+          try {
+            const updates = editorQuestions.map((q, idx) => ({
+              id: q.id,
+              _id: q._id,
+              orderIndex: idx + 1,
+            }));
 
-            {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={editorQuestions.map((q) => q.id || q._id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <div className="space-y-4">
-                    {editorQuestions.map((q, idx) => (
-                      <SortableQuestionItem
-                        key={q.id || q._id || idx}
-                        id={q.id || q._id}
-                        question={q}
-                        index={idx}
-                      />
-                    ))}
-                  </div>
-                </SortableContext>
-              </DndContext>
-              {editorQuestions.length === 0 && (
-                <div className="py-20 text-center">
-                  <span className="material-symbols-outlined text-gray-200 text-6xl">
-                    quiz
-                  </span>
-                  <p className="text-gray-400 mt-4 font-medium">
-                    No questions available to sort
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Footer */}
-            <div className="px-8 py-5 border-t border-gray-100 flex items-center justify-end gap-3 bg-white rounded-b-2xl">
-              <button
-                onClick={() => setShowSortModal(false)}
-                className="px-8 py-2.5 border border-gray-200 rounded-lg text-[13px] font-bold text-gray-500 hover:bg-gray-50 transition-all active:scale-95"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={async () => {
-                  try {
-                    const updates = editorQuestions.map((q, idx) => ({
-                      id: q.id,
-                      _id: q._id,
-                      orderIndex: idx + 1,
-                    }));
-
-                    await questionsAPI.updateAll(updates);
-                    showToast("Question order saved successfully", "success");
-                    setShowSortModal(false);
-                    loadData();
-                  } catch (err: any) {
-                    showToast(
-                      err.message || "Failed to save question order",
-                      "error",
-                    );
-                  }
-                }}
-                disabled={editorQuestions.length === 0}
-                className="px-10 py-2.5 bg-[#4F46E5] text-white text-[13px] font-bold rounded-lg hover:bg-[#4338CA] transition-all shadow-md active:scale-95 disabled:opacity-50"
-              >
-                Save Order
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+            await questionsAPI.updateAll(updates);
+            showToast("Question order saved successfully", "success");
+            setShowSortModal(false);
+            loadData();
+          } catch (err: any) {
+            showToast(
+              err.message || "Failed to save question order",
+              "error",
+            );
+          }
+        }}
+      />
       {/* Add Question Drawer */}
-      <AddQuestionDrawer
+      <AddQuestionEditorDrawer
         isOpen={!!viewingAddQuestionForm}
         onClose={() => setViewingAddQuestionForm(null)}
-        onSubmit={(data) => {
-          handleSaveQuestion(data);
-        }}
-        editingQuestion={
-          viewingAddQuestionForm &&
-            typeof viewingAddQuestionForm === "object" &&
-            Object.keys(viewingAddQuestionForm).length > 0
-            ? viewingAddQuestionForm
-            : null
-        }
+        onSubmit={handleSaveQuestion}
+        viewingQuestion={viewingAddQuestionForm}
+        setViewingQuestion={setViewingAddQuestionForm}
+        questions={editorQuestions}
         sections={[
           { id: "default", name: viewingQuestionEditor?.name || "Default" },
         ]}
         testId={viewingQuestionEditor?.id || viewingQuestionEditor?._id || ""}
-        onSaveAndGoToPrevious={(data) => {
-          handleSaveQuestion(data).then(() => {
-            // Find current question index and go to previous
-            const currentId = data.id || data._id;
-            const currentIdx = editorQuestions.findIndex(
-              (q: any) => (q.id || q._id) === currentId,
-            );
-            if (currentIdx > 0) {
-              setViewingAddQuestionForm(editorQuestions[currentIdx - 1]);
-            } else {
-              showToast("This is the first question", "error");
-              setViewingAddQuestionForm(null);
-            }
-          });
-        }}
-        onSaveAndGoToNext={(data) => {
-          handleSaveQuestion(data).then(() => {
-            // Find current question index and go to next
-            const currentId = data.id || data._id;
-            const currentIdx = editorQuestions.findIndex(
-              (q: any) => (q.id || q._id) === currentId,
-            );
-            if (currentIdx < editorQuestions.length - 1) {
-              setViewingAddQuestionForm(editorQuestions[currentIdx + 1]);
-            } else {
-              showToast("This is the last question", "error");
-              setViewingAddQuestionForm(null);
-            }
-          });
-        }}
+        showToast={showToast}
       />
 
 

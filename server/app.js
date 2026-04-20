@@ -65,8 +65,13 @@ app.use(cors({
   maxAge: 86400
 }));
 
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ limit: '100mb', extended: true }));
+// --- Body Parser Configuration ---
+// Increase limit specifically for bulk question uploads (Parsed test papers can be large)
+app.post('/api/questions/bulk', express.json({ limit: '50mb' }));
+
+// Global limits for all other routes
+app.use(express.json({ limit: '2mb' }));
+app.use(express.urlencoded({ limit: '2mb', extended: true }));
 app.use(sanitizeInput);
 app.use(cookieParser());
 
@@ -94,11 +99,54 @@ const excelUpload = multer({
 // Live Stream helpers moved to server/services/liveStream.service.js
 
 // --- Proxy & Gateway Routes ---
+const isValidProxyUrl = (urlStr) => {
+  try {
+    const url = new URL(urlStr);
+    if (!['http:', 'https:'].includes(url.protocol)) return false;
+
+    const hostname = url.hostname.toLowerCase();
+    
+    // Exact match or subdomain match for allowlisted domains
+    const allowedDomains = [
+      'res.cloudinary.com',
+      'drive.google.com',
+      'docs.google.com',
+      'googleusercontent.com' // Often used for drive thumbnails/content
+    ];
+    
+    const isAllowed = allowedDomains.some(domain => 
+      hostname === domain || hostname.endsWith('.' + domain)
+    );
+
+    if (!isAllowed) return false;
+
+    // Block private IPs and localhost even if they spoof hostnames (basic check)
+    const blockedHosts = ['localhost', '127.0.0.1', '0.0.0.0', '::1', '169.254.169.254'];
+    if (blockedHosts.includes(hostname)) return false;
+    
+    // IP Range Checks (Very basic, better than nothing)
+    if (hostname.startsWith('10.') || hostname.startsWith('192.168.') || hostname.startsWith('172.')) {
+       // Potential private IP
+       if (/^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)) return false; // 172.16.0.0/12
+       if (hostname.startsWith('192.168.')) return false;
+       if (hostname.startsWith('10.')) return false;
+    }
+
+    return true;
+  } catch (e) { return false; }
+};
+
 app.get('/api/proxy-resource', async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).send('URL is required');
   try {
-    let targetUrl = decodeURIComponent(url);
+    const targetUrl = decodeURIComponent(url);
+    
+    if (!isValidProxyUrl(targetUrl)) {
+      console.warn(`[SECURITY] Blocked SSRF attempt to: ${targetUrl}`);
+      return res.status(403).send('Forbidden: Invalid resource domain');
+    }
+
     if (targetUrl.includes('res.cloudinary.com')) {
       const parts = targetUrl.split('/');
       const uploadIdx = parts.indexOf('upload');

@@ -16,6 +16,7 @@ const courseSchema = new mongoose.Schema({
     contentType: { type: String },
     demoVideo: { type: String, default: '' },
     subject: { type: String },
+    subjectId: { type: String },
     boardType: { type: String },
     isActive: { type: Boolean, default: true },
     lessons: { type: Number, default: 0 },
