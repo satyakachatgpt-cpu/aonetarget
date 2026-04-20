@@ -16,8 +16,9 @@ export const evaluateTest = ({ questions, answers, test }) => {
     const isCorrect = studentAnswer === q.correctAnswer;
     
     // Resolve marks: Strictly use saved DB values
-    const marks = Number(q.marks || q.positiveMarks || test.marksPerQuestion);
-    const negMarks = Number(q.negativeMarks || test.negativeMarking);
+    const marks = Number(q.marks || q.positiveMarks || test.marksPerQuestion || 0);
+    const qNeg = q.negativeMarks !== undefined && q.negativeMarks !== '' ? q.negativeMarks : null;
+    const negMarks = Math.abs(Number(qNeg ?? test.negativeMarking ?? 0));
 
     totalMarks += marks;
 

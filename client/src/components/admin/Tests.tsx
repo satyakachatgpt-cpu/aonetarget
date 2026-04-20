@@ -489,8 +489,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           correctAnswer:
             row.CorrectAnswer || row.correct || row.Answer || row.answer,
           solution: row.Solution || row.solution || row.Explanation || "",
-          positiveMarks: Number(row.Marks || row.marks || 4),
-          negativeMarks: Number(row.Negative || row.negative || 1),
+          positiveMarks: Number(row.Marks || row.marks || 0),
+          negativeMarks: Number(row.Negative || row.negative || 0),
         }));
         
         return { questions: parsedQuestions, extractedImages: [] };
@@ -5182,6 +5182,11 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             
             setShowAddSingleTestDrawer(false);
             setEditingTest(null);
+            
+            // Critical: Navigate away from /edit or /add subroutes to prevent auto-reopening of drawers
+            if (routeId) {
+              navigate('/admin/tests', { replace: true });
+            }
           } catch (err: any) {
             showToast(err.message || "Failed to save test", "error");
           }

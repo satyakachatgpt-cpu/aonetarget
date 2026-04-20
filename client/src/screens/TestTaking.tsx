@@ -131,7 +131,7 @@ const TestTaking: React.FC = () => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [questions.length, submitted]);
+  }, [questions.length, submitted, hasAcceptedTerms, timeLeft > 0, test?.termsAndConditions]);
 
   const formatTime = (secs: number) => {
     const h = Math.floor(secs / 3600);
@@ -212,8 +212,10 @@ const TestTaking: React.FC = () => {
       let negativeMarksTotal = 0;
       const testNegMarking = test?.negativeMarking || 0;
       questions.forEach(q => {
-        const marks = Number(q.marks) || Number(q.positiveMarks) || Number(test?.marksPerQuestion) || Number(test?.marks) || 0;
-        const negMarks = Number(q.negativeMarks) !== undefined && !isNaN(Number(q.negativeMarks)) ? Number(q.negativeMarks) : (Number(q.negative) !== undefined && !isNaN(Number(q.negative)) ? Number(q.negative) : (Number(testNegMarking) || 0));
+        const marks = Number(q.marks || q.positiveMarks || test?.marksPerQuestion || test?.marks || 0);
+        const qNeg = q.negativeMarks !== undefined && q.negativeMarks !== '' ? q.negativeMarks : (q.negative !== undefined && q.negative !== '' ? q.negative : null);
+        const negMarks = Math.abs(Number(qNeg ?? testNegMarking ?? 0));
+        
         totalMarks += marks;
         if (answers[q.id]) {
           if (answers[q.id] === q.correctAnswer) {
