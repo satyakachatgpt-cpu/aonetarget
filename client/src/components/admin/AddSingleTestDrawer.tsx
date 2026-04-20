@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RightSideDrawer, DrawerBody } from './DrawerSystem';
 import CustomDropdown from './CustomDropdown';
+import RichTextEditor from '../shared/RichTextEditor';
 
 interface AddSingleTestDrawerProps {
     isOpen: boolean;
@@ -22,6 +23,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
     showToast
 }) => {
     const [activeTab, setActiveTab] = useState<'Basic' | 'Advanced'>('Basic');
+    const [showTermsEditor, setShowTermsEditor] = useState(false);
 
     // Helper to format date for display
     const formatDisplayDate = (dateStr: string) => {
@@ -88,7 +90,8 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
         telegramChannelId: '',
         sendTelegramNotice: false,
         marksPerQuestion: '',
-        negativeMarking: ''
+        negativeMarking: '',
+        termsAndConditions: ''
     });
 
     const [sections, setSections] = useState([
@@ -139,7 +142,8 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                     telegramChannelId: editingTest.telegramChannelId || '',
                     sendTelegramNotice: editingTest.sendTelegramNotice || false,
                     marksPerQuestion: editingTest.marksPerQuestion?.toString() || '',
-                    negativeMarking: editingTest.negativeMarking?.toString() || ''
+                    negativeMarking: editingTest.negativeMarking?.toString() || '',
+                    termsAndConditions: editingTest.termsAndConditions || ''
                 });
                 if (editingTest.sections && Array.isArray(editingTest.sections)) {
                     setSections(editingTest.sections);
@@ -181,7 +185,8 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                     telegramChannelId: '',
                     sendTelegramNotice: false,
                     marksPerQuestion: '',
-                    negativeMarking: ''
+                    negativeMarking: '',
+                    termsAndConditions: ''
                 });
                 setSections([{ id: Date.now(), section: '', maxQuestions: -1, partTitle: '', cutoff: 0, isOptional: true, fixedTiming: false }]);
             }
@@ -317,12 +322,59 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
 
                                     {/* Test Instructions */}
                                     <div className="space-y-2 col-span-2">
-                                        <label className="text-[13px] font-bold text-[#2d3748]">Test Instructions<span className="text-red-500 ml-0.5">*</span></label>
-                                        <div className="flex">
-                                            <button className="flex items-center justify-center px-6 h-12 border border-gray-200 rounded-xl text-[14px] font-bold text-[#4a5568] hover:bg-gray-50 transition-all shadow-sm">
-                                                Add Terms
-                                            </button>
-                                        </div>
+                                        <label className="text-[13px] font-bold text-[#2d3748]">Test Instructions (Terms and Conditions)<span className="text-red-500 ml-0.5">*</span></label>
+                                        {!showTermsEditor ? (
+                                            <div className="flex">
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => {
+                                                        if (!formData.termsAndConditions) {
+                                                            setFormData(prev => ({ 
+                                                                ...prev, 
+                                                                termsAndConditions: '<ul><li>Ensure you have a stable internet connection before starting the test.</li><li>You must attempt all the questions.</li></ul>' 
+                                                            }));
+                                                        }
+                                                        setShowTermsEditor(true);
+                                                    }}
+                                                    className={`flex items-center justify-center px-6 h-12 border ${formData.termsAndConditions ? 'border-[#1a202c] bg-gray-50 text-[#1a202c]' : 'border-gray-200 text-[#4a5568] hover:bg-gray-50'} rounded-xl text-[14px] font-bold transition-all shadow-sm`}>
+                                                    {formData.termsAndConditions ? 'Edit Terms' : 'Add Terms'}
+                                                </button>
+                                                {formData.termsAndConditions && (
+                                                    <div className="ml-3 flex items-center text-green-600 text-[13px] font-bold bg-green-50 px-3 rounded-lg border border-green-100">
+                                                        <span className="material-symbols-outlined text-[18px] mr-1">check_circle</span>
+                                                        Terms Added
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
+                                                <RichTextEditor
+                                                    label=""
+                                                    content={formData.termsAndConditions}
+                                                    onChange={(val) => handleInputChange('termsAndConditions', val)}
+                                                    height="250px"
+                                                />
+                                                <div className="mt-3 flex gap-2 justify-end">
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => {
+                                                            if (formData.termsAndConditions === '<ul><li>Ensure you have a stable internet connection before starting the test.</li><li>You must attempt all the questions.</li></ul>') {
+                                                                handleInputChange('termsAndConditions', '');
+                                                            }
+                                                            setShowTermsEditor(false);
+                                                        }}
+                                                        className="px-4 h-10 bg-gray-100 text-gray-600 border border-gray-200 rounded-lg text-[13px] font-bold hover:bg-gray-200 transition-all">
+                                                        Cancel
+                                                    </button>
+                                                    <button 
+                                                        type="button"
+                                                        onClick={() => setShowTermsEditor(false)}
+                                                        className="px-6 h-10 bg-[#1a202c] text-white rounded-lg text-[13px] font-bold hover:bg-black transition-all">
+                                                        Update Terms
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Test Series */}

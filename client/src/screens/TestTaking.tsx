@@ -29,6 +29,7 @@ const TestTaking: React.FC = () => {
   const [reportIssue, setReportIssue] = useState('');
   const [reportComment, setReportComment] = useState('');
   const [reportingStatus, setReportingStatus] = useState(false);
+  const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
 
   useEffect(() => {
     // Reset session state when changing tests
@@ -41,6 +42,7 @@ const TestTaking: React.FC = () => {
     setLoading(true);
     setError('');
     setReportModal(null);
+    setHasAcceptedTerms(false);
 
     const storedStudent = localStorage.getItem('studentData');
     if (storedStudent && storedStudent !== 'undefined') {
@@ -107,7 +109,8 @@ const TestTaking: React.FC = () => {
   };
 
   useEffect(() => {
-    if (questions.length > 0 && !submitted && timeLeft > 0) {
+    const needsTerms = test?.termsAndConditions && test?.termsAndConditions.trim() !== '' && test?.termsAndConditions !== '<p><br></p>';
+    if (questions.length > 0 && !submitted && timeLeft > 0 && (!needsTerms || hasAcceptedTerms)) {
       timerRef.current = setInterval(() => {
         setTimeLeft(prev => {
           if (prev <= 1) {
@@ -381,6 +384,66 @@ const TestTaking: React.FC = () => {
   const currentQuestion = questions[currentIndex];
   const answeredCount = Object.keys(answers).length;
   const flaggedCount = flagged.size;
+  const needsTerms = test?.termsAndConditions && test?.termsAndConditions.trim() !== '' && test?.termsAndConditions !== '<p><br></p>';
+
+  if (!loading && !error && !submitted && needsTerms && !hasAcceptedTerms) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col">
+          <header className="bg-[#1A237E] text-white py-3 px-4 sticky top-0 z-30 shadow-md">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => navigate('/mock-tests', { replace: true })}
+                className="p-1.5 rounded-full hover:bg-white/20 transition-colors"
+                title="Back to Tests"
+              >
+                <span className="material-symbols-rounded text-[20px]">arrow_back</span>
+              </button>
+              <h1 className="text-sm font-bold flex-1 truncate">{test?.title || test?.name || 'Test Instructions'}</h1>
+            </div>
+          </header>
+          
+          <div className="flex-1 overflow-y-auto p-4 max-w-4xl mx-auto w-full">
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-full">
+                  <div className="p-4 md:p-6 border-b border-gray-100 bg-blue-50/30 flex items-center justify-between">
+                     <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-[#1A237E]/10 flex items-center justify-center text-[#1A237E]">
+                           <span className="material-symbols-rounded text-xl">gavel</span>
+                        </div>
+                        <div>
+                           <h2 className="text-lg font-black text-gray-800 tracking-tight">Terms &amp; Conditions</h2>
+                           <p className="text-xs text-gray-500 font-medium">Please read carefully before starting the test</p>
+                        </div>
+                     </div>
+                  </div>
+                  
+                  <div className="p-5 md:p-8 flex-1 overflow-y-auto prose max-w-none text-[14.5px] leading-relaxed text-gray-700 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li]:mb-2 [&>ol]:list-decimal [&>ol]:pl-5 [&>ol>li]:mb-2 [&>p]:mb-4" dangerouslySetInnerHTML={{ __html: test.termsAndConditions }} />
+                  
+                  <div className="p-5 md:p-6 border-t border-gray-100 bg-gray-50 flex flex-col gap-3">
+                     <div className="text-xs text-center text-gray-500 mb-1">
+                        By clicking start, you agree to all the terms listed above. The timer will start immediately.
+                     </div>
+                     <button
+                        onClick={() => {
+                            setHasAcceptedTerms(true);
+                            startTimeRef.current = Date.now();
+                        }}
+                        className="w-full py-4 bg-[#1A237E] text-white rounded-xl text-[14px] font-bold uppercase tracking-wider hover:bg-[#283593] transition-all shadow-md hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
+                     >
+                        I Accept &amp; Start Test
+                        <span className="material-symbols-rounded text-[20px]">arrow_forward</span>
+                     </button>
+                     <button
+                        onClick={() => navigate('/mock-tests', { replace: true })}
+                        className="w-full py-3 bg-white text-gray-600 rounded-xl text-[13px] font-bold border border-gray-200 hover:bg-gray-50 transition-all"
+                     >
+                        Cancel
+                     </button>
+                  </div>
+              </div>
+          </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
