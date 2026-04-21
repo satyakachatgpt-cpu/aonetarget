@@ -277,7 +277,7 @@ export const loginWithPassword = async (req, res) => {
 export const registerStudent = async (req, res) => {
   try {
     const db = getDb();
-    const { name, email, phone, username, class: studentClass, target, address, state, district, gender, dob, password } = req.body;
+    const { name, email, phone, username, class: studentClass, target, address, state, district, gender, dob, password, higherEducation } = req.body;
 
     if (!name || !phone || !email) {
       return res.status(400).json({ error: 'Name, email, and phone are required' });
@@ -325,12 +325,15 @@ export const registerStudent = async (req, res) => {
       phone: cleanPhone,
       password: hashedPassword,
       class: studentClass || '11th',
+      highQualification: higherEducation || '',
+      address: address || '',
       admission: {
         fullAddress: address || '',
         admissionDate: new Date()
       },
       state: state || '',
       district: district || '',
+      city: district || '', // Mirroring district to city for legacy compatibility
       gender: gender || '',
       dob: dob || '',
       enrolledCourses: [],

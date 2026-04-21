@@ -4403,31 +4403,64 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                           <span className="text-[14px] font-bold text-gray-400 uppercase tracking-widest">Loading Content...</span>
                         </div>
                       ) : importItems.length > 0 ? (
-                        importItems.filter(item => (item.title || item.name || '').toLowerCase().includes(importSearch.toLowerCase())).map((item) => (
-                          <div
-                            key={item._id || item.id}
-                            onClick={() => {
-                              const id = item._id || item.id;
-                              setSelectedImportItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-                            }}
-                            className="flex items-center justify-between py-4 px-3 hover:bg-gray-50 rounded-[15px] cursor-pointer transition-all border border-transparent group"
-                          >
-                            <div className="flex items-center gap-4">
-                              <div className="w-10 h-10 bg-white border border-gray-100 rounded-xl flex items-center justify-center shadow-sm group-hover:shadow transition-all shrink-0">
-                                <span className="material-symbols-outlined text-gray-400 text-[20px]">
-                                  {item.type === 'folder' ? 'folder' : (item.type === 'video' ? 'videocam' : 'description')}
-                                </span>
+                        importItems.filter(item => (item.title || item.name || '').toLowerCase().includes(importSearch.toLowerCase())).map((item) => {
+                          const type = item.type;
+                          const title = (item.title || item.name || '').toLowerCase();
+                          const isLive = item.platform || item.streamStatus || title.includes('live') || item.contentType === 'live' || item.streamSource;
+                          
+                          let badgeLabel = '';
+                          let badgeColor = '';
+                          
+                          if (type === 'folder') {
+                            badgeLabel = 'FOLDER';
+                            badgeColor = 'bg-blue-50 text-blue-600 border-blue-100/50';
+                          } else if (type === 'video') {
+                            if (isLive) {
+                              badgeLabel = 'LIVE';
+                              badgeColor = 'bg-red-50 text-red-600 border-red-100/50';
+                            } else {
+                              badgeLabel = 'VIDEO';
+                              badgeColor = 'bg-indigo-50 text-indigo-600 border-indigo-100/50';
+                            }
+                          } else {
+                            // Map notes, documents, and tests to DOCUMENT
+                            badgeLabel = 'DOCUMENT';
+                            badgeColor = 'bg-teal-50 text-teal-600 border-teal-100/50';
+                          }
+
+                          return (
+                            <div
+                              key={item._id || item.id}
+                              onClick={() => {
+                                const id = item._id || item.id;
+                                setSelectedImportItems(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+                              }}
+                              className="flex items-center justify-between py-4 px-3 hover:bg-gray-50 rounded-[15px] cursor-pointer transition-all border border-transparent group"
+                            >
+                              <div className="flex items-center gap-4">
+                                <div className="w-10 h-10 bg-white border border-gray-100 rounded-xl flex items-center justify-center shadow-sm group-hover:shadow transition-all shrink-0">
+                                  <span className="material-symbols-outlined text-gray-400 text-[20px]">
+                                    {type === 'folder' ? 'folder' : (type === 'video' ? 'videocam' : 'description')}
+                                  </span>
+                                </div>
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-[15px] font-bold text-gray-700 tracking-tight">{item.title || item.name}</span>
+                                  <div className="flex items-center gap-2">
+                                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-md border uppercase tracking-wider ${badgeColor}`}>
+                                      {badgeLabel}
+                                    </span>
+                                  </div>
+                                </div>
                               </div>
-                              <span className="text-[15px] font-bold text-gray-700 tracking-tight">{item.title || item.name}</span>
+                              <input
+                                type="checkbox"
+                                checked={selectedImportItems.includes(item._id || item.id)}
+                                onChange={() => { }} // Handled by div click
+                                className="w-5 h-5 accent-black cursor-pointer rounded-md"
+                              />
                             </div>
-                            <input
-                              type="checkbox"
-                              checked={selectedImportItems.includes(item._id || item.id)}
-                              onChange={() => { }} // Handled by div click
-                              className="w-5 h-5 accent-black cursor-pointer rounded-md"
-                            />
-                          </div>
-                        ))
+                          );
+                        })
                       ) : (
                         <div className="py-32 flex flex-col items-center justify-center text-center opacity-20">
                           <span className="material-symbols-outlined text-[64px] mb-4">move_to_inbox</span>

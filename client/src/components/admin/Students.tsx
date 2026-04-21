@@ -232,7 +232,8 @@ const StudentProfileContent: React.FC<{
                 { label: 'District', value: student.district || student.city },
                 { label: 'Gender', value: student.gender || student.admission?.gender },
                 { label: 'Address', value: student.admission?.fullAddress || (student as any).address || (student as any).fullAddress },
-                { label: 'Class', value: (student as any).class },
+                { label: 'Class', value: student.class },
+                { label: 'Higher Education', value: student.highQualification },
                 { label: 'Age / DOB', value: student.dob ? new Date(student.dob).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A' }
               ].map((item, idx) => (
                 <div key={idx} className="space-y-1">
@@ -352,6 +353,28 @@ interface Props {
   viewMode?: 'all' | 'blocked';
 }
 
+interface StudentFormData {
+  name: string;
+  email: string;
+  phone: string;
+  dob: string;
+  state: string;
+  city: string;
+  district: string;
+  class: string;
+  userId: string;
+  password?: string;
+  confirmPassword?: string;
+  highQualification: string;
+  gender: string;
+  registrationDate: string;
+  registrationType: string;
+  status: 'active' | 'inactive';
+  paymentStatus: 'paid' | 'pending' | 'failed';
+  notes: string;
+  fullAddress: string;
+}
+
 const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode = 'all' }) => {
   const [students, setStudents] = useState<Student[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
@@ -394,13 +417,15 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
   // Form states
-  const [formData, setFormData] = useState({
+  const initialFormData: StudentFormData = {
     name: '',
     email: '',
     phone: '',
     dob: '',
     state: '',
     city: '',
+    district: '',
+    class: '',
     userId: '',
     password: '',
     confirmPassword: '',
@@ -408,28 +433,12 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     gender: 'Male',
     registrationDate: new Date().toISOString().split('T')[0],
     registrationType: 'regular',
-    status: 'active' as 'active' | 'inactive',
-    paymentStatus: 'pending' as 'paid' | 'pending' | 'failed',
+    status: 'active',
+    paymentStatus: 'pending',
     notes: '',
-    // Legacy/Hidden fields kept in state for API compatibility but hidden from simple form
-    fatherName: '',
-    motherName: '',
-    alternatePhone: '',
     fullAddress: '',
-    previousClass: '',
-    schoolName: '',
-    marksPercentage: '',
-    passingYear: '',
-    batchTiming: '',
-    admissionDate: new Date().toISOString().split('T')[0],
-    totalFees: 0,
-    paidAmount: 0,
-    remainingAmount: 0,
-    aadharCard: '',
-    marksheet: '',
-    photo: '',
-    profilePhoto: ''
-  });
+  };
+  const [formData, setFormData] = useState<StudentFormData>(initialFormData);
 
   const [uploadingField, setUploadingField] = useState<string | null>(null);
   const [courses, setCourses] = useState<{ value: string, label: string }[]>([]);
@@ -588,13 +597,15 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     return true;
   };
 
-  const formatPayload = (data: typeof formData) => {
+  const formatPayload = (data: StudentFormData) => {
     const payload: any = {
       name: data.name,
       email: data.email,
       phone: data.phone,
       dob: data.dob,
-      city: data.city,
+      city: data.district || data.city,
+      district: data.district || data.city,
+      class: data.class,
       state: data.state,
       userId: data.userId,
       highQualification: data.highQualification,
@@ -603,31 +614,12 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       status: data.status,
       paymentStatus: data.paymentStatus,
       notes: data.notes,
+      gender: data.gender,
+      address: data.fullAddress,
       admission: {
-        fatherName: data.fatherName,
-        motherName: data.motherName,
         gender: data.gender,
-        alternatePhone: data.alternatePhone,
         fullAddress: data.fullAddress,
-        batchTiming: data.batchTiming,
-        admissionDate: data.admissionDate,
-      },
-      academic: {
-        previousClass: data.previousClass,
-        schoolName: data.schoolName,
-        marksPercentage: data.marksPercentage,
-        passingYear: data.passingYear,
-      },
-      fees: {
-        totalFees: data.totalFees,
-        paidAmount: data.paidAmount,
-        remainingAmount: data.remainingAmount,
-      },
-      documents: {
-        aadharCard: data.aadharCard,
-        marksheet: data.marksheet,
-        photo: data.photo,
-        profilePhoto: data.profilePhoto,
+        admissionDate: new Date().toISOString().split('T')[0]
       }
     };
     if (data.password) {
@@ -783,42 +775,28 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
 
   const handleEditClick = (student: Student) => {
     setSelectedStudent(student);
-    setFormData({
-      name: student.name,
-      email: student.email,
-      phone: student.phone,
-      dob: student.dob,
+    const hydratedFormData: StudentFormData = {
+      name: student.name || '',
+      email: student.email || '',
+      phone: student.phone || '',
+      dob: student.dob || '',
       state: student.state || getStateFromCity(student.city) || '',
-      city: student.city,
-      registrationDate: student.registrationDate,
-      registrationType: student.registrationType,
-      status: student.status,
-      paymentStatus: student.paymentStatus,
+      city: student.city || student.district || '',
+      district: student.district || student.city || '',
+      class: student.class || '',
+      registrationDate: student.registrationDate || new Date().toISOString().split('T')[0],
+      registrationType: student.registrationType || 'regular',
+      status: student.status || 'active',
+      paymentStatus: student.paymentStatus || 'pending',
       notes: student.notes || '',
-      userId: student.userId || student.id,
-      password: '', // Don't pre-fill password for security
+      userId: student.userId || student.id || '',
+      password: '', 
       confirmPassword: '',
-      highQualification: student.highQualification || '',
+      highQualification: student.highQualification || student.qualification || '',
       gender: student.admission?.gender || student.gender || 'Male',
-      // Hidden fields
-      fatherName: student.admission?.fatherName || '',
-      motherName: student.admission?.motherName || '',
-      alternatePhone: student.admission?.alternatePhone || '',
-      fullAddress: student.admission?.fullAddress || (student as any).address || (student as any).fullAddress || '',
-      previousClass: student.academic?.previousClass || '',
-      schoolName: student.academic?.schoolName || '',
-      marksPercentage: student.academic?.marksPercentage || '',
-      passingYear: student.academic?.passingYear || '',
-      batchTiming: student.admission?.batchTiming || '',
-      admissionDate: student.admission?.admissionDate ? new Date(student.admission.admissionDate).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-      totalFees: student.fees?.totalFees || 0,
-      paidAmount: student.fees?.paidAmount || 0,
-      remainingAmount: student.fees?.remainingAmount || 0,
-      aadharCard: student.documents?.aadharCard || '',
-      marksheet: student.documents?.marksheet || '',
-      photo: student.documents?.photo || '',
-      profilePhoto: student.documents?.profilePhoto || ''
-    });
+      fullAddress: student.admission?.fullAddress || student.address || ''
+    };
+    setFormData(hydratedFormData);
     setShowEditModal(true);
   };
 
@@ -834,41 +812,7 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
   };
 
   const resetForm = () => {
-    setFormData({
-      name: '',
-      email: '',
-      phone: '',
-      dob: '',
-      state: '',
-      city: '',
-      userId: '',
-      password: '',
-      confirmPassword: '',
-      highQualification: '',
-      gender: 'Male',
-      registrationDate: new Date().toISOString().split('T')[0],
-      registrationType: 'regular',
-      status: 'active',
-      paymentStatus: 'pending',
-      notes: '',
-      fatherName: '',
-      motherName: '',
-      alternatePhone: '',
-      fullAddress: '',
-      previousClass: '',
-      schoolName: '',
-      marksPercentage: '',
-      passingYear: '',
-      batchTiming: '',
-      admissionDate: new Date().toISOString().split('T')[0],
-      totalFees: 0,
-      paidAmount: 0,
-      remainingAmount: 0,
-      aadharCard: '',
-      marksheet: '',
-      photo: '',
-      profilePhoto: ''
-    });
+    setFormData(initialFormData);
     setSelectedStudent(null);
   };
 
@@ -1403,10 +1347,10 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                     type="text"
                     disabled={!formData.state || !indiaStateDistrictMap[formData.state]}
                     placeholder={formData.state && indiaStateDistrictMap[formData.state] ? "Enter district name (e.g. Rohtak)" : "Select valid State first"}
-                    value={formData.city}
+                    value={formData.district || formData.city}
                     onChange={(e) => {
                       const val = e.target.value ?? '';
-                      setFormData({ ...formData, city: val });
+                      setFormData({ ...formData, district: val, city: val });
                       if (val.trim() && formData.state && indiaStateDistrictMap[formData.state]) {
                         const lowVal = val.toLowerCase();
                         const filtered = (indiaStateDistrictMap[formData.state] || []).filter(d => 
@@ -1440,7 +1384,7 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                           key={i}
                           type="button"
                           onClick={() => {
-                            setFormData({ ...formData, city: d });
+                            setFormData({ ...formData, district: d, city: d });
                             setShowDistrictSuggestions(false);
                           }}
                           className="w-full px-5 py-3.5 text-left text-[13px] font-bold text-gray-700 hover:bg-indigo-50 hover:text-indigo-600 transition-all border-b border-gray-50 last:border-0"
@@ -1451,6 +1395,40 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                     </div>
                   )}
                   {showDistrictSuggestions && <div className="fixed inset-0 z-[55]" onClick={() => setShowDistrictSuggestions(false)}></div>}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <FormLabel label="Class" required />
+                    <FormSelect
+                      value={formData.class}
+                      onChange={(val) => setFormData({ ...formData, class: val })}
+                      options={[
+                        { value: '9th', label: '9th' },
+                        { value: '10th', label: '10th' },
+                        { value: '11th', label: '11th' },
+                        { value: '12th', label: '12th' },
+                        { value: 'Neet', label: 'Neet' },
+                        { value: 'iit-Jee', label: 'iit-Jee' },
+                        { value: 'Nursing-CET', label: 'Nursing-CET' },
+                        { value: 'Dropper', label: 'Dropper' }
+                      ]}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <FormLabel label="Higher Education" />
+                    <FormSelect
+                      value={formData.highQualification}
+                      onChange={(val) => setFormData({ ...formData, highQualification: val })}
+                      options={[
+                        { value: '10th Pass', label: '10th Pass' },
+                        { value: '12th Pass', label: '12th Pass' },
+                        { value: 'Graduate', label: 'Graduate' },
+                        { value: 'Post Graduate', label: 'Post Graduate' },
+                        { value: 'Other', label: 'Other' }
+                      ]}
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-2">
