@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import mammoth from 'mammoth';
 import DOMPurify from 'dompurify';
-import { getPdfUrl } from '../lib/utils';
+import { getPdfUrl, getViewerUrl } from '../lib/utils';
 
 const PDFViewerScreen: React.FC = () => {
   const location = useLocation();
@@ -10,7 +10,12 @@ const PDFViewerScreen: React.FC = () => {
   const queryParams = new URLSearchParams(location.search);
   const containerRef = useRef<HTMLDivElement>(null);
   
-  const pdfUrl = location.state?.pdf?.fileUrl || location.state?.pdf?.url || location.state?.pdf?.link || queryParams.get('url') || '';
+  const pdfUrl = location.state?.pdf?.fileUrl || 
+                 location.state?.pdf?.url || 
+                 location.state?.pdf?.link || 
+                 location.state?.fileUrl ||
+                 location.state?.url ||
+                 queryParams.get('url') || '';
   const title = location.state?.title || location.state?.pdf?.title || queryParams.get('title') || 'Document';
   const subject = location.state?.pdf?.subject || 'Study Material';
 
@@ -24,10 +29,10 @@ const PDFViewerScreen: React.FC = () => {
   const fullPdfUrl = getPdfUrl(pdfUrl);
   
   // Extension detection: URL + Title
-  const isDocx = (pdfUrl || '').toLowerCase().split('?')[0].split('.').pop()?.startsWith('doc') || 
+  const fileExt = (pdfUrl || '').toLowerCase().split('?')[0].split('.').pop() || '';
+  const isDocx = fileExt.startsWith('doc') || 
                  (title || '').toLowerCase().endsWith('.docx') || 
-                 (title || '').toLowerCase().endsWith('.doc') || 
-                 false;
+                 (title || '').toLowerCase().endsWith('.doc');
 
   const handleExit = useCallback(() => {
     if (window.opener) {
@@ -51,6 +56,7 @@ const PDFViewerScreen: React.FC = () => {
         
         if (isDocx) {
           try {
+            // Docs need to be fetched via proxy for Mammoth to work (CORS)
             const proxyUrl = `/api/proxy-resource?url=${encodeURIComponent(fullPdfUrl)}`;
             const res = await fetch(proxyUrl, { mode: 'cors' });
             if (!res.ok) throw new Error('Proxy fetch failed');
@@ -59,20 +65,21 @@ const PDFViewerScreen: React.FC = () => {
             setDocxContent(result.value);
             setLoading(false);
           } catch (e) {
-            console.warn('Proxy fetch failed, showing fallback');
+            console.warn('Docx loading failed, showing fallback', e);
             setUseFallback(true);
             setLoading(false);
           }
           return;
         }
 
-        // Native PDF Iframe View
-        const proxyUrl = `/api/proxy-resource?url=${encodeURIComponent(fullPdfUrl)}`;
-        setPdfIframeUrl(`${proxyUrl}#toolbar=0&navpanes=0&scrollbar=0`);
+        // Native PDF Iframe View with security flags
+        // Use the centralized viewer URL logic which adds proxy/signing if needed
+        const viewerUrl = getViewerUrl(fullPdfUrl);
+        setPdfIframeUrl(`${viewerUrl}#toolbar=0&navpanes=0&scrollbar=0`);
         setProgress(100);
         setLoading(false);
       } catch (err) {
-        console.error('Fetch Error:', err);
+        console.error('Document Load Error:', err);
         setUseFallback(true);
         setLoading(false);
       }
@@ -80,6 +87,7 @@ const PDFViewerScreen: React.FC = () => {
 
     loadDocument();
   }, [fullPdfUrl, isDocx]);
+
 
   if (!pdfUrl && !location.state) {
     navigate(-1);
@@ -116,7 +124,7 @@ const PDFViewerScreen: React.FC = () => {
       </div>
 
       {/* Content */}
-      <div className="flex-1 relative bg-white" ref={containerRef}>
+      <div className="flex-1 relative bg-white overflow-y-auto" ref={containerRef}>
         {loading ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 animate-fade-in bg-[#f4f7f6] z-[101]">
              <div className="relative w-16 h-16">

@@ -32,10 +32,46 @@ export const getVideoUrl = (url: string | undefined | null): string => {
 
 export const getPdfUrl = (url: string | undefined | null): string => {
   if (!url) return "";
-  if (url.startsWith("http")) return url;
-  if (url.startsWith("/uploads/")) return `${API_BASE}${url}`;
-  return url;
+  const trimmed = url.trim();
+  
+  // 1. Full URLs
+  if (trimmed.startsWith("http")) return trimmed;
+  
+  // 2. Relative paths with leading slash
+  if (trimmed.startsWith("/")) return `${API_BASE}${trimmed}`;
+  
+  // 3. Old stored formats / Relative paths without slash
+  // If it's just a filename.pdf or similar
+  if (trimmed.includes('.') && !trimmed.includes('/') && !trimmed.includes('\\')) {
+    return `${API_BASE}/uploads/${trimmed}`;
+  }
+  
+  // 4. Relative paths starting with uploads/
+  if (trimmed.startsWith("uploads/")) return `${API_BASE}/${trimmed}`;
+
+  return trimmed;
 };
+
+/**
+ * Returns a URL safe for iframe viewing, using proxy for external/Cloudinary URLs.
+ */
+export const getViewerUrl = (url: string | undefined | null): string => {
+  const normalizedUrl = getPdfUrl(url);
+  if (!normalizedUrl) return "";
+  
+  // If it's a local URL (same origin as API), we might not need proxy, 
+  // but proxying ensures consistent headers for PDF viewing.
+  // Especially for Cloudinary and Google Drive.
+  if (normalizedUrl.includes('res.cloudinary.com') || 
+      normalizedUrl.includes('drive.google.com') || 
+      normalizedUrl.includes('docs.google.com') ||
+      !normalizedUrl.startsWith(window.location.origin)) {
+    return `${API_BASE}/api/proxy-resource?url=${encodeURIComponent(normalizedUrl)}`;
+  }
+  
+  return normalizedUrl;
+};
+
 
 // ---------- YOUTUBE HELPERS ----------
 

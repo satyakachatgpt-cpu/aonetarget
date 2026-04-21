@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { getImageUrl, getVideoUrl, getPdfUrl } from '../lib/utils';
+import { getImageUrl, getVideoUrl, getPdfUrl, getViewerUrl } from '../lib/utils';
 
 interface FileViewerProps {
   file: {
@@ -7,6 +7,7 @@ interface FileViewerProps {
     title: string;
     type: string;
     fileUrl: string;
+    url?: string; // Fallback
     size?: string;
     downloadedAt?: string;
   } | null;
@@ -18,11 +19,16 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, onClose }) => {
 
   if (!file) return null;
 
+  // Normalize URL
+  const rawUrl = file.fileUrl || file.url || '';
+  const fileType = file.type?.toLowerCase();
+  
   const getFileTypeIcon = (type: string) => {
     switch (type?.toLowerCase()) {
       case 'video':
         return 'play_circle';
       case 'pdf':
+      case 'document':
         return 'picture_as_pdf';
       case 'audio':
         return 'headphones';
@@ -38,6 +44,7 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, onClose }) => {
       case 'video':
         return 'bg-red-100 text-red-600';
       case 'pdf':
+      case 'document':
         return 'bg-orange-100 text-orange-600';
       case 'audio':
         return 'bg-purple-100 text-purple-600';
@@ -49,7 +56,7 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, onClose }) => {
   };
 
   const renderFileContent = () => {
-    const type = file.type?.toLowerCase();
+    const type = fileType;
 
     if (type === 'video') {
       return (
@@ -58,7 +65,7 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, onClose }) => {
             controls
             autoPlay
             className="w-full h-full max-h-full object-contain"
-            src={getVideoUrl(file.fileUrl)}
+            src={getVideoUrl(rawUrl)}
           >
             Your browser does not support the video tag.
           </video>
@@ -66,17 +73,20 @@ const FileViewer: React.FC<FileViewerProps> = ({ file, onClose }) => {
       );
     }
 
-    if (type === 'pdf') {
+    if (type === 'pdf' || type === 'document') {
+      // Use getViewerUrl to ensure proxy is used for Cloudinary/external PDFs
+      const viewerUrl = getViewerUrl(rawUrl);
       return (
         <div className={`w-full bg-white relative group ${isFullscreen ? 'h-full' : 'h-[600px] rounded-xl overflow-hidden'}`}>
           <iframe
-            src={`${getPdfUrl(file.fileUrl)}#toolbar=1&navpanes=0`}
+            src={`${viewerUrl}#toolbar=1&navpanes=0`}
             className="w-full h-full border-none"
             title={file.title}
           />
         </div>
       );
     }
+
 
     if (type === 'audio') {
       return (
