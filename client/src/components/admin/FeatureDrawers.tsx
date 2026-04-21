@@ -91,7 +91,19 @@ export const OMRTestDrawer: React.FC<OMRTestDrawerProps> = ({
                     {selectedSeries && (
                         <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div className="space-y-3">
-                                <FormLabel label="Select Test" />
+                                <div className="flex items-center justify-between">
+                                    <FormLabel label="Select Test" />
+                                    {selectedSeries && (
+                                        <div className="flex items-center gap-1.5 px-3 py-1 bg-blue-50/50 border border-blue-100 rounded-full animate-in zoom-in-95 duration-300">
+                                            <span className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
+                                            <span className="text-[11px] font-black text-blue-600 uppercase tracking-widest leading-none">
+                                                {testSeriesList.find(s => (s._id || s.id) === selectedSeries)?.seriesName || 
+                                                 testSeriesList.find(s => (s._id || s.id) === selectedSeries)?.title || 
+                                                 testSeriesList.find(s => (s._id || s.id) === selectedSeries)?.name || "Series"}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
                                 <div className="relative">
                                     <input
                                         type="text"
@@ -252,7 +264,19 @@ export const TestDrawer: React.FC<OMRTestDrawerProps> = ({
                     {selectedSeries && (
                         <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
                             <div className="space-y-3">
-                                <FormLabel label="Select Test" />
+                                <div className="flex items-center justify-between">
+                                    <FormLabel label="Select Test" />
+                                    {selectedSeries && (
+                                        <div className="flex items-center gap-1.5 px-3 py-1 bg-indigo-50/50 border border-indigo-100 rounded-full animate-in zoom-in-95 duration-300">
+                                            <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse" />
+                                            <span className="text-[11px] font-black text-indigo-600 uppercase tracking-widest leading-none">
+                                                {testSeriesList.find(s => (s._id || s.id) === selectedSeries)?.seriesName || 
+                                                 testSeriesList.find(s => (s._id || s.id) === selectedSeries)?.title || 
+                                                 testSeriesList.find(s => (s._id || s.id) === selectedSeries)?.name || "Series"}
+                                            </span>
+                                        </div>
+                                    )}
+                                </div>
                                 <div className="relative">
                                     <input
                                         type="text"
