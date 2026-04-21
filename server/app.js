@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import { Readable } from 'node:stream';
 import express from 'express';
 import multer from 'multer';
 import cors from 'cors';
@@ -108,10 +109,11 @@ const isValidProxyUrl = (urlStr) => {
     
     // Exact match or subdomain match for allowlisted domains
     const allowedDomains = [
+      'cloudinary.com',
       'res.cloudinary.com',
       'drive.google.com',
       'docs.google.com',
-      'googleusercontent.com' // Often used for drive thumbnails/content
+      'googleusercontent.com'
     ];
     
     const isAllowed = allowedDomains.some(domain => 
@@ -139,6 +141,7 @@ const isValidProxyUrl = (urlStr) => {
 app.get('/api/proxy-resource', async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).send('URL is required');
+
   try {
     const targetUrl = decodeURIComponent(url);
     
@@ -147,32 +150,91 @@ app.get('/api/proxy-resource', async (req, res) => {
       return res.status(403).send('Forbidden: Invalid resource domain');
     }
 
+    let fetchUrl = targetUrl;
+
+    // Cloudinary URL Handling: 
+    // We fetch the original URL as-is to avoid signature calculation errors for public (upload) resources.
+    // Re-signing is only attempted for truly restricted content (authenticated/private).
     if (targetUrl.includes('res.cloudinary.com')) {
-      const parts = targetUrl.split('/');
-      const uploadIdx = parts.indexOf('upload');
-      if (uploadIdx !== -1) {
-        const resourceType = parts[uploadIdx - 1];
-        const type = parts[uploadIdx];
-        let publicIdWithExt = parts.slice(uploadIdx + 1).join('/');
-        if (publicIdWithExt.startsWith('v')) {
-          const potentialVersion = publicIdWithExt.split('/')[0];
-          if (/^v\d+$/.test(potentialVersion)) publicIdWithExt = parts.slice(uploadIdx + 2).join('/');
+      const isRestricted = targetUrl.includes('/authenticated/') || targetUrl.includes('/private/');
+      
+      if (isRestricted) {
+        const parts = targetUrl.split('/');
+        const deliveryTypes = ['private', 'authenticated'];
+        let foundTypeIdx = -1;
+        let deliveryType = 'upload';
+        
+        for (const t of deliveryTypes) {
+          const idx = parts.indexOf(t);
+          if (idx !== -1) { foundTypeIdx = idx; deliveryType = t; break; }
         }
-        const publicId = publicIdWithExt.replace(/\.[^.]+$/, '');
-        const signedUrl = cloudinary.url(publicId, {
-          resource_type: resourceType, type: type, sign_url: true, secure: true,
-          expires_at: Math.floor(Date.now() / 1000) + 3600
-        });
-        return res.redirect(signedUrl);
+
+        if (foundTypeIdx !== -1) {
+          const resourceType = parts[foundTypeIdx - 1];
+          let publicIdWithExt = parts.slice(foundTypeIdx + 1).join('/');
+          let version = '';
+          
+          if (publicIdWithExt.startsWith('v')) {
+            const potentialVersion = publicIdWithExt.split('/')[0];
+            if (/^v\d+$/.test(potentialVersion)) {
+              version = potentialVersion.substring(1);
+              publicIdWithExt = parts.slice(foundTypeIdx + 2).join('/');
+            }
+          }
+          
+          const extMatch = publicIdWithExt.match(/\.([^.]+)$/);
+          const extension = extMatch ? extMatch[1] : '';
+          const publicId = (extension && resourceType !== 'raw')
+            ? publicIdWithExt.substring(0, publicIdWithExt.length - extension.length - 1)
+            : publicIdWithExt;
+          
+          fetchUrl = cloudinary.url(publicId, {
+            resource_type: resourceType,
+            type: deliveryType,
+            sign_url: true,
+            secure: true,
+            version: version,
+            format: (resourceType !== 'raw') ? extension : undefined,
+            expires_at: Math.floor(Date.now() / 1000) + 3600
+          });
+        }
       }
     }
-    const response = await fetch(targetUrl);
-    if (!response.ok) return res.status(response.status).send('Storage error');
+
+    const response = await fetch(fetchUrl);
+    
+    if (!response.ok) {
+      console.error(`[PROXY] Source fetch failed: ${response.status} ${response.statusText} for URL: ${fetchUrl}`);
+      return res.status(response.status).send('Storage source error');
+    }
+
+    // Target headers to forward or override
     const contentType = response.headers.get('content-type');
+    const contentLength = response.headers.get('content-length');
+
     if (contentType) res.setHeader('Content-Type', contentType);
-    const arrayBuffer = await response.arrayBuffer();
-    res.send(Buffer.from(arrayBuffer));
-  } catch (error) { res.status(500).send('Proxy Error'); }
+    if (contentLength) res.setHeader('Content-Length', contentLength);
+    
+    // Standardize headers for PDF iframe usage
+    // We remove upstream XFO/CSP which might block the iframe, 
+    // and rely on our own app-level security.
+    res.removeHeader('X-Frame-Options');
+    res.removeHeader('Content-Security-Policy');
+    
+    // Ensure browsers treat it as inline-friendly
+    res.setHeader('Content-Disposition', 'inline');
+
+    // Stream the body directly to the response
+    if (response.body) {
+      // Readable.fromWeb handles the conversion from WHATWG stream to Node stream
+      Readable.fromWeb(response.body).pipe(res);
+    } else {
+      res.status(500).send('Response body is empty');
+    }
+  } catch (error) { 
+    console.error('[PROXY] Error translating resource:', error);
+    res.status(500).send('Internal Proxy Error'); 
+  }
 });
 
 // --- Middleware & Auth Logic (Re-registering for Local use) ---

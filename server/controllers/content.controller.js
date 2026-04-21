@@ -469,6 +469,11 @@ export const createCourseNote = async (req, res) => {
       courseId,
       createdAt: new Date().toISOString()
     };
+    
+    // Ensure URL consistency for backward compatibility
+    if (note.url && !note.fileUrl) note.fileUrl = note.url;
+    if (note.fileUrl && !note.url) note.url = note.fileUrl;
+
     const result = await db.collection('pdfs').insertOne(note);
     res.status(201).json({ _id: result.insertedId, ...note });
   } catch (error) {
@@ -493,6 +498,11 @@ export const updateCourseNote = async (req, res) => {
     }
 
     const { _id, ...updateData } = req.body;
+    
+    // Ensure URL consistency
+    if (updateData.url && !updateData.fileUrl) updateData.fileUrl = updateData.url;
+    if (updateData.fileUrl && !updateData.url) updateData.url = updateData.fileUrl;
+
     // Try pdfs collection first, then notes
     let result = await db.collection('pdfs').updateOne(
       query,
@@ -552,7 +562,16 @@ export const bulkCreatePdfs = async (req, res) => {
   try {
     const { pdfs } = req.body;
     if (!Array.isArray(pdfs) || pdfs.length === 0) return res.status(400).json({ error: 'No PDFs provided' });
-    const result = await db.collection('pdfs').insertMany(pdfs);
+    
+    // Normalize Each PDF URL
+    const normalizedPdfs = pdfs.map(p => {
+      const np = { ...p };
+      if (np.url && !np.fileUrl) np.fileUrl = np.url;
+      if (np.fileUrl && !np.url) np.url = np.fileUrl;
+      return np;
+    });
+
+    const result = await db.collection('pdfs').insertMany(normalizedPdfs);
     res.status(201).json({ success: true, inserted: result.insertedCount });
   } catch (error) {
     res.status(500).json({ error: 'Failed to bulk create PDFs' });
@@ -561,8 +580,12 @@ export const bulkCreatePdfs = async (req, res) => {
 
 export const createStandalonePdf = async (req, res) => {
   try {
-    const result = await db.collection('pdfs').insertOne(req.body);
-    res.status(201).json({ _id: result.insertedId, ...req.body });
+    const data = { ...req.body };
+    if (data.url && !data.fileUrl) data.fileUrl = data.url;
+    if (data.fileUrl && !data.url) data.url = data.fileUrl;
+    
+    const result = await db.collection('pdfs').insertOne(data);
+    res.status(201).json({ _id: result.insertedId, ...data });
   } catch (error) {
     res.status(500).json({ error: 'Failed to create PDF' });
   }
