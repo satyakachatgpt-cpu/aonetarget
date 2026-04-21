@@ -1268,10 +1268,8 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       const data = await res.json();
       const list = Array.isArray(data) ? data : [];
 
-      // Strict course filter
-      let finalTests = list.filter((t: any) =>
-        t.courseId === courseId || t.id.startsWith(`test_${courseId}`)
-      );
+      // Use tests from backend directly (they are already filtered by seriesId on server)
+      let finalTests = list;
 
       // Mock behavior support (Separate mock data for standard vs omr)
       if (finalTests.length === 0 && seriesId.includes(courseId as string)) {

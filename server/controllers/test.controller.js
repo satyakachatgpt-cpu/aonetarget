@@ -13,9 +13,65 @@ import { findCourse, getRelatedCourseIds } from '../services/course.service.js';
 export const getAllTests = async (req, res) => {
   try {
     const startTimeMetric = Date.now();
-    const { courseId } = req.query;
+    const { courseId, seriesId, testType } = req.query;
 
-    const matchStage = courseId ? { courseId } : {};
+    let matchConditions = [];
+
+    // Robust ID/Series matching
+    const searchId = seriesId || courseId;
+    if (searchId) {
+      // Find all variants of this ID (custom id, ObjectId string, slug, name matches)
+      const variants = await getRelatedCourseIds(await findCourse(searchId), searchId);
+      
+      const idConditions = [
+        { testSeriesId: { $in: variants } },
+        { seriesId: { $in: variants } },
+        { courseId: { $in: variants } },
+        { course: { $in: variants } },
+        // Direct string match fallback (useful if searchId is a name/title)
+        { testSeriesId: searchId },
+        { seriesName: searchId },
+        { series: searchId }
+      ];
+
+      // Add ObjectId variants for database compatibility
+      const objectIdVariants = variants
+        .filter(v => mongoose.Types.ObjectId.isValid(v))
+        .map(v => new mongoose.Types.ObjectId(v));
+      
+      if (objectIdVariants.length > 0) {
+        idConditions.push({ testSeriesId: { $in: objectIdVariants } });
+        idConditions.push({ seriesId: { $in: objectIdVariants } });
+        idConditions.push({ courseId: { $in: objectIdVariants } });
+        idConditions.push({ course: { $in: objectIdVariants } });
+      }
+
+      // If we are specifically filtering by series, exclude the series container record itself
+      if (seriesId) {
+        matchConditions.push({ isSeries: { $ne: true } });
+      }
+
+      matchConditions.push({ $or: idConditions });
+    }
+
+    // Support testType filtering (standard vs omr vs pdf)
+    if (testType) {
+      if (testType.toLowerCase() === 'omr') {
+        matchConditions.push({ $or: [{ testType: 'OMR' }, { type: 'OMR' }] });
+      } else if (testType.toLowerCase() === 'standard') {
+        matchConditions.push({
+          $and: [
+            { testType: { $ne: 'OMR' } },
+            { type: { $ne: 'OMR' } }
+          ]
+        });
+      } else {
+        matchConditions.push({ type: testType });
+      }
+    }
+
+    const matchStage = matchConditions.length > 0 ? { $and: matchConditions } : {};
+
     const tests = await db.collection('tests').find(matchStage).toArray();
 
     // Count questions accurately for each test using OR conditions (handles both 'id' and '_id')
