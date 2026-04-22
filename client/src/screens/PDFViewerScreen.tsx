@@ -75,7 +75,7 @@ const PDFViewerScreen: React.FC = () => {
         // Native PDF Iframe View with security flags
         // Use the centralized viewer URL logic which adds proxy/signing if needed
         const viewerUrl = getViewerUrl(fullPdfUrl);
-        setPdfIframeUrl(`${viewerUrl}#toolbar=0&navpanes=0&scrollbar=0`);
+        setPdfIframeUrl(`${viewerUrl}#toolbar=0&navpanes=0&view=FitH`);
         setProgress(100);
         setLoading(false);
       } catch (err) {
@@ -95,9 +95,12 @@ const PDFViewerScreen: React.FC = () => {
   }
 
   return (
-    <div className="fixed inset-0 bg-[#f4f7f6] z-[99999] flex flex-col font-outfit select-none overflow-hidden h-[100dvh] w-full">
+    <div 
+      className="fixed inset-0 bg-[#f4f7f6] z-[99999] flex flex-col font-outfit h-[100dvh] w-full overflow-hidden"
+      onContextMenu={(e) => e.preventDefault()}
+    >
       {/* Header */}
-      <div className="bg-white/95 backdrop-blur-md px-4 py-3 flex items-center justify-between border-b border-gray-200 shadow-sm z-[110] shrink-0">
+      <div className="bg-white/95 backdrop-blur-md px-4 py-2 md:py-3 flex items-center justify-between border-b border-gray-200 shadow-sm z-[110] shrink-0">
         <button 
           onClick={handleExit} 
           className="w-9 h-9 rounded-xl flex items-center justify-center bg-gray-100 text-gray-800 hover:bg-gray-200 transition-all group scale-100 active:scale-95 z-[120]"
@@ -124,7 +127,7 @@ const PDFViewerScreen: React.FC = () => {
       </div>
 
       {/* Content */}
-      <div className="flex-1 relative bg-white overflow-y-auto" ref={containerRef}>
+      <div className="flex-1 relative bg-white overflow-auto min-h-0" ref={containerRef}>
         {loading ? (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 animate-fade-in bg-[#f4f7f6] z-[101]">
              <div className="relative w-16 h-16">
@@ -150,18 +153,10 @@ const PDFViewerScreen: React.FC = () => {
               </p>
 
               <div className="space-y-4 max-w-sm mx-auto">
-                <button 
-                  onClick={() => window.open(fullPdfUrl, '_blank')}
-                  className="w-full bg-primary-600 hover:bg-primary-700 text-white font-black py-5 rounded-2xl transition-all shadow-lg shadow-primary-200 active:scale-95 flex items-center justify-center gap-3 text-xs uppercase tracking-widest"
-                >
-                  <span className="material-symbols-rounded text-xl">open_in_new</span>
-                  View Document
-                </button>
-                
                 <div className="p-5 bg-orange-50 rounded-2xl border border-orange-100 flex items-start gap-4">
                   <span className="material-symbols-rounded text-orange-500 mt-0.5">info</span>
                   <p className="text-[11px] text-orange-700 text-left leading-normal font-bold uppercase tracking-tight">
-                    Note: If the document doesn't open, please check if your browser blocked the window or try refreshing.
+                    Note: If the document doesn't load correctly, please try refreshing the page. For security reasons, direct downloads are disabled.
                   </p>
                 </div>
               </div>
@@ -186,24 +181,12 @@ const PDFViewerScreen: React.FC = () => {
         ) : pdfIframeUrl ? (
           <iframe 
             src={pdfIframeUrl} 
-            className="w-full h-full border-none m-0 p-0"
+            className="w-full h-full border-none block m-0 p-0"
             title={title}
-            style={{ minHeight: 'calc(100dvh - 65px)' }}
           />
         ) : null}
       </div>
 
-      {/* Footer */}
-      <div className="bg-white px-8 py-5 border-t border-gray-100 flex items-center justify-between shrink-0 shadow-sm z-[110]">
-        <div className="flex items-center gap-3">
-           <div className="bg-navy px-3 py-1.5 rounded flex items-center justify-center shadow-lg gap-2">
-              <span className="material-symbols-rounded text-[14px] text-white">verified_user</span>
-              <span className="text-white text-[9px] font-black italic tracking-widest uppercase">High Dynamic Range</span>
-           </div>
-           <p className="text-[9px] font-black text-gray-400 uppercase tracking-[0.2em] opacity-80 italic">Protected High-Fidelity Rendering</p>
-        </div>
-        <p className="text-[9px] font-black text-gray-300 uppercase tracking-[0.4em]">AUTHENTIC • SECURE • AONE TARGET</p>
-      </div>
     </div>
   );
 };
