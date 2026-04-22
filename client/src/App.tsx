@@ -191,7 +191,6 @@ const App: React.FC = () => {
                     <Route path="/checkout/:id" element={<Checkout />} />
                     <Route path="/study/:id" element={<StudyDashboard />} />
                     <Route path="/video-player" element={<VideoPlayer />} />
-                    <Route path="/pdf-viewer" element={<PDFViewerScreen />} />
                     <Route path="/success" element={<Success />} />
                     <Route path="/purchase-success" element={<PurchaseSuccess />} />
 
@@ -246,6 +245,7 @@ const App: React.FC = () => {
                 </Suspense>
               </MainLayout>
             } />
+            <Route path="/pdf-viewer" element={<PDFViewerScreen />} />
           </Routes>
         </Suspense>
       </Router>
