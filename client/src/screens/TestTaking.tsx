@@ -210,11 +210,22 @@ const TestTaking: React.FC = () => {
       let totalMarks = 0;
       let obtainedMarks = 0;
       let negativeMarksTotal = 0;
-      const testNegMarking = test?.negativeMarking || 0;
       questions.forEach(q => {
-        const marks = Number(q.marks || q.positiveMarks || test?.marksPerQuestion || test?.marks || 0);
-        const qNeg = q.negativeMarks !== undefined && q.negativeMarks !== '' ? q.negativeMarks : (q.negative !== undefined && q.negative !== '' ? q.negative : null);
-        const negMarks = Math.abs(Number(qNeg ?? testNegMarking ?? 0));
+        const tMarks = (test?.marksPerQuestion !== undefined && test?.marksPerQuestion !== null && test?.marksPerQuestion !== '') ? Number(test.marksPerQuestion) : 
+                       (test?.marks !== undefined && test?.marks !== null && test?.marks !== '') ? Number(test.marks) : null;
+        
+        const qMarks = (q.marks !== undefined && q.marks !== null && q.marks !== '') ? Number(q.marks) : 
+                       (q.positiveMarks !== undefined && q.positiveMarks !== null && q.positiveMarks !== '') ? Number(q.positiveMarks) : null;
+        
+        const marks = tMarks !== null ? tMarks : (qMarks !== null ? qMarks : 0);
+
+        const tNeg = (test?.negativeMarking !== undefined && test?.negativeMarking !== null && test?.negativeMarking !== '') ? test.negativeMarking : 
+                     (test?.negative !== undefined && test?.negative !== null && test?.negative !== '') ? test.negative : null;
+                     
+        const qNeg = (q.negativeMarks !== undefined && q.negativeMarks !== null && q.negativeMarks !== '') ? q.negativeMarks : 
+                     (q.negative !== undefined && q.negative !== null && q.negative !== '') ? q.negative : null;
+                     
+        const negMarks = Math.abs(Number(tNeg !== null ? tNeg : (qNeg !== null ? qNeg : 0)));
         
         totalMarks += marks;
         if (answers[q.id]) {
@@ -575,10 +586,22 @@ const TestTaking: React.FC = () => {
               <div className="flex items-center gap-2">
                 <div className="flex flex-col items-end">
                    <span className="text-[10px] font-black text-green-600">
-                    +{Number(test?.marksPerQuestion) || Number(test?.positive) || Number(currentQuestion?.marks) || Number(currentQuestion?.positiveMarks) || 0}
+                    +{(function() {
+                      const tMarks = (test?.marksPerQuestion !== undefined && test?.marksPerQuestion !== null && test?.marksPerQuestion !== '') ? Number(test.marksPerQuestion) : 
+                                     (test?.marks !== undefined && test?.marks !== null && test?.marks !== '') ? Number(test.marks) : null;
+                      const qMarks = (currentQuestion?.marks !== undefined && currentQuestion?.marks !== null && currentQuestion?.marks !== '') ? Number(currentQuestion?.marks) : 
+                                     (currentQuestion?.positiveMarks !== undefined && currentQuestion?.positiveMarks !== null && currentQuestion?.positiveMarks !== '') ? Number(currentQuestion?.positiveMarks) : null;
+                      return tMarks !== null ? tMarks : (qMarks !== null ? qMarks : 0);
+                    })()}
                   </span>
                   <span className="text-[10px] font-black text-red-500">
-                    -{Math.abs(Number(test?.negativeMarking) || Number(test?.negative) || Number(currentQuestion?.negativeMarks) || Number(currentQuestion?.negative) || 0)}
+                    -{(function() {
+                      const tNeg = (test?.negativeMarking !== undefined && test?.negativeMarking !== null && test?.negativeMarking !== '') ? test.negativeMarking : 
+                                   (test?.negative !== undefined && test?.negative !== null && test?.negative !== '') ? test.negative : null;
+                      const qNeg = (currentQuestion?.negativeMarks !== undefined && currentQuestion?.negativeMarks !== null && currentQuestion?.negativeMarks !== '') ? currentQuestion?.negativeMarks : 
+                                   (currentQuestion?.negative !== undefined && currentQuestion?.negative !== null && currentQuestion?.negative !== '') ? currentQuestion?.negative : null;
+                      return Math.abs(Number(tNeg !== null ? tNeg : (qNeg !== null ? qNeg : 0)));
+                    })()}
                   </span>
                 </div>
                 <button

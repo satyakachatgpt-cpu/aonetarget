@@ -282,24 +282,7 @@ const TestsBulkUploaderTab: React.FC<TestsBulkUploaderTabProps> = ({
                           {renderQuestionText(q.solution)}
                         </div>
                       </div>
-                      <div className="flex border-t border-gray-100">
-                        <div className="flex-1 flex border-r border-gray-100">
-                          <div className="w-24 bg-gray-50 p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0 whitespace-nowrap">
-                            Positive Marks
-                          </div>
-                          <div className="p-2.5 text-[11px] text-green-600 font-black">
-                            {q.positiveMarks}
-                          </div>
-                        </div>
-                        <div className="flex-1 flex">
-                          <div className="w-24 bg-gray-50 p-2.5 text-[10px] font-black text-gray-400 uppercase border-r border-gray-100 shrink-0 whitespace-nowrap">
-                            Negative Marks
-                          </div>
-                          <div className="p-2.5 text-[11px] text-red-500 font-black">
-                            {q.negativeMarks}
-                          </div>
-                        </div>
-                      </div>
+
                       {renderDiagram(q)}
                     </div>
                   </div>
