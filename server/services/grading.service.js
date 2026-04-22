@@ -12,13 +12,28 @@ export const evaluateTest = ({ questions, answers, test }) => {
   let negativeMarksTotal = 0;
 
   const questionResults = questions.map((q) => {
-    const studentAnswer = answers[q.id] || null;
-    const isCorrect = studentAnswer === q.correctAnswer;
+    const qIdStr = q.id ? String(q.id) : (q._id ? q._id.toString() : null);
+    const studentAnswer = qIdStr ? (answers[qIdStr] || null) : null;
+    const normalizedCorrect = (q.correctAnswer || q.correct_answer || q.answer || q['Correct Answer'] || q.correctOption || 'A').toString().toUpperCase().trim();
+    const isCorrect = studentAnswer === normalizedCorrect;
     
-    // Resolve marks: Strictly use saved DB values
-    const marks = Number(q.marks || q.positiveMarks || test.marksPerQuestion || 0);
-    const qNeg = q.negativeMarks !== undefined && q.negativeMarks !== '' ? q.negativeMarks : null;
-    const negMarks = Math.abs(Number(qNeg ?? test.negativeMarking ?? 0));
+    // Resolve marks: Test-level wins, then Question-level fallback, then 0. 
+    // We use explicit checks for undefined/null/empty string to allow 0.
+    const tMarks = (test.marksPerQuestion !== undefined && test.marksPerQuestion !== null && test.marksPerQuestion !== '') ? Number(test.marksPerQuestion) :
+                   (test.marks !== undefined && test.marks !== null && test.marks !== '') ? Number(test.marks) : null;
+    
+    const qMarks = (q.marks !== undefined && q.marks !== null && q.marks !== '') ? Number(q.marks) : 
+                   (q.positiveMarks !== undefined && q.positiveMarks !== null && q.positiveMarks !== '') ? Number(q.positiveMarks) : null;
+    
+    const marks = tMarks !== null ? tMarks : (qMarks !== null ? qMarks : 0);
+
+    const tNeg = (test.negativeMarking !== undefined && test.negativeMarking !== null && test.negativeMarking !== '') ? test.negativeMarking : 
+                 (test.negative !== undefined && test.negative !== null && test.negative !== '') ? test.negative : null;
+                 
+    const qNeg = (q.negativeMarks !== undefined && q.negativeMarks !== null && q.negativeMarks !== '') ? q.negativeMarks : 
+                 (q.negative !== undefined && q.negative !== null && q.negative !== '') ? q.negative : null;
+    
+    const negMarks = Math.abs(Number(tNeg !== null ? tNeg : (qNeg !== null ? qNeg : 0)));
 
     totalMarks += marks;
 
@@ -34,9 +49,9 @@ export const evaluateTest = ({ questions, answers, test }) => {
     }
 
     return {
-      questionId: q.id,
+      questionId: qIdStr,
       studentAnswer,
-      correctAnswer: q.correctAnswer,
+      correctAnswer: normalizedCorrect,
       isCorrect,
       marks,
       negativeMarks: (!isCorrect && studentAnswer) ? negMarks : 0
