@@ -5477,11 +5477,11 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                     <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-[#D32F2F] rounded-full"
-                        style={{ width: "0%" }}
+                        style={{ width: `${(viewingStudentAnalysis.negativeMarksTotal / viewingStudentAnalysis.totalMarks) * 100 || 0}%` }}
                       ></div>
                     </div>
                     <p className="text-[18px] font-black text-[#D32F2F]">
-                      -0.00
+                      -{viewingStudentAnalysis.negativeMarksTotal?.toFixed(2) || "0.00"}
                     </p>
                   </div>
 
@@ -5494,14 +5494,20 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                       <div
                         className="h-full bg-blue-500 rounded-full"
                         style={{
-                          width: `${(viewingStudentAnalysis.obtainedMarks / viewingStudentAnalysis.totalMarks) * 100 || 0}%`,
+                          width: `${
+                            ((viewingStudentAnalysis.correctAnswers || 0) /
+                              ((viewingStudentAnalysis.correctAnswers || 0) +
+                                (viewingStudentAnalysis.wrongAnswers || 0) || 1)) *
+                            100
+                          }%`,
                         }}
                       ></div>
                     </div>
                     <p className="text-[18px] font-black text-blue-600">
                       {(
-                        (viewingStudentAnalysis.obtainedMarks /
-                          viewingStudentAnalysis.totalMarks) *
+                        ((viewingStudentAnalysis.correctAnswers || 0) /
+                          ((viewingStudentAnalysis.correctAnswers || 0) +
+                            (viewingStudentAnalysis.wrongAnswers || 0) || 1)) *
                         100
                       ).toFixed(1)}
                       %
@@ -5523,7 +5529,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="text-center bg-white/60 p-4 rounded-xl shadow-sm">
                     <p className="text-[20px] font-black text-gray-800 italic">
-                      {Math.floor(viewingStudentAnalysis.obtainedMarks)}
+                      {(viewingStudentAnalysis.correctAnswers || 0) + (viewingStudentAnalysis.wrongAnswers || 0)}
                     </p>
                     <p className="text-[11px] font-bold text-gray-400 uppercase mt-1 tracking-widest">
                       Attempted
@@ -5531,8 +5537,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                   </div>
                   <div className="text-center bg-white/60 p-4 rounded-xl shadow-sm">
                     <p className="text-[20px] font-black text-gray-800 italic">
-                      {viewingStudentAnalysis.totalMarks -
-                        Math.floor(viewingStudentAnalysis.obtainedMarks)}
+                      {viewingStudentAnalysis.unanswered || 0}
                     </p>
                     <p className="text-[11px] font-bold text-gray-400 uppercase mt-1 tracking-widest">
                       Unattempted
@@ -5540,7 +5545,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                   </div>
                   <div className="text-center bg-white/60 p-4 rounded-xl shadow-sm">
                     <p className="text-[20px] font-black text-gray-800 italic">
-                      {viewingStudentAnalysis.obtainedMarks}
+                      {viewingStudentAnalysis.correctAnswers || 0}
                     </p>
                     <p className="text-[11px] font-bold text-gray-400 uppercase mt-1 tracking-widest">
                       Correct
@@ -5548,10 +5553,10 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                   </div>
                   <div className="text-center bg-white/60 p-4 rounded-xl shadow-sm">
                     <p className="text-[20px] font-black text-gray-800 italic">
-                      0
+                      {viewingStudentAnalysis.wrongAnswers || 0}
                     </p>
                     <p className="text-[11px] font-bold text-gray-400 uppercase mt-1 tracking-widest">
-                      Incorrect
+                      Wrong
                     </p>
                   </div>
                 </div>
