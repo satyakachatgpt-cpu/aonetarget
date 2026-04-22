@@ -13,4 +13,5 @@ export * from './paymentService';
 export * from './studentService';
 export * from './adminService';
 export * from './courseService';
-export * from './testService';
+export { questionsAPI, testsAPI, testSeriesAPI, subjectiveTestsAPI, reportedQuestionsAPI, resultsAPI } from './testService';
+

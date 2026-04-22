@@ -8,6 +8,7 @@ import {
   invalidateCache,
   reportedQuestionsAPI,
   getAdminHeaders,
+  resultsAPI,
 } from "../../services/apiClient";
 import QuestionPaperRenderer from "./QuestionPaperRenderer";
 import { InlineMath } from "react-katex";
@@ -1310,76 +1311,14 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   }, [showFloatingAddMenu, showFloatingMoreMenu, activeActionMenuId, activeMenu]);
 
   const loadResults = async () => {
-    // Mock results matching screenshot + more entries
-    const mockResults = [
-      {
-        id: "res_1",
-        studentName: "Harsh",
-        studentId: "STU-1772001203724",
-        timeTaken: 19,
-        obtainedMarks: 0,
-        totalMarks: 8,
-        submittedAt: "2026-02-25T15:57:00",
-        testId: "test_159",
-        testName: "HSSC TEST-159",
-      },
-      {
-        id: "res_2",
-        studentName: "Karan",
-        studentId: "STU-1772012972378",
-        timeTaken: 3,
-        obtainedMarks: 0,
-        totalMarks: 8,
-        submittedAt: "2026-02-25T15:27:00",
-        testId: "test_159",
-        testName: "HSSC TEST-159",
-      },
-      {
-        id: "res_3",
-        studentName: "Karan",
-        studentId: "STU-1772012972378",
-        timeTaken: 5,
-        obtainedMarks: 3,
-        totalMarks: 8,
-        submittedAt: "2026-02-25T15:27:00",
-        testId: "test_159",
-        testName: "HSSC TEST-159",
-      },
-      {
-        id: "res_4",
-        studentName: "Harsh",
-        studentId: "STU-1772001203724",
-        timeTaken: 45,
-        obtainedMarks: 6,
-        totalMarks: 8,
-        submittedAt: "2026-02-26T10:15:00",
-        testId: "test_160",
-        testName: "HSSC TEST-160",
-      },
-      {
-        id: "res_5",
-        studentName: "Amit Verma",
-        studentId: "STU-1883012932910",
-        timeTaken: 120,
-        obtainedMarks: 8,
-        totalMarks: 8,
-        submittedAt: "2026-02-26T11:40:00",
-        testId: "test_159",
-        testName: "HSSC TEST-159",
-      },
-      {
-        id: "res_6",
-        studentName: "Rahul",
-        studentId: "STU-1994032139044",
-        timeTaken: 60,
-        obtainedMarks: 5,
-        totalMarks: 8,
-        submittedAt: "2026-02-26T14:20:00",
-        testId: "test_161",
-        testName: "HSSC TEST-161",
-      },
-    ];
-    setResults(mockResults);
+    try {
+      const data = await resultsAPI.getAll();
+      setResults(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      console.error("Error loading results:", err);
+      showToast("Failed to load test results", "error");
+      setResults([]);
+    }
   };
 
   const loadReportedQuestions = async () => {
@@ -1675,8 +1614,11 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     const testId = test.id || (test as any)._id;
     try {
       showToast("Re-evaluating attempts...");
-      await testsAPI.reevaluate(testId);
+      await resultsAPI.reevaluate(testId);
       showToast("Re-evaluation completed successfully!");
+      if (activeTab === "Results") {
+        loadResults();
+      }
       loadData(); // Refresh UI to show updated marks
     } catch (err: any) {
       showToast(err.message || "Failed to re-evaluate", "error");
@@ -1807,10 +1749,25 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const renderResultsTab = () => {
     const filteredResults = results.filter((res) => {
       const matchSeries =
-        !resultFilters.series || res.testName.includes(resultFilters.series);
+        !resultFilters.series || 
+        res.courseName === resultFilters.series || 
+        res.courseId === resultFilters.series ||
+        (res.testName || "").includes(resultFilters.series);
+        
       const matchTest =
-        !resultFilters.test || res.testName.includes(resultFilters.test);
-      return matchSeries && matchTest;
+        !resultFilters.test || 
+        res.testName === resultFilters.test ||
+        res.testId === resultFilters.test;
+
+      const matchSubject = 
+        !resultFilters.subject || 
+        (res.subject || "").includes(resultFilters.subject);
+
+      const matchType = 
+        !resultFilters.type || 
+        (res.type || "").includes(resultFilters.type);
+
+      return matchSeries && matchTest && matchSubject && matchType;
     });
 
     const totalResults = filteredResults.length;
@@ -1994,7 +1951,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                     </td>
                   </tr>
                 ) : (
-                  filteredResults.map((r, idx) => (
+                  paginatedResults.map((r, idx) => (
                     <tr
                       key={r.id}
                       className="hover:bg-gray-50/50 transition-colors"
@@ -2006,7 +1963,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                         />
                       </td>
                       <td className="px-6 py-4 text-[14px] font-bold text-gray-600">
-                        {idx + 1}
+                        {resultsStartIndex + idx + 1}
                       </td>
                       <td className="px-6 py-4">
                         <div>
@@ -2110,9 +2067,22 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 Previous
               </button>
               <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
-              <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
-                {resultsCurrentPage}
-              </button>
+              
+              {/* Render Page Numbers */}
+              {Array.from({ length: totalResultsPages }, (_, i) => i + 1).map((pageNum) => (
+                <button
+                  key={pageNum}
+                  onClick={() => setResultsCurrentPage(pageNum)}
+                  className={`h-9 w-9 flex items-center justify-center text-[13px] rounded-xl transition-all ${
+                    resultsCurrentPage === pageNum
+                      ? "font-black bg-black text-white shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
+                      : "font-bold text-gray-400 hover:text-black hover:bg-gray-50"
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              ))}
+
               <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
               <button
                 onClick={() => setResultsCurrentPage((p) => Math.min(totalResultsPages, p + 1))}
@@ -2363,9 +2333,22 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 Previous
               </button>
               <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
-              <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
-                {reportedCurrentPage}
-              </button>
+              
+              {/* Render Page Numbers */}
+              {Array.from({ length: totalReportedPages }, (_, i) => i + 1).map((pageNum) => (
+                <button
+                  key={pageNum}
+                  onClick={() => setReportedCurrentPage(pageNum)}
+                  className={`h-9 w-9 flex items-center justify-center text-[13px] rounded-xl transition-all ${
+                    reportedCurrentPage === pageNum
+                      ? "font-black bg-black text-white shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
+                      : "font-bold text-gray-400 hover:text-black hover:bg-gray-50"
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              ))}
+
               <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
               <button
                 onClick={() =>

@@ -335,3 +335,34 @@ export const reportedQuestionsAPI = {
     return response.json();
   }
 };
+// Results API
+export const resultsAPI = {
+  getAll: async (filters: any = {}) => {
+    const params = new URLSearchParams();
+    if (filters.studentId) params.append('studentId', filters.studentId);
+    if (filters.courseId) params.append('courseId', filters.courseId);
+    if (filters.testId) params.append('testId', filters.testId);
+
+    const response = await fetch(`${API_BASE_URL}/admin/test-results?${params.toString()}`, {
+      headers: getAdminHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch test results');
+    return response.json();
+  },
+  delete: async (id: string) => {
+    const response = await fetch(`${API_BASE_URL}/admin/test-results/${id}`, {
+      method: 'DELETE',
+      headers: getAdminHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to delete test result');
+    return response.json();
+  },
+  reevaluate: async (testId: string) => {
+    const response = await fetch(`${API_BASE_URL}/tests/${testId}/reevaluate`, {
+      method: 'POST',
+      headers: getAdminHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to re-evaluate test');
+    return response.json();
+  }
+};
