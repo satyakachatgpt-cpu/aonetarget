@@ -5,8 +5,9 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-export const API_BASE =
-  import.meta.env.VITE_API_URL || "http://localhost:5000";
+export const API_BASE = import.meta.env.PROD
+  ? (import.meta.env.VITE_API_URL || "")
+  : (import.meta.env.VITE_API_URL || "http://localhost:5000");
 
 // ---------- MEDIA URL HELPERS ----------
 
