@@ -325,13 +325,37 @@ export const reportedQuestionsAPI = {
     if (!response.ok) throw new Error('Failed to fetch reported questions');
     return response.json();
   },
-  updateStatus: async (id: string, status: string) => {
+  getByStudent: async (studentId: string) => {
+    const response = await fetch(`${API_BASE_URL}/students/${studentId}/reported-questions`, {
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch student reported questions');
+    return response.json();
+  },
+  updateStatus: async (id: string, status: string, resolution?: string) => {
     const response = await fetch(`${API_BASE_URL}/admin/reported-questions/${id}`, {
       method: 'PATCH',
       headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status }),
+      body: JSON.stringify({ status, resolution }),
     });
     if (!response.ok) throw new Error('Failed to update report status');
+    return response.json();
+  },
+  delete: async (id: string) => {
+    const response = await fetch(`${API_BASE_URL}/admin/reported-questions/${id}`, {
+      method: 'DELETE',
+      headers: getAdminHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to delete report');
+    return response.json();
+  },
+  bulkDelete: async (ids: string[]) => {
+    const response = await fetch(`${API_BASE_URL}/admin/reported-questions`, {
+      method: 'DELETE',
+      headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids }),
+    });
+    if (!response.ok) throw new Error('Failed to bulk delete reports');
     return response.json();
   }
 };
