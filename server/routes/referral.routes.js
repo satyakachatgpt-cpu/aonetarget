@@ -7,11 +7,13 @@ import {
   getAdminReferralSettings,
   updateAdminReferralSettings,
   getAllReferralsAdmin,
-  updateReferralStatusAdmin
+  updateReferralStatusAdmin,
+  deleteReferralAdmin
 } from '../controllers/referral.controller.js';
 import { authMiddleware, adminMiddleware } from '../middleware/auth.js';
 
 const router = express.Router();
+
 
 const referralOwnerOrAdmin = (req, res, next) => {
   if (req.user?.isAdmin || req.user?.role === 'admin') return next();
@@ -30,5 +32,6 @@ router.get('/admin/referral-settings', adminMiddleware, getAdminReferralSettings
 router.put('/admin/referral-settings', adminMiddleware, updateAdminReferralSettings);
 router.get('/admin/referrals', adminMiddleware, getAllReferralsAdmin);
 router.put('/admin/referrals/update-status', adminMiddleware, updateReferralStatusAdmin);
+router.delete('/admin/referrals/:referralCode/:studentId', adminMiddleware, deleteReferralAdmin);
 
 export default router;

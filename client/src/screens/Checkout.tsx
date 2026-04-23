@@ -92,6 +92,9 @@ const Checkout: React.FC = () => {
   const [couponError, setCouponError] = useState('');
   const [breakdown, setBreakdown] = useState<PriceBreakdown | null>(null);
   const [upsellData, setUpsellData] = useState<Course[]>([]);
+  const [availableCoins, setAvailableCoins] = useState(0);
+  const [coinsToUse, setCoinsToUse] = useState(0);
+  const [useCoins, setUseCoins] = useState(false);
 
   const legalContent = {
     terms: {
@@ -126,6 +129,17 @@ const Checkout: React.FC = () => {
       }
     };
     loadCourse();
+
+    const fetchCoins = async () => {
+      const student = getStudentData();
+      if (!student) return;
+      try {
+        const res = await fetch(`/api/referrals/${student.id}`, { headers: getAuthHeaders() });
+        const data = await res.json();
+        setAvailableCoins(data.availableCoins || 0);
+      } catch (e) { /* ignore */ }
+    };
+    fetchCoins();
   }, [id]);
 
   // Set initial breakdown whenever course changes
@@ -224,7 +238,8 @@ const Checkout: React.FC = () => {
         body: JSON.stringify({
           courseId: course?.id || course?._id || id,
           studentId: student.id,
-          couponCode: breakdown?.couponCode || undefined
+          couponCode: breakdown?.couponCode || undefined,
+          coinsUsed: useCoins ? coinsToUse : 0
         })
       });
       const orderData = await orderRes.json();
@@ -249,7 +264,8 @@ const Checkout: React.FC = () => {
                 courseId: course?.id || course?._id || id,
                 studentId: student.id,
                 referralCode: referralCode || undefined,
-                couponCode: breakdown?.couponCode || undefined
+                couponCode: breakdown?.couponCode || undefined,
+                coinsUsed: useCoins ? coinsToUse : 0
               })
             });
             const verifyData = await verifyRes.json();
@@ -308,7 +324,8 @@ const Checkout: React.FC = () => {
           courseId: course?.id || course?._id || id,
           amount: 0,
           paymentMethod: 'free',
-          referralCode: referralCode || undefined
+          referralCode: referralCode || undefined,
+          coinsUsed: useCoins ? coinsToUse : 0
         })
       });
       const data = await res.json();
@@ -349,9 +366,11 @@ const Checkout: React.FC = () => {
   const gstPercentage = breakdown?.gstPercentage ?? 0;
   const gstAmount = breakdown?.gstAmount ?? 0;
   const discountAmount = breakdown?.discountAmount ?? 0;
-  const totalAmount = breakdown?.totalAmount ?? basePrice;
   const mrp = safeParse(course.mrp, 0);
   const mrpDiscount = mrp > basePrice ? mrp - basePrice : 0;
+  
+  const coinDiscount = useCoins ? (coinsToUse / 10) : 0;
+  const totalAmount = Math.max(0, (breakdown?.totalAmount ?? basePrice) - coinDiscount);
   const isFree = totalAmount <= 0;
 
   return (
@@ -439,6 +458,50 @@ const Checkout: React.FC = () => {
           </div>
         )}
 
+        {/* Coin Redemption */}
+        {availableCoins > 0 && (
+          <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-bold flex items-center gap-2">
+                <span className="material-symbols-rounded text-amber-500">monetization_on</span>
+                Redeem Coins
+              </h2>
+              <div 
+                className={`w-10 h-5 rounded-full relative transition-all cursor-pointer ${useCoins ? 'bg-green-500' : 'bg-gray-200'}`}
+                onClick={() => {
+                  if (!useCoins) {
+                    // Default to using max available coins or enough to cover the price
+                    setCoinsToUse(Math.min(availableCoins, Math.floor((breakdown?.totalAmount || 0) * 10)));
+                  }
+                  setUseCoins(!useCoins);
+                }}
+              >
+                <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${useCoins ? 'right-1' : 'left-1'}`}></div>
+              </div>
+            </div>
+            
+            {useCoins ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 bg-amber-50 border border-amber-100 p-3 rounded-xl">
+                  <div className="flex-1">
+                    <p className="text-[10px] font-black text-amber-700 uppercase tracking-wider">Using Coins</p>
+                    <p className="text-sm font-black text-amber-900">{coinsToUse} Coins = ₹{(coinsToUse/10).toFixed(2)} Off</p>
+                  </div>
+                  <button 
+                    onClick={() => setUseCoins(false)}
+                    className="text-amber-700 text-[10px] font-bold underline"
+                  >
+                    Change
+                  </button>
+                </div>
+                <p className="text-[10px] text-gray-400">Available: {availableCoins} coins</p>
+              </div>
+            ) : (
+              <p className="text-xs text-gray-500">You have {availableCoins} coins available. Use them to get a discount!</p>
+            )}
+          </div>
+        )}
+
 
 
         {/* Upsell */}
@@ -501,6 +564,13 @@ const Checkout: React.FC = () => {
               <div className="flex justify-between">
                 <span className="text-green-600 font-bold">Coupon Discount ({breakdown?.couponCode})</span>
                 <span className="text-green-600 font-black">- ₹{discountAmount.toFixed(2)}</span>
+              </div>
+            )}
+
+            {useCoins && coinsToUse > 0 && (
+              <div className="flex justify-between">
+                <span className="text-amber-600 font-bold">Coins Redeemed ({coinsToUse} coins)</span>
+                <span className="text-amber-600 font-black">- ₹{(coinsToUse/10).toFixed(2)}</span>
               </div>
             )}
 

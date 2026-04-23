@@ -65,6 +65,13 @@ const studentSchema = new mongoose.Schema({
     isBanned: { type: Boolean, default: false },
     banReason: { type: String, default: null },
 
+    // Referral & Coin System
+    referredBy: { type: String, default: null },
+    coins: { type: Number, default: 0 },
+    welcomeBonus: { type: Number, default: 0 },
+    usedCoins: { type: Number, default: 0 },
+    availableCoins: { type: Number, default: 0 },
+
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }
 });

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getAdminHeaders } from '../../services/apiClient';
 
 interface ReferralRecord {
@@ -10,16 +11,19 @@ interface ReferralRecord {
     studentId: string;
     studentName: string;
     date: string;
-    earning: number;
+    coins: number;
     status: string;
   }[];
-  totalEarnings: number;
-  pendingEarnings: number;
+  totalCoins: number;
+  pendingCoins: number;
+  availableCoins: number;
 }
 
 interface ReferralSettings {
-  commissionType: 'percentage' | 'fixed';
-  commissionValue: number;
+  coinsPerReferral: number;
+  welcomeBonusCoins: number;
+  coinToRupeeRate: number;
+  maxCoinsPerAccount: number;
 }
 
 interface Props {
@@ -27,11 +31,18 @@ interface Props {
 }
 
 const Referrals: React.FC<Props> = ({ showToast }) => {
+  const navigate = useNavigate();
   const [referrals, setReferrals] = useState<ReferralRecord[]>([]);
-  const [settings, setSettings] = useState<ReferralSettings>({ commissionType: 'fixed', commissionValue: 50 });
+  const [settings, setSettings] = useState<ReferralSettings>({ 
+    coinsPerReferral: 500, 
+    welcomeBonusCoins: 100,
+    coinToRupeeRate: 10,
+    maxCoinsPerAccount: 50000
+  });
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [students, setStudents] = useState<any[]>([]);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'settings'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -53,7 +64,7 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
       const settingsData = await settingsRes.json();
       const studentsData = await studentsRes.json();
       setReferrals(referralsData);
-      if (settingsData && settingsData.commissionType) {
+      if (settingsData && settingsData.coinsPerReferral) {
         setSettings(settingsData);
       }
       setStudents(studentsData);
@@ -107,9 +118,28 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
     }
   };
 
+  const deleteReferral = async (referralCode: string, studentId: string) => {
+    if (!window.confirm('Are you sure you want to delete this referral? This will also revert any coins earned.')) return;
+    try {
+      const res = await fetch(`/api/admin/referrals/${referralCode}/${studentId}`, {
+        method: 'DELETE',
+        headers: getAdminHeaders()
+      });
+      if (res.ok) {
+        showToast('Referral deleted successfully', 'success');
+        loadData();
+      } else {
+        const err = await res.json();
+        showToast(err.error || 'Failed to delete referral', 'error');
+      }
+    } catch (error) {
+      showToast('Failed to delete referral', 'error');
+    }
+  };
+
   const totalReferrals = referrals.reduce((sum, r) => sum + (r.referredStudents?.length || 0), 0);
-  const totalCommissionsPaid = referrals.reduce((sum, r) => sum + (r.totalEarnings || 0), 0);
-  const pendingCommissions = referrals.reduce((sum, r) => sum + (r.pendingEarnings || 0), 0);
+  const totalCoinsPaid = referrals.reduce((sum, r) => sum + (r.totalCoins || 0), 0);
+  const pendingCoins = referrals.reduce((sum, r) => sum + (r.pendingCoins || 0), 0);
 
   const allReferredEntries = referrals.flatMap(r =>
     (r.referredStudents || []).map(rs => ({
@@ -168,11 +198,11 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
         </div>
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center gap-4">
           <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center text-[24px]">
-            <span className="material-symbols-outlined text-green-600">payments</span>
+            <span className="material-symbols-outlined text-green-600">monetization_on</span>
           </div>
           <div>
-            <p className="text-2xl font-bold text-gray-900 text-left">₹{totalCommissionsPaid}</p>
-            <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">Commissions Paid</p>
+            <p className="text-2xl font-bold text-gray-900 text-left">{totalCoinsPaid}</p>
+            <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider">Total Coins Earned</p>
           </div>
         </div>
         <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 flex items-center gap-4">
@@ -180,8 +210,8 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
             <span className="material-symbols-outlined text-amber-600 text-[24px]">schedule</span>
           </div>
           <div>
-            <p className="text-2xl font-bold text-gray-900 text-left">₹{pendingCommissions}</p>
-            <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider text-left">Pending Commissions</p>
+            <p className="text-2xl font-bold text-gray-900 text-left">{pendingCoins}</p>
+            <p className="text-[11px] text-gray-400 font-bold uppercase tracking-wider text-left">Pending Coins</p>
           </div>
         </div>
       </div>
@@ -239,24 +269,41 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div className="space-y-2 text-left">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block ml-1">Commission Type</label>
-              <select
-                value={settings.commissionType}
-                onChange={(e) => setSettings({ ...settings, commissionType: e.target.value as 'percentage' | 'fixed' })}
-                className="w-full h-[54px] px-5 bg-gray-50 border border-gray-200 rounded-2xl text-[14px] font-bold outline-none focus:border-[#1a237e] transition-all cursor-pointer shadow-sm"
-              >
-                <option value="fixed">Fixed Amount (₹)</option>
-                <option value="percentage">Percentage (%)</option>
-              </select>
-            </div>
-            <div className="space-y-2 text-left">
-              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block ml-1">
-                {settings.commissionType === 'fixed' ? 'Amount (₹)' : 'Percentage (%)'}
-              </label>
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block ml-1">Referrer Reward (Coins)</label>
               <input
                 type="number"
-                value={settings.commissionValue}
-                onChange={(e) => setSettings({ ...settings, commissionValue: Number(e.target.value) })}
+                value={settings.coinsPerReferral}
+                onChange={(e) => setSettings({ ...settings, coinsPerReferral: Number(e.target.value) })}
+                className="w-full h-[54px] px-5 bg-gray-50 border border-gray-200 rounded-2xl text-[14px] font-bold outline-none focus:border-[#1a237e] transition-all shadow-sm"
+                min={0}
+              />
+            </div>
+            <div className="space-y-2 text-left">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block ml-1">Referred Bonus (Coins)</label>
+              <input
+                type="number"
+                value={settings.welcomeBonusCoins}
+                onChange={(e) => setSettings({ ...settings, welcomeBonusCoins: Number(e.target.value) })}
+                className="w-full h-[54px] px-5 bg-gray-50 border border-gray-200 rounded-2xl text-[14px] font-bold outline-none focus:border-[#1a237e] transition-all shadow-sm"
+                min={0}
+              />
+            </div>
+            <div className="space-y-2 text-left">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block ml-1">Conversion Rate (Coins per ₹1)</label>
+              <input
+                type="number"
+                value={settings.coinToRupeeRate}
+                onChange={(e) => setSettings({ ...settings, coinToRupeeRate: Number(e.target.value) })}
+                className="w-full h-[54px] px-5 bg-gray-50 border border-gray-200 rounded-2xl text-[14px] font-bold outline-none focus:border-[#1a237e] transition-all shadow-sm"
+                min={1}
+              />
+            </div>
+            <div className="space-y-2 text-left">
+              <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block ml-1">Max Coins Cap</label>
+              <input
+                type="number"
+                value={settings.maxCoinsPerAccount}
+                onChange={(e) => setSettings({ ...settings, maxCoinsPerAccount: Number(e.target.value) })}
                 className="w-full h-[54px] px-5 bg-gray-50 border border-gray-200 rounded-2xl text-[14px] font-bold outline-none focus:border-[#1a237e] transition-all shadow-sm"
                 min={0}
               />
@@ -266,10 +313,8 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
           <div className="mt-8 p-4 bg-indigo-50/50 border border-indigo-100 rounded-2xl flex items-start gap-3">
             <span className="material-symbols-outlined text-indigo-600 text-[20px] mt-0.5">info</span>
             <p className="text-[13px] text-indigo-800 font-medium leading-relaxed text-left">
-              {settings.commissionType === 'fixed'
-                ? `Referrers will earn a flat reward of ₹${settings.commissionValue} for every student who joins using their referral code.`
-                : `Referrers will receive ${settings.commissionValue}% of the total purchase amount made by students who use their referral code.`
-              }
+              Referrers will earn {settings.coinsPerReferral} coins when their friend signs up. These coins will be unlocked when the friend makes their first purchase. New students get {settings.welcomeBonusCoins} coins as a welcome bonus. 
+              Conversion: {settings.coinToRupeeRate} Coins = ₹1.
             </p>
           </div>
 
@@ -309,7 +354,7 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
                       <span className="material-symbols-outlined text-sm">unfold_more</span>
                     </div>
                   </th>
-                  <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Commission</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Reward</th>
                   <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                 </tr>
@@ -326,7 +371,7 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
                   </tr>
                 ) : (
                   paginatedEntries.map((entry, idx) => {
-                    const isLastFew = paginatedEntries.length > 3 ? idx >= paginatedEntries.length - 2 : idx >= paginatedEntries.length - 1;
+                    const isLastFew = paginatedEntries.length > 2 && idx >= paginatedEntries.length - 2;
                     return (
                       <tr key={idx} className="hover:bg-gray-50/30 transition-colors group">
                         <td className="px-6 py-5">
@@ -350,10 +395,10 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
                           {entry.date ? new Date(entry.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-') : '-'}
                         </td>
                         <td className="px-6 py-5">
-                          <span className="text-[13px] font-black text-green-600">₹{entry.earning || 0}</span>
+                          <span className="text-[13px] font-black text-amber-600">{entry.coins || 0} Coins</span>
                         </td>
                         <td className="px-6 py-5">
-                          <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${entry.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                          <span className={`inline-block px-3 py-1 rounded-lg text-[10px] font-bold uppercase tracking-tight ${entry.status === 'unlocked' || entry.status === 'confirmed' ? 'bg-green-100 text-green-700' :
                             entry.status === 'rejected' ? 'bg-red-100 text-red-700' :
                               'bg-amber-100 text-amber-700'
                             }`}>
@@ -361,34 +406,28 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
                           </span>
                         </td>
                         <td className="px-6 py-5 text-right overflow-visible">
-                          <div className="relative inline-block text-left group/menu">
-                            <button className="flex items-center gap-1 px-4 py-1.5 border border-gray-200 rounded-lg text-[11px] font-bold text-gray-600 hover:bg-gray-50 transition-all">
+                          <div className="relative inline-block text-left">
+                            <button 
+                              onClick={() => setOpenMenuId(openMenuId === `${entry.referralCode}-${entry.studentId}` ? null : `${entry.referralCode}-${entry.studentId}`)}
+                              className="flex items-center gap-1 px-4 py-1.5 border border-gray-200 rounded-lg text-[11px] font-bold text-gray-600 hover:bg-gray-50 transition-all focus:outline-none"
+                            >
                               Actions
-                              <span className="material-symbols-outlined text-[16px]">expand_more</span>
+                              <span className="material-symbols-outlined text-[16px] transition-transform duration-200" style={{ transform: openMenuId === `${entry.referralCode}-${entry.studentId}` ? 'rotate(180deg)' : 'none' }}>expand_more</span>
                             </button>
 
-                            <div className={`absolute right-0 ${isLastFew ? 'bottom-full mb-1' : 'top-full mt-1'} w-36 bg-white border border-gray-100 rounded-xl shadow-xl z-[100] py-1 opacity-0 pointer-events-none group-hover/menu:opacity-100 group-hover/menu:pointer-events-auto transition-all`}>
-                              {(entry.status === 'pending' || !entry.status) ? (
-                                <>
+                            {openMenuId === `${entry.referralCode}-${entry.studentId}` && (
+                              <>
+                                <div className="fixed inset-0 z-[90]" onClick={() => setOpenMenuId(null)}></div>
+                                <div className={`absolute right-0 ${isLastFew ? 'bottom-full mb-1' : 'top-full mt-1'} w-32 bg-white border border-gray-100 rounded-xl shadow-xl z-[100] py-1 transition-all animate-in fade-in zoom-in duration-200`}>
                                   <button
-                                    onClick={() => updateReferralStatus(entry.referralCode, entry.studentId, 'confirmed')}
-                                    className="w-full px-4 py-2.5 text-left text-[12px] font-bold text-gray-700 hover:bg-green-50 flex items-center gap-2 group/item"
+                                    onClick={() => { setOpenMenuId(null); deleteReferral(entry.referralCode, entry.studentId); }}
+                                    className="w-full px-4 py-2.5 text-left text-[12px] font-bold text-red-600 hover:bg-red-50 flex items-center gap-2"
                                   >
-                                    <span className="material-symbols-outlined text-sm text-green-500">check_circle</span> Approve
+                                    <span className="material-symbols-outlined text-sm">delete</span> Delete
                                   </button>
-                                  <button
-                                    onClick={() => updateReferralStatus(entry.referralCode, entry.studentId, 'rejected')}
-                                    className="w-full px-4 py-2.5 text-left text-[12px] font-bold text-gray-700 hover:bg-red-50 flex items-center gap-2 group/item"
-                                  >
-                                    <span className="material-symbols-outlined text-sm text-red-500">cancel</span> Reject
-                                  </button>
-                                </>
-                              ) : (
-                                <div className="px-4 py-2.5 text-center text-[10px] font-bold text-gray-400 uppercase italic">
-                                  No Actions
                                 </div>
-                              )}
-                            </div>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
