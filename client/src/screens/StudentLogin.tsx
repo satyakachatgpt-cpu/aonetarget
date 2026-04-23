@@ -253,6 +253,25 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   ];
 
   useEffect(() => {
+    // Capture referral code from URL
+    const params = new URLSearchParams(window.location.search);
+    const refCode = params.get('ref');
+    if (refCode) {
+      localStorage.setItem('pendingReferralCode', refCode);
+    }
+  }, []);
+
+  useEffect(() => {
+    // Auto-fill referral code from localStorage if on profile step
+    if (step === 'profile') {
+      const storedRef = localStorage.getItem('pendingReferralCode');
+      if (storedRef) {
+        setProfileValue('referralCode', storedRef);
+      }
+    }
+  }, [step, setProfileValue]);
+
+  useEffect(() => {
     const fetchCategories = async () => {
       try {
         const response = await fetch('/api/categories');
@@ -436,8 +455,42 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
   const resendLoginOtp = async () => {
     if (resendTimer > 0) return;
-    if (currentPhone.length === 10) {
+    if (currentPhone && currentPhone.length === 10) {
       await sendLoginOtp({ phone: currentPhone });
+    }
+  };
+
+  const resendSignupOtp = async () => {
+    if (resendTimer > 0) return;
+    const phone = profileWatch('phone');
+    if (phone && phone.length === 10) {
+      setLoading(true);
+      try {
+        const otpRes = await fetch('/api/students/signup/send-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone })
+        });
+        const otpData = await otpRes.json();
+        if (otpRes.ok) {
+          toast.success('Registration OTP resent!');
+          setResendTimer(60);
+          setOtp(['', '', '', '', '', '']);
+        } else {
+          toast.error(otpData.error || 'Failed to resend OTP');
+        }
+      } catch (err: any) {
+        toast.error('Connection error');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  const resendResetOtp = async () => {
+    if (resendTimer > 0) return;
+    if (resetPhone && resetPhone.length === 10) {
+      await handleForgotStep1({ preventDefault: () => {} } as any);
     }
   };
 
@@ -738,7 +791,11 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
               value={digit}
               onChange={(e) => handleOtpChange(index, e.target.value)}
               onKeyDown={(e) => handleOtpKeyDown(index, e)}
-              className={`w-12 h-16 text-center text-2xl font-black border-2 rounded-2xl focus:outline-none transition-all ${digit ? 'border-brandBlue bg-brandBlue/5 text-brandBlue shadow-lg shadow-brandBlue/10' : 'border-gray-100 focus:border-brandBlue text-gray-400'}`}
+              className={`w-12 h-16 text-center text-2xl font-black border-2 rounded-2xl focus:outline-none transition-all ${
+                digit 
+                  ? 'border-brandBlue bg-brandBlue/5 text-brandBlue shadow-[0_4px_12px_rgba(58,119,255,0.1)]' 
+                  : 'border-gray-200 bg-gray-50 focus:border-brandBlue focus:bg-white focus:shadow-[0_0_20px_rgba(58,119,255,0.15)] text-gray-400'
+              }`}
             />
           ))}
         </div>
@@ -749,6 +806,23 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
         >
           {loading ? 'Verifying...' : 'Verify OTP'}
         </button>
+
+        <div className="text-center">
+          {resendTimer > 0 ? (
+            <p className="text-[12px] font-bold text-gray-400 uppercase tracking-widest">
+              Resend OTP in <span className="text-brandBlue">{resendTimer}s</span>
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={resendResetOtp}
+              disabled={loading}
+              className="text-[12px] font-black text-brandBlue uppercase tracking-widest hover:underline disabled:opacity-50"
+            >
+              Resend OTP
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -834,7 +908,11 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
               value={digit}
               onChange={(e) => handleOtpChange(index, e.target.value)}
               onKeyDown={(e) => handleOtpKeyDown(index, e)}
-              className={`w-12 h-16 text-center text-2xl font-black border-2 rounded-2xl focus:outline-none transition-all ${digit ? 'border-[#1A237E] bg-[#1A237E]/5 text-[#1A237E] shadow-lg' : 'border-gray-100 focus:border-[#1A237E] text-gray-400'}`}
+              className={`w-12 h-16 text-center text-2xl font-black border-2 rounded-2xl focus:outline-none transition-all ${
+                digit 
+                  ? 'border-[#1A237E] bg-[#1A237E]/5 text-[#1A237E] shadow-[0_4px_12px_rgba(26,35,126,0.1)]' 
+                  : 'border-gray-200 bg-gray-50 focus:border-[#1A237E] focus:bg-white focus:shadow-[0_0_20px_rgba(26,35,126,0.15)] text-gray-400'
+              }`}
             />
           ))}
         </div>
@@ -845,6 +923,23 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
         >
           {loading ? 'Verifying...' : 'Verify OTP'}
         </button>
+
+        <div className="text-center">
+          {resendTimer > 0 ? (
+            <p className="text-[12px] font-bold text-gray-400 uppercase tracking-widest">
+              Resend OTP in <span className="text-[#1A237E]">{resendTimer}s</span>
+            </p>
+          ) : (
+            <button
+              type="button"
+              onClick={resendSignupOtp}
+              disabled={loading}
+              className="text-[12px] font-black text-[#1A237E] uppercase tracking-widest hover:underline disabled:opacity-50"
+            >
+              Resend OTP
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -871,7 +966,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
           </p>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-8">
           <div className="flex justify-center gap-2.5">
             {otp.map((digit, index) => (
               <input
@@ -883,7 +978,11 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
                 value={digit}
                 onChange={(e) => handleOtpChange(index, e.target.value)}
                 onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                className={`w-12 h-14 text-center text-xl font-bold border-2 rounded-xl focus:outline-none transition-all ${digit ? 'border-[#303F9F] bg-[#1A237E]/5' : 'border-gray-200 focus:border-[#303F9F]'}`}
+                className={`w-12 h-16 text-center text-2xl font-black border-2 rounded-2xl focus:outline-none transition-all ${
+                  digit 
+                    ? 'border-[#1A237E] bg-[#1A237E]/5 text-[#1A237E] shadow-[0_4px_12px_rgba(26,35,126,0.1)]' 
+                    : 'border-gray-200 bg-gray-50 focus:border-[#1A237E] focus:bg-white focus:shadow-[0_0_20px_rgba(26,35,126,0.15)] text-gray-400'
+                }`}
               />
             ))}
           </div>
@@ -899,15 +998,15 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
           <div className="text-center">
             {resendTimer > 0 ? (
-              <p className="text-sm text-gray-500">
-                Resend OTP in <span className="font-bold text-[#1A237E]">{resendTimer}s</span>
+              <p className="text-[12px] font-bold text-gray-400 uppercase tracking-widest">
+                Resend OTP in <span className="text-[#1A237E] font-black">{resendTimer}s</span>
               </p>
             ) : (
               <button
                 type="button"
                 onClick={resendLoginOtp}
                 disabled={loading}
-                className="text-sm text-[#1A237E] font-bold hover:underline disabled:opacity-50"
+                className="text-[12px] font-black text-[#1A237E] uppercase tracking-widest hover:underline disabled:opacity-50"
               >
                 Resend OTP
               </button>
@@ -1063,6 +1162,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
           if (!response.ok) throw new Error(resData.error || 'Registration failed');
           
           toast.success('Registration successful! Please login.');
+          localStorage.removeItem('pendingReferralCode');
           setStep('login');
           setPasswordFormData({ loginId: data.phone, password: '' });
         } catch (err: any) {

@@ -7,6 +7,7 @@ import { calculatePriceBreakdown } from '../utils/helpers.js';
 import { sendEmail, templates } from '../utils/email.js';
 import sendSMS from '../utils/sendSMS.js';
 import Student from '../models/Student.js';
+import { unlockReferralCoins, useCoinsForPurchase } from './referral.controller.js';
 
 function canActForStudent(req, studentId) {
   return req.admin || req.user?.isAdmin || req.user?.role === 'admin' || String(req.user?.studentId) === String(studentId);
@@ -60,18 +61,34 @@ export const createRazorpayOrder = async (req, res) => {
 
     const breakdown = calculatePriceBreakdown(course, coupon);
 
-    if (breakdown.totalAmount <= 0) {
+    // Coin redemption logic
+    const coinsUsed = req.body.coinsUsed || 0;
+    let coinDiscount = 0;
+    if (coinsUsed > 0) {
+      const student = await db.collection('students').findOne({ id: studentId });
+      const available = student?.availableCoins || 0;
+      const actualCoinsToUse = Math.min(coinsUsed, available);
+      coinDiscount = actualCoinsToUse / 10; // 10 coins = 1 INR
+    }
+
+    const finalAmount = Math.max(0, breakdown.totalAmount - coinDiscount);
+
+    if (finalAmount <= 0 && breakdown.totalAmount > 0) {
+       // Allow zero amount if coins cover it
+    } else if (finalAmount <= 0) {
       return res.status(400).json({ error: 'This course is free or discounted to zero, use manual enrollment' });
     }
 
     const orderData = {
-      amount: Math.round(breakdown.totalAmount * 100),
+      amount: Math.round(finalAmount * 100),
       currency: 'INR',
       receipt: `receipt_${Date.now()}`,
       notes: {
         courseId: course.id || course._id.toString(),
         studentId,
         couponCode: couponCode || '',
+        coinsUsed: coinsUsed || 0,
+        coinDiscount: coinDiscount,
         basePrice: breakdown.basePrice,
         gstAmount: breakdown.gstAmount,
         discountAmount: breakdown.discountAmount
@@ -198,6 +215,13 @@ export const verifyRazorpayPayment = async (req, res) => {
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
+    const enrolledCourses = student.enrolledCourses || [];
+
+    // Idempotency: Check if this payment was already processed
+    const existingPurchase = await db.collection('purchases').findOne({ razorpayPaymentId: razorpay_payment_id });
+    if (existingPurchase) {
+      return res.status(201).json({ success: true, purchase: existingPurchase, alreadyProcessed: true });
+    }
 
     const actualCourseId = course.id || courseId;
     const actualAmount = paymentData.amount / 100;
@@ -223,32 +247,32 @@ export const verifyRazorpayPayment = async (req, res) => {
 
     await db.collection('purchases').insertOne(purchase);
 
-    const enrolledCourses = student.enrolledCourses || [];
-    if (!enrolledCourses.includes(actualCourseId)) {
+    if (enrolledCourses.includes(actualCourseId)) {
+      // Already enrolled, but this is a new purchase record (manual or retry)
+      // Usually verifyRazorpayPayment shouldn't hit this if existingPurchase check above works
+    } else {
       await db.collection('students').updateOne(
         { id: studentId },
         { $addToSet: { enrolledCourses: actualCourseId } }
       );
-    }
 
-    if (referralCode) {
-      const referral = await db.collection('referrals').findOne({ referralCode });
-      if (referral) {
-        const referralSettings = await db.collection('referralSettings').findOne({}) || { commissionType: 'fixed', commissionValue: 50 };
-        let earning = referralSettings.commissionValue || 50;
-        if (referralSettings.commissionType === 'percentage') {
-          earning = Math.round((purchase.amount * referralSettings.commissionValue) / 100);
-        }
-        const alreadyReferred = referral.referredStudents && referral.referredStudents.some(r => r.studentId === studentId);
-        if (!alreadyReferred) {
-          await db.collection('referrals').updateOne(
-            { referralCode },
-            {
-              $push: { referredStudents: { studentId, studentName: student.name || 'Unknown', date: new Date(), earning, status: 'pending' } },
-              $inc: { pendingEarnings: earning }
-            }
-          );
-        }
+      // Coin Deduction (Internal Helper)
+      const maxCoinsAllowed = Math.floor((breakdown.totalAmount || 0) * 10);
+      const coinsToDeduct = Math.min(req.body.coinsUsed || 0, maxCoinsAllowed);
+      if (coinsToDeduct > 0) {
+        await useCoinsForPurchase(studentId, coinsToDeduct);
+      }
+
+      // Referral Unlock Logic (STRICT FIRST PURCHASE ONLY)
+      const previousPurchases = await db.collection('purchases').countDocuments({ 
+        studentId, 
+        status: 'completed',
+        id: { $ne: purchase.id } 
+      });
+
+      if (previousPurchases === 0) {
+        // This is the first purchase
+        await unlockReferralCoins(studentId, purchase.id);
       }
     }
 
@@ -289,6 +313,7 @@ export const createPurchase = async (req, res) => {
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
+    const enrolledCourses = student.enrolledCourses || [];
 
     let course = await findCourse(courseId);
     if (!course) {
@@ -305,7 +330,7 @@ export const createPurchase = async (req, res) => {
       studentId,
       courseId: actualCourseId,
       courseName: course ? (course.name || course.title) : courseId,
-      amount: amount || (course ? course.price : 0),
+      amount: (typeof amount === 'number') ? amount : (course ? course.price : 0),
       paymentMethod: paymentMethod || 'online',
       referralCode: referralCode || null,
       status: 'completed',
@@ -314,40 +339,31 @@ export const createPurchase = async (req, res) => {
 
     await db.collection('purchases').insertOne(purchase);
 
-    const enrolledCourses = student.enrolledCourses || [];
-    if (!enrolledCourses.includes(actualCourseId)) {
+    if (enrolledCourses.includes(actualCourseId)) {
+       // Already enrolled
+    } else {
       await db.collection('students').updateOne(
         { id: studentId },
         { $addToSet: { enrolledCourses: actualCourseId } }
       );
-    }
 
-    if (referralCode) {
-      const referral = await db.collection('referrals').findOne({ referralCode });
-      if (referral) {
-        const settings = await db.collection('referralSettings').findOne({}) || { commissionType: 'fixed', commissionValue: 50 };
-        let earning = settings.commissionValue || 50;
-        if (settings.commissionType === 'percentage') {
-          earning = Math.round((purchase.amount * settings.commissionValue) / 100);
-        }
+      // Coin Deduction
+      const coursePrice = course ? course.price : 0;
+      const maxCoinsAllowed = Math.floor(coursePrice * 10);
+      const coinsToDeduct = Math.min(req.body.coinsUsed || 0, maxCoinsAllowed);
+      if (coinsToDeduct > 0) {
+        await useCoinsForPurchase(studentId, coinsToDeduct);
+      }
 
-        const alreadyReferred = referral.referredStudents && referral.referredStudents.some(r => r.studentId === studentId);
-        if (!alreadyReferred) {
-          const referredEntry = {
-            studentId,
-            studentName: student.name || 'Unknown',
-            date: new Date(),
-            earning,
-            status: 'pending'
-          };
-          await db.collection('referrals').updateOne(
-            { referralCode },
-            {
-              $push: { referredStudents: referredEntry },
-              $inc: { pendingEarnings: earning }
-            }
-          );
-        }
+      // Referral Unlock (FIRST PURCHASE ONLY)
+      const previousPurchases = await db.collection('purchases').countDocuments({ 
+        studentId, 
+        status: 'completed',
+        id: { $ne: purchase.id } 
+      });
+
+      if (previousPurchases === 0) {
+        await unlockReferralCoins(studentId, purchase.id);
       }
     }
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { indiaStateDistrictMap } from '../../utils/indiaStates';
@@ -243,6 +244,40 @@ const StudentProfileContent: React.FC<{
               ))}
             </div>
 
+            {/* Referral & Coins Section */}
+            <div className="pt-6 border-t border-gray-100">
+              <div className="flex items-center gap-3 mb-4">
+                <span className="material-symbols-outlined text-amber-600 text-[20px]">payments</span>
+                <h4 className="text-[14px] font-black text-gray-900 uppercase tracking-wider">Referral & Coins</h4>
+              </div>
+              <div className="bg-amber-50/50 p-5 rounded-2xl border border-amber-100/50">
+                <div className="grid grid-cols-2 gap-y-4">
+                  <div>
+                    <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Referrer Code</p>
+                    <p className="text-[13px] font-bold text-gray-900">{ (student as any).referredBy || 'Direct Signup' }</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Welcome Bonus</p>
+                    <p className="text-[13px] font-bold text-gray-900">{ (student as any).welcomeBonus || 0 } Coins</p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Total Coins Earned</p>
+                    <p className="text-[14px] font-black text-[#1a237e]">{ (student as any).coins || 0 } <span className="text-[10px] font-bold text-gray-400 ml-0.5">Coins</span></p>
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Available to Use</p>
+                    <p className="text-[14px] font-black text-green-600">{ (student as any).availableCoins || 0 } <span className="text-[10px] font-bold text-gray-400 ml-0.5">Coins</span></p>
+                  </div>
+                </div>
+                { (student as any).usedCoins > 0 && (
+                  <div className="mt-4 pt-4 border-t border-amber-100/50 flex items-center justify-between">
+                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Total Redeemed</p>
+                    <p className="text-[12px] font-black text-red-500">{ (student as any).usedCoins } Coins</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
             {/* Account Security Section */}
             <div className="pt-4 mt-2">
               <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex items-center justify-between h-16">
@@ -376,6 +411,7 @@ interface StudentFormData {
 }
 
 const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode = 'all' }) => {
+  const location = useLocation();
   const [students, setStudents] = useState<Student[]>([]);
   const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
@@ -472,6 +508,19 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     window.addEventListener('click', handleClickOutside);
     return () => window.removeEventListener('click', handleClickOutside);
   }, []);
+
+  // Handle opening student from state
+  useEffect(() => {
+    if (location.state?.openStudentId && students.length > 0) {
+      const student = students.find(s => s.id === location.state.openStudentId);
+      if (student) {
+        setSelectedStudent(student);
+        setShowViewModal(true);
+        // Clear state to prevent re-opening
+        window.history.replaceState({}, document.title);
+      }
+    }
+  }, [location.state, students]);
 
   const loadCourses = async () => {
     try {
@@ -686,9 +735,9 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       await studentsAPI.delete(studentId);
       setStudents(students.filter(s => s.id !== studentId));
       showToast(`${studentName} has been deleted`, 'success');
-    } catch (error) {
-      console.error('Delete student error:', error);
-      showToast('Failed to delete student. Please try again.', 'error');
+  } catch (error: any) {
+    console.error('SERVER_ERROR [deleteReferralAdmin]:', error);
+    showToast('Failed to delete referral: ' + error.message, 'error');
     }
   };
 

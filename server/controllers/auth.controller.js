@@ -326,7 +326,6 @@ export const registerStudent = async (req, res) => {
       password: hashedPassword,
       class: studentClass || '11th',
       highQualification: higherEducation || '',
-      address: address || '',
       admission: {
         fullAddress: address || '',
         admissionDate: new Date()
@@ -337,8 +336,49 @@ export const registerStudent = async (req, res) => {
       gender: gender || '',
       dob: dob || '',
       enrolledCourses: [],
-      status: 'active'
+      status: 'active',
+      // Referral system
+      referredBy: req.body.referralCode || null,
+      coins: 0,
+      availableCoins: 0,
+      welcomeBonus: 0
     });
+
+    // Process Referral Code if provided
+    const referralCode = req.body.referralCode;
+    if (referralCode) {
+      const referral = await db.collection('referrals').findOne({ referralCode });
+      if (referral && referral.studentId !== studentId) {
+        const settings = await db.collection('referralSettings').findOne({}) || { 
+          coinsPerReferral: 500, 
+          welcomeBonusCoins: 100 
+        };
+        const coinsReward = settings.coinsPerReferral || 500;
+        const welcomeBonus = settings.welcomeBonusCoins || 100;
+
+        // Give Welcome Bonus to New Student
+        student.coins = welcomeBonus;
+        student.availableCoins = welcomeBonus;
+        student.welcomeBonus = welcomeBonus;
+
+        // Add Pending Reward to Referrer
+        await db.collection('referrals').updateOne(
+          { referralCode },
+          {
+            $push: { 
+              referredStudents: { 
+                studentId, 
+                studentName: name, 
+                date: new Date(), 
+                coins: coinsReward, 
+                status: 'pending' 
+              } 
+            },
+            $inc: { pendingCoins: coinsReward }
+          }
+        );
+      }
+    }
 
     await student.save();
 
