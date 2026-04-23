@@ -160,26 +160,44 @@ const CustomDropdown = ({
   return (
     <div className={`relative ${isOpen ? "z-[100]" : "z-10"}`} ref={wrapperRef}>
       <div
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full h-11 px-4 bg-white border border-gray-200 rounded-xl text-[12px] font-medium text-gray-700 outline-none flex items-center justify-between cursor-pointer focus:border-gray-400"
+        className="w-full h-11 bg-white border border-gray-200 rounded-xl text-[12px] font-medium text-gray-700 outline-none flex items-center justify-between cursor-pointer focus-within:border-gray-400 group"
       >
-        <span className="truncate text-left flex-1">
-          {isMulti
-            ? value.length > 0
-              ? placeholder === "Select"
-                ? `${value.length} selected`
-                : placeholder
-              : placeholder
-            : value
-              ? options.find((o: any) => o.value === value)?.label ||
-              placeholder
-              : placeholder}
-        </span>
-        <span
-          className={`material-symbols-outlined text-gray-400 pointer-events-none transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+        <div 
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex-1 h-full px-4 flex items-center min-w-0"
         >
-          expand_more
-        </span>
+          <span className="truncate text-left flex-1">
+            {isMulti
+              ? value.length > 0
+                ? placeholder === "Select"
+                  ? `${value.length} selected`
+                  : placeholder
+                : placeholder
+              : value
+                ? options.find((o: any) => o.value === value)?.label || value
+                : placeholder}
+          </span>
+        </div>
+        
+        <div className="flex items-center pr-3 gap-1">
+          {value && !isMulti && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClear();
+              }}
+              className="text-gray-400 hover:text-red-500 transition-colors p-1 flex items-center justify-center rounded-full hover:bg-gray-50"
+            >
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+          )}
+          <span
+            onClick={() => setIsOpen(!isOpen)}
+            className={`material-symbols-outlined text-gray-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+          >
+            expand_more
+          </span>
+        </div>
       </div>
 
       {isOpen && (
@@ -1751,8 +1769,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       const matchSeries =
         !resultFilters.series || 
         res.courseName === resultFilters.series || 
-        res.courseId === resultFilters.series ||
-        (res.testName || "").includes(resultFilters.series);
+        res.courseId === resultFilters.series;
         
       const matchTest =
         !resultFilters.test || 
@@ -1761,11 +1778,11 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
       const matchSubject = 
         !resultFilters.subject || 
-        (res.subject || "").includes(resultFilters.subject);
+        res.subject === resultFilters.subject;
 
       const matchType = 
         !resultFilters.type || 
-        (res.type || "").includes(resultFilters.type);
+        res.type === resultFilters.type;
 
       return matchSeries && matchTest && matchSubject && matchType;
     });
@@ -1795,10 +1812,12 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 Test Series Title
               </label>
               <CustomDropdown
-                options={courses.map((c) => ({
-                  value: c.name || c.title || "",
-                  label: c.name || c.title || "",
-                }))}
+                options={tests
+                  .filter((t) => t.isSeries)
+                  .map((t) => ({
+                    value: t.name || t.title || "",
+                    label: t.name || t.title || "",
+                  }))}
                 value={resultFilters.series}
                 onChange={(val: any) =>
                   setResultFilters({ ...resultFilters, series: val, test: "" })
@@ -1811,12 +1830,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 Test Subject
               </label>
               <CustomDropdown
-                options={[
-                  "General Knowledge",
-                  "Mathematics",
-                  "Reasoning",
-                  "English",
-                ].map((s) => ({ value: s, label: s }))}
+                options={Array.from(new Set(results.map(r => r.subject).filter(Boolean)))
+                  .sort()
+                  .map((s) => ({ value: s, label: s }))}
                 value={resultFilters.subject}
                 onChange={(val: any) =>
                   setResultFilters({ ...resultFilters, subject: val })
@@ -1829,14 +1845,14 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 Test Type
               </label>
               <CustomDropdown
-                options={["Mock Test", "Practice Test", "Previous Year"].map(
-                  (t) => ({ value: t, label: t }),
-                )}
+                options={Array.from(new Set(results.map(r => r.type).filter(Boolean)))
+                  .sort()
+                  .map((t) => ({ value: t, label: t }))}
                 value={resultFilters.type}
                 onChange={(val: any) =>
                   setResultFilters({ ...resultFilters, type: val })
                 }
-                placeholder="Test Title"
+                placeholder="Select Type"
               />
             </div>
             <div className="space-y-2">
@@ -1844,16 +1860,19 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 Test Title
               </label>
               <CustomDropdown
-                options={tests
+                options={Array.from(new Set(results
                   .filter(
-                    (t) =>
+                    (r) =>
                       !resultFilters.series ||
-                      t.courseName === resultFilters.series ||
-                      t.courseId === resultFilters.series,
+                      r.courseName === resultFilters.series ||
+                      r.courseId === resultFilters.series,
                   )
-                  .map((t) => ({
-                    value: t.name || "Unnamed Test",
-                    label: t.name || "Unnamed Test",
+                  .map((r) => r.testName || r.testTitle)))
+                  .filter(Boolean)
+                  .sort()
+                  .map((name) => ({
+                    value: name,
+                    label: name,
                   }))}
                 value={resultFilters.test}
                 onChange={(val: any) =>
