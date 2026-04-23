@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getImageUrl } from '@/lib/utils';
 import { getAuthHeaders, reportedQuestionsAPI } from '../services/apiClient';
 
@@ -8,6 +8,8 @@ type QuestionStatus = 'unanswered' | 'answered' | 'flagged' | 'flagged-answered'
 const TestTaking: React.FC = () => {
   const { testId } = useParams<{ testId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const launchedSeriesId = location.state?.seriesId;
 
   const [test, setTest] = useState<any>(null);
   const [questions, setQuestions] = useState<any[]>([]);
@@ -193,7 +195,8 @@ const TestTaking: React.FC = () => {
         body: JSON.stringify({
           studentId: student?.id || 'anonymous',
           answers,
-          timeTaken
+          timeTaken,
+          courseId: launchedSeriesId
         })
       });
 

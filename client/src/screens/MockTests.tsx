@@ -316,7 +316,7 @@ const MockTests: React.FC = () => {
                           </span>
                         </div>
                         <button
-                          onClick={() => status !== 'upcoming' && navigate(`/test/${test.id || test._id}`)}
+                          onClick={() => status !== 'upcoming' && navigate(`/test/${test.id || test._id}`, { state: { seriesId: activeSeries?.id || activeSeries?._id } })}
                           disabled={status === 'upcoming'}
                           className={`w-full mt-4 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 ${status === 'upcoming' ? 'bg-gray-100 text-gray-300' : 'bg-primary text-white shadow-primary/20'
                             }`}

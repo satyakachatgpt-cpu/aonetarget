@@ -1356,7 +1356,24 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const loadResults = async () => {
     try {
       const data = await resultsAPI.getAll();
-      setResults(Array.isArray(data) ? data : []);
+      const enrichedData = (Array.isArray(data) ? data : []).map((res: any) => {
+        let enriched = { ...res };
+        
+        // Enrich Series Name if missing
+        if (!enriched.courseName && enriched.courseId) {
+          const series = tests.find(t => t.isSeries && (String(t.id) === String(enriched.courseId) || String((t as any)._id) === String(enriched.courseId)));
+          if (series) enriched.courseName = series.name || series.title;
+        }
+
+        // Enrich Test Name if missing
+        if (!enriched.testName && enriched.testId) {
+          const testItem = tests.find(t => !t.isSeries && (String(t.id) === String(enriched.testId) || String((t as any)._id) === String(enriched.testId)));
+          if (testItem) enriched.testName = testItem.name || testItem.title;
+        }
+
+        return enriched;
+      });
+      setResults(enrichedData);
     } catch (err: any) {
       console.error("Error loading results:", err);
       showToast("Failed to load test results", "error");
