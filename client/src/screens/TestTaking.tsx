@@ -72,6 +72,7 @@ const TestTaking: React.FC = () => {
         testId: testId,
         testTitle: test?.title || 'Unknown Test',
         questionId: reportModal.question.id,
+        questionNumber: questions.findIndex(q => q.id === reportModal.question.id) + 1,
         questionEn: reportModal.question.questionEn || reportModal.question.question || reportModal.question.text,
         questionHi: reportModal.question.questionHi || '',
         issue: reportIssue,
