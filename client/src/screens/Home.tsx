@@ -1016,7 +1016,7 @@ const Home: React.FC = () => {
               {testSeries.slice(0, 4).map((ts: any, i: number) => (
                 <div
                   key={ts._id || ts.id || i}
-                  onClick={() => navigate('/mock-tests')}
+                  onClick={() => navigate('/mock-tests', { state: { seriesId: ts._id || ts.id } })}
                   className="card-premium p-3 rounded-2xl border border-gray-100/50 cursor-pointer hover:-translate-y-0.5 transition-all duration-200 group"
                 >
                   <div className="w-12 h-12 bg-gradient-to-br from-primary-100 to-primary-200 rounded-2xl flex items-center justify-center mb-3 group-hover:from-primary-200 group-hover:to-primary-300 transition-all duration-200">

@@ -4,6 +4,7 @@ import { AdminUIContext } from "../../context/AdminUIContext";
 import {
   testsAPI,
   coursesAPI,
+  testSeriesAPI,
   questionsAPI,
   invalidateCache,
   reportedQuestionsAPI,
@@ -160,26 +161,44 @@ const CustomDropdown = ({
   return (
     <div className={`relative ${isOpen ? "z-[100]" : "z-10"}`} ref={wrapperRef}>
       <div
-        onClick={() => setIsOpen(!isOpen)}
-        className="w-full h-11 px-4 bg-white border border-gray-200 rounded-xl text-[12px] font-medium text-gray-700 outline-none flex items-center justify-between cursor-pointer focus:border-gray-400"
+        className="w-full h-11 bg-white border border-gray-200 rounded-xl text-[12px] font-medium text-gray-700 outline-none flex items-center justify-between cursor-pointer focus-within:border-gray-400 group"
       >
-        <span className="truncate text-left flex-1">
-          {isMulti
-            ? value.length > 0
-              ? placeholder === "Select"
-                ? `${value.length} selected`
-                : placeholder
-              : placeholder
-            : value
-              ? options.find((o: any) => o.value === value)?.label ||
-              placeholder
-              : placeholder}
-        </span>
-        <span
-          className={`material-symbols-outlined text-gray-400 pointer-events-none transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+        <div 
+          onClick={() => setIsOpen(!isOpen)}
+          className="flex-1 h-full px-4 flex items-center min-w-0"
         >
-          expand_more
-        </span>
+          <span className="truncate text-left flex-1">
+            {isMulti
+              ? value.length > 0
+                ? placeholder === "Select"
+                  ? `${value.length} selected`
+                  : placeholder
+                : placeholder
+              : value
+                ? options.find((o: any) => o.value === value)?.label || value
+                : placeholder}
+          </span>
+        </div>
+        
+        <div className="flex items-center pr-3 gap-1">
+          {value && !isMulti && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                handleClear();
+              }}
+              className="text-gray-400 hover:text-red-500 transition-colors p-1 flex items-center justify-center rounded-full hover:bg-gray-50"
+            >
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+          )}
+          <span
+            onClick={() => setIsOpen(!isOpen)}
+            className={`material-symbols-outlined text-gray-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
+          >
+            expand_more
+          </span>
+        </div>
       </div>
 
       {isOpen && (
@@ -336,6 +355,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const location = useLocation();
   const [tests, setTests] = useState<Test[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [testSeries, setTestSeries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeMenu, setActiveMenu] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState(0); // Added for progress visibility
@@ -969,25 +989,34 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       );
 
       if (foundTest) {
-        // If it's a test, we might also want to set its parent series if possible
-        // but for now ensure the editor/view is shown
-        if (subPath === "questions/add" || subPath === "review") {
-          setActiveTab("Tests");
-          setViewingQuestionEditor(foundTest);
-        } else if (subPath === "edit") {
-          setActiveTab("Tests");
-          setEditingTest(foundTest);
-          setShowAddSingleTestDrawer(true);
-        } else if (subPath === "results") {
-          setActiveTab("Results");
-          setResultFilters((prev) => ({
-            ...prev,
-            series: foundTest.courseName || "",
-            test: foundTest.name || foundTest.title || "",
-          }));
+        const currentId = viewingTestSeries?.id || viewingTestSeries?._id;
+        const newId = foundTest.id || foundTest._id;
+        
+        if (currentId !== newId) {
+          if (subPath === "questions/add" || subPath === "review") {
+            setActiveTab("Tests");
+            setViewingQuestionEditor(foundTest);
+          } else if (subPath === "edit") {
+            setActiveTab("Tests");
+            setEditingTest(foundTest);
+            setShowAddSingleTestDrawer(true);
+          } else if (subPath === "results") {
+            setActiveTab("Results");
+            setResultFilters((prev) => ({
+              ...prev,
+              series: foundTest.courseName || "",
+              test: foundTest.name || foundTest.title || "",
+            }));
+          } else {
+            setViewingTestSeries(foundTest);
+          }
         }
       } else if (foundCourse) {
-        setViewingTestSeries(foundCourse);
+        const currentId = viewingTestSeries?.id || viewingTestSeries?._id;
+        const newId = foundCourse.id || foundCourse._id;
+        if (currentId !== newId) {
+          setViewingTestSeries(foundCourse);
+        }
       }
     } else if (viewingTestSeries) {
       if (location.pathname === "/admin/tests") {
@@ -1014,10 +1043,11 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         }
         localStorage.removeItem("viewingTestSeries");
       }
-      setViewingTestSeriesState(val);
+      // Note: We don't call setViewingTestSeriesState here anymore.
+      // The useEffect above will handle setting the state based on the routeId.
+      // This prevents the "blinking" caused by two simultaneous state updates.
     } catch (error) {
       console.error("Error in handleSetViewingTestSeries:", error);
-      setViewingTestSeriesState(val);
     }
   };
 
@@ -1185,26 +1215,18 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       if (!seriesId) return;
       const loadDetailTests = async () => {
         try {
-          // Try course-specific endpoint first
-          const res = await fetch(`/api/courses/${seriesId}/tests`);
-          if (res.ok) {
-            const data = await res.json();
-            setDetailTests(Array.isArray(data) ? data : []);
-          } else {
-            // Fall back to filtering all tests
-            const allRes = await fetch("/api/tests");
-            if (allRes.ok) {
-              const allTests = await allRes.json();
-              const filtered = (Array.isArray(allTests) ? allTests : []).filter(
-                (t: any) =>
-                  t &&
-                  (t.courseId === seriesId ||
-                    (t as any)._id === seriesId ||
-                    t.id === seriesId),
-              );
-              setDetailTests(filtered);
-            }
-          }
+          // Filter from the already loaded global tests state
+          // This ensures that tests linked to multiple series are visible
+          const filtered = tests.filter((t: any) => {
+            if (!t) return false;
+            const tId = t.id || t._id;
+            return (
+              String(t.courseId) === String(seriesId) ||
+              String(t.testSeriesId) === String(seriesId) ||
+              (Array.isArray(t.courseIds) && t.courseIds.map(String).includes(String(seriesId)))
+            );
+          });
+          setDetailTests(filtered);
         } catch (err) {
           console.error("Error loading detail tests:", err);
           setDetailTests([]);
@@ -1214,7 +1236,28 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     } else {
       setDetailTests([]);
     }
-  }, [viewingTestSeries]);
+  }, [viewingTestSeries, tests]);
+
+  // Track the last viewed IDs to prevent redundant Bulk Uploader resets
+  const lastViewedIds = React.useRef({ seriesId: "", testId: "" });
+
+  useEffect(() => {
+    const seriesId = viewingTestSeries?.id || (viewingTestSeries as any)?._id;
+    const testId = viewingQuestionEditor?.id || (viewingQuestionEditor as any)?._id;
+    const testSeriesId = viewingQuestionEditor?.courseId || (viewingQuestionEditor as any)?.testSeriesId || seriesId;
+
+    // Only update if the context IDs have actually changed
+    if (seriesId !== lastViewedIds.current.seriesId || testId !== lastViewedIds.current.testId) {
+      if (seriesId || testId) {
+        setBulkUploadData(prev => ({
+          ...prev,
+          testSeries: String(testSeriesId || prev.testSeries || ""),
+          testTitle: String(testId || prev.testTitle || ""),
+        }));
+      }
+      lastViewedIds.current = { seriesId: String(seriesId || ""), testId: String(testId || "") };
+    }
+  }, [viewingTestSeries, viewingQuestionEditor]);
 
   useEffect(() => {
     const fetchQs = async () => {
@@ -1313,7 +1356,24 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const loadResults = async () => {
     try {
       const data = await resultsAPI.getAll();
-      setResults(Array.isArray(data) ? data : []);
+      const enrichedData = (Array.isArray(data) ? data : []).map((res: any) => {
+        let enriched = { ...res };
+        
+        // Enrich Series Name if missing
+        if (!enriched.courseName && enriched.courseId) {
+          const series = tests.find(t => t.isSeries && (String(t.id) === String(enriched.courseId) || String((t as any)._id) === String(enriched.courseId)));
+          if (series) enriched.courseName = series.name || series.title;
+        }
+
+        // Enrich Test Name if missing
+        if (!enriched.testName && enriched.testId) {
+          const testItem = tests.find(t => !t.isSeries && (String(t.id) === String(enriched.testId) || String((t as any)._id) === String(enriched.testId)));
+          if (testItem) enriched.testName = testItem.name || testItem.title;
+        }
+
+        return enriched;
+      });
+      setResults(enrichedData);
     } catch (err: any) {
       console.error("Error loading results:", err);
       showToast("Failed to load test results", "error");
@@ -1350,7 +1410,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     }, 10000);
 
     try {
-      const [testData, courseData] = await Promise.all([
+      const [testData, courseData, seriesData] = await Promise.all([
         testsAPI.getAll().catch((err) => {
           console.error("Error fetching tests:", err);
           return [];
@@ -1359,9 +1419,14 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           console.error("Error fetching courses:", err);
           return [];
         }),
+        testSeriesAPI.getAll().catch((err) => {
+          console.error("Error fetching test series:", err);
+          return [];
+        }),
       ]);
       setTests(Array.isArray(testData) ? testData : []);
       setCourses(Array.isArray(courseData) ? courseData : []);
+      setTestSeries(Array.isArray(seriesData) ? seriesData : []);
     } catch (error) {
       console.error("loadData massive failure:", error);
       setTests([]);
@@ -1751,8 +1816,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       const matchSeries =
         !resultFilters.series || 
         res.courseName === resultFilters.series || 
-        res.courseId === resultFilters.series ||
-        (res.testName || "").includes(resultFilters.series);
+        res.courseId === resultFilters.series;
         
       const matchTest =
         !resultFilters.test || 
@@ -1761,11 +1825,11 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
       const matchSubject = 
         !resultFilters.subject || 
-        (res.subject || "").includes(resultFilters.subject);
+        res.subject === resultFilters.subject;
 
       const matchType = 
         !resultFilters.type || 
-        (res.type || "").includes(resultFilters.type);
+        res.type === resultFilters.type;
 
       return matchSeries && matchTest && matchSubject && matchType;
     });
@@ -1795,10 +1859,12 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 Test Series Title
               </label>
               <CustomDropdown
-                options={courses.map((c) => ({
-                  value: c.name || c.title || "",
-                  label: c.name || c.title || "",
-                }))}
+                options={tests
+                  .filter((t) => t.isSeries)
+                  .map((t) => ({
+                    value: t.name || t.title || "",
+                    label: t.name || t.title || "",
+                  }))}
                 value={resultFilters.series}
                 onChange={(val: any) =>
                   setResultFilters({ ...resultFilters, series: val, test: "" })
@@ -1811,12 +1877,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 Test Subject
               </label>
               <CustomDropdown
-                options={[
-                  "General Knowledge",
-                  "Mathematics",
-                  "Reasoning",
-                  "English",
-                ].map((s) => ({ value: s, label: s }))}
+                options={Array.from(new Set(results.map(r => r.subject).filter(Boolean)))
+                  .sort()
+                  .map((s) => ({ value: s, label: s }))}
                 value={resultFilters.subject}
                 onChange={(val: any) =>
                   setResultFilters({ ...resultFilters, subject: val })
@@ -1829,14 +1892,14 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 Test Type
               </label>
               <CustomDropdown
-                options={["Mock Test", "Practice Test", "Previous Year"].map(
-                  (t) => ({ value: t, label: t }),
-                )}
+                options={Array.from(new Set(results.map(r => r.type).filter(Boolean)))
+                  .sort()
+                  .map((t) => ({ value: t, label: t }))}
                 value={resultFilters.type}
                 onChange={(val: any) =>
                   setResultFilters({ ...resultFilters, type: val })
                 }
-                placeholder="Test Title"
+                placeholder="Select Type"
               />
             </div>
             <div className="space-y-2">
@@ -1844,16 +1907,19 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 Test Title
               </label>
               <CustomDropdown
-                options={tests
+                options={Array.from(new Set(results
                   .filter(
-                    (t) =>
+                    (r) =>
                       !resultFilters.series ||
-                      t.courseName === resultFilters.series ||
-                      t.courseId === resultFilters.series,
+                      r.courseName === resultFilters.series ||
+                      r.courseId === resultFilters.series,
                   )
-                  .map((t) => ({
-                    value: t.name || "Unnamed Test",
-                    label: t.name || "Unnamed Test",
+                  .map((r) => r.testName || r.testTitle)))
+                  .filter(Boolean)
+                  .sort()
+                  .map((name) => ({
+                    value: name,
+                    label: name,
                   }))}
                 value={resultFilters.test}
                 onChange={(val: any) =>
@@ -2529,7 +2595,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                             if (item.id === "create")
                               setViewingAddQuestionForm({});
                             if (item.id === "word") {
-                              setViewingTestSeries(null);
                               setActiveTab("Bulk Uploader");
                             }
 
@@ -3574,6 +3639,23 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
     return (
       <div className="animate-in fade-in duration-500 pb-20">
+        {/* Back Button for Contextual Access */}
+        {(viewingTestSeries || viewingQuestionEditor) && (
+          <div className="mb-6 flex items-center gap-4">
+            <button
+              onClick={() => setActiveTab("Tests")}
+              className="flex items-center gap-2 px-4 h-9 bg-white border border-gray-200 rounded-xl text-[13px] font-bold text-gray-600 hover:border-black hover:text-black transition-all shadow-sm"
+            >
+              <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+              Back to {viewingQuestionEditor ? "Question Editor" : viewingTestSeries?.name || "Series"}
+            </button>
+            <div className="h-4 w-[1px] bg-gray-200"></div>
+            <p className="text-[12px] font-medium text-gray-400">
+              Bulk uploading questions to <span className="text-black font-bold">{viewingQuestionEditor?.name || viewingTestSeries?.name}</span>
+            </p>
+          </div>
+        )}
+
         {/* Extracted Image Gallery */}
         {extractedImages.length > 0 && (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm p-6 mb-8">
@@ -5060,9 +5142,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           setEditingTest(null);
         }}
         editingTest={editingTest}
-        testSeriesOptions={courses.map((c) => ({
-          value: c.id || (c as any)._id,
-          label: c.name || c.title || "Unnamed Series",
+        testSeriesOptions={testSeries.map((ts) => ({
+          value: ts.id || ts._id,
+          label: ts.name || ts.title || "Unnamed Series",
         }))}
         defaultTestSeries={
           viewingTestSeries 
@@ -5084,6 +5166,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
               ...testData,
               name: testData.title || testData.name,
               courseId: effectiveCourseId,
+              courseIds: Array.isArray(testData.testSeries) && testData.testSeries.length > 0 
+                ? testData.testSeries 
+                : [effectiveCourseId],
               isSeries: false, // Explicitly mark as a test, not a series
               status: "active", // Must be 'active' to show in the course tests list (server-side filter)
               questions: 0, // Initial actual count
@@ -5113,21 +5198,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             }
 
             // Refresh the specific list inside the series view
-            if (viewingTestSeries) {
-              try {
-                const seriesId = viewingTestSeries.id || (viewingTestSeries as any)._id;
-                const res = await fetch(`/api/courses/${seriesId}/tests`);
-                if (res.ok) {
-                  const data = await res.json();
-                  setDetailTests(Array.isArray(data) ? data : []);
-                }
-              } catch (e) {
-                console.error("Failed to fetch specific tests list", e);
-              }
-            }
-
             try {
-               await loadData(); // Refresh global list
+               await loadData(); // Refresh global list - this will trigger the useEffect for detailTests
             } catch (e) {
                console.error("Failed to load global data", e);
             }
@@ -5166,6 +5238,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 title: testTitle,
                 name: testTitle,
                 courseId: targetCourseId,
+                courseIds: Array.isArray(data.testSeries) && data.testSeries.length > 0 
+                  ? data.testSeries 
+                  : [targetCourseId],
                 type: "PDF",
                 pdfFile: file // Add individual file back as pdfFile for backwards compatibility
               });
@@ -5178,9 +5253,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             showToast(err.message, "error");
           }
         }}
-        testSeriesOptions={courses.map((c) => ({
-          value: c.id || (c as any)?._id,
-          label: c.name || c.title || "",
+        testSeriesOptions={testSeries.map((ts) => ({
+          value: ts.id || ts._id,
+          label: ts.name || ts.title || "Unnamed Series",
         }))}
       />
 
@@ -5192,9 +5267,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           setShowSubjectiveTestDrawer(false);
           showToast("Subjective Test added successfully", "success");
         }}
-        testSeriesOptions={courses.map((c) => ({
-          value: c.id,
-          label: c.name || c.title || "",
+        testSeriesOptions={testSeries.map((ts) => ({
+          value: ts.id || ts._id,
+          label: ts.name || ts.title || "Unnamed Series",
         }))}
       />
 
