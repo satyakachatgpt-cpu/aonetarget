@@ -36,6 +36,36 @@ export const getAllTestSeries = async (req, res) => {
     }
 
     const combined = Array.from(mergedMap.values());
+
+    // Calculate actual test count for each series
+    try {
+      const allTestsLightweight = await db.collection('tests').find({}).toArray();
+      console.log('[DEBUG] allTestsLightweight length:', allTestsLightweight.length);
+      
+      for (const series of combined) {
+        const seriesIdStr = String(series.id || series._id);
+        const seriesTestIdsArray = Array.isArray(series.testIds) ? series.testIds.map(String) : [];
+        const seriesTestsObjectsIds = Array.isArray(series.tests) ? series.tests.map(st => String(st.id || st._id)) : [];
+        
+        const count = allTestsLightweight.filter(t => {
+          const tIdStr = String(t.id || t._id);
+          return (
+            String(t.seriesId) === seriesIdStr || 
+            String(t.courseId) === seriesIdStr ||
+            (Array.isArray(t.courseIds) && t.courseIds.map(String).includes(seriesIdStr)) ||
+            (Array.isArray(t.testSeries) && t.testSeries.map(String).includes(seriesIdStr)) ||
+            seriesTestIdsArray.includes(tIdStr) ||
+            seriesTestsObjectsIds.includes(tIdStr)
+          );
+        }).length;
+        
+        // console.log(`[DEBUG] Series: ${seriesIdStr}, Count: ${count}`);
+        series.totalTests = count;
+      }
+    } catch (countError) {
+      console.error('Error calculating test counts for series:', countError);
+    }
+
     console.log('GET /api/test-series - Found', combined.length, 'series (collection:', seriesFromCollection.length, '+ tests:', seriesFromTests.length, ')');
     res.json(combined);
   } catch (error) {
