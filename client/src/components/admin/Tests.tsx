@@ -432,6 +432,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     uploadMode: 'append',
   });
 
+  // Assignment state for image uploader
   const [activeImageAssignment, setActiveImageAssignment] = useState<{
     questionId: number;
     field: string; // "question" | "A" | "B" | "C" | "D"
@@ -966,6 +967,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const [resultsCurrentPage, setResultsCurrentPage] = useState(1);
   const [reportedPageSize, setReportedPageSize] = useState(10);
   const [reportedCurrentPage, setReportedCurrentPage] = useState(1);
+  const [selectedReportedIds, setSelectedReportedIds] = useState<string[]>([]);
 
   // Question Library States
 
@@ -1391,14 +1393,44 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     }
   };
 
-  const updateReportStatus = async (reportId: string, status: string) => {
+  const handleQuickResolve = async (report: any) => {
+    if (!report) return;
     try {
-      await reportedQuestionsAPI.updateStatus(reportId, status);
+      await reportedQuestionsAPI.updateStatus(report.id || report._id, "resolved", "Resolved by Admin");
       await loadReportedQuestions();
-      alert(`Report status updated to ${status}`);
-    } catch (error) {
-      console.error("Error updating report status:", error);
-      alert("Failed to update status");
+      showToast("Report resolved successfully!", "success");
+    } catch (error: any) {
+      console.error("Error resolving report:", error);
+      showToast(error.message || "Failed to resolve report", "error");
+    }
+  };
+
+  const handleDeleteReport = async (report: any) => {
+    if (!report) return;
+    if (!window.confirm("Are you sure you want to delete this report? This action cannot be undone.")) return;
+    
+    try {
+      await reportedQuestionsAPI.delete(String(report.id || report._id));
+      setSelectedReportedIds(prev => prev.filter(id => id !== String(report.id || report._id)));
+      await loadReportedQuestions();
+      showToast("Report deleted successfully!", "success");
+    } catch (error: any) {
+      console.error("Error deleting report:", error);
+      showToast(error.message || "Failed to delete report", "error");
+    }
+  };
+
+  const handleBulkDeleteReports = async () => {
+    if (selectedReportedIds.length === 0) return;
+    if (!window.confirm(`Delete ${selectedReportedIds.length} selected report(s)? This cannot be undone.`)) return;
+    try {
+      await reportedQuestionsAPI.bulkDelete(selectedReportedIds);
+      setSelectedReportedIds([]);
+      await loadReportedQuestions();
+      showToast(`${selectedReportedIds.length} report(s) deleted!`, "success");
+    } catch (error: any) {
+      console.error("Error bulk deleting reports:", error);
+      showToast(error.message || "Failed to delete reports", "error");
     }
   };
 
@@ -2134,20 +2166,34 @@ const Tests: React.FC<Props> = ({ showToast }) => {
               </button>
               <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
               
-              {/* Render Page Numbers */}
-              {Array.from({ length: totalResultsPages }, (_, i) => i + 1).map((pageNum) => (
-                <button
-                  key={pageNum}
-                  onClick={() => setResultsCurrentPage(pageNum)}
-                  className={`h-9 w-9 flex items-center justify-center text-[13px] rounded-xl transition-all ${
-                    resultsCurrentPage === pageNum
-                      ? "font-black bg-black text-white shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
-                      : "font-bold text-gray-400 hover:text-black hover:bg-gray-50"
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              ))}
+              {/* Render Truncated Page Numbers */}
+              {(() => {
+                const pages = [];
+                const maxVisible = 3;
+                let start = Math.max(1, resultsCurrentPage - 1);
+                let end = Math.min(totalResultsPages, start + maxVisible - 1);
+                
+                if (end === totalResultsPages) {
+                  start = Math.max(1, end - maxVisible + 1);
+                }
+
+                for (let i = start; i <= end; i++) {
+                  pages.push(
+                    <button
+                      key={i}
+                      onClick={() => setResultsCurrentPage(i)}
+                      className={`h-9 w-9 flex items-center justify-center text-[13px] rounded-xl transition-all ${
+                        resultsCurrentPage === i
+                          ? "font-black bg-black text-white shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
+                          : "font-bold text-gray-400 hover:text-black hover:bg-gray-50"
+                      }`}
+                    >
+                      {i}
+                    </button>
+                  );
+                }
+                return pages;
+              })()}
 
               <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
               <button
@@ -2203,9 +2249,19 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           ? "bg-green-50 text-green-600"
           : "bg-red-50 text-red-600";
         return (
-          <tr key={String(rq.id || idx)} className="hover:bg-gray-50/50 transition-colors group">
+           <tr key={String(rq.id || idx)} className="hover:bg-gray-50/50 transition-colors group">
             <td className="px-4 py-8 text-center align-top border-b border-gray-50/50">
-              <input type="checkbox" className="w-4 h-4 rounded border-gray-300 mt-1" />
+              <input
+                type="checkbox"
+                className="w-4 h-4 rounded border-gray-300 mt-1 cursor-pointer"
+                checked={selectedReportedIds.includes(String(rq.id || rq._id))}
+                onChange={(e) => {
+                  const id = String(rq.id || rq._id);
+                  setSelectedReportedIds(prev =>
+                    e.target.checked ? [...prev, id] : prev.filter(x => x !== id)
+                  );
+                }}
+              />
             </td>
             <td className="px-4 py-8 text-[14px] font-bold text-gray-600 align-top border-b border-gray-50/50 text-center">
               {reportedStartIndex + idx + 1}
@@ -2239,13 +2295,35 @@ const Tests: React.FC<Props> = ({ showToast }) => {
               }
             </td>
             <td className="px-4 py-8 align-top text-center border-b border-gray-50/50 text-gray-500 text-[12px] whitespace-nowrap">
-              {new Date(rq.reportedDate).toLocaleString()}
+              {rq.reportedDate || rq.createdAt 
+                ? new Date(rq.reportedDate || rq.createdAt).toLocaleString(undefined, {
+                    dateStyle: 'medium',
+                    timeStyle: 'short'
+                  })
+                : "—"}
             </td>
             <td className="px-4 py-8 align-top text-center border-b border-gray-50/50">
               {rq.status !== "resolved"
-                ? <button onClick={() => updateReportStatus(rq.id, "resolved")} className="h-9 px-4 bg-black text-white rounded-xl text-[12px] font-bold hover:bg-gray-800 transition-colors shadow-sm">Resolve</button>
-                : <span className="text-green-600 flex items-center justify-center gap-1 text-[12px] font-bold"><span className="material-symbols-outlined text-[16px]">check_circle</span>Resolved</span>
+                ? <button 
+                    onClick={() => handleQuickResolve(rq)} 
+                    className="h-9 px-4 bg-black text-white rounded-xl text-[12px] font-bold hover:bg-gray-800 transition-colors shadow-sm"
+                  >
+                    Resolve
+                  </button>
+                : <div className="flex flex-col items-center justify-center">
+                    <span className="text-green-600 flex items-center justify-center gap-1 text-[12px] font-bold">
+                      <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                      Resolved
+                    </span>
+                  </div>
               }
+              <button
+                onClick={() => handleDeleteReport(rq)}
+                className="mt-2 text-gray-300 hover:text-red-500 transition-colors"
+                title="Delete Report"
+              >
+                <span className="material-symbols-outlined text-[18px]">delete</span>
+              </button>
             </td>
           </tr>
         );
@@ -2254,10 +2332,21 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     return (
       <div className="space-y-6 animate-in fade-in duration-500">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
-            <h2 className="text-[18px] font-bold text-gray-800 tracking-tight">
-              Reported Questions
-            </h2>
+          <div className="flex items-center gap-3">
+            <div>
+              <h2 className="text-[18px] font-bold text-gray-800 tracking-tight">
+                Reported Questions
+              </h2>
+            </div>
+            {selectedReportedIds.length > 0 && (
+              <button
+                onClick={handleBulkDeleteReports}
+                className="flex items-center gap-1.5 px-4 h-9 bg-red-500 hover:bg-red-600 text-white rounded-xl text-[12px] font-bold transition-colors shadow-sm"
+              >
+                <span className="material-symbols-outlined text-[16px]">delete_sweep</span>
+                Delete {selectedReportedIds.length} Selected
+              </button>
+            )}
           </div>
           <div className="flex gap-3 items-center w-full sm:w-auto">
             <div className="relative group flex-1 sm:w-[280px]">
@@ -2330,7 +2419,17 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                   <th className="px-4 py-4 w-[40px] text-center">
                     <input
                       type="checkbox"
-                      className="w-4 h-4 rounded border-gray-300"
+                      className="w-4 h-4 rounded border-gray-300 cursor-pointer"
+                      checked={paginatedReported.length > 0 && paginatedReported.every((rq: any) => selectedReportedIds.includes(String(rq.id || rq._id)))}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          const newIds = paginatedReported.map((rq: any) => String(rq.id || rq._id));
+                          setSelectedReportedIds(prev => Array.from(new Set([...prev, ...newIds])));
+                        } else {
+                          const pageIds = paginatedReported.map((rq: any) => String(rq.id || rq._id));
+                          setSelectedReportedIds(prev => prev.filter(id => !pageIds.includes(id)));
+                        }
+                      }}
                     />
                   </th>
                   <th className="px-4 py-4 w-[50px] text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap text-center">
@@ -2400,20 +2499,34 @@ const Tests: React.FC<Props> = ({ showToast }) => {
               </button>
               <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
               
-              {/* Render Page Numbers */}
-              {Array.from({ length: totalReportedPages }, (_, i) => i + 1).map((pageNum) => (
-                <button
-                  key={pageNum}
-                  onClick={() => setReportedCurrentPage(pageNum)}
-                  className={`h-9 w-9 flex items-center justify-center text-[13px] rounded-xl transition-all ${
-                    reportedCurrentPage === pageNum
-                      ? "font-black bg-black text-white shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
-                      : "font-bold text-gray-400 hover:text-black hover:bg-gray-50"
-                  }`}
-                >
-                  {pageNum}
-                </button>
-              ))}
+              {/* Render Truncated Page Numbers */}
+              {(() => {
+                const pages = [];
+                const maxVisible = 3;
+                let start = Math.max(1, reportedCurrentPage - 1);
+                let end = Math.min(totalReportedPages, start + maxVisible - 1);
+                
+                if (end === totalReportedPages) {
+                  start = Math.max(1, end - maxVisible + 1);
+                }
+
+                for (let i = start; i <= end; i++) {
+                  pages.push(
+                    <button
+                      key={i}
+                      onClick={() => setReportedCurrentPage(i)}
+                      className={`h-9 w-9 flex items-center justify-center text-[13px] rounded-xl transition-all ${
+                        reportedCurrentPage === i
+                          ? "font-black bg-black text-white shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
+                          : "font-bold text-gray-400 hover:text-black hover:bg-gray-50"
+                      }`}
+                    >
+                      {i}
+                    </button>
+                  );
+                }
+                return pages;
+              })()}
 
               <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
               <button
@@ -6042,7 +6155,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           }
         }}
       />
-
     </div>
   );
 };

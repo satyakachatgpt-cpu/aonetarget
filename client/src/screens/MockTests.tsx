@@ -248,6 +248,12 @@ const MockTests: React.FC = () => {
                   <span className="material-symbols-rounded text-primary text-2xl">style</span>
                 </div>
                 <h4 className="font-bold text-[14px] text-gray-800 leading-tight line-clamp-2 min-h-[36px]">{series.title || series.name}</h4>
+                <div className="flex items-center gap-1.5 mt-2">
+                  <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                    <span className="material-symbols-rounded text-[12px]">description</span>
+                    {getSeriesTests(series).length} Tests
+                  </span>
+                </div>
                 <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between">
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{series.category || 'General'}</span>
                   {series.price > 0 ? (

@@ -58,7 +58,7 @@ export const getReportedQuestions = async (req, res) => {
 
     // Map to the structure expected by the frontend
     const formattedReports = reports.map(r => ({
-      id: r._id,
+      id: r._id.toString(),
       studentName: r.studentInfo?.name || r.studentName || 'Unknown Student',
       studentEmail: r.studentInfo?.email || r.studentEmail || '-',
       studentPhone: r.studentInfo?.phone || r.studentPhone || '-',
@@ -95,5 +95,38 @@ export const updateReportStatus = async (req, res) => {
   } catch (error) {
     console.error('Error updating report status:', error);
     res.status(500).json({ error: 'Failed to update report status' });
+  }
+};
+export const deleteReport = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const query = { _id: ObjectId.isValid(id) ? new ObjectId(id) : id };
+    const result = await db.collection('reportedQuestions').deleteOne(query);
+    if (result.deletedCount === 0) return res.status(404).json({ error: 'Report not found' });
+    res.json({ success: true, message: 'Report deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting report:', error);
+    res.status(500).json({ error: 'Failed to delete report' });
+  }
+};
+
+export const bulkDeleteReports = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: 'No IDs provided' });
+    }
+    const objectIds = ids.map(id => {
+      try {
+        return ObjectId.isValid(id) ? new ObjectId(id) : id;
+      } catch (e) {
+        return id;
+      }
+    });
+    const result = await db.collection('reportedQuestions').deleteMany({ _id: { $in: objectIds } });
+    res.json({ success: true, deletedCount: result.deletedCount, message: `${result.deletedCount} reports deleted` });
+  } catch (error) {
+    console.error('Error bulk deleting reports:', error);
+    res.status(500).json({ error: 'Failed to bulk delete reports' });
   }
 };

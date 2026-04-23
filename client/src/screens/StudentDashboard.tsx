@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
-import { testsAPI, notificationsAPI, getAuthHeaders } from '../services/apiClient';
+import { testsAPI, notificationsAPI, reportedQuestionsAPI, getAuthHeaders } from '../services/apiClient';
 import { getImageUrl } from '../lib/utils';
 import { useAuthStore } from '../store/authStore';
 import { Course, Student, VideoProgress } from '../types';
@@ -87,22 +87,20 @@ const StudentDashboard: React.FC = () => {
 
       const coursesData = Array.isArray(coursesRes) ? coursesRes : [];
       const resultsData = Array.isArray(resultsRes) ? resultsRes : [];
+      
+      setEnrolledCourses(coursesData);
+      setTestResults(resultsData);
 
-      setEnrolledCourses(Array.isArray(coursesData) ? coursesData : []);
-
-      const results = Array.isArray(resultsData) ? resultsData : [];
-      setTestResults(results);
-
-      const avgScore = results.length > 0
-        ? Math.round(results.reduce((sum: number, r: any) => sum + (r.percentage || 0), 0) / results.length)
+      const avgScore = resultsData.length > 0
+        ? Math.round(resultsData.reduce((sum: number, r: any) => sum + (r.percentage || 0), 0) / resultsData.length)
         : 0;
-      const bestScore = results.length > 0
-        ? Math.max(...results.map((r: any) => r.percentage || 0))
+      const bestScore = resultsData.length > 0
+        ? Math.max(...resultsData.map((r: any) => r.percentage || 0))
         : 0;
 
       setStats({
-        courses: Array.isArray(coursesData) ? coursesData.length : 0,
-        testsTaken: results.length,
+        courses: coursesData.length,
+        testsTaken: resultsData.length,
         avgScore,
         bestScore
       });

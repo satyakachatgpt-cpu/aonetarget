@@ -399,6 +399,78 @@ const TestTaking: React.FC = () => {
             Back to Mock Tests
           </button>
         </div>
+
+        {/* Report Question Modal (inside results view) */}
+        {reportModal && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
+            <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white">
+                <h3 className="text-sm font-bold text-gray-800">Report Issue</h3>
+                <button
+                  onClick={() => setReportModal(null)}
+                  className="text-gray-400 hover:text-black transition-colors"
+                >
+                  <span className="material-symbols-rounded text-[20px]">close</span>
+                </button>
+              </div>
+              
+              <div className="p-6">
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">
+                  <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wider mb-1">Question Content</p>
+                  <p className="text-[12px] text-amber-900 line-clamp-3 leading-relaxed">
+                    {reportModal.question?.question || reportModal.question?.questionEn || reportModal.question?.text}
+                  </p>
+                </div>
+
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Select Issue Type</p>
+                <div className="space-y-2 mb-4">
+                  {['Formatting Issue', 'Wrong Answer', 'Wrong Question', 'Image Hidden/Broken', 'Other'].map(issue => (
+                    <button
+                      key={issue}
+                      onClick={() => setReportIssue(issue)}
+                      className={`w-full text-left px-4 py-2.5 rounded-xl border text-[13px] transition-all ${reportIssue === issue 
+                        ? 'border-[#1A237E] bg-blue-50 text-[#1A237E] font-bold shadow-sm' 
+                        : 'border-gray-100 text-gray-600 hover:border-gray-200 hover:bg-gray-50'}`}
+                    >
+                      {issue}
+                    </button>
+                  ))}
+                </div>
+
+                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Comment (Optional)</p>
+                <textarea
+                  value={reportComment}
+                  onChange={(e) => setReportComment(e.target.value)}
+                  placeholder="Explain the issue in detail..."
+                  className="w-full h-24 p-3 bg-gray-50 border border-gray-100 rounded-xl text-[13px] mb-5 focus:outline-none focus:border-[#1A237E] focus:bg-white transition-all resize-none"
+                />
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setReportModal(null)}
+                    className="flex-1 py-3 rounded-xl border border-gray-100 text-gray-600 text-sm font-bold hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleReportSubmit}
+                    disabled={!reportIssue || reportingStatus}
+                    className="flex-1 py-3 rounded-xl bg-[#1A237E] text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98] transition-all"
+                  >
+                    {reportingStatus ? (
+                      <span className="material-symbols-rounded animate-spin text-[18px]">progress_activity</span>
+                    ) : (
+                      <>
+                        <span className="material-symbols-rounded text-[18px]">send</span>
+                        Submit
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -608,6 +680,13 @@ const TestTaking: React.FC = () => {
                   </span>
                 </div>
                 <button
+                  onClick={() => currentQuestion && setReportModal({ isOpen: true, question: currentQuestion })}
+                  className="p-1.5 rounded-full bg-gray-100 text-amber-600 hover:bg-amber-50 transition-colors"
+                  title="Report Issue"
+                >
+                  <span className="material-symbols-rounded text-[18px]">report</span>
+                </button>
+                <button
                   onClick={() => currentQuestion && toggleFlag(currentQuestion.id)}
                   className={`p-1.5 rounded-full ${flagged.has(currentQuestion?.id) ? 'bg-amber-100 text-amber-600' : 'bg-gray-100 text-gray-400'}`}
                 >
@@ -768,50 +847,73 @@ const TestTaking: React.FC = () => {
         </div>
       )}
 
-      {/* Report Question Modal */}
+      {/* Report Question Modal (during active test) */}
       {reportModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl overflow-hidden">
-            <h3 className="font-bold text-lg text-gray-800 mb-1">Report Question</h3>
-            <p className="text-xs text-gray-500 mb-4">Please select the issue you found in this question.</p>
-            
-            <div className="space-y-1.5 mb-4 max-h-[40vh] overflow-y-auto pr-1">
-              {['Formatting Issue', 'Wrong Answer', 'Wrong Question', 'Image Hidden/Broken', 'Other'].map(issue => (
-                <button
-                  key={issue}
-                  onClick={() => setReportIssue(issue)}
-                  className={`w-full text-left px-4 py-2 rounded-lg border text-sm transition-all ${reportIssue === issue 
-                    ? 'border-[#1A237E] bg-blue-50 text-[#1A237E] font-bold' 
-                    : 'border-gray-200 text-gray-600 hover:border-gray-300'}`}
-                >
-                  {issue}
-                </button>
-              ))}
-            </div>
-
-            <textarea
-              value={reportComment}
-              onChange={(e) => setReportComment(e.target.value)}
-              placeholder="Additional comments (optional)"
-              className="w-full h-20 p-3 border border-gray-200 rounded-lg text-sm mb-4 focus:outline-none focus:border-[#1A237E]"
-            />
-
-            <div className="flex gap-3">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white">
+              <h3 className="text-sm font-bold text-gray-800">Report Issue</h3>
               <button
                 onClick={() => setReportModal(null)}
-                className="flex-1 py-2.5 rounded-lg border border-gray-200 text-gray-600 text-sm font-bold"
+                className="text-gray-400 hover:text-black transition-colors"
               >
-                Cancel
+                <span className="material-symbols-rounded text-[20px]">close</span>
               </button>
-              <button
-                onClick={handleReportSubmit}
-                disabled={!reportIssue || reportingStatus}
-                className="flex-1 py-2.5 rounded-lg bg-[#1A237E] text-white text-sm font-bold flex items-center justify-center gap-1 disabled:opacity-50"
-              >
-                {reportingStatus ? (
-                  <span className="material-symbols-rounded animate-spin text-[16px]">progress_activity</span>
-                ) : 'Submit'}
-              </button>
+            </div>
+            
+            <div className="p-6">
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">
+                <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wider mb-1">Question Content</p>
+                <p className="text-[12px] text-amber-900 line-clamp-3 leading-relaxed">
+                  {reportModal.question?.question || reportModal.question?.questionEn || reportModal.question?.text}
+                </p>
+              </div>
+
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Select Issue Type</p>
+              <div className="space-y-2 mb-4">
+                {['Formatting Issue', 'Wrong Answer', 'Wrong Question', 'Image Hidden/Broken', 'Other'].map(issue => (
+                  <button
+                    key={issue}
+                    onClick={() => setReportIssue(issue)}
+                    className={`w-full text-left px-4 py-2.5 rounded-xl border text-[13px] transition-all ${reportIssue === issue 
+                      ? 'border-[#1A237E] bg-blue-50 text-[#1A237E] font-bold shadow-sm' 
+                      : 'border-gray-100 text-gray-600 hover:border-gray-200 hover:bg-gray-50'}`}
+                  >
+                    {issue}
+                  </button>
+                ))}
+              </div>
+
+              <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Comment (Optional)</p>
+              <textarea
+                value={reportComment}
+                onChange={(e) => setReportComment(e.target.value)}
+                placeholder="Explain the issue in detail..."
+                className="w-full h-24 p-3 bg-gray-50 border border-gray-100 rounded-xl text-[13px] mb-5 focus:outline-none focus:border-[#1A237E] focus:bg-white transition-all resize-none"
+              />
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setReportModal(null)}
+                  className="flex-1 py-3 rounded-xl border border-gray-100 text-gray-600 text-sm font-bold hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleReportSubmit}
+                  disabled={!reportIssue || reportingStatus}
+                  className="flex-1 py-3 rounded-xl bg-[#1A237E] text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98] transition-all"
+                >
+                  {reportingStatus ? (
+                    <span className="material-symbols-rounded animate-spin text-[18px]">progress_activity</span>
+                  ) : (
+                    <>
+                      <span className="material-symbols-rounded text-[18px]">send</span>
+                      Submit
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         </div>
