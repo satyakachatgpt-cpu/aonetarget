@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
-import { testsAPI, testSeriesAPI, coursesAPI } from '../services/apiClient';
+import { testsAPI, testSeriesAPI, coursesAPI, getAuthHeaders } from '../services/apiClient';
 
 interface CourseGroup {
   courseId: string;
@@ -118,7 +118,7 @@ const MockTests: React.FC = () => {
     try {
       const seriesId = series.id || series._id;
       const res = await fetch(`/api/students/${student.id || student._id}/enrolled/${seriesId}`, {
-        headers: { 'Authorization': `Bearer ${localStorage.getItem('token') || localStorage.getItem('accessToken')}` }
+        headers: getAuthHeaders()
       });
       if (res.ok) {
         const data = await res.json();
@@ -144,7 +144,7 @@ const MockTests: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token') || localStorage.getItem('accessToken')}`
+          ...getAuthHeaders()
         },
         body: JSON.stringify({ courseId: seriesId })
       });

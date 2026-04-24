@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getImageUrl } from '@/lib/utils';
-import { getAuthHeaders, reportedQuestionsAPI } from '../services/apiClient';
+import { getAuthHeaders, getAdminHeaders, reportedQuestionsAPI } from '../services/apiClient';
 
 type QuestionStatus = 'unanswered' | 'answered' | 'flagged' | 'flagged-answered';
 
@@ -92,8 +92,13 @@ const TestTaking: React.FC = () => {
 
   const fetchTestData = async () => {
     try {
-      const res = await fetch(`/api/tests/${testId}`);
-      if (!res.ok) throw new Error('Test not found');
+      const res = await fetch(`/api/tests/${testId}`, {
+        headers: { ...getAuthHeaders(), ...getAdminHeaders() }
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'Test not found');
+      }
       const testData = await res.json();
       if (!testData || typeof testData !== 'object') throw new Error('Invalid test data');
       setTest(testData);
