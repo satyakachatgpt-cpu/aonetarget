@@ -55,9 +55,10 @@ const ReferEarn: React.FC = () => {
 
       // Set stats regardless of whether referralCode exists yet
       if (!statsData.error) {
+        console.log("REFERRAL API RESPONSE", statsData);
         setStats({
           referralCode: statsData.referralCode || '',
-          invitedCount: statsData.invitedCount || 0,
+          invitedCount: statsData.totalReferrals || statsData.invitedCount || 0,
           lifetimeCoins: statsData.lifetimeCoins || 0,
           pendingCoins: statsData.pendingCoins || 0,
           availableCoins: statsData.availableCoins || 0,

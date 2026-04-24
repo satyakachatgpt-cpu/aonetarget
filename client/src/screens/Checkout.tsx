@@ -114,6 +114,11 @@ const Checkout: React.FC = () => {
     } catch { return null; }
   };
 
+  const getResolvedStudentId = (student: any) => {
+    if (!student) return null;
+    return student.id || student._id || student.userId;
+  };
+
   useEffect(() => {
     const loadCourse = async () => {
       try {
@@ -132,12 +137,19 @@ const Checkout: React.FC = () => {
 
     const fetchCoins = async () => {
       const student = getStudentData();
-      if (!student) return;
+      const resolvedId = getResolvedStudentId(student);
+      if (!resolvedId) {
+        console.warn('[CHECKOUT] Missing student identifier for coin fetch');
+        return;
+      }
       try {
-        const res = await fetch(`/api/referrals/${student.id}`, { headers: getAuthHeaders() });
+        const res = await fetch(`/api/referrals/${resolvedId}`, { headers: getAuthHeaders() });
         const data = await res.json();
-        setAvailableCoins(data.availableCoins || 0);
-      } catch (e) { /* ignore */ }
+        // Backend returns availableCoins as source of truth
+        setAvailableCoins(data.availableCoins || data.coins || 0);
+      } catch (e) {
+        console.error('[CHECKOUT] Failed to fetch coins:', e);
+      }
     };
     fetchCoins();
   }, [id]);
@@ -237,7 +249,7 @@ const Checkout: React.FC = () => {
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
           courseId: course?.id || course?._id || id,
-          studentId: student.id,
+          studentId: getResolvedStudentId(student),
           couponCode: breakdown?.couponCode || undefined,
           coinsUsed: useCoins ? coinsToUse : 0
         })
@@ -262,7 +274,7 @@ const Checkout: React.FC = () => {
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_signature: response.razorpay_signature,
                 courseId: course?.id || course?._id || id,
-                studentId: student.id,
+                studentId: getResolvedStudentId(student),
                 referralCode: referralCode || undefined,
                 couponCode: breakdown?.couponCode || undefined,
                 coinsUsed: useCoins ? coinsToUse : 0
@@ -320,7 +332,7 @@ const Checkout: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
-          studentId: student.id,
+          studentId: getResolvedStudentId(student),
           courseId: course?.id || course?._id || id,
           amount: 0,
           paymentMethod: 'free',
@@ -470,8 +482,10 @@ const Checkout: React.FC = () => {
                 className={`w-10 h-5 rounded-full relative transition-all cursor-pointer ${useCoins ? 'bg-green-500' : 'bg-gray-200'}`}
                 onClick={() => {
                   if (!useCoins) {
-                    // Default to using max available coins or enough to cover the price
-                    setCoinsToUse(Math.min(availableCoins, Math.floor((breakdown?.totalAmount || 0) * 10)));
+                    // Safe calculation based on current totalAmount
+                    const currentTotal = breakdown?.totalAmount ?? basePrice;
+                    const maxCoinsUsable = Math.floor(currentTotal * 10);
+                    setCoinsToUse(Math.min(availableCoins, maxCoinsUsable));
                   }
                   setUseCoins(!useCoins);
                 }}

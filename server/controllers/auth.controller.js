@@ -348,7 +348,14 @@ export const registerStudent = async (req, res) => {
     const referralCode = req.body.referralCode;
     if (referralCode) {
       const referral = await db.collection('referrals').findOne({ referralCode });
-      if (referral && referral.studentId !== studentId) {
+      // Polymorphic self-referral check
+      const isSelfReferral = referral && (
+        String(referral.studentId) === String(studentId) || 
+        String(referral.studentId) === String(student._id) ||
+        referral.referralCode === student.referralCode
+      );
+
+      if (referral && !isSelfReferral) {
         const settings = await db.collection('referralSettings').findOne({}) || { 
           coinsPerReferral: 500, 
           welcomeBonusCoins: 100 
@@ -361,13 +368,13 @@ export const registerStudent = async (req, res) => {
         student.availableCoins = welcomeBonus;
         student.welcomeBonus = welcomeBonus;
 
-        // Add Pending Reward to Referrer
+        // 1. Update Referrals Ledger (Pending)
         await db.collection('referrals').updateOne(
           { referralCode },
           {
             $push: { 
               referredStudents: { 
-                studentId, 
+                studentId: studentId, 
                 studentName: name, 
                 date: new Date(), 
                 coins: coinsReward, 
@@ -376,6 +383,18 @@ export const registerStudent = async (req, res) => {
             },
             $inc: { pendingCoins: coinsReward }
           }
+        );
+
+        // 2. Update Referrer's Student Profile (Pending)
+        await db.collection('students').updateOne(
+          { 
+            $or: [
+              { id: referral.studentId },
+              { referralCode: referralCode },
+              ...(ObjectId.isValid(referral.studentId) ? [{ _id: new ObjectId(referral.studentId) }] : [])
+            ]
+          },
+          { $inc: { pendingCoins: coinsReward } }
         );
       }
     }

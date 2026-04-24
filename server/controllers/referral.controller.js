@@ -85,39 +85,35 @@ export const getReferralStats = async (req, res) => {
       ]
     });
 
-    // 3. Aggregate Data
+    // 3. Aggregate Data (Source of Truth: Student Profile)
     const available = student.availableCoins || 0;
-    const unlockedCount = referral?.referredStudents ? referral.referredStudents.filter(s => s.status === 'unlocked' || s.status === 'confirmed').length : 0;
-    const pending = referral ? (referral.pendingCoins || 0) : 0;
-    const invited = referral?.referredStudents ? referral.referredStudents.length : 0;
+    const pending = student.pendingCoins || 0;
     const used = student.usedCoins || 0;
+    const lifetime = available + pending + used;
     
-    // Milestone Rewards (Dynamic)
-    let milestoneBonus = 0;
-    if (unlockedCount >= 10) milestoneBonus = 500;
-    else if (unlockedCount >= 5) milestoneBonus = 200;
-
-    // Lifetime = Actual Earned (including welcome bonus) + Pending
-    const lifetime = (student.coins || 0) + pending;
+    const referredStudents = referral?.referredStudents || [];
+    const unlockedCount = referredStudents.filter(s => ['unlocked', 'confirmed'].includes(s.status?.toLowerCase())).length;
+    const invitedCount = referredStudents.length;
 
     const statsData = {
       referralCode: student.referralCode || (referral ? referral.referralCode : null),
-      availableCoins: available, // Strictly persisted coins
+      availableCoins: available,
       pendingCoins: pending,
-      invitedCount: invited,
-      lifetimeCoins: lifetime,
       usedCoins: used,
-      milestoneBonus, // Display-only derived metric
+      lifetimeCoins: lifetime,
+      invitedCount: invitedCount,
+      totalReferrals: invitedCount,
       stats: {
-        totalInvited: invited,
-        pendingInvites: referral?.referredStudents ? referral.referredStudents.filter(s => s.status === 'pending').length : 0,
+        totalInvited: invitedCount,
+        pendingInvites: referredStudents.filter(s => s.status?.toLowerCase() === 'pending').length,
         unlockedInvites: unlockedCount,
-        conversionRate: invited > 0 
-          ? Math.round((unlockedCount / invited) * 100) 
+        conversionRate: invitedCount > 0 
+          ? Math.round((unlockedCount / invitedCount) * 100) 
           : 0
       }
     };
 
+    console.log(`[REFERRAL_STATS] Response for ${sid}:`, statsData);
     res.json(statsData);
   } catch (error) {
     console.error('SERVER_ERROR [getReferralStats]:', error);
@@ -198,7 +194,7 @@ export const applyReferralCode = async (req, res) => {
       status: 'pending'
     };
 
-    // Update Referrer
+    // 1. Update Referrer's Referral Ledger
     await db.collection('referrals').updateOne(
       { referralCode },
       {
@@ -207,7 +203,19 @@ export const applyReferralCode = async (req, res) => {
       }
     );
 
-    // Update New Student (Referred)
+    // 2. Update Referrer's Student Profile
+    await db.collection('students').updateOne(
+      { 
+        $or: [
+          { id: referral.studentId },
+          { referralCode: referralCode },
+          ...(ObjectId.isValid(referral.studentId) ? [{ _id: new ObjectId(referral.studentId) }] : [])
+        ]
+      },
+      { $inc: { pendingCoins: coinsReward } }
+    );
+
+    // 3. Update New Student (Referred)
     await db.collection('students').updateOne(
       { id: newStudentId },
       { 
@@ -406,6 +414,7 @@ export const unlockReferralCoins = async (referredStudentId, purchaseId) => {
     const updatedStudents = [...referral.referredStudents];
     updatedStudents[entryIndex] = { ...entry, status: 'unlocked', purchaseId };
 
+    // 1. Update Referrer's Referral Ledger (Move from pending to available)
     await db.collection('referrals').updateOne(
       { referralCode },
       {
@@ -414,17 +423,22 @@ export const unlockReferralCoins = async (referredStudentId, purchaseId) => {
       }
     );
 
-    // Update Referrer student model (Polymorphic update to ensure balance is added)
-    await db.collection('students').updateOne(
-      { 
-        $or: [
-          { id: referral.studentId },
-          ...(ObjectId.isValid(referral.studentId) ? [{ _id: new ObjectId(referral.studentId) }] : [])
-        ]
-      },
-      { $inc: { coins: coins, availableCoins: coins } }
+    // 2. Update Referrer's Student Profile (Move from pending to available)
+    const referrerFilter = { 
+      $or: [
+        { id: referral.studentId },
+        { referralCode: referralCode },
+        ...(ObjectId.isValid(referral.studentId) ? [{ _id: new ObjectId(referral.studentId) }] : []),
+        { userId: referral.studentId }
+      ]
+    };
+
+    const studentUpdate = await db.collection('students').updateOne(
+      referrerFilter,
+      { $inc: { availableCoins: coins, pendingCoins: -coins } }
     );
 
+    console.log(`[REFERRAL_UNLOCK] Referrer: ${referral.studentId}, Coins: ${coins}, Result:`, studentUpdate.modifiedCount);
     return true;
   } catch (error) {
     console.error('Error unlocking referral coins:', error);
@@ -439,25 +453,34 @@ export const useCoinsForPurchase = async (studentId, coinsToUse) => {
   try {
     if (!coinsToUse || coinsToUse <= 0) return true;
 
-    const student = await db.collection('students').findOne({ id: studentId });
+    const student = await db.collection('students').findOne({
+      $or: [
+        { id: studentId },
+        ...(ObjectId.isValid(studentId) ? [{ _id: new ObjectId(studentId) }] : []),
+        { userId: studentId }
+      ]
+    });
+
     if (!student || (student.availableCoins || 0) < coinsToUse) {
       console.error('Insufficient coins or student not found');
       return false;
     }
 
+    // Atomic update for student
     await db.collection('students').updateOne(
-      { 
-        $or: [
-          { id: studentId },
-          ...(ObjectId.isValid(studentId) ? [{ _id: new ObjectId(studentId) }] : [])
-        ]
-      },
+      { _id: student._id },
       { $inc: { availableCoins: -coinsToUse, usedCoins: coinsToUse } }
     );
 
-    // Also update referral record usedCoins if exists
+    // Also update referral record (Polymorphic lookup for ledger sync)
     await db.collection('referrals').updateOne(
-      { studentId },
+      {
+        $or: [
+          { studentId: student.id },
+          { studentId: student._id.toString() },
+          { studentId: student._id }
+        ]
+      },
       { $inc: { availableCoins: -coinsToUse, usedCoins: coinsToUse } }
     );
 
