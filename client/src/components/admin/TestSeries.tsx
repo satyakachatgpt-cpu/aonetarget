@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { testSeriesAPI, coursesAPI } from '../../services/apiClient';
 import AddTestDrawer from './AddTestDrawer';
 
@@ -27,6 +28,7 @@ interface Props {
 }
 
 const TestSeries: React.FC<Props> = ({ showToast }) => {
+  const navigate = useNavigate();
   const [series, setSeries] = useState<TestSeriesItem[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
@@ -360,6 +362,13 @@ const TestSeries: React.FC<Props> = ({ showToast }) => {
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => navigate(`/admin/tests/${item.id}`)}
+                          className="p-2 text-navy hover:bg-navy/10 rounded-lg transition-colors"
+                          title="View Tests"
+                        >
+                          <span className="material-icons-outlined text-lg">visibility</span>
+                        </button>
                         <button
                           onClick={() => handleOpenDrawer(item)}
                           className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"

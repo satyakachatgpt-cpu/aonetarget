@@ -3,9 +3,7 @@ import { API_BASE_URL, apiRequest, cachedFetch, getAdminHeaders, getAuthHeaders,
 // Questions API
 export const questionsAPI = {
   getAll: async () => {
-    const response = await fetch(`${API_BASE_URL}/questions`);
-    if (!response.ok) throw new Error('Failed to fetch questions');
-    return response.json();
+    return cachedFetch(`${API_BASE_URL}/questions`, 10000);
   },
   create: async (data: any) => {
     return apiRequest(`${API_BASE_URL}/questions`, {
@@ -148,7 +146,9 @@ export const testsAPI = {
     return response.json();
   },
   export: async (id: string, solution = true) => {
-    const response = await fetch(`${API_BASE_URL}/tests/${id}/export?solution=${solution}`);
+    const response = await fetch(`${API_BASE_URL}/tests/${id}/export?solution=${solution}`, {
+      headers: getAdminHeaders()
+    });
     if (!response.ok) throw new Error('Failed to export PDF');
     return response.blob();
   }
@@ -245,17 +245,7 @@ export const testSeriesAPI = {
 // Subjective Tests API
 export const subjectiveTestsAPI = {
   getAll: async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/subjective-tests`);
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
-        throw new Error(error.error || 'Failed to fetch subjective tests');
-      }
-      return response.json();
-    } catch (error) {
-      console.error('Subjective Tests getAll error:', error);
-      throw error;
-    }
+    return cachedFetch(`${API_BASE_URL}/subjective-tests`, 10000);
   },
   create: async (data: any) => {
     try {

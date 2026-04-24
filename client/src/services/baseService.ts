@@ -102,7 +102,8 @@ export async function cachedFetch(url: string, ttl = CACHE_TTL): Promise<any> {
     return pendingRequests[url];
   }
 
-  const promise = fetch(url, { headers: getAuthHeaders() }).then(async (response) => {
+  const headers = { ...getAuthHeaders(), ...getAdminHeaders() };
+  const promise = fetch(url, { headers }).then(async (response) => {
     await handleUnauthorized(response, url);
 
     if (!response.ok) throw new Error(`Failed to fetch ${url}`);
