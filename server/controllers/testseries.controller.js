@@ -1,6 +1,6 @@
 import { db } from '../config/db.js';
 import mongoose from 'mongoose';
-import { getCourseIdVariants } from '../services/course.service.js';
+import { findCourse, getCourseIdVariants } from '../services/course.service.js';
 const { ObjectId } = mongoose.Types;
 
 /**
@@ -198,18 +198,23 @@ export const getTestSeriesUsers = async (req, res) => {
       }
     }
 
-    // 4. Fetch the test series document to get validity settings
-    const series = await db.collection('testSeries').findOne({ 
-      $or: [{ id: testSeriesId }, { _id: ObjectId.isValid(testSeriesId) ? new ObjectId(testSeriesId) : null }] 
-    }) || await db.collection('tests').findOne({ 
-      $or: [{ id: testSeriesId }, { _id: ObjectId.isValid(testSeriesId) ? new ObjectId(testSeriesId) : null }] 
-    });
+    // 4. Fetch the test series document to get validity settings using the robust findCourse service
+    let series = await findCourse(testSeriesId);
+    
+    // Extra Fallback: If not found, try to find it using the courseId from the purchases
+    if (!series && purchases.length > 0) {
+      for (const p of purchases) {
+        series = await findCourse(p.courseId);
+        if (series) break;
+      }
+    }
 
     const users = students.map(student => {
       const sId = String(student.id || student._id);
       const p = purchaseMap[sId] || purchaseMap[student.id];
       
-      let expiryDate = 'Lifetime';
+      let expiryDate = 'Lifetime'; // Default if no series info at all
+      
       if (series) {
         let mode = series.expiryMode;
         let val = series.validity;
@@ -228,31 +233,32 @@ export const getTestSeriesUsers = async (req, res) => {
           }
         }
         
+        // Robust Fallback: If mode is missing but validity is a number, treat as 'Validity'
+        if (!mode && val && !isNaN(parseInt(val))) {
+          mode = 'Validity';
+        }
+
+        // Final Calculation Logic
         if (mode === 'End Date' && val) {
-          expiryDate = val;
-        } else if (mode === 'Validity' && val && p) {
-          const months = parseInt(val);
-          if (!isNaN(months)) {
+          expiryDate = `Valid until ${val}`;
+        } else if (mode === 'Validity' && val) {
+          if (p) {
+            const months = parseInt(val);
             const date = new Date(p.createdAt);
             date.setMonth(date.getMonth() + months);
-            expiryDate = date.toLocaleDateString('en-IN');
+            const dateStr = date.toLocaleDateString('en-IN');
+            expiryDate = `Valid for ${months} Months (${dateStr})`;
+          } else {
+            expiryDate = `Valid for ${val} Months`;
           }
         } else if (mode === 'Lifetime Access') {
           expiryDate = 'Lifetime';
-        } else if (mode === 'Validity' && val) {
-          // Default for manual enrollment if no purchase found
-          expiryDate = `+${val} Months`;
         } else if (val && !isNaN(parseInt(val))) {
-          // Fallback: If validity is a number but mode is missing, assume "Validity" mode
-          const months = parseInt(val);
-          if (p) {
-            const date = new Date(p.createdAt);
-            date.setMonth(date.getMonth() + months);
-            expiryDate = date.toLocaleDateString('en-IN');
-          } else {
-            expiryDate = `+${months} Months`;
-          }
+           // One last fallback for raw validity numbers
+           expiryDate = `Valid for ${val} Months`;
         }
+      } else {
+        expiryDate = 'Lifetime (Series Data Not Found)';
       }
 
       return {
