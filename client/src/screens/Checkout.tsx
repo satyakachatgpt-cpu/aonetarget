@@ -30,6 +30,8 @@ interface Course {
   category?: string;
   instructor?: string;
   settings?: CourseSettings;
+  validity?: string | number;
+  expiryMode?: 'Validity' | 'End Date' | 'Lifetime Access';
   content?: {
     upsell?: {
       enabled?: boolean;
@@ -407,7 +409,22 @@ const Checkout: React.FC = () => {
               {course.instructor && <p className="text-xs text-gray-400 mt-1">{course.instructor}</p>}
               <div className="flex flex-wrap items-center text-[10px] text-gray-400 gap-3 mt-2">
                 <span className="flex items-center gap-1">
-                  <span className="material-symbols-rounded text-xs">schedule</span> Lifetime Access
+                  <span className="material-symbols-rounded text-xs">schedule</span>
+                  {(() => {
+                    const mode = course.expiryMode;
+                    const val = course.validity;
+                    
+                    if (typeof val === 'object' && val !== null) {
+                      const v = val as any;
+                      if (v.tab === 'end') return `Expires on ${v.endDate}`;
+                      if (v.tab === 'set') return `${v.value} ${v.unit || 'Months'} Validity`;
+                      return 'Lifetime Access';
+                    }
+                    
+                    if (mode === 'End Date') return `Expires on ${val}`;
+                    if (mode === 'Validity') return `${val} Months Validity`;
+                    return 'Lifetime Access';
+                  })()}
                 </span>
                 <span className="flex items-center gap-1">
                   <span className="material-symbols-rounded text-xs">language</span> Hinglish

@@ -1,4 +1,7 @@
 import { db } from '../config/db.js';
+import mongoose from 'mongoose';
+import { getCourseIdVariants } from '../services/course.service.js';
+const { ObjectId } = mongoose.Types;
 
 /**
  * Test Series Management Controller
@@ -152,5 +155,119 @@ export const updateAllTestSeries = async (req, res) => {
     res.json({ success: true, message: `Updated ${updates.length} series` });
   } catch (error) {
     res.status(500).json({ error: 'Failed to update all test series' });
+  }
+};
+
+// GET /api/test-series/:id/users
+export const getTestSeriesUsers = async (req, res) => {
+  try {
+    const testSeriesId = req.params.id;
+
+    // 1. Use centralized service to resolve all possible related IDs (variants, packages, etc.)
+    const idVariants = await getCourseIdVariants(testSeriesId);
+    
+    // Add the original ID if not already included
+    if (!idVariants.includes(testSeriesId)) idVariants.push(testSeriesId);
+
+    // Prepare ObjectId versions for variants that look like MongoDB IDs
+    const objectIdVariants = idVariants
+      .filter(id => id && typeof id === 'string' && id.length === 24 && /^[0-9a-fA-F]{24}$/.test(id))
+      .map(id => new ObjectId(id));
+
+    // 2. Fetch students who have any of these variants in their enrolledCourses
+    const students = await db.collection('students').find({
+      $or: [
+        { enrolledCourses: { $in: idVariants } },
+        { enrolledCourses: { $in: objectIdVariants } }
+      ]
+    }).toArray();
+
+    // 3. Fetch purchases for any of these variants
+    const purchases = await db.collection('purchases').find({
+      $or: [
+        { courseId: { $in: idVariants } },
+        { courseId: { $in: objectIdVariants } }
+      ]
+    }).toArray();
+
+    const purchaseMap = {};
+    for (const p of purchases) {
+      const sId = String(p.studentId);
+      if (!purchaseMap[sId] || new Date(p.createdAt) > new Date(purchaseMap[sId].createdAt)) {
+        purchaseMap[sId] = p;
+      }
+    }
+
+    // 4. Fetch the test series document to get validity settings
+    const series = await db.collection('testSeries').findOne({ 
+      $or: [{ id: testSeriesId }, { _id: ObjectId.isValid(testSeriesId) ? new ObjectId(testSeriesId) : null }] 
+    }) || await db.collection('tests').findOne({ 
+      $or: [{ id: testSeriesId }, { _id: ObjectId.isValid(testSeriesId) ? new ObjectId(testSeriesId) : null }] 
+    });
+
+    const users = students.map(student => {
+      const sId = String(student.id || student._id);
+      const p = purchaseMap[sId] || purchaseMap[student.id];
+      
+      let expiryDate = 'Lifetime';
+      if (series) {
+        let mode = series.expiryMode;
+        let val = series.validity;
+
+        // Handle Course/Test Series complex validity object structure
+        if (typeof val === 'object' && val !== null) {
+          if (val.tab === 'end') {
+            mode = 'End Date';
+            val = val.endDate;
+          } else if (val.tab === 'set') {
+            mode = 'Validity';
+            val = val.value;
+          } else if (val.tab === 'lifetime') {
+            mode = 'Lifetime Access';
+            val = null;
+          }
+        }
+        
+        if (mode === 'End Date' && val) {
+          expiryDate = val;
+        } else if (mode === 'Validity' && val && p) {
+          const months = parseInt(val);
+          if (!isNaN(months)) {
+            const date = new Date(p.createdAt);
+            date.setMonth(date.getMonth() + months);
+            expiryDate = date.toLocaleDateString('en-IN');
+          }
+        } else if (mode === 'Lifetime Access') {
+          expiryDate = 'Lifetime';
+        } else if (mode === 'Validity' && val) {
+          // Default for manual enrollment if no purchase found
+          expiryDate = `+${val} Months`;
+        } else if (val && !isNaN(parseInt(val))) {
+          // Fallback: If validity is a number but mode is missing, assume "Validity" mode
+          const months = parseInt(val);
+          if (p) {
+            const date = new Date(p.createdAt);
+            date.setMonth(date.getMonth() + months);
+            expiryDate = date.toLocaleDateString('en-IN');
+          } else {
+            expiryDate = `+${months} Months`;
+          }
+        }
+      }
+
+      return {
+        id: student.id || student._id,
+        name: student.name || 'Unknown',
+        phone: student.phone || student.email || 'N/A',
+        transactionId: p ? (p.razorpayPaymentId || p.id) : 'Manual/Free',
+        dateTime: p ? new Date(p.createdAt).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) : 'N/A',
+        expiryDate: expiryDate
+      };
+    });
+
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching test series users:', error);
+    res.status(500).json({ error: 'Failed to fetch enrolled users' });
   }
 };

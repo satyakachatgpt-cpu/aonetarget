@@ -4,6 +4,7 @@ import { db } from '../config/db.js';
 import * as XLSX from 'xlsx';
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from 'docx';
 import { findCourse, getRelatedCourseIds } from '../services/course.service.js';
+import { isPurchaseExpired } from '../utils/helpers.js';
 
 /**
  * MCQ Framework - Test Management Controller
@@ -139,6 +140,44 @@ export const getTestById = async (req, res) => {
     }
 
     let test = await db.collection('tests').findOne({ $or: orConditions });
+
+    if (test) {
+      // Security Check: Enrollment & Expiry Validation for Students
+      const adminId = req.headers['x-admin-id'] || req.headers['adminid'];
+      const studentId = req.headers['x-student-id'] || req.headers['studentid'] || req.user?.studentId;
+
+      if (!adminId) {
+        // If it's a student, check if they are enrolled in the course/series
+        const seriesId = test.courseId || test.testSeriesId || (Array.isArray(test.courseIds) ? test.courseIds[0] : null);
+        
+        if (seriesId && studentId) {
+          const enrollment = await db.collection('enrollments').findOne({
+            studentId: studentId.toString(),
+            $or: [
+              { courseId: seriesId.toString() },
+              { testSeriesId: seriesId.toString() }
+            ],
+            status: 'active'
+          });
+
+          if (!enrollment) {
+            // Optional: Check if test is free
+            if (!test.free && !test.isFree) {
+              return res.status(403).json({ error: 'Enrollment required to access this test', code: 'ENROLLMENT_REQUIRED' });
+            }
+          } else {
+            // Check if enrollment has expired
+            const course = await findCourse(seriesId);
+            if (course && isPurchaseExpired(enrollment.createdAt, course.validity, course.expiryMode)) {
+              return res.status(403).json({ error: 'Your access to this test series has expired', code: 'EXPIRED' });
+            }
+          }
+        } else if (!test.free && !test.isFree) {
+           // Not an admin, no seriesId/studentId found, and not free
+           return res.status(403).json({ error: 'Access denied', code: 'ACCESS_DENIED' });
+        }
+      }
+    }
 
     if (!test) {
       const questionCount = await db.collection('questions').countDocuments({

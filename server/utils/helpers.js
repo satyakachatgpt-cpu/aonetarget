@@ -50,3 +50,58 @@ export const calculatePriceBreakdown = (course, coupon = null) => {
     couponCode: coupon?.code || null
   };
 };
+
+/**
+ * Check if a purchase has expired based on course validity settings
+ */
+export const isPurchaseExpired = (purchase, course) => {
+  if (!purchase || !course) return false;
+  
+  const mode = course.expiryMode;
+  const val = course.validity;
+  
+  let validityValue = val;
+  let currentExpiryMode = mode;
+
+  // Handle Course validity object structure
+  if (typeof val === 'object' && val !== null) {
+    if (val.tab === 'end') {
+      currentExpiryMode = 'End Date';
+      validityValue = val.endDate;
+    } else if (val.tab === 'set') {
+      currentExpiryMode = 'Validity';
+      validityValue = val.value; // Assuming value is in months or matching unit
+    } else if (val.tab === 'lifetime') {
+      currentExpiryMode = 'Lifetime Access';
+    }
+  }
+
+  if (currentExpiryMode === 'End Date' && validityValue) {
+    // Expected format: DD-MM-YYYY or ISO
+    let dateStr = validityValue;
+    if (typeof dateStr === 'string' && dateStr.includes('-')) {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        // If it's DD-MM-YYYY (last part is 4 digits), convert to YYYY-MM-DD
+        if (parts[2].length === 4) {
+          dateStr = `${parts[2]}-${parts[1]}-${parts[0]}`;
+        }
+        // If it's already YYYY-MM-DD (first part is 4 digits), keep it as is
+      }
+    }
+    const expiryDate = new Date(dateStr);
+    if (!isNaN(expiryDate.getTime())) {
+      return new Date() > expiryDate;
+    }
+  } else if (currentExpiryMode === 'Validity' && validityValue) {
+    const months = parseInt(validityValue);
+    if (!isNaN(months)) {
+      const createdAt = purchase.createdAt ? new Date(purchase.createdAt) : new Date();
+      const expiryDate = new Date(createdAt);
+      expiryDate.setMonth(expiryDate.getMonth() + months);
+      return new Date() > expiryDate;
+    }
+  }
+  
+  return false;
+};

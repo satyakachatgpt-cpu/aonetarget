@@ -970,6 +970,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   // Question Library States
 
   const [detailTests, setDetailTests] = useState<any[]>([]);
+  const [seriesUsers, setSeriesUsers] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
   const [detailSearchQuery, setDetailSearchQuery] = useState("");
   const [questionFormData, setQuestionFormData] = useState<any>(null);
   const [editorQuestions, setEditorQuestions] = useState<any[]>([]);
@@ -1237,6 +1239,25 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       setDetailTests([]);
     }
   }, [viewingTestSeries, tests]);
+
+  useEffect(() => {
+    const seriesId = viewingTestSeries?.id || viewingTestSeries?._id;
+    if (viewingTestSeries && viewingTestSeriesTab === "Users" && seriesId) {
+      const fetchUsers = async () => {
+        setLoadingUsers(true);
+        try {
+          const users = await testSeriesAPI.getUsers(seriesId);
+          setSeriesUsers(Array.isArray(users) ? users : []);
+        } catch (err) {
+          console.error("Error fetching series users:", err);
+          setSeriesUsers([]);
+        } finally {
+          setLoadingUsers(false);
+        }
+      };
+      fetchUsers();
+    }
+  }, [viewingTestSeries, viewingTestSeriesTab]);
 
   // Track the last viewed IDs to prevent redundant Bulk Uploader resets
   const lastViewedIds = React.useRef({ seriesId: "", testId: "" });
@@ -1571,6 +1592,17 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         logo: data.image,
         sortBy: data.sortBy,
         isSeries: viewingTestSeries ? false : true,
+        validity: data.validity,
+        expiryMode: data.expiryMode,
+        mrp: data.mrp,
+        description: data.description,
+        disableCoupons: data.disableCoupons,
+        enableCombo: data.enableCombo,
+        includeTestMaker: data.includeTestMaker,
+        allowPayment: data.allowPayment,
+        metaTitle: data.metaTitle,
+        metaDescription: data.metaDescription,
+        enableRichSnippets: data.enableRichSnippets,
         testSeriesId: viewingTestSeries
           ? viewingTestSeries.id || viewingTestSeries._id
           : undefined,
@@ -3418,8 +3450,17 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {mockUsers.length > 0 ? (
-                    mockUsers.map((user, idx) => (
+                  {loadingUsers ? (
+                    <tr>
+                      <td colSpan={5} className="py-20 text-center">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="w-10 h-10 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
+                          <span className="text-[14px] font-bold text-gray-400">Loading users...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : seriesUsers.length > 0 ? (
+                    seriesUsers.map((user, idx) => (
                       <tr
                         key={user.id || idx}
                         className="hover:bg-gray-50/50 transition-colors"
@@ -3495,7 +3536,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
               </table>
               <div className="px-8 py-4 bg-[#FAFAFA] border-t border-gray-100 flex items-center justify-between">
                 <span className="text-[12px] font-bold text-gray-400 italic">
-                  Showing {mockUsers.length} users
+                  Showing {seriesUsers.length} users
                 </span>
                 <div className="flex items-center gap-2">
                   <button className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-100 text-gray-400 hover:bg-gray-50 transition-all disabled:opacity-30">

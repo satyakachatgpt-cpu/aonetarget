@@ -10,6 +10,7 @@ router.delete('/', adminMiddleware, testSeriesController.deleteAllTestSeries);
 router.post('/bulk', adminMiddleware, testSeriesController.bulkCreateTestSeries);
 router.put('/update-all', adminMiddleware, testSeriesController.updateAllTestSeries);
 
+router.get('/:id/users', adminMiddleware, testSeriesController.getTestSeriesUsers);
 router.put('/:id', adminMiddleware, testSeriesController.updateTestSeries);
 router.delete('/:id', adminMiddleware, testSeriesController.deleteTestSeries);
 

@@ -224,6 +224,21 @@ export const testSeriesAPI = {
       console.error('Test Series delete error:', error);
       throw error;
     }
+  },
+  getUsers: async (id: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/test-series/${id}/users`, {
+        headers: getAdminHeaders(),
+      });
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+        throw new Error(error.error || 'Failed to fetch enrolled users');
+      }
+      return response.json();
+    } catch (error) {
+      console.error('Test Series getUsers error:', error);
+      throw error;
+    }
   }
 };
 
