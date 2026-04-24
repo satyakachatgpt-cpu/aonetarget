@@ -628,12 +628,9 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                       <div className="flex flex-col gap-0.5">
                         {[
                           { id: 'folder', icon: 'create_new_folder', label: 'Add Folder' },
-                          { id: 'link', icon: 'link', label: 'Add Link' },
                           { id: 'video', icon: 'videocam', label: 'Add Video' },
                           { id: 'pdf', icon: 'picture_as_pdf', label: 'Add PDF' },
                           { id: 'test', icon: 'quiz', label: 'Add Test' },
-                          { id: 'live_stream', icon: 'sensors', label: 'Add Live Stream' },
-                          { id: 'image', icon: 'image', label: 'Add Image' },
                           { id: 'youtube_zoom', icon: 'video_camera_front', label: 'Add YouTube/Zoom Video' },
                           { id: 'document', icon: 'description', label: 'Add Document' }
                         ].map((item) => (
@@ -654,10 +651,6 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                                   break;
                                 case 'test': setShowTestDrawer(true); break;
                                 case 'quiz': setShowQuizDrawer(true); break;
-                                case 'image':
-                                  setUploadType({ title: 'Add Image File(s)', subtitle: 'Upload Image', accept: 'image/*' });
-                                  setShowUploadDrawer(true);
-                                  break;
                                 case 'live_stream': setShowLiveStreamDrawer(true); break;
                                 case 'youtube_zoom': setShowVideoDrawer(true); break;
                                 case 'webinar_gg': setShowWebinarDrawer(true); break;

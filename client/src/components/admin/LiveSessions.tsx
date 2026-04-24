@@ -349,12 +349,6 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true, courseId, showToast 
                                 </div>
                             )}
                         </div>
-                        <button
-                            onClick={() => setShowLiveStreamDrawer(true)}
-                            className="w-10 h-10 bg-black text-white rounded-full flex items-center justify-center hover:bg-gray-900 transition-all shadow-md active:scale-95"
-                        >
-                            <span className="material-symbols-outlined text-[20px]">add</span>
-                        </button>
                     </div>
                 </div>
 
