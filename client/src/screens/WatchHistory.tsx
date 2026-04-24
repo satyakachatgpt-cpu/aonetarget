@@ -13,46 +13,113 @@ const WatchHistory: React.FC = () => {
   const [clearing, setClearing] = useState(false);
 
   useEffect(() => {
-    const storedStudent = localStorage.getItem('studentData');
-    if (storedStudent) {
-      const studentData = JSON.parse(storedStudent);
-      setStudent(studentData);
-      fetchWatchHistory(studentData.id);
+    if (student) {
+      const id = student.id || (student as any).userId || (student as any)._id;
+      if (id) fetchWatchHistory(id);
     } else {
-      navigate('/student-login');
+      const storedStudent = localStorage.getItem('studentData');
+      if (storedStudent) {
+        const studentData = JSON.parse(storedStudent);
+        setStudent(studentData);
+        const id = studentData.id || studentData.userId || studentData._id;
+        if (id) fetchWatchHistory(id);
+      } else {
+        navigate('/student-login');
+      }
     }
-  }, []);
+  }, [student, navigate]);
 
   const fetchWatchHistory = async (studentId: string) => {
+    setLoading(true);
     try {
-      const response = await fetch(`/api/students/${studentId}/watch-history`, { headers: getAuthHeaders() });
-      const data = await response.json();
-      setHistory(Array.isArray(data) ? data : []);
+      // Fetch from both sources for maximum coverage
+      const [historyRes, progressRes] = await Promise.all([
+        fetch(`/api/students/${studentId}/watch-history`, { headers: getAuthHeaders() }),
+        fetch(`/api/progress/${studentId}`, { headers: getAuthHeaders() })
+      ]);
+
+      const historyData = await historyRes.json().catch(() => []);
+      const progressData = await progressRes.json().catch(() => []);
+
+      // Merge data by videoId
+      const merged: any[] = [];
+      const seenIds = new Set();
+
+      // 1. Process manual watchHistory entries
+      if (Array.isArray(historyData)) {
+        historyData.forEach(item => {
+          const vId = item.videoId || item.id;
+          if (vId) {
+            merged.push({ ...item, videoId: vId });
+            seenIds.add(vId);
+          }
+        });
+      }
+
+      // 2. Add or update from automated progressData
+      if (Array.isArray(progressData)) {
+        progressData.forEach(item => {
+          const vId = item.videoId || item.id;
+          if (!vId) return;
+
+          const progressPct = item.duration > 0 ? Math.round((item.timestamp / item.duration) * 100) : 0;
+          const existingIdx = merged.findIndex(m => m.videoId === vId);
+
+          if (existingIdx !== -1) {
+            // Update existing with latest progress if it's higher
+            merged[existingIdx].watchProgress = Math.max(merged[existingIdx].watchProgress || 0, progressPct);
+            if (!merged[existingIdx].courseId) merged[existingIdx].courseId = item.courseId;
+            if (!merged[existingIdx].thumbnail) merged[existingIdx].thumbnail = item.thumbnail;
+          } else {
+            merged.push({
+              ...item,
+              videoId: vId,
+              watchProgress: progressPct,
+              watchedAt: item.lastUpdated || item.updatedAt
+            });
+            seenIds.add(vId);
+          }
+        });
+      }
+
+      // Sort by recency (watchedAt or lastUpdated)
+      merged.sort((a, b) => {
+        const dateA = new Date(a.watchedAt || a.lastUpdated || a.updatedAt || 0).getTime();
+        const dateB = new Date(b.watchedAt || b.lastUpdated || b.updatedAt || 0).getTime();
+        return dateB - dateA;
+      });
+
+      setHistory(merged);
     } catch (error) {
-      console.error('Error fetching watch history:', error);
+      console.error('Error fetching history:', error);
+      setHistory([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Direct navigation — build video obj from cached watch history data, no extra fetch needed
-  const handleVideoClick = (item: any) => {
+  const handleVideoClick = async (item: any) => {
+    const videoUrl = item.videoUrl || item.youtubeUrl || item.url || item.fileUrl || '';
+    const vId = item.videoId || item.id;
     const videoObj = {
-      _id: item.videoId,
-      id: item.videoId,
+      _id: vId,
+      id: vId,
       title: item.title || 'Video',
       thumbnail: getImageUrl(item.thumbnail) || '',
       thumbnailUrl: getImageUrl(item.thumbnail) || '',
       duration: item.duration || '',
-      youtubeUrl: item.youtubeUrl || null,
-      videoUrl: toYouTubeEmbed(item.youtubeUrl || item.videoUrl || item.url || item.fileUrl || ''),
-      courseId: item.courseId,
+      youtubeUrl: isYouTubeUrl(videoUrl) ? videoUrl : (item.youtubeUrl || null),
+      videoUrl: toYouTubeEmbed(videoUrl),
+      courseId: item.courseId || '',
+      courseTitle: item.courseTitle || item.subject || '',
     };
-    navigate('/video-player', {
+
+    navigate(`/watch/${item.courseId || 'history'}/${vId}`, {
       state: {
-        video: videoObj,
-        courseTitle: item.courseTitle || '',
-        courseId: item.courseId,
+        video: (videoObj.videoUrl || videoObj.youtubeUrl) ? videoObj : null,
+        courseTitle: item.courseTitle || 'Watch History',
+        courseId: item.courseId || '',
+        returnTo: '/watch-history'
       },
     });
   };
@@ -95,101 +162,116 @@ const WatchHistory: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
+    <div className="min-h-screen bg-[#FDFDFD] font-outfit pb-24">
       <StudentSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} student={student} />
 
-      <header className="bg-gradient-to-r from-brandBlue to-[#1A237E] text-white pt-8 pb-6 px-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-white/20">
-              <span className="material-symbols-rounded">arrow_back</span>
-            </button>
-            <h1 className="text-lg font-bold">Watch History</h1>
-          </div>
-          {history.length > 0 && (
-            <button
-              onClick={handleClearAll}
-              disabled={clearing}
-              className="text-xs font-bold bg-white/20 px-3 py-1.5 rounded-full hover:bg-white/30 transition-all disabled:opacity-50"
-            >
-              {clearing ? 'Clearing...' : 'Clear All'}
-            </button>
-          )}
-        </div>
-      </header>
+      {/* Pixel Minimal Header */}
+      <div className="bg-[#1A237E] text-white px-6 py-6 sticky top-0 z-50 flex items-center gap-4">
+        <button 
+          onClick={() => navigate(-1)} 
+          className="w-10 h-10 rounded-full flex items-center justify-center active:bg-white/10 transition-all"
+        >
+          <span className="material-symbols-rounded text-2xl">arrow_back</span>
+        </button>
+        <h1 className="text-xl font-bold">Watch History</h1>
+      </div>
 
-      <div className="p-4">
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="w-10 h-10 border-4 border-brandBlue border-t-transparent rounded-full animate-spin" />
+      {/* Statistics Section */}
+      <div className="px-6 py-8 flex flex-col items-center">
+         <div className="w-full max-w-2xl bg-white rounded-3xl p-6 shadow-sm border border-gray-100 flex items-center justify-around">
+            <div className="text-center">
+               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Watched</p>
+               <h2 className="text-3xl font-black text-[#1A237E]">{history.length}</h2>
+            </div>
+            <div className="w-px h-12 bg-gray-100" />
+            <div className="text-center">
+               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Completion</p>
+               <h2 className="text-3xl font-black text-brandBlue">
+                  {history.length > 0 ? Math.round(history.reduce((acc, curr) => acc + (curr.watchProgress || 0), 0) / history.length) : 0}%
+               </h2>
+            </div>
+         </div>
+      </div>
+
+      {/* History List - Minimal Vertical Rows */}
+      <div className="px-6 pb-24 max-w-2xl mx-auto">
+        {loading && history.length === 0 ? (
+          <div className="space-y-4">
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} className="h-24 bg-gray-50 rounded-2xl animate-pulse" />
+            ))}
           </div>
         ) : history.length > 0 ? (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {history.map((item, idx) => {
-              const thumb = getThumbnail(item);
+              const progress = item.watchProgress || 0;
+              const date = new Date(item.watchedAt || item.lastUpdated || item.updatedAt);
+              const timeLabel = date.toLocaleDateString() === new Date().toLocaleDateString() 
+                ? 'Today' 
+                : date.toLocaleDateString() === new Date(Date.now() - 86400000).toLocaleDateString()
+                ? 'Yesterday'
+                : date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+
               return (
-                <div
-                  key={idx}
-                  className="bg-white rounded-xl shadow-sm overflow-hidden flex cursor-pointer hover:shadow-md active:scale-[0.99] transition-all"
+                <div 
+                  key={idx} 
                   onClick={() => handleVideoClick(item)}
+                  className="bg-white rounded-2xl p-2.5 flex gap-3.5 border border-gray-100 hover:border-brandBlue/30 transition-all cursor-pointer group shadow-sm active:scale-[0.98]"
                 >
-                  {/* Thumbnail */}
-                  <div className="relative w-32 h-20 bg-gray-100 shrink-0">
-                    {thumb ? (
-                      <img
-                        src={thumb}
-                        alt={item.title}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = 'none';
-                        }}
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
-                        <span className="material-symbols-rounded text-gray-400 text-3xl">smart_display</span>
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                      <span className="material-symbols-rounded text-white text-3xl">play_circle</span>
-                    </div>
+                  {/* Thumbnail Left */}
+                  <div className="relative w-24 aspect-video rounded-xl overflow-hidden shrink-0 bg-gray-100">
+                    <img 
+                      src={getImageUrl(item.thumbnail)} 
+                      alt={item.title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=200&q=80';
+                      }}
+                    />
+                    <div className="absolute inset-0 bg-black/5 group-hover:bg-black/0 transition-colors" />
                     {item.duration && (
-                      <div className="absolute bottom-1 right-1 bg-black/80 text-white text-[8px] px-1 rounded">
+                      <div className="absolute bottom-1 right-1 px-1 py-0.5 bg-black/70 rounded text-[8px] font-bold text-white tracking-tighter">
                         {item.duration}
                       </div>
                     )}
                   </div>
 
-                  {/* Info */}
-                  <div className="flex-1 p-3 min-w-0">
-                    <h4 className="font-bold text-xs line-clamp-2 text-gray-900">
-                      {item.title || 'Untitled Video'}
-                    </h4>
-                    <p className="text-[10px] text-gray-400 mt-0.5 truncate">
-                      {item.courseTitle || item.subject || 'General'}
-                    </p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-pink-500 rounded-full"
-                          style={{ width: `${item.watchProgress || 0}%` }}
-                        />
-                      </div>
-                      <span className="text-[8px] text-gray-400 shrink-0">{item.watchProgress || 0}%</span>
+                  {/* Info Right */}
+                  <div className="flex-1 flex flex-col justify-center min-w-0">
+                    <div className="flex justify-between items-start gap-2">
+                      <h3 className="text-sm font-bold text-gray-900 line-clamp-1">{item.title || 'Video'}</h3>
+                      <span className="text-[9px] font-medium text-gray-400 whitespace-nowrap">{timeLabel}</span>
                     </div>
-                    <p className="text-[9px] text-gray-300 mt-1">{formatDate(item.watchedAt)}</p>
+                    <p className="text-[11px] text-gray-500 mt-0.5 truncate uppercase tracking-wide">
+                      {item.courseTitle || item.subject || 'Course Content'}
+                    </p>
+
+                    {/* Minimal Progress */}
+                    <div className="mt-3 flex items-center gap-3">
+                       <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-brandBlue transition-all duration-700" 
+                            style={{ width: `${progress}%` }} 
+                          />
+                       </div>
+                       <span className="text-[10px] font-bold text-brandBlue">{progress}%</span>
+                    </div>
                   </div>
                 </div>
               );
             })}
           </div>
         ) : (
-          <div className="bg-white rounded-xl p-10 text-center shadow-sm mt-4">
-            <span className="material-symbols-rounded text-6xl text-gray-200">history</span>
-            <p className="text-sm font-bold text-gray-400 mt-4">No watch history yet</p>
-            <p className="text-[10px] text-gray-300 mt-1">Videos you watch will appear here</p>
-            <button
-              onClick={() => navigate('/my-courses')}
-              className="mt-5 bg-brandBlue text-white px-6 py-2 rounded-xl text-sm font-bold shadow-md active:scale-95 transition-all"
+          /* Same style as the user's screenshot empty state */
+          <div className="mt-12 bg-white rounded-[2rem] p-10 py-16 text-center shadow-[0_15px_40px_rgba(0,0,0,0.04)] border border-gray-50 flex flex-col items-center">
+            <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mb-8">
+              <span className="material-symbols-rounded text-5xl text-gray-200">history</span>
+            </div>
+            <h3 className="text-lg font-bold text-gray-800 mb-2">No watch history yet</h3>
+            <p className="text-xs text-gray-400 mb-8">Videos you watch will appear here</p>
+            <button 
+              onClick={() => navigate('/batches')}
+              className="px-10 py-3.5 bg-[#1A237E] text-white rounded-2xl font-bold text-sm shadow-xl active:scale-95 transition-all"
             >
               Browse Courses
             </button>

@@ -19,7 +19,7 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
     notifications: true,
     emailUpdates: true,
     autoPlay: localStorage.getItem('autoPlay') !== 'false',
-    downloadOverWifi: localStorage.getItem('downloadOverWifi') !== 'false',
+    downloadOverWifi: false,
     videoQuality: localStorage.getItem('videoQuality') || 'Auto'
   });
 
@@ -32,9 +32,9 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
 
   useEffect(() => {
     localStorage.setItem('autoPlay', settings.autoPlay.toString());
-    localStorage.setItem('downloadOverWifi', settings.downloadOverWifi.toString());
+
     localStorage.setItem('videoQuality', settings.videoQuality);
-  }, [settings.autoPlay, settings.downloadOverWifi, settings.videoQuality]);
+  }, [settings.autoPlay, settings.videoQuality]);
 
   useEffect(() => {
     const isModalOpen = showQualityModal;
@@ -131,7 +131,7 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
       title: 'Video',
       items: [
         { key: 'autoPlay', label: 'Auto-play Videos', icon: 'play_circle', toggle: true },
-        { key: 'downloadOverWifi', label: 'Download over Wi-Fi only', icon: 'wifi', toggle: true },
+
         { key: 'videoQuality', label: 'Video Quality', icon: 'hd', value: settings.videoQuality }
       ]
     },

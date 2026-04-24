@@ -154,11 +154,14 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
           body: JSON.stringify({
             userId: studentId,
             courseId: courseId,
+            courseTitle: courseTitle,
             videoId: propVideoId,
             progress: time,
             duration: total,
             title,
-            thumbnail
+            thumbnail,
+            videoUrl: src,
+            youtubeUrl: youtubeUrl
           })
         });
       } catch (err) {
@@ -373,7 +376,9 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
           time = videoRef.current.currentTime;
           total = videoRef.current.duration || duration;
         }
-        setCurrentTime(time);
+        if (!isDragging) {
+          setCurrentTime(time);
+        }
         
         // Auto-save every 10 seconds
         if (Math.floor(time) % 10 === 0) {
@@ -626,13 +631,19 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                <input 
                  type="range" min="0" max={duration||0} step="0.5" value={currentTime} 
                  onMouseDown={() => setIsDragging(true)}
-                 onMouseUp={() => setIsDragging(false)}
+                 onMouseUp={() => {
+                    setIsDragging(false);
+                    if(isYoutube){ playerRef.current?.seekTo(currentTime, true); } 
+                    else { if(videoRef.current) videoRef.current.currentTime = currentTime; }
+                 }}
                  onTouchStart={() => setIsDragging(true)}
-                 onTouchEnd={() => setIsDragging(false)}
+                 onTouchEnd={() => {
+                    setIsDragging(false);
+                    if(isYoutube){ playerRef.current?.seekTo(currentTime, true); } 
+                    else { if(videoRef.current) videoRef.current.currentTime = currentTime; }
+                 }}
                  onChange={(e) => { 
                    const t = parseFloat(e.target.value); 
-                   if(isYoutube){ playerRef.current?.seekTo(t, true); } 
-                   else { if(videoRef.current) videoRef.current.currentTime = t; } 
                    setCurrentTime(t); 
                  }} 
                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-[60]" 

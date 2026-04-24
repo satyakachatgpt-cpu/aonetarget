@@ -25,13 +25,10 @@ const HelpSupport: React.FC = () => {
       answer: 'Go to Batches or Courses section, select the course you want to enroll in, and complete the payment process.'
     },
     {
-      question: 'How can I download videos for offline viewing?',
-      answer: 'In your enrolled course, click on the download icon next to any video. Downloaded videos will appear in the Downloads section.'
-    },
-    {
       question: 'How do I take a mock test?',
       answer: 'Go to Mock Tests section, select the test you want to attempt, and click on Start Test. Make sure you have a stable internet connection.'
     },
+
     {
       question: 'How can I contact my instructor?',
       answer: 'Use the Chats section to message your instructor directly. You can also ask doubts during live classes.'

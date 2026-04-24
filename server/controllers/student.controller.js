@@ -600,6 +600,31 @@ export const saveWatchHistory = async (req, res) => {
       { upsert: true }
     );
 
+    // Sync with videoProgress collection
+    const watchProgress = req.body.watchProgress || 0;
+    // Estimate timestamp if not provided (watchProgress is percentage)
+    let durationSec = 0;
+    if (req.body.duration) {
+       const parts = req.body.duration.split(':').map(Number);
+       if (parts.length === 2) durationSec = parts[0] * 60 + parts[1];
+       else if (parts.length === 3) durationSec = parts[0] * 3600 + parts[1] * 60 + parts[2];
+    }
+    
+    await db.collection('videoProgress').updateOne(
+      { userId: req.params.id, videoId: videoId },
+      { 
+        $set: {
+          courseId: req.body.courseId,
+          timestamp: (watchProgress / 100) * durationSec,
+          duration: durationSec,
+          title: req.body.title,
+          thumbnail: req.body.thumbnail,
+          lastUpdated: now
+        }
+      },
+      { upsert: true }
+    );
+
     const saved = await db.collection('watchHistory').findOne({ studentId: req.params.id, videoId });
     res.status(201).json(saved);
   } catch (error) {
