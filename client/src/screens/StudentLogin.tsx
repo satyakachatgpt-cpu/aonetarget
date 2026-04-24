@@ -1296,7 +1296,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
             <input type="hidden" {...profileReg('dob')} />
           </div>
           <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">Class *</label>
+            <label className="text-xs font-semibold text-gray-600 block mb-1">Target *</label>
             <button
               type="button"
               onClick={() => openSelection('class')}

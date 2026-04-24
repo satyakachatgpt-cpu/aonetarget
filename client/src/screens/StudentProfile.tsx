@@ -26,7 +26,7 @@ const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
     name: '',
     phone: '',
     class: '',
-    target: ''
+    higherEducation: ''
   });
 
   useEffect(() => {
@@ -58,7 +58,7 @@ const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
         name: globalStudent.name || '',
         phone: globalStudent.phone || '',
         class: globalStudent.class || '12th',
-        target: globalStudent.target || 'NEET'
+        higherEducation: globalStudent.higherEducation || '12th Pass'
       });
       fetchStats(globalStudent.id);
     }
@@ -338,32 +338,39 @@ const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Class</label>
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Target</label>
                   <div className="relative mt-1.5">
                     <span className="material-symbols-rounded text-gray-400 text-lg absolute left-3 top-1/2 -translate-y-1/2">school</span>
                     <select
                       value={editForm.class}
                       onChange={(e) => setEditForm({ ...editForm, class: e.target.value })}
-                      className="w-full pl-10 pr-4 py-3 bg-surface-100 border border-surface-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-brandBlue/20 focus:border-brandBlue appearance-none transition-all duration-200"
+                      className="w-full pl-10 pr-4 py-3 bg-surface-100 border border-surface-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-brandBlue/20 focus:border-brandBlue appearance-none transition-all duration-200 font-bold"
                     >
+                      <option value="9th">9th</option>
+                      <option value="10th">10th</option>
                       <option value="11th">11th</option>
                       <option value="12th">12th</option>
+                      <option value="Neet">Neet</option>
+                      <option value="iit-Jee">iit-Jee</option>
+                      <option value="Nursing-CET">Nursing-CET</option>
                       <option value="Dropper">Dropper</option>
                     </select>
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Target</label>
+                  <label className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Higher Education</label>
                   <div className="relative mt-1.5">
-                    <span className="material-symbols-rounded text-gray-400 text-lg absolute left-3 top-1/2 -translate-y-1/2">target</span>
+                    <span className="material-symbols-rounded text-gray-400 text-lg absolute left-3 top-1/2 -translate-y-1/2">history_edu</span>
                     <select
-                      value={editForm.target}
-                      onChange={(e) => setEditForm({ ...editForm, target: e.target.value })}
-                      className="w-full pl-10 pr-4 py-3 bg-surface-100 border border-surface-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-brandBlue/20 focus:border-brandBlue appearance-none transition-all duration-200"
+                      value={editForm.higherEducation}
+                      onChange={(e) => setEditForm({ ...editForm, higherEducation: e.target.value })}
+                      className="w-full pl-10 pr-4 py-3 bg-surface-100 border border-surface-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-brandBlue/20 focus:border-brandBlue appearance-none transition-all duration-200 font-bold"
                     >
-                      <option value="NEET">NEET</option>
-                      <option value="JEE">JEE</option>
-                      <option value="Both">Both</option>
+                      <option value="10th Pass">10th Pass</option>
+                      <option value="12th Pass">12th Pass</option>
+                      <option value="Graduate">Graduate</option>
+                      <option value="Post Graduate">Post Graduate</option>
+                      <option value="Other">Other</option>
                     </select>
                   </div>
                 </div>
