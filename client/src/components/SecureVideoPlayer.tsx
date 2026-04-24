@@ -88,6 +88,8 @@ const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
         courseTitle: courseTitle || '',
         thumbnail: thumbnail || '',
         duration: duration || '',
+        videoUrl: src || '',
+        youtubeUrl: isYouTubeUrl(src) ? src : '',
         watchProgress: progressPercent,
       }),
     }).catch(() => { /* silent fail - don't interrupt playback */ });

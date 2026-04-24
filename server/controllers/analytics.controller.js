@@ -12,7 +12,7 @@ export const saveProgress = async (req, res) => {
     const db = getDb();
     if (!db) return res.status(500).json({ error: 'DB not ready' });
 
-    const { userId, courseId, videoId, progress, duration, title, thumbnail } = req.body;
+    const { userId, courseId, courseTitle, videoId, progress, duration, title, thumbnail, videoUrl, youtubeUrl } = req.body;
     const isAdmin = req.user?.isAdmin || req.user?.role === 'admin';
     const tokenStudentId = req.user?.studentId;
 
@@ -29,15 +29,39 @@ export const saveProgress = async (req, res) => {
     const update = {
       $set: {
         courseId,
+        courseTitle,
         timestamp: progress,
         duration,
         title,
         thumbnail,
+        videoUrl,
+        youtubeUrl,
         lastUpdated: new Date()
       }
     };
 
     const result = await db.collection('videoProgress').updateOne(query, update, { upsert: true });
+
+    // Sync with watchHistory collection
+    await db.collection('watchHistory').updateOne(
+      { studentId: effectiveUserId, videoId: videoId },
+      { 
+        $set: {
+          videoId,
+          title,
+          courseId,
+          courseTitle,
+          thumbnail,
+          videoUrl,
+          youtubeUrl,
+          duration,
+          watchProgress: duration > 0 ? Math.round((progress / duration) * 100) : 0,
+          updatedAt: new Date()
+        },
+        $setOnInsert: { createdAt: new Date() }
+      },
+      { upsert: true }
+    );
 
     res.json({ success: true, message: 'Progress saved', result });
   } catch (error) {

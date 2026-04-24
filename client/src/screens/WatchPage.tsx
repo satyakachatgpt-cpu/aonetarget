@@ -92,7 +92,7 @@ const WatchPage: React.FC = () => {
   useEffect(() => {
     const loadContent = async () => {
       // Priority 1: Check if video is passed via state (e.g. from Live Classes)
-      if (location.state?.video) {
+      if (location.state?.video && (location.state.video.videoUrl || location.state.video.youtubeUrl || location.state.video.url)) {
         setCurrentVideo(location.state.video);
         setLoading(false);
         return;
@@ -221,7 +221,8 @@ const WatchPage: React.FC = () => {
           else navigate('/live-classes', { replace: true });
         }
       }}
-      courseId={batchId}
+      courseId={batchId || (location.state as any)?.courseId}
+      courseTitle={currentVideo.courseTitle || (location.state as any)?.courseTitle}
       isAdmin={isAdmin}
     />
   );

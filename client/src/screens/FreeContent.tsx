@@ -21,7 +21,7 @@ const FreeContent: React.FC = () => {
     const [freeTestSeries, setFreeTestSeries] = useState<any[]>([]);
     const [freeNotes, setFreeNotes] = useState<any[]>([]);
     const [examDocs, setExamDocs] = useState<any[]>([]);
-    const [downloadingId, setDownloadingId] = useState<string | null>(null);
+
 
     useEffect(() => {
         const storedStudent = localStorage.getItem('studentData');
@@ -113,71 +113,7 @@ const FreeContent: React.FC = () => {
     };
 
 
-    const handleDownload = async (item: any) => {
-        // Support all possible URL field names used in across different collections
-        const isPdf = item.pdfUrl || item.fileUrl?.endsWith('.pdf') || (activeTab === 'notes');
-        const isVid = item.videoUrl || item.url?.endsWith('.mp4') || (activeTab === 'videos');
-        
-        let fileUrl = item.youtubeUrl || '';
-        if (!fileUrl) {
-            if (isPdf) fileUrl = getPdfUrl(item.pdfUrl || item.fileUrl || item.url || item.link);
-            else if (isVid) fileUrl = getVideoUrl(item.videoUrl || item.url || item.fileUrl);
-            else fileUrl = getImageUrl(item.imageUrl || item.thumbnail || item.fileUrl || item.url);
-        }
 
-        if (!fileUrl) {
-            toast.error('Download link not available for this item');
-            return;
-        }
-
-        // YouTube links cannot be downloaded directly via fetch due to CORS/Term constraints
-        if (fileUrl.includes('youtube.com') || fileUrl.includes('youtu.be')) {
-            toast.info('YouTube videos are available for streaming only.');
-            return;
-        }
-
-        setDownloadingId(item._id || item.id);
-        toast.info('Starting download...', { duration: 2000 });
-
-        try {
-            // 1. Caching for "in-app only" offline access
-            const cache = await caches.open('aone-downloads');
-            try {
-                const response = await fetch(fileUrl, { mode: 'cors' });
-                if (response.ok) {
-                    await cache.put(fileUrl, response);
-                } else {
-                    const opaque = await fetch(fileUrl, { mode: 'no-cors' });
-                    await cache.put(fileUrl, opaque);
-                }
-            } catch (e) {
-                const opaque = await fetch(fileUrl, { mode: 'no-cors' });
-                await cache.put(fileUrl, opaque);
-            }
-
-            // 2. Sync to profile if logged in
-            if (student) {
-                await fetch(`/api/students/${student.id}/downloads`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-                    body: JSON.stringify({
-                        id: item.id || item._id,
-                        title: item.title || item.name,
-                        type: item.videoUrl ? 'video' : 'pdf',
-                        fileUrl: fileUrl,
-                        downloadedAt: new Date().toISOString()
-                    })
-                }).catch(() => { });
-            }
-
-            toast.success('Successfully downloaded to app library!');
-        } catch (error) {
-            console.error('Download error:', error);
-            toast.error('Failed to save for offline use.');
-        } finally {
-            setDownloadingId(null);
-        }
-    };
 
     const handleVideoClick = (video: any) => {
         if (video.videoUrl || video.youtubeUrl || video.url || video.link) {
@@ -232,13 +168,7 @@ const FreeContent: React.FC = () => {
                             <p className="text-[9px] text-white/40 font-bold uppercase tracking-widest mt-0.5">Premium Resources</p>
                         </div>
                     </div>
-                    <button
-                        onClick={() => navigate('/downloads')}
-                        className="flex items-center gap-2 bg-white text-[#1A237E] px-4 py-2 rounded-2xl shadow-lg active:scale-95 transition-all"
-                    >
-                        <span className="material-symbols-rounded text-lg">download</span>
-                        <span className="text-xs font-black uppercase tracking-tight">Downloads</span>
-                    </button>
+
                 </div>
 
                 <div className="relative flex justify-start gap-7 px-4">
@@ -340,21 +270,7 @@ const FreeContent: React.FC = () => {
                                                     <h3 className="font-bold text-gray-800 text-sm mt-1 line-clamp-1 group-hover:text-primary transition-colors">{video.title}</h3>
                                                     <p className="text-[10px] text-gray-400 mt-1 line-clamp-1">{video.subject || 'General'}</p>
                                                 </div>
-                                                <div className="flex flex-col gap-2 justify-center">
-                                                    {(video.allowDownload === true || video.allowDownload === 'true') && !isYouTubeUrl(video.videoUrl || video.url || video.youtubeUrl) && (
-                                                        <button
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleDownload(video);
-                                                            }}
-                                                            className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${downloadingId === (video._id || video.id) ? 'bg-primary-100 text-primary animate-pulse' : 'bg-gray-50 text-gray-400 hover:bg-primary hover:text-white'}`}
-                                                        >
-                                                            <span className={`material-symbols-rounded text-lg ${downloadingId === (video._id || video.id) ? 'animate-spin' : ''}`}>
-                                                                {downloadingId === (video._id || video.id) ? 'progress_activity' : 'download'}
-                                                            </span>
-                                                        </button>
-                                                    )}
-                                                </div>
+
                                             </div>
                                         ))}
 

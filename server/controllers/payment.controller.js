@@ -13,6 +13,16 @@ function canActForStudent(req, studentId) {
   return req.admin || req.user?.isAdmin || req.user?.role === 'admin' || String(req.user?.studentId) === String(studentId);
 }
 
+const getStudentFilter = (studentId) => {
+  return {
+    $or: [
+      { id: studentId },
+      ...(ObjectId.isValid(studentId) ? [{ _id: new ObjectId(studentId) }] : []),
+      { userId: studentId }
+    ]
+  };
+};
+
 /**
  * Razorpay Order Creation (Mirrored from server.js)
  */
@@ -44,7 +54,7 @@ export const createRazorpayOrder = async (req, res) => {
       return res.status(500).json({ error: 'Razorpay keys missing from .env and settings collection.' });
     }
 
-    const student = await db.collection('students').findOne({ id: studentId });
+    const student = await db.collection('students').findOne(getStudentFilter(studentId));
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
@@ -65,7 +75,6 @@ export const createRazorpayOrder = async (req, res) => {
     const coinsUsed = req.body.coinsUsed || 0;
     let coinDiscount = 0;
     if (coinsUsed > 0) {
-      const student = await db.collection('students').findOne({ id: studentId });
       const available = student?.availableCoins || 0;
       const actualCoinsToUse = Math.min(coinsUsed, available);
       coinDiscount = actualCoinsToUse / 10; // 10 coins = 1 INR
@@ -152,7 +161,7 @@ export const verifyRazorpayPayment = async (req, res) => {
       // Send Failure Email if studentId and courseId are present
       if (studentId && courseId) {
         try {
-          const student = await db.collection('students').findOne({ id: studentId });
+          const student = await db.collection('students').findOne(getStudentFilter(studentId));
           const course = await findCourse(courseId);
           if (student && student.email && course) {
             const { subject, html } = templates.paymentFailed(student.name || 'Student', course.name || course.title, course.price, 'Invalid payment signature');
@@ -178,7 +187,7 @@ export const verifyRazorpayPayment = async (req, res) => {
       // Send Failure Email
       if (studentId && courseId) {
         try {
-          const student = await db.collection('students').findOne({ id: studentId });
+          const student = await db.collection('students').findOne(getStudentFilter(studentId));
           const course = await findCourse(courseId);
           if (student && student.email && course) {
             const { subject, html } = templates.paymentFailed(student.name || 'Student', course.name || course.title, course.price, paymentData.error?.description || 'Payment was not captured');
@@ -211,7 +220,7 @@ export const verifyRazorpayPayment = async (req, res) => {
 
     const breakdown = calculatePriceBreakdown(course, coupon);
 
-    const student = await db.collection('students').findOne({ id: studentId });
+    const student = await db.collection('students').findOne(getStudentFilter(studentId));
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
@@ -252,7 +261,7 @@ export const verifyRazorpayPayment = async (req, res) => {
       // Usually verifyRazorpayPayment shouldn't hit this if existingPurchase check above works
     } else {
       await db.collection('students').updateOne(
-        { id: studentId },
+        getStudentFilter(studentId),
         { $addToSet: { enrolledCourses: actualCourseId } }
       );
 
@@ -309,7 +318,7 @@ export const createPurchase = async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    const student = await db.collection('students').findOne({ id: studentId });
+    const student = await db.collection('students').findOne(getStudentFilter(studentId));
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
@@ -343,7 +352,7 @@ export const createPurchase = async (req, res) => {
        // Already enrolled
     } else {
       await db.collection('students').updateOne(
-        { id: studentId },
+        getStudentFilter(studentId),
         { $addToSet: { enrolledCourses: actualCourseId } }
       );
 

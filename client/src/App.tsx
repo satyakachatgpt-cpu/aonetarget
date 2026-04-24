@@ -29,7 +29,7 @@ const LiveClasses = lazy(() => import('./screens/LiveClasses'));
 const MockTests = lazy(() => import('./screens/MockTests'));
 const TestTaking = lazy(() => import('./screens/TestTaking'));
 const EbookNotes = lazy(() => import('./screens/EbookNotes'));
-const Downloads = lazy(() => import('./screens/Downloads'));
+
 const Notifications = lazy(() => import('./screens/Notifications'));
 const WatchHistory = lazy(() => import('./screens/WatchHistory'));
 const HelpSupport = lazy(() => import('./screens/HelpSupport'));
@@ -215,9 +215,7 @@ const App: React.FC = () => {
                     <Route path="/ebook-notes" element={
                       isStudentLoggedIn ? <EbookNotes /> : <Navigate to="/student-login" />
                     } />
-                    <Route path="/downloads" element={
-                      isStudentLoggedIn ? <Downloads /> : <Navigate to="/student-login" />
-                    } />
+
                     <Route path="/notifications" element={
                       isStudentLoggedIn ? <Notifications /> : <Navigate to="/student-login" />
                     } />

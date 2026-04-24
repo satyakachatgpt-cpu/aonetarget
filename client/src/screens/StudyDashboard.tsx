@@ -43,15 +43,14 @@ const StudyDashboard: React.FC = () => {
   const [folders, setFolders] = useState<any[]>([]);
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [folderStack, setFolderStack] = useState<any[]>([]);
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
-  const [downloadedIds, setDownloadedIds] = useState<Set<string>>(new Set());
+
   const [activeSubject, setActiveSubject] = useState('All Subjects');
   const [subjects, setSubjects] = useState<any[]>([]);
   const [isEnrolled, setIsEnrolled] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
-    if (!msg.includes('Downloading')) {
+    if (msg) {
       setTimeout(() => setToastMsg(''), 3000);
     }
   };
@@ -78,18 +77,10 @@ const StudyDashboard: React.FC = () => {
         setNotes(Array.isArray(nRes) ? nRes : []);
         setTests(Array.isArray(tRes) ? tRes : []);
         setFolders(Array.isArray(fRes) ? fRes : []);
-
-        // Fetch user downloads to check what's already offline
-        if (storedStudent) {
-          const s = JSON.parse(storedStudent);
-          const dRes = await fetch(`/api/students/${s.id}/downloads`, { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : []);
-          if (Array.isArray(dRes)) {
-            setDownloadedIds(new Set(dRes.map(d => d.id || d._id)));
-          }
-
-          // Fetch Enrollment Status
+        // Fetch Enrollment Status
+        if (sId) {
           try {
-            const enrolledRes = await fetch(`/api/students/${s.id}/enrolled/${id}`, { headers: getAuthHeaders() });
+            const enrolledRes = await fetch(`/api/students/${sId}/enrolled/${id}`, { headers: getAuthHeaders() });
             if (enrolledRes.ok) {
               const enrolledData = await enrolledRes.json();
               setIsEnrolled(enrolledData.enrolled || false);
@@ -128,71 +119,7 @@ const StudyDashboard: React.FC = () => {
     course?.categoryId === 'free-content' ||
     course?.type === 'free';
 
-  // Download handler - saves to app's downloads collection AND caches file for offline use
-  const handleDownload = async (item: any, type: 'video' | 'pdf' | 'audio') => {
-    if (!student?.id) {
-      showToast('Please login to download');
-      return;
-    }
 
-    const fileUrl = toYouTubeEmbed(item.youtubeUrl || item.fileUrl || item.url || item.videoUrl || '');
-    if (!fileUrl) {
-      showToast('Error: No file URL available to download.');
-      return;
-    }
-
-    setDownloadingId(item._id || item.id);
-    showToast('Downloading...');
-
-    try {
-      // 1. Save to Offline Cache first
-      const cache = await caches.open('aone-downloads');
-      try {
-        const fileResponse = await fetch(fileUrl, { mode: 'cors' });
-        if (fileResponse.ok) {
-          await cache.put(fileUrl, fileResponse);
-        } else {
-          // fallback to no-cors if cors fails
-          const opaqueResponse = await fetch(fileUrl, { mode: 'no-cors' });
-          await cache.put(fileUrl, opaqueResponse);
-        }
-      } catch (e) {
-        // network error or cors blocked entirely, try no-cors fallback
-        const opaqueResponse = await fetch(fileUrl, { mode: 'no-cors' });
-        await cache.put(fileUrl, opaqueResponse);
-      }
-
-      // 2. Save metadata to Database
-      const downloadData = {
-        id: `download_${Date.now()}`,
-        title: item.title,
-        type: type,
-        fileUrl: fileUrl,
-        size: item.fileSize || item.size || 'N/A',
-        courseId: id,
-        courseName: course?.name || course?.title,
-        downloadedAt: new Date().toISOString()
-      };
-
-      const response = await fetch(`/api/students/${student.id}/downloads`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-        body: JSON.stringify(downloadData)
-      });
-
-      if (response.ok) {
-        setDownloadedIds(prev => new Set([...prev, item._id || item.id]));
-        showToast('Successfully downloaded to app library!');
-      } else {
-        showToast('Error: Failed to sync metadata.');
-      }
-    } catch (error) {
-      console.error('Download error:', error);
-      showToast('Error saving file offline.');
-    } finally {
-      setDownloadingId(null);
-    }
-  };
 
   const handleView = (item: any, type: 'video' | 'pdf') => {
     const canAccess = isFreeContent || isEnrolled;
@@ -322,10 +249,10 @@ const StudyDashboard: React.FC = () => {
                   className="bg-white rounded-xl shadow-sm p-3 border border-gray-100 flex gap-4 items-center cursor-pointer active:scale-[0.98] transition-all"
                   onClick={() => {
                     const firstVideo = videos[0];
-                    if (isFreeContent || downloadedIds.has(firstVideo._id || firstVideo.id) || isYouTubeUrl(firstVideo.videoUrl || firstVideo.url || firstVideo.youtubeUrl)) {
+                    if (isFreeContent || isEnrolled || isYouTubeUrl(firstVideo.videoUrl || firstVideo.url || firstVideo.youtubeUrl)) {
                       handleView(firstVideo, 'video');
                     } else {
-                      showToast('Please download the lesson to start watching.');
+                      showToast('Please purchase this batch to start watching.');
                     }
                   }}
                 >
@@ -333,14 +260,14 @@ const StudyDashboard: React.FC = () => {
                     <img src={getYouTubeThumbnail(videos[0].youtubeUrl || videos[0].videoUrl || videos[0].url || '') || getImageUrl(videos[0].thumbnail)} className="w-full h-full object-cover" alt="Thumb" />
                     <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
                       <span className="material-symbols-rounded text-white">
-                        {isFreeContent || downloadedIds.has(videos[0]._id || videos[0].id) ? 'play_arrow' : 'download'}
+                        play_arrow
                       </span>
                     </div>
                   </div>
                   <div className="flex-1 min-w-0">
                     <h4 className="font-bold text-xs truncate">{videos[0].title}</h4>
                     <p className="text-[10px] text-gray-400 mt-1">
-                      {isFreeContent || downloadedIds.has(videos[0]._id || videos[0].id) ? 'Resume Lesson' : 'Download to Resume'}
+                      Resume Lesson
                     </p>
                     <div className="w-full h-1 bg-gray-100 rounded-full mt-2 overflow-hidden">
                       <div className="bg-brandBlue h-full w-0"></div>
@@ -452,7 +379,6 @@ const StudyDashboard: React.FC = () => {
                                 <span className="text-[8px] text-gray-400">{video.duration}</span>
                               </div>
                             </div>
-                            {isFreeContent || downloadedIds.has(video._id || video.id) || isYouTubeUrl(video.videoUrl || video.url || video.youtubeUrl) ? (
                               <button
                                 onClick={() => handleView(video, 'video')}
                                 className="bg-brandBlue text-white px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center gap-2"
@@ -460,19 +386,6 @@ const StudyDashboard: React.FC = () => {
                                 <span className="material-symbols-rounded text-sm">play_arrow</span>
                                 Watch
                               </button>
-                            ) : (
-                              <button
-                                onClick={() => handleDownload(video, 'video')}
-                                className="p-2 text-gray-400 group-hover:text-brandBlue group-hover:bg-blue-50 rounded-lg transition-all flex-shrink-0"
-                                title="Add to Downloads"
-                              >
-                                {downloadingId === (video._id || video.id) ? (
-                                  <span className="material-symbols-rounded animate-spin">progress_activity</span>
-                                ) : (
-                                  <span className="material-symbols-rounded">download</span>
-                                )}
-                              </button>
-                            )}
                           </div>
                         </div>
                       ))
@@ -617,8 +530,7 @@ const StudyDashboard: React.FC = () => {
         <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-[#1E293B] text-white px-5 py-3 rounded-full shadow-2xl flex items-center gap-3 z-50 animate-fade-in-up">
           {toastMsg.includes('Error') || toastMsg.includes('Failed') ? (
             <span className="material-symbols-rounded text-red-400 text-lg border-2 border-red-400 rounded-full p-0.5">close</span>
-          ) : toastMsg.includes('Downloading') ? (
-            <span className="material-symbols-rounded text-brandBlue animate-spin text-xl">progress_activity</span>
+
           ) : (
             <span className="material-symbols-rounded text-green-400 text-xl">check_circle</span>
           )}

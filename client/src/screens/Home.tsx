@@ -782,7 +782,7 @@ const Home: React.FC = () => {
                           </div>
                           
                           {(lc.pdf1 || lc.pdf2 || lc.studyMaterial) && (
-                            <div className="flex flex-wrap gap-2 pt-3 border-t border-red-100/50 relative z-10">
+                            <div className="px-3 pb-3 -mt-1 flex flex-wrap gap-2 relative z-10">
                               {lc.pdf1 && (
                                 <button
                                   onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.pdf1))}&title=${encodeURIComponent('PDF 1')}`, '_blank'); }}
@@ -790,6 +790,15 @@ const Home: React.FC = () => {
                                 >
                                   <span className="material-symbols-rounded text-sm">picture_as_pdf</span>
                                   PDF 1
+                                </button>
+                              )}
+                              {lc.pdf2 && (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.pdf2))}&title=${encodeURIComponent('PDF 2')}`, '_blank'); }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 text-red-600 text-[10px] font-bold border border-red-100 hover:bg-white transition-all shadow-sm"
+                                >
+                                  <span className="material-symbols-rounded text-sm">picture_as_pdf</span>
+                                  PDF 2
                                 </button>
                               )}
                               {lc.studyMaterial && (
@@ -857,11 +866,19 @@ const Home: React.FC = () => {
                           </div>
 
                           {(lc.pdf1 || lc.pdf2 || lc.studyMaterial) && (
-                            <div className="flex flex-wrap gap-2 pt-3 border-t border-gray-50">
+                            <div className="px-3 pb-3 -mt-1 flex flex-wrap gap-2 relative z-10">
                               {lc.pdf1 && (
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.pdf1))}&title=${encodeURIComponent('PDF 1')}`, '_blank'); }}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-[10px] font-black border border-red-100 hover:bg-red-100 transition-all uppercase tracking-widest"
+                                  onClick={(e) => { 
+                                    e.stopPropagation(); 
+                                    const status = computeEffectiveStatus(lc);
+                                    if (status !== 'live') {
+                                      alert("PDF will be available once the class starts.");
+                                      return;
+                                    }
+                                    window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.pdf1))}&title=${encodeURIComponent('PDF 1')}`, '_blank'); 
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-[10px] font-black border border-red-100 transition-all uppercase tracking-widest shadow-sm opacity-50 cursor-not-allowed"
                                 >
                                   <span className="material-symbols-rounded text-[16px]">picture_as_pdf</span>
                                   PDF 1
@@ -869,8 +886,16 @@ const Home: React.FC = () => {
                               )}
                               {lc.pdf2 && (
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.pdf2))}&title=${encodeURIComponent('PDF 2')}`, '_blank'); }}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-[10px] font-black border border-red-100 hover:bg-red-100 transition-all uppercase tracking-widest"
+                                  onClick={(e) => { 
+                                    e.stopPropagation(); 
+                                    const status = computeEffectiveStatus(lc);
+                                    if (status !== 'live') {
+                                      alert("PDF will be available once the class starts.");
+                                      return;
+                                    }
+                                    window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.pdf2))}&title=${encodeURIComponent('PDF 2')}`, '_blank'); 
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-[10px] font-black border border-red-100 transition-all uppercase tracking-widest shadow-sm opacity-50 cursor-not-allowed"
                                 >
                                   <span className="material-symbols-rounded text-[16px]">picture_as_pdf</span>
                                   PDF 2
@@ -878,8 +903,16 @@ const Home: React.FC = () => {
                               )}
                               {lc.studyMaterial && (
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.studyMaterial))}&title=${encodeURIComponent('Study Material')}`, '_blank'); }}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-[10px] font-black border border-indigo-100 hover:bg-indigo-100 transition-all uppercase tracking-widest"
+                                  onClick={(e) => { 
+                                    e.stopPropagation(); 
+                                    const status = computeEffectiveStatus(lc);
+                                    if (status !== 'live') {
+                                      alert("Material will be available once the class starts.");
+                                      return;
+                                    }
+                                    window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.studyMaterial))}&title=${encodeURIComponent('Study Material')}`, '_blank'); 
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-[10px] font-black border border-indigo-100 transition-all uppercase tracking-widest shadow-sm opacity-50 cursor-not-allowed"
                                 >
                                   <span className="material-symbols-rounded text-[16px]">auto_stories</span>
                                   Material

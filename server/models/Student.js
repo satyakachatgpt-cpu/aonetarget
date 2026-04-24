@@ -71,6 +71,7 @@ const studentSchema = new mongoose.Schema({
     welcomeBonus: { type: Number, default: 0 },
     usedCoins: { type: Number, default: 0 },
     availableCoins: { type: Number, default: 0 },
+    pendingCoins: { type: Number, default: 0 },
 
     createdAt: { type: Date, default: Date.now },
     updatedAt: { type: Date, default: Date.now }

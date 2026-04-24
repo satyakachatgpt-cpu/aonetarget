@@ -49,7 +49,6 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ isOpen, onClose, studen
     { icon: 'notifications', label: 'Notifications', path: '/notifications' },
     { icon: 'history', label: 'Watch History', path: '/watch-history' },
     { icon: 'redeem', label: 'Refer & Earn', path: '/refer-earn' },
-    { icon: 'download', label: 'Downloads', path: '/downloads' },
   ];
 
   const handleNavigation = (path: string) => {
