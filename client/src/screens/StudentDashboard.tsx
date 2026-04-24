@@ -46,7 +46,8 @@ const StudentDashboard: React.FC = () => {
 
   useEffect(() => {
     if (student) {
-      fetchDashboardData(student.id || (student as any)._id);
+      const id = student.id || (student as any).userId || (student as any)._id;
+      if (id) fetchDashboardData(id);
     } else if (!isAuthenticated) {
       navigate('/student-login');
     } else {
@@ -170,7 +171,14 @@ const StudentDashboard: React.FC = () => {
           >
             <span className="material-symbols-rounded">arrow_back</span>
           </button>
-          <div className="flex gap-2">
+          <div className="flex gap-1">
+            <button
+              onClick={() => student && fetchDashboardData(student.id || (student as any)._id)}
+              className="p-2 rounded-full hover:bg-white/20 transition-all active:rotate-180 duration-500"
+              title="Refresh Dashboard"
+            >
+              <span className="material-symbols-rounded">refresh</span>
+            </button>
             <button
               onClick={() => {
                 setUnreadCount?.(0);
@@ -309,7 +317,13 @@ const StudentDashboard: React.FC = () => {
           ].map((tab) => (
             <button
               key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => {
+                setActiveTab(tab.key);
+                if (student) {
+                  const id = student.id || (student as any).userId || (student as any)._id;
+                  if (id) fetchDashboardData(id);
+                }
+              }}
               className={`flex-1 py-2 rounded-lg font-bold text-[10px] flex flex-col items-center gap-1 transition-all ${activeTab === tab.key ? 'bg-white text-brandBlue shadow-sm' : 'text-gray-500'
                 }`}
             >
@@ -521,12 +535,15 @@ const StudentDashboard: React.FC = () => {
                 );
               })
             ) : (
-              <div className="bg-white rounded-xl p-8 text-center shadow-sm">
-                <span className="material-symbols-rounded text-5xl text-gray-200 dark:text-gray-700">assessment</span>
-                <p className="text-sm text-gray-400 mt-3">No test results yet</p>
+              <div className="bg-white rounded-[2rem] p-12 text-center shadow-sm border border-gray-100 animate-in fade-in zoom-in duration-500">
+                <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <span className="material-symbols-rounded text-5xl text-gray-200">description</span>
+                </div>
+                <h4 className="text-gray-800 font-bold mb-1">No Results Yet</h4>
+                <p className="text-xs text-gray-400 mb-6 max-w-[200px] mx-auto">Complete a test to see your detailed performance report here.</p>
                 <button
                   onClick={() => navigate('/mock-tests')}
-                  className="mt-3 bg-brandBlue text-white px-6 py-2 rounded-lg text-sm font-bold"
+                  className="bg-brandBlue text-white px-8 py-3 rounded-xl text-sm font-black shadow-lg shadow-blue-900/20 active:scale-95 transition-all"
                 >
                   Take a Test
                 </button>
@@ -536,11 +553,47 @@ const StudentDashboard: React.FC = () => {
         )}
 
         {activeTab === 'progress' && (
-          <div className="space-y-4">
-            <section className="bg-white rounded-xl p-4 shadow-sm">
-              <h3 className="font-bold text-sm mb-4 flex items-center gap-2">
-                <span className="material-symbols-rounded text-brandBlue">bar_chart</span>
-                Overall Performance
+          <div className="space-y-6">
+            {/* SYLLABUS PROGRESS SECTION */}
+            {enrolledCourses.length > 0 && (
+              <section className="bg-white rounded-2xl p-5 shadow-sm border border-gray-50">
+                <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-gray-400 mb-5 flex items-center gap-2">
+                  <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                  Syllabus Completion
+                </h3>
+                <div className="space-y-5">
+                  {enrolledCourses.map((course: any) => (
+                    <div key={course.id || course._id}>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-[11px] font-bold text-gray-700 line-clamp-1 flex-1 pr-4">{course.name || course.title}</span>
+                        <span className="text-[11px] font-black text-brandBlue">{course.progress || 0}%</span>
+                      </div>
+                      <div className="h-2 bg-gray-50 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-gradient-to-r from-brandBlue to-blue-400 rounded-full transition-all duration-1000 ease-out"
+                          style={{ width: `${course.progress || 0}%` }}
+                        ></div>
+                      </div>
+                      <div className="flex justify-between mt-1.5">
+                        <p className="text-[9px] text-gray-400 font-bold uppercase">
+                          {course.watchedCount || 0} / {course.totalVideos || 0} Videos
+                        </p>
+                        {course.progress >= 100 && (
+                          <span className="text-[9px] text-green-600 font-black flex items-center gap-0.5">
+                            <span className="material-symbols-rounded text-[12px]">verified</span> COMPLETED
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section className="bg-white rounded-2xl p-5 shadow-sm border border-gray-50">
+              <h3 className="font-black text-[10px] uppercase tracking-[0.2em] text-gray-400 mb-5 flex items-center gap-2">
+                <span className="w-2 h-2 bg-brandBlue rounded-full"></span>
+                Performance Analytics
               </h3>
               {testResults.length > 0 ? (
                 <div className="space-y-3">

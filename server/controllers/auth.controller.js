@@ -12,7 +12,7 @@ import { getDb } from '../config/db.js';
 import Student from '../models/Student.js';
 import * as authService from '../services/auth.service.js';
 
-const OTP_EXPIRY_MS = 5 * 60 * 1000;
+const OTP_EXPIRY_MS = 10 * 60 * 1000;
 const REFRESH_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
 function shouldExposeOtp() {

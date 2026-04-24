@@ -41,11 +41,34 @@ export const enrichResult = async (r, db) => {
 // GET /api/students/:id/test-results
 export const getStudentTestResults = async (req, res) => {
   try {
+    const identifier = req.params.id;
     const db = getDb();
-    const studentId = req.params.id;
+    
+    // First, find the actual student to get all possible IDs (legacy custom ID, userId, and MongoDB _id)
+    const student = await db.collection('students').findOne({
+      $or: [
+        { id: identifier },
+        { userId: identifier },
+        { _id: ObjectId.isValid(identifier) ? new ObjectId(identifier) : null }
+      ].filter(v => v.id || v.userId || v._id)
+    });
+
+    const idList = [identifier];
+    if (student) {
+      if (student.id) idList.push(student.id);
+      if (student.userId) idList.push(student.userId);
+      if (student._id) idList.push(student._id.toString());
+    }
+
+    const matchStage = {
+      $or: [
+        { studentId: { $in: idList } },
+        { studentId: !isNaN(identifier) ? Number(identifier) : null }
+      ].filter(c => c.studentId !== null)
+    };
 
     const pipeline = [
-      { $match: { studentId } },
+      { $match: matchStage },
       { $sort: { submittedAt: -1 } },
       // Lookup tests (Match by id or _id)
       {

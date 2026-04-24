@@ -8,7 +8,14 @@ const { ObjectId } = mongoose.Types;
 // --- Student Course Access Controllers ---
 export const getStudentCourses = async (req, res) => {
   try {
-    const student = await db.collection('students').findOne({ id: req.params.id });
+    const studentId = req.params.id;
+    const student = await db.collection('students').findOne({
+      $or: [
+        { id: studentId },
+        { userId: studentId },
+        { _id: ObjectId.isValid(studentId) ? new ObjectId(studentId) : null }
+      ].filter(v => v.id || v.userId || v._id)
+    });
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }

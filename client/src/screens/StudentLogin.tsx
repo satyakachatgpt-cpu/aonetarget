@@ -654,8 +654,8 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   };
 
   const renderLoginStep = () => (
-    <div className="flex flex-col items-center justify-center w-full">
-      <div className="w-full p-6 sm:p-8">
+    <div className="flex flex-col items-center justify-start w-full">
+      <div className="w-full p-6 sm:p-8 pb-10 sm:pb-8">
         <div className="text-center mb-8">
           <div className="w-14 h-14 bg-[#1A237E]/10 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="material-symbols-rounded text-[#1A237E] text-2xl">lock_open</span>
@@ -780,7 +780,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
         <p className="text-[12px] text-gray-400 font-bold uppercase tracking-widest mt-2">Enter OTP sent to +91 {resetPhone}</p>
       </div>
       <div className="space-y-8">
-        <div className="flex justify-center gap-3">
+        <div className="flex justify-center gap-1.5 sm:gap-3">
           {otp.map((digit, index) => (
             <input
               key={index}
@@ -791,7 +791,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
               value={digit}
               onChange={(e) => handleOtpChange(index, e.target.value)}
               onKeyDown={(e) => handleOtpKeyDown(index, e)}
-              className={`w-12 h-16 text-center text-2xl font-black border-2 rounded-2xl focus:outline-none transition-all ${
+              className={`w-10 sm:w-12 h-14 sm:h-16 text-center text-xl sm:text-2xl font-black border-2 rounded-xl sm:rounded-2xl focus:outline-none transition-all ${
                 digit 
                   ? 'border-brandBlue bg-brandBlue/5 text-brandBlue shadow-[0_4px_12px_rgba(58,119,255,0.1)]' 
                   : 'border-gray-200 bg-gray-50 focus:border-brandBlue focus:bg-white focus:shadow-[0_0_20px_rgba(58,119,255,0.15)] text-gray-400'
@@ -897,7 +897,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
         <p className="text-[12px] text-gray-400 font-bold uppercase tracking-widest mt-2">Sent to +91 {currentPhone}</p>
       </div>
       <div className="space-y-8">
-        <div className="flex justify-center gap-3">
+        <div className="flex justify-center gap-1.5 sm:gap-3">
           {otp.map((digit, index) => (
             <input
               key={index}
@@ -908,7 +908,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
               value={digit}
               onChange={(e) => handleOtpChange(index, e.target.value)}
               onKeyDown={(e) => handleOtpKeyDown(index, e)}
-              className={`w-12 h-16 text-center text-2xl font-black border-2 rounded-2xl focus:outline-none transition-all ${
+              className={`w-10 sm:w-12 h-14 sm:h-16 text-center text-xl sm:text-2xl font-black border-2 rounded-xl sm:rounded-2xl focus:outline-none transition-all ${
                 digit 
                   ? 'border-[#1A237E] bg-[#1A237E]/5 text-[#1A237E] shadow-[0_4px_12px_rgba(26,35,126,0.1)]' 
                   : 'border-gray-200 bg-gray-50 focus:border-[#1A237E] focus:bg-white focus:shadow-[0_0_20px_rgba(26,35,126,0.15)] text-gray-400'
@@ -945,8 +945,8 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   );
 
   const renderOtpStep = () => (
-    <div className="flex flex-col items-center justify-center w-full">
-      <div className="w-full p-6 sm:p-8">
+    <div className="flex flex-col items-center justify-start w-full">
+      <div className="w-full p-6 sm:p-8 pb-10 sm:pb-8">
         <button
           type="button"
           onClick={() => setStep('login')}
@@ -967,7 +967,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
         </div>
 
         <div className="space-y-8">
-          <div className="flex justify-center gap-2.5">
+          <div className="flex justify-center gap-1.5 sm:gap-2.5">
             {otp.map((digit, index) => (
               <input
                 key={index}
@@ -978,7 +978,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
                 value={digit}
                 onChange={(e) => handleOtpChange(index, e.target.value)}
                 onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                className={`w-12 h-16 text-center text-2xl font-black border-2 rounded-2xl focus:outline-none transition-all ${
+                className={`w-10 sm:w-12 h-14 sm:h-16 text-center text-xl sm:text-2xl font-black border-2 rounded-xl sm:rounded-2xl focus:outline-none transition-all ${
                   digit 
                     ? 'border-[#1A237E] bg-[#1A237E]/5 text-[#1A237E] shadow-[0_4px_12px_rgba(26,35,126,0.1)]' 
                     : 'border-gray-200 bg-gray-50 focus:border-[#1A237E] focus:bg-white focus:shadow-[0_0_20px_rgba(26,35,126,0.15)] text-gray-400'
@@ -1019,7 +1019,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
   const renderSignupStep = () => (
     <div className="flex flex-col items-center justify-start w-full">
-      <div className="w-full p-6 sm:p-8">
+      <div className="w-full p-6 sm:p-8 pb-10 sm:pb-8">
         <button
           type="button"
           onClick={() => setStep('login')}
@@ -1296,7 +1296,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
             <input type="hidden" {...profileReg('dob')} />
           </div>
           <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">Class *</label>
+            <label className="text-xs font-semibold text-gray-600 block mb-1">Target *</label>
             <button
               type="button"
               onClick={() => openSelection('class')}
@@ -1412,18 +1412,18 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       ></div>
 
       {/* Fixed Header Section */}
-      <div className="relative z-20 pt-10 px-5 flex flex-col items-center flex-shrink-0">
-        <div className="mb-6 flex flex-col items-center">
-          <img src="/attach-assist/alonelogo_1770810181717.jpg" alt="Aone Target" className="w-[64px] h-[64px] object-contain rounded-2xl shadow-lg border-4 border-white/20 bg-white mb-2" />
+      <div className="relative z-20 pt-6 sm:pt-10 px-5 flex flex-col items-center flex-shrink-0">
+        <div className="mb-4 sm:mb-6 flex flex-col items-center">
+          <img src="/attach-assist/alonelogo_1770810181717.jpg" alt="Aone Target" className="w-[48px] h-[48px] sm:w-[64px] sm:h-[64px] object-contain rounded-2xl shadow-lg border-4 border-white/20 bg-white mb-2" />
           <h1 className="text-[20px] font-black text-white drop-shadow-md tracking-tight leading-none text-center">Aone Target</h1>
           <p className="text-white/80 text-[9px] font-bold tracking-widest mt-1 uppercase">Academic Excellence</p>
         </div>
       </div>
 
       {/* Main Form Container */}
-      <div className="relative z-10 flex-1 px-5 pb-8 overflow-hidden">
+      <div className="relative z-10 flex-1 px-5 pb-4 sm:pb-8 overflow-hidden">
         <div className="w-full h-full bg-white shadow-2xl rounded-[32px] border border-gray-100 overflow-hidden flex flex-col">
-          <div className="flex-1 overflow-hidden relative flex flex-col">
+          <div className="flex-1 overflow-y-auto relative flex flex-col hide-scrollbar">
             {step === 'login' && renderLoginStep()}
             {step === 'otp' && renderOtpStep()}
             {step === 'signup' && renderSignupStep()}
