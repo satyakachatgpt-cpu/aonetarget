@@ -147,33 +147,74 @@ export const getTestById = async (req, res) => {
       const studentId = req.headers['x-student-id'] || req.headers['studentid'] || req.user?.studentId;
 
       if (!adminId) {
-        // If it's a student, check if they are enrolled in the course/series
-        const seriesId = test.courseId || test.testSeriesId || (Array.isArray(test.courseIds) ? test.courseIds[0] : null);
+        // 1. Resolve student and series IDs
+        const seriesId = test.courseId || test.testSeriesId || test.seriesId || test.batchId || (Array.isArray(test.courseIds) ? test.courseIds[0] : null);
         
         if (seriesId && studentId) {
-          const enrollment = await db.collection('enrollments').findOne({
-            studentId: studentId.toString(),
+          // 2. Fetch Student with all possible ID variants
+          const student = await db.collection('students').findOne({
             $or: [
-              { courseId: seriesId.toString() },
-              { testSeriesId: seriesId.toString() }
-            ],
-            status: 'active'
+              { id: studentId.toString() },
+              { userId: studentId.toString() },
+              { _id: ObjectId.isValid(studentId) ? new ObjectId(studentId) : null }
+            ].filter(v => v.id || v.userId || v._id)
           });
 
-          if (!enrollment) {
+          // 3. Check multiple sources of truth for enrollment
+          let isEnrolled = false;
+          
+          // Source A: Student document's enrolledCourses array
+          if (student?.enrolledCourses?.some(id => String(id) === String(seriesId))) {
+            isEnrolled = true;
+          }
+
+          // Source B: Enrollments collection (legacy/liveclass pattern)
+          if (!isEnrolled) {
+            const enrollmentRecord = await db.collection('enrollments').findOne({
+              studentId: studentId.toString(),
+              $or: [
+                { courseId: seriesId.toString() },
+                { testSeriesId: seriesId.toString() },
+                { seriesId: seriesId.toString() },
+                { batchId: seriesId.toString() }
+              ]
+            });
+            if (enrollmentRecord) isEnrolled = true;
+          }
+
+          // Source C: Purchases collection (fallback)
+          if (!isEnrolled) {
+            const purchase = await db.collection('purchases').findOne({
+              studentId: studentId.toString(),
+              courseId: seriesId.toString(),
+              status: 'completed'
+            });
+            if (purchase) isEnrolled = true;
+          }
+
+          if (!isEnrolled) {
             // Optional: Check if test is free
             if (!test.free && !test.isFree) {
+              console.warn(`[getTestById] Access Denied - No enrollment found for student ${studentId} in series ${seriesId}`);
               return res.status(403).json({ error: 'Enrollment required to access this test', code: 'ENROLLMENT_REQUIRED' });
             }
           } else {
-            // Check if enrollment has expired
+            // 4. Check for expiry if enrolled
             const course = await findCourse(seriesId);
-            if (course && isPurchaseExpired(enrollment.createdAt, course.validity, course.expiryMode)) {
+            const purchase = await db.collection('purchases').findOne({
+              studentId: studentId.toString(),
+              courseId: seriesId.toString(),
+              status: 'completed'
+            }, { sort: { createdAt: -1 } });
+
+            if (course && purchase && isPurchaseExpired(purchase.createdAt, course.validity, course.expiryMode)) {
+              console.warn(`[getTestById] Access Denied - Enrollment expired for student ${studentId}`);
               return res.status(403).json({ error: 'Your access to this test series has expired', code: 'EXPIRED' });
             }
           }
         } else if (!test.free && !test.isFree) {
            // Not an admin, no seriesId/studentId found, and not free
+           console.warn(`[getTestById] Access Denied - No studentId (${studentId}) or seriesId (${seriesId}) found`);
            return res.status(403).json({ error: 'Access denied', code: 'ACCESS_DENIED' });
         }
       }
