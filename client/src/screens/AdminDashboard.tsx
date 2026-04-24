@@ -178,9 +178,10 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
       label: 'Test Portal',
       icon: 'assignment',
       color: 'text-gray-700',
-      submenu: [
-        { id: 'tests', label: 'Tests', icon: 'quiz' }
-      ]
+        submenu: [
+          { id: 'tests', label: 'Tests', icon: 'quiz' },
+          { id: 'test-series', label: 'Test Series', icon: 'library_books' }
+        ]
     },
     {
       id: 'marketing',
