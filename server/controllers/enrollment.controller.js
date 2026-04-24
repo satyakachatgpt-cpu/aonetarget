@@ -1,6 +1,7 @@
 import { db } from '../config/db.js';
 import mongoose from 'mongoose';
 import { findCourse, getRelatedCourseIds, getCourseIdVariants } from '../services/course.service.js';
+import { isPurchaseExpired } from '../utils/helpers.js';
 import { sendEmail, templates } from '../utils/email.js';
 
 const { ObjectId } = mongoose.Types;
@@ -57,16 +58,27 @@ export const getStudentCourses = async (req, res) => {
 
       const progress = totalVideos > 0 ? Math.round((watchedCount / totalVideos) * 100) : 0;
 
+      // Check for expiry
+      const purchase = await db.collection('purchases').findOne({
+        studentId: req.params.id,
+        courseId: { $in: idVariants },
+        status: 'completed'
+      }, { sort: { createdAt: -1 } });
+
+      const expired = isPurchaseExpired(purchase, c);
+
       return {
         ...c,
         id: courseIdStr,
         progress: progress,
         totalVideos: totalVideos,
-        watchedCount: watchedCount
+        watchedCount: watchedCount,
+        expired: expired
       };
     }));
 
-    res.json(mappedCourses);
+    // Filter out expired courses for the main list
+    res.json(mappedCourses.filter(c => !c.expired));
   } catch (error) {
     console.error('Error fetching student courses:', error);
     res.status(500).json({ error: 'Failed to fetch courses' });
@@ -140,7 +152,20 @@ export const checkEnrollment = async (req, res) => {
     const enrolledCourses = student.enrolledCourses || [];
 
     // Check if any variant of the course ID is in the student's enrolled list
-    const isEnrolled = idVariants.some(id => enrolledCourses.includes(id));
+    let isEnrolled = idVariants.some(id => enrolledCourses.includes(id));
+
+    if (isEnrolled) {
+      // Check for expiry
+      const purchase = await db.collection('purchases').findOne({
+        studentId: req.params.id,
+        courseId: { $in: idVariants },
+        status: 'completed'
+      }, { sort: { createdAt: -1 } });
+
+      if (isPurchaseExpired(purchase, course)) {
+        isEnrolled = false;
+      }
+    }
 
     res.json({ enrolled: isEnrolled });
   } catch (error) {

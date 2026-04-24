@@ -48,7 +48,7 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
         if (isOpen) {
             if (editingTest) {
                 setFormData({
-                    name: editingTest.name || '',
+                    name: editingTest.seriesName || editingTest.name || editingTest.title || '',
                     description: editingTest.description || '',
                     courseId: editingTest.courseId || '',
                     price: editingTest.price?.toString() || '',
@@ -56,7 +56,17 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
                     sortBy: editingTest.sortBy?.toString() || '0.00',
                     status: editingTest.status === 'active' ? 'active' : 'inactive',
                     image: editingTest.logo || null,
-                    validity: editingTest.validity || '',
+                    validity: (() => {
+                        const val = editingTest.validity?.toString() || '';
+                        if (editingTest.expiryMode === 'End Date' && val.includes('-')) {
+                            const parts = val.split('-');
+                            if (parts.length === 3 && parts[2].length === 4) {
+                                // Convert DD-MM-YYYY to YYYY-MM-DD for the date input
+                                return `${parts[2]}-${parts[1]}-${parts[0]}`;
+                            }
+                        }
+                        return val;
+                    })(),
                     expiryMode: editingTest.expiryMode || 'Validity',
                     duration: editingTest.duration?.toString() || '',
                     noOfQuestions: editingTest.noOfQuestions?.toString() || editingTest.questions?.toString() || '0',

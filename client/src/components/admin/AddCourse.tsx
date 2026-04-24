@@ -384,6 +384,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                     value: validityValue,
                     endDate: validityTab === 'end' ? `${endDay}-${endMonth}-${endYear}` : null
                 },
+                expiryMode: validityTab === 'end' ? 'End Date' : validityTab === 'set' ? 'Validity' : 'Lifetime Access',
                 thumbnail: coverImage,
                 imageUrl: coverImage,
                 demoVideo: toYouTubeEmbed(demoVideoUrl),

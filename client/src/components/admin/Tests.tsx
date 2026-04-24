@@ -52,8 +52,6 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLi
 const tabs = ["Tests", "Results", "Bulk Uploader", "Reported Questions"];
 const detailSubTabs = [
   "Tests",
-  "Test PDFs",
-  "Subjective Tests",
   "Users",
 ] as const;
 
@@ -972,6 +970,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   // Question Library States
 
   const [detailTests, setDetailTests] = useState<any[]>([]);
+  const [seriesUsers, setSeriesUsers] = useState<any[]>([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
   const [detailSearchQuery, setDetailSearchQuery] = useState("");
   const [questionFormData, setQuestionFormData] = useState<any>(null);
   const [editorQuestions, setEditorQuestions] = useState<any[]>([]);
@@ -1239,6 +1239,25 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       setDetailTests([]);
     }
   }, [viewingTestSeries, tests]);
+
+  useEffect(() => {
+    const seriesId = viewingTestSeries?.id || viewingTestSeries?._id;
+    if (viewingTestSeries && viewingTestSeriesTab === "Users" && seriesId) {
+      const fetchUsers = async () => {
+        setLoadingUsers(true);
+        try {
+          const users = await testSeriesAPI.getUsers(seriesId);
+          setSeriesUsers(Array.isArray(users) ? users : []);
+        } catch (err) {
+          console.error("Error fetching series users:", err);
+          setSeriesUsers([]);
+        } finally {
+          setLoadingUsers(false);
+        }
+      };
+      fetchUsers();
+    }
+  }, [viewingTestSeries, viewingTestSeriesTab]);
 
   // Track the last viewed IDs to prevent redundant Bulk Uploader resets
   const lastViewedIds = React.useRef({ seriesId: "", testId: "" });
@@ -1573,6 +1592,17 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         logo: data.image,
         sortBy: data.sortBy,
         isSeries: viewingTestSeries ? false : true,
+        validity: data.validity,
+        expiryMode: data.expiryMode,
+        mrp: data.mrp,
+        description: data.description,
+        disableCoupons: data.disableCoupons,
+        enableCombo: data.enableCombo,
+        includeTestMaker: data.includeTestMaker,
+        allowPayment: data.allowPayment,
+        metaTitle: data.metaTitle,
+        metaDescription: data.metaDescription,
+        enableRichSnippets: data.enableRichSnippets,
         testSeriesId: viewingTestSeries
           ? viewingTestSeries.id || viewingTestSeries._id
           : undefined,
@@ -3396,200 +3426,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             </div>
           )}
 
-          {viewingTestSeriesTab === "Test PDFs" && (
-            <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden text-[#1a202c]">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-[#FAFAFA]">
-                  <tr>
-                    <th className="px-8 py-5 text-[12px] font-black text-gray-400 uppercase tracking-widest text-[#1a202c]">
-                      File Name
-                    </th>
-                    <th className="px-8 py-5 text-[12px] font-black text-gray-400 uppercase tracking-widest text-[#1a202c]">
-                      Size
-                    </th>
-                    <th className="px-8 py-5 text-[12px] font-black text-gray-400 uppercase tracking-widest text-center text-[#1a202c]">
-                      Added On
-                    </th>
-                    <th className="px-8 py-5 text-[12px] font-black text-gray-400 uppercase tracking-widest text-right text-[#1a202c]">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {mockPDFs.length > 0 ? (
-                    mockPDFs.map((pdf, idx) => (
-                      <tr
-                        key={pdf.id || idx}
-                        className="hover:bg-gray-50/50 transition-colors group"
-                      >
-                        <td className="px-8 py-5">
-                          <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center text-red-500">
-                              <span className="material-symbols-outlined">
-                                picture_as_pdf
-                              </span>
-                            </div>
-                            <span className="text-[14px] font-bold text-gray-700">
-                              {pdf.name}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-8 py-5 text-[14px] font-medium text-gray-500">
-                          {pdf.size}
-                        </td>
-                        <td className="px-8 py-5 text-center text-[14px] font-medium text-gray-500">
-                          {pdf.addedOn}
-                        </td>
-                        <td className="px-8 py-5 text-right">
-                          <div className="relative inline-block action-menu-container">
-                            <button
-                              onClick={() => setActiveActionMenuId(activeActionMenuId === (pdf.id || idx) + 30000 ? null : (pdf.id || idx) + 30000)}
-                              className={`flex items-center justify-between gap-2 px-4 h-9 border rounded-lg text-[13px] font-bold transition-all shadow-sm w-[110px] ${activeActionMenuId === (pdf.id || idx) + 30000 ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
-                            >
-                              Actions
-                              <span className={`material-symbols-outlined text-[18px] transition-all duration-200 ${activeActionMenuId === (pdf.id || idx) + 30000 ? "rotate-180 text-blue-500" : "text-gray-400 group-hover:text-gray-600"}`}>
-                                expand_more
-                              </span>
-                            </button>
-                            {activeActionMenuId === (pdf.id || idx) + 30000 && (
-                              <div className={`absolute right-0 top-full mt-1 w-[160px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[101] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right`}>
-                                {[
-                                  { id: "download", label: "Download", icon: "download", onClick: () => { setActiveActionMenuId(null); showToast("Downloading..."); } },
-                                  { id: "delete", label: "Delete", icon: "delete", color: "text-red-500", onClick: () => { setActiveActionMenuId(null); showToast("Delete functionality pending..."); } },
-                                ].map(item => (
-                                  <button
-                                    key={item.id}
-                                    onClick={() => item.onClick()}
-                                    className="w-full px-5 py-2 flex items-center gap-3 hover:bg-gray-50 transition-colors group text-left"
-                                  >
-                                    <span className={`material-symbols-outlined text-[20px] ${item.color || "text-gray-400 group-hover:text-black"}`}>
-                                      {item.icon}
-                                    </span>
-                                    <span className={`text-[13px] font-bold ${item.color || "text-gray-600 group-hover:text-black"}`}>
-                                      {item.label}
-                                    </span>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td
-                        colSpan={4}
-                        className="py-20 text-center text-gray-400 font-medium"
-                      >
-                        No PDFs added yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {viewingTestSeriesTab === "Subjective Tests" && (
-            <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden text-[#1a202c]">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-[#FAFAFA]">
-                  <tr>
-                    <th className="px-8 py-5 text-[12px] font-black text-gray-400 uppercase tracking-widest text-[#1a202c]">
-                      S. No.
-                    </th>
-                    <th className="px-8 py-5 text-[12px] font-black text-gray-400 uppercase tracking-widest text-[#1a202c]">
-                      Title
-                    </th>
-                    <th className="px-8 py-5 text-[12px] font-black text-gray-400 uppercase tracking-widest text-[#1a202c]">
-                      Marks
-                    </th>
-                    <th className="px-8 py-5 text-[12px] font-black text-gray-400 uppercase tracking-widest text-[#1a202c]">
-                      Time
-                    </th>
-                    <th className="px-8 py-5 text-[12px] font-black text-gray-400 uppercase tracking-widest text-center text-[#1a202c]">
-                      Status
-                    </th>
-                    <th className="px-8 py-5 text-[12px] font-black text-gray-400 uppercase tracking-widest text-right text-[#1a202c]">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {mockSubjectives.length > 0 ? (
-                    mockSubjectives.map((test, i) => (
-                      <tr
-                        key={test.id || i}
-                        className="hover:bg-gray-50/50 transition-colors"
-                      >
-                        <td className="px-8 py-5 text-[14px] font-medium text-gray-500">
-                          {i + 1}
-                        </td>
-                        <td className="px-8 py-5 text-[14px] font-bold text-gray-700">
-                          {test.name}
-                        </td>
-                        <td className="px-8 py-5 text-[14px] font-medium text-gray-500">
-                          {test.marks}
-                        </td>
-                        <td className="px-8 py-5 text-[14px] font-medium text-gray-500">
-                          {test.time} Min
-                        </td>
-                        <td className="px-8 py-5 text-center">
-                          <span className="px-4 py-1.5 bg-green-50 text-green-700 rounded-full text-[11px] font-black border border-green-100 uppercase tracking-wider whitespace-nowrap">
-                            {test.status}
-                          </span>
-                        </td>
-                        <td className="px-8 py-5 text-right">
-                          <div className="relative inline-block action-menu-container">
-                            <button
-                              onClick={() => setActiveActionMenuId(activeActionMenuId === (test.id || i) + 40000 ? null : (test.id || i) + 40000)}
-                              className={`flex items-center justify-between gap-2 px-4 h-9 border rounded-lg text-[13px] font-bold transition-all shadow-sm w-[110px] ${activeActionMenuId === (test.id || i) + 40000 ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
-                            >
-                              Actions
-                              <span className={`material-symbols-outlined text-[18px] transition-all duration-200 ${activeActionMenuId === (test.id || i) + 40000 ? "rotate-180 text-blue-500" : "text-gray-400 group-hover:text-gray-600"}`}>
-                                expand_more
-                              </span>
-                            </button>
-                            {activeActionMenuId === (test.id || i) + 40000 && (
-                              <div className={`absolute right-0 top-full mt-1 w-[160px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[101] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right`}>
-                                {[
-                                  { id: "edit", label: "Edit Test", icon: "edit", onClick: () => { setActiveActionMenuId(null); showToast("Edit subjective..."); } },
-                                  { id: "delete", label: "Delete", icon: "delete", color: "text-red-500", onClick: () => { setActiveActionMenuId(null); showToast("Delete subjective..."); } },
-                                ].map(item => (
-                                  <button
-                                    key={item.id}
-                                    onClick={() => item.onClick()}
-                                    className="w-full px-5 py-2 flex items-center gap-3 hover:bg-gray-50 transition-colors group text-left"
-                                  >
-                                    <span className={`material-symbols-outlined text-[20px] ${item.color || "text-gray-400 group-hover:text-black"}`}>
-                                      {item.icon}
-                                    </span>
-                                    <span className={`text-[13px] font-bold ${item.color || "text-gray-600 group-hover:text-black"}`}>
-                                      {item.label}
-                                    </span>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td
-                        colSpan={6}
-                        className="py-20 text-center text-gray-400 font-medium"
-                      >
-                        No subjective tests added yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
 
           {viewingTestSeriesTab === "Users" && (
             <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden text-[#1a202c]">
@@ -3614,8 +3450,17 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {mockUsers.length > 0 ? (
-                    mockUsers.map((user, idx) => (
+                  {loadingUsers ? (
+                    <tr>
+                      <td colSpan={5} className="py-20 text-center">
+                        <div className="flex flex-col items-center gap-3">
+                          <div className="w-10 h-10 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
+                          <span className="text-[14px] font-bold text-gray-400">Loading users...</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : seriesUsers.length > 0 ? (
+                    seriesUsers.map((user, idx) => (
                       <tr
                         key={user.id || idx}
                         className="hover:bg-gray-50/50 transition-colors"
@@ -3691,7 +3536,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
               </table>
               <div className="px-8 py-4 bg-[#FAFAFA] border-t border-gray-100 flex items-center justify-between">
                 <span className="text-[12px] font-bold text-gray-400 italic">
-                  Showing {mockUsers.length} users
+                  Showing {seriesUsers.length} users
                 </span>
                 <div className="flex items-center gap-2">
                   <button className="w-8 h-8 flex items-center justify-center rounded-lg border border-gray-100 text-gray-400 hover:bg-gray-50 transition-all disabled:opacity-30">

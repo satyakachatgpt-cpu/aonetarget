@@ -57,22 +57,34 @@ export const getReportedQuestions = async (req, res) => {
     ]).toArray();
 
     // Map to the structure expected by the frontend
-    const formattedReports = reports.map(r => ({
-      id: r._id.toString(),
-      studentName: r.studentInfo?.name || r.studentName || 'Unknown Student',
-      studentEmail: r.studentInfo?.email || r.studentEmail || '-',
-      studentPhone: r.studentInfo?.phone || r.studentPhone || '-',
-      testTitle: r.testInfo?.title || r.testTitle || 'Unknown Test',
-      batchSeries: r.testInfo?.batchSeries || r.batchSeries || '-',
-      questionId: r.questionId,
-      questionNumber: r.questionNumber || (r.questionInfo?.orderIndex + 1) || '-',
-      questionEn: r.questionInfo?.questionEn || r.questionEn || '-',
-      questionHi: r.questionInfo?.questionHi || r.questionHi || '-',
-      issue: r.issue,
-      comment: r.comment || '',
-      reportedDate: r.reportedAt,
-      status: r.status || 'pending'
-    }));
+    const formattedReports = reports.map(r => {
+      let qNum = r.questionNumber;
+      if (!qNum) {
+        if (r.questionInfo && r.questionInfo.orderIndex !== undefined) {
+          qNum = r.questionInfo.orderIndex + 1;
+        } else if (r.testInfo && Array.isArray(r.testInfo.questions)) {
+          const idx = r.testInfo.questions.findIndex(q => String(q.id || q._id) === String(r.questionId));
+          if (idx !== -1) qNum = idx + 1;
+        }
+      }
+      
+      return {
+        id: r._id.toString(),
+        studentName: r.studentInfo?.name || r.studentName || 'Unknown Student',
+        studentEmail: r.studentInfo?.email || r.studentEmail || '-',
+        studentPhone: r.studentInfo?.phone || r.studentPhone || '-',
+        testTitle: r.testInfo?.title || r.testTitle || 'Unknown Test',
+        batchSeries: r.testInfo?.batchSeries || r.batchSeries || '-',
+        questionId: r.questionId,
+        questionNumber: qNum || '-',
+        questionEn: r.questionInfo?.questionEn || r.questionEn || '-',
+        questionHi: r.questionInfo?.questionHi || r.questionHi || '-',
+        issue: r.issue,
+        comment: r.comment || '',
+        reportedDate: r.reportedAt,
+        status: r.status || 'pending'
+      };
+    });
 
     res.json(formattedReports);
   } catch (error) {
