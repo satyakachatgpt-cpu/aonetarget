@@ -38,6 +38,7 @@ interface Course {
       courses?: string | string[];
     };
   };
+  discountCodes?: string[];
 }
 
 interface PriceBreakdown {
@@ -54,30 +55,90 @@ const safeParse = (val: any, fallback = 0): number => {
   return isNaN(n) ? fallback : n;
 };
 
-const calcBreakdown = (course: Course, coupon: any = null): PriceBreakdown => {
+const calcBreakdown = (course: Course, coupon: any = null): PriceBreakdown & { isInvalid?: boolean; invalidReason?: string } => {
   const basePrice = safeParse(course.price, 0);
   const gstIncluded = course.settings?.gstIncluded === true;
   const gstPercentage = safeParse(course.settings?.gstPercentage, 0);
   const gstAmount = gstIncluded && gstPercentage > 0 ? (basePrice * gstPercentage) / 100 : 0;
 
   let discountAmount = 0;
-  if (coupon && coupon.status === 'active') {
-    const minPurchase = safeParse(coupon.minPurchase, 0);
-    if (basePrice >= minPurchase) {
-      const isPercent = coupon.discountType === 'percentage' || coupon.type === 'percentage';
-      const val = safeParse(coupon.discountValue ?? coupon.value, 0);
-      if (isPercent) {
-        discountAmount = (basePrice * val) / 100;
-        const maxDisc = safeParse(coupon.maxDiscount, 0);
-        if (maxDisc > 0 && discountAmount > maxDisc) discountAmount = maxDisc;
+  let isInvalid = false;
+  let invalidReason = '';
+
+  if (coupon) {
+    if (!coupon.code) {
+      isInvalid = true;
+      invalidReason = 'Invalid coupon data';
+    }
+
+    const now = new Date();
+    const expiryDate = new Date(coupon.validUpto);
+    expiryDate.setHours(23, 59, 59, 999);
+
+    if (coupon.status !== 'active') {
+      isInvalid = true;
+      invalidReason = 'Coupon is inactive';
+    } else if (coupon.validUpto && expiryDate < now) {
+      isInvalid = true;
+      invalidReason = 'Coupon has expired';
+    } else if (coupon.usageLimit > 0 && (coupon.usedCount || 0) >= coupon.usageLimit) {
+      isInvalid = true;
+      invalidReason = 'Coupon usage limit reached';
+    } else if (coupon.applicableToAllBatches === false && Array.isArray(coupon.batchIds) && coupon.batchIds.length > 0) {
+      const courseIdStr = (course.id || course._id || "").toString().trim();
+      const isBatchMatch = coupon.batchIds.some((bid: any) => (bid || "").toString().trim() === courseIdStr);
+      
+      // Check if this coupon is explicitly whitelisted for this course
+      const allowedCodes = Array.isArray(course.discountCodes) ? course.discountCodes : [];
+      const normalize = (val: any) => (val || "").toString().trim().toUpperCase();
+      const isWhitelisted = allowedCodes.some(code => normalize(code) === normalize(coupon.code));
+
+      if (!isBatchMatch && !isWhitelisted) {
+        isInvalid = true;
+        invalidReason = 'This coupon is not applicable for this batch';
+      }
+    }
+
+    // Course-level whitelist validation: Only allow coupons selected by Admin for this course
+    const allowedCodes = Array.isArray(course.discountCodes) ? course.discountCodes : [];
+    const normalize = (val: any) => (val || "").toString().trim().toUpperCase();
+    const isAllowed = allowedCodes.some(code => normalize(code) === normalize(coupon.code));
+
+    if (!isInvalid && allowedCodes.length > 0 && !isAllowed) {
+      isInvalid = true;
+      invalidReason = 'This coupon is not valid for this batch';
+    }
+
+    if (!isInvalid) {
+      const minPurchase = safeParse(coupon.minPurchase, 0);
+      if (basePrice >= minPurchase) {
+        const isPercent = coupon.discountType === 'percentage' || coupon.type === 'percentage';
+        const val = safeParse(coupon.discountValue ?? coupon.value, 0);
+        if (isPercent) {
+          discountAmount = (basePrice * val) / 100;
+          const maxDisc = safeParse(coupon.maxDiscount, 0);
+          if (maxDisc > 0 && discountAmount > maxDisc) discountAmount = maxDisc;
+        } else {
+          discountAmount = val;
+        }
       } else {
-        discountAmount = val;
+        isInvalid = true;
+        invalidReason = `Minimum purchase of ₹${minPurchase} required`;
       }
     }
   }
 
-  const totalAmount = Math.max(0, basePrice + gstAmount - discountAmount);
-  return { basePrice, gstPercentage, gstAmount, discountAmount, totalAmount, couponCode: coupon?.code };
+  const totalAmount = Math.max(0, basePrice + gstAmount - (isInvalid ? 0 : discountAmount));
+  return { 
+    basePrice, 
+    gstPercentage, 
+    gstAmount, 
+    discountAmount: isInvalid ? 0 : discountAmount, 
+    totalAmount, 
+    couponCode: isInvalid ? undefined : coupon?.code,
+    isInvalid,
+    invalidReason
+  };
 };
 
 const Checkout: React.FC = () => {
@@ -217,8 +278,10 @@ const Checkout: React.FC = () => {
           totalAmount: safeParse(data.totalAmount),
           couponCode: data.couponCode
         });
+        setCouponError('');
       } else {
         setCouponError(data.error || 'Invalid or expired coupon code');
+        if (course) setBreakdown(calcBreakdown(course));
       }
     } catch {
       setCouponError('Failed to validate coupon. Please try again.');
@@ -339,6 +402,7 @@ const Checkout: React.FC = () => {
           amount: 0,
           paymentMethod: 'free',
           referralCode: referralCode || undefined,
+          couponCode: breakdown?.couponCode || undefined,
           coinsUsed: useCoins ? coinsToUse : 0
         })
       });

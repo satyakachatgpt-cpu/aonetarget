@@ -66,10 +66,13 @@ export const createRazorpayOrder = async (req, res) => {
 
     let coupon = null;
     if (couponCode) {
-      coupon = await db.collection('coupons').findOne({ code: couponCode, status: 'active' });
+      coupon = await db.collection('coupons').findOne({ code: couponCode });
     }
 
     const breakdown = calculatePriceBreakdown(course, coupon);
+    if (breakdown.isInvalid) {
+      return res.status(400).json({ error: breakdown.invalidReason });
+    }
 
     // Coin redemption logic
     const coinsUsed = req.body.coinsUsed || 0;
@@ -219,6 +222,9 @@ export const verifyRazorpayPayment = async (req, res) => {
     }
 
     const breakdown = calculatePriceBreakdown(course, coupon);
+    if (breakdown.isInvalid) {
+      console.warn(`[PAYMENT] Coupon ${couponCode} became invalid at fulfillment: ${breakdown.invalidReason}`);
+    }
 
     const student = await db.collection('students').findOne(getStudentFilter(studentId));
     if (!student) {
@@ -255,6 +261,14 @@ export const verifyRazorpayPayment = async (req, res) => {
     };
 
     await db.collection('purchases').insertOne(purchase);
+
+    // Increment coupon usage if applicable
+    if (coupon && breakdown.discountAmount > 0) {
+      await db.collection('coupons').updateOne(
+        { id: coupon.id },
+        { $inc: { usedCount: 1 } }
+      );
+    }
 
     if (enrolledCourses.includes(actualCourseId)) {
       // Already enrolled, but this is a new purchase record (manual or retry)
@@ -310,7 +324,7 @@ export const verifyRazorpayPayment = async (req, res) => {
 export const createPurchase = async (req, res) => {
   try {
     const db = getDb();
-    const { studentId, courseId, amount, paymentMethod, referralCode } = req.body;
+    const { studentId, courseId, amount, paymentMethod, referralCode, couponCode } = req.body;
     if (!studentId || !courseId) {
       return res.status(400).json({ error: 'studentId and courseId are required' });
     }
@@ -334,12 +348,27 @@ export const createPurchase = async (req, res) => {
     }
     const actualCourseId = course ? (course.id || courseId) : courseId;
 
+    let coupon = null;
+    if (couponCode) {
+      coupon = await db.collection('coupons').findOne({ code: couponCode });
+    }
+
+    const breakdown = calculatePriceBreakdown(course || { price: amount }, coupon);
+    if (breakdown.isInvalid && couponCode) {
+      return res.status(400).json({ error: breakdown.invalidReason });
+    }
+
     const purchase = {
       id: `purchase_${Date.now()}`,
       studentId,
       courseId: actualCourseId,
       courseName: course ? (course.name || course.title) : courseId,
-      amount: (typeof amount === 'number') ? amount : (course ? course.price : 0),
+      amount: breakdown.totalAmount || (typeof amount === 'number' ? amount : (course ? course.price : 0)),
+      basePrice: breakdown.basePrice,
+      gstAmount: breakdown.gstAmount,
+      gstPercentage: breakdown.gstPercentage,
+      discountAmount: breakdown.discountAmount,
+      couponCode: coupon?.code || '',
       paymentMethod: paymentMethod || 'online',
       referralCode: referralCode || null,
       status: 'completed',
@@ -347,6 +376,14 @@ export const createPurchase = async (req, res) => {
     };
 
     await db.collection('purchases').insertOne(purchase);
+
+    // Increment coupon usage if applicable
+    if (coupon && breakdown.discountAmount > 0) {
+      await db.collection('coupons').updateOne(
+        { id: coupon.id },
+        { $inc: { usedCount: 1 } }
+      );
+    }
 
     if (enrolledCourses.includes(actualCourseId)) {
        // Already enrolled

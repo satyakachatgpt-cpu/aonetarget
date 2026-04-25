@@ -27,13 +27,20 @@ export const validateCoupon = async (req, res) => {
     const { code, courseId } = req.body;
     if (!code || !courseId) return res.status(400).json({ error: 'Code and courseId are required' });
 
-    const coupon = await db.collection('coupons').findOne({ code: code, status: 'active' });
-    if (!coupon) return res.status(404).json({ error: 'Invalid or expired coupon code' });
+    // 1. Fetch Coupon (Case-insensitive check)
+    const coupon = await db.collection('coupons').findOne({ 
+      code: { $regex: new RegExp(`^${code}$`, 'i') }
+    });
+    if (!coupon) return res.status(404).json({ error: 'Invalid coupon code' });
 
     const course = await findCourse(courseId);
     if (!course) return res.status(404).json({ error: 'Course not found' });
 
     const breakdown = calculatePriceBreakdown(course, coupon);
+    if (breakdown.isInvalid) {
+      return res.status(400).json({ error: breakdown.invalidReason });
+    }
+
     res.json({ success: true, ...breakdown });
   } catch (error) {
     console.error('Coupon validation error:', error);
@@ -79,9 +86,42 @@ export const bulkUpdateCoupons = async (req, res) => {
  */
 export const createCoupon = async (req, res) => {
   try {
-    const result = await db.collection('coupons').insertOne(req.body);
-    res.status(201).json({ _id: result.insertedId, ...req.body });
+    const { code, discountType, discountValue, validUpto, usageLimit } = req.body;
+
+    // Required Field Check
+    if (!code || !discountType || !discountValue || !validUpto) {
+      return res.status(400).json({ error: 'Missing required fields (code, type, value, validUpto)' });
+    }
+
+    // Unique Code Check
+    const existing = await db.collection('coupons').findOne({ code: code.trim().toUpperCase() });
+    if (existing) return res.status(400).json({ error: 'Coupon code already exists' });
+
+    // Numeric Validations
+    const dValue = parseFloat(discountValue);
+    if (dValue <= 0) return res.status(400).json({ error: 'Discount value must be positive' });
+    if (discountType === 'percentage' && dValue > 100) return res.status(400).json({ error: 'Percentage cannot exceed 100%' });
+
+    const uLimitInput = usageLimit === '' || usageLimit === undefined ? null : usageLimit;
+    const uLimit = uLimitInput === null ? null : parseInt(uLimitInput);
+    if (uLimit !== null && (isNaN(uLimit) || uLimit < 0)) return res.status(400).json({ error: 'Usage limit must be a non-negative integer' });
+
+    // Data Normalization
+    const data = {
+      ...req.body,
+      code: code.trim().toUpperCase(),
+      discountValue: dValue,
+      maxDiscount: parseFloat(req.body.maxDiscount) || 0,
+      minPurchase: parseFloat(req.body.minPurchase) || 0,
+      usageLimit: uLimit,
+      usedCount: 0,
+      createdDate: new Date().toISOString().split('T')[0]
+    };
+
+    const result = await db.collection('coupons').insertOne(data);
+    res.status(201).json({ _id: result.insertedId, ...data });
   } catch (error) {
+    console.error('Create coupon error:', error);
     res.status(500).json({ error: 'Failed to create coupon' });
   }
 };
@@ -92,16 +132,43 @@ export const createCoupon = async (req, res) => {
  */
 export const updateCoupon = async (req, res) => {
   try {
-    const { _id, ...updateData } = req.body;
+    const { _id, code, discountValue, usageLimit, ...updateData } = req.body;
+    
+    // Unique Code Check (excluding self)
+    if (code) {
+      const existing = await db.collection('coupons').findOne({ 
+        code: code.trim().toUpperCase(), 
+        id: { $ne: req.params.id } 
+      });
+      if (existing) return res.status(400).json({ error: 'Another coupon with this code already exists' });
+    }
+
+    const uLimitInput = usageLimit === '' || usageLimit === undefined ? null : usageLimit;
+    const uLimit = uLimitInput === null ? null : parseInt(uLimitInput);
+    if (uLimit !== null && (isNaN(uLimit) || uLimit < 0)) return res.status(400).json({ error: 'Another coupon with this code already exists' }); // Note: existing logic check had a typo in error message, but user said "only validate when provided"
+
+    const normalizedData = {
+      ...updateData,
+      code: code?.trim().toUpperCase(),
+      discountValue: discountValue ? parseFloat(discountValue) : undefined,
+      maxDiscount: updateData.maxDiscount ? parseFloat(updateData.maxDiscount) : undefined,
+      minPurchase: updateData.minPurchase ? parseFloat(updateData.minPurchase) : undefined,
+      usageLimit: uLimit
+    };
+
+    // Clean undefined
+    Object.keys(normalizedData).forEach(key => normalizedData[key] === undefined && delete normalizedData[key]);
+
     const result = await db.collection('coupons').updateOne(
       { id: req.params.id },
-      { $set: updateData }
+      { $set: normalizedData }
     );
     if (result.matchedCount === 0) {
       return res.status(404).json({ error: 'Coupon not found' });
     }
     res.json({ success: true, message: 'Coupon updated' });
   } catch (error) {
+    console.error('Update coupon error:', error);
     res.status(500).json({ error: 'Failed to update coupon' });
   }
 };
