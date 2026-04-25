@@ -5,6 +5,7 @@ import { indiaStateDistrictMap } from '../utils/indiaStates';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
+import { API_BASE_URL } from '../services/baseService';
 
 const phoneSchema = z.object({
   phone: z.string().length(10, 'Enter a valid 10-digit phone number').regex(/^\d+$/, 'Digits only'),
@@ -38,15 +39,25 @@ interface StudentLoginProps {
   onSuccess?: () => void;
 }
 
+const getDeviceType = () => {
+  const ua = navigator.userAgent;
+  if (/android/i.test(ua)) return 'Android Phone';
+  if (/iPhone/i.test(ua)) return 'iPhone';
+  if (/iPad/i.test(ua)) return 'iPad';
+  if (/Windows/i.test(ua)) return 'Windows Laptop/PC';
+  if (/Macintosh/i.test(ua)) return 'MacBook/Desktop';
+  return 'Browser Device';
+};
+
 const getDeviceId = () => {
-  let deviceId = localStorage.getItem('deviceId');
+  let deviceId = localStorage.getItem('studentDeviceId');
   if (!deviceId) {
     if (window.crypto && window.crypto.randomUUID) {
       deviceId = window.crypto.randomUUID();
     } else {
-      deviceId = 'dev_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
+      deviceId = 'stu_' + Math.random().toString(36).substring(2) + Date.now().toString(36);
     }
-    localStorage.setItem('deviceId', deviceId);
+    localStorage.setItem('studentDeviceId', deviceId);
   }
   return deviceId;
 };
@@ -274,7 +285,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await fetch('/api/categories');
+        const response = await fetch(`${API_BASE_URL}/categories`);
         if (response.ok) {
           const data = await response.json();
           const active = (Array.isArray(data) ? data : []).filter((c: any) => c.isActive);
@@ -380,7 +391,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   const sendLoginOtp = async (data: PhoneFormData) => {
     setLoading(true);
     try {
-      const response = await fetch('/api/otp/send', {
+      const response = await fetch(`${API_BASE_URL}/otp/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: data.phone, purpose: 'login' })
@@ -430,18 +441,26 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
     }
     setLoading(true);
     try {
-      const response = await fetch('/api/otp/verify', {
+      const response = await fetch(`${API_BASE_URL}/otp/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone: currentPhone,
           otp: otpValue,
-          deviceId: getDeviceId()
+          deviceId: getDeviceId(),
+          deviceName: navigator.userAgent,
+          deviceType: getDeviceType()
         })
       });
 
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'OTP verification failed');
+      if (!response.ok) {
+        if (data.code === 'DEVICE_APPROVAL_REQUIRED') {
+          toast.error(data.message || 'New device approval pending. Please contact admin.', { duration: 6000 });
+          return;
+        }
+        throw new Error(data.error || 'OTP verification failed');
+      }
 
       setAuth(data.student, data.accessToken, data.deviceId, data.refreshToken);
       toast.success('Login successful!');
@@ -466,7 +485,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
     if (phone && phone.length === 10) {
       setLoading(true);
       try {
-        const otpRes = await fetch('/api/students/signup/send-otp', {
+        const otpRes = await fetch(`${API_BASE_URL}/students/signup/send-otp`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ phone })
@@ -505,10 +524,17 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
     try {
       setLoading(true);
-      const response = await fetch('/api/students/login-password', {
+      const loginUrl = `${API_BASE_URL}/students/login-password`;
+      console.log('[LOGIN_API_URL]', loginUrl);
+      const response = await fetch(loginUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...passwordFormData, deviceId: getDeviceId() })
+        body: JSON.stringify({ 
+          ...passwordFormData, 
+          deviceId: getDeviceId(),
+          deviceName: navigator.userAgent,
+          deviceType: getDeviceType()
+        })
       });
 
       const data = await response.json();
@@ -519,6 +545,10 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
         if (onSuccess) onSuccess();
         navigate('/student-dashboard');
       } else {
+        if (data.code === 'DEVICE_APPROVAL_REQUIRED') {
+          toast.error(data.message || 'New device approval pending. Please contact admin.', { duration: 6000 });
+          return;
+        }
         toast.error(data.error || 'Login failed');
       }
     } catch (error) {
@@ -537,7 +567,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
     try {
       setLoading(true);
-      const response = await fetch('/api/students/forgot-password/send-otp', {
+      const response = await fetch(`${API_BASE_URL}/students/forgot-password/send-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: resetPhone })
@@ -578,7 +608,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
     try {
       setLoading(true);
       const otpStr = otp.join('');
-      const response = await fetch('/api/students/forgot-password/verify-otp', {
+      const response = await fetch(`${API_BASE_URL}/students/forgot-password/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: resetPhone, otp: otpStr })
@@ -610,7 +640,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
     try {
       setLoading(true);
-      const response = await fetch('/api/students/reset-password', {
+      const response = await fetch(`${API_BASE_URL}/students/reset-password`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: resetPhone, newPassword: newPasswordData.password })
@@ -634,7 +664,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
     try {
       setLoading(true);
       const otpStr = otp.join('');
-      const response = await fetch('/api/students/signup/verify-otp', {
+      const response = await fetch(`${API_BASE_URL}/students/signup/verify-otp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: currentPhone, otp: otpStr })

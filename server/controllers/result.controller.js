@@ -84,7 +84,7 @@ export const getStudentTestResults = async (req, res) => {
                     {
                       $and: [
                         { $regexMatch: { input: { $toString: '$$tid' }, regex: /^[0-9a-fA-F]{24}$/ } },
-                        { $eq: ['$_id', { $toObjectId: '$$tid' }] }
+                        { $eq: ['$_id', { $convert: { input: '$$tid', to: 'objectId', onError: null, onNull: null } }] }
                       ]
                     }
                   ]
@@ -111,7 +111,7 @@ export const getStudentTestResults = async (req, res) => {
                     {
                       $and: [
                         { $regexMatch: { input: { $toString: '$$sid' }, regex: /^[0-9a-fA-F]{24}$/ } },
-                        { $eq: ['$_id', { $toObjectId: '$$sid' }] }
+                        { $eq: ['$_id', { $convert: { input: '$$sid', to: 'objectId', onError: null, onNull: null } }] }
                       ]
                     }
                   ]
@@ -144,7 +144,7 @@ export const getStudentTestResults = async (req, res) => {
                     {
                       $and: [
                         { $regexMatch: { input: { $toString: '$$cid' }, regex: /^[0-9a-fA-F]{24}$/ } },
-                        { $eq: ['$_id', { $toObjectId: '$$cid' }] }
+                        { $eq: ['$_id', { $convert: { input: '$$cid', to: 'objectId', onError: null, onNull: null } }] }
                       ]
                     }
                   ]
@@ -171,7 +171,7 @@ export const getStudentTestResults = async (req, res) => {
                     {
                       $and: [
                         { $regexMatch: { input: { $toString: '$$cid' }, regex: /^[0-9a-fA-F]{24}$/ } },
-                        { $eq: ['$_id', { $toObjectId: '$$cid' }] }
+                        { $eq: ['$_id', { $convert: { input: '$$cid', to: 'objectId', onError: null, onNull: null } }] }
                       ]
                     }
                   ]

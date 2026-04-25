@@ -1,5 +1,7 @@
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import mongoose from 'mongoose';
+import Student from '../models/Student.js';
 
 if (!process.env.JWT_SECRET) {
   throw new Error("JWT_SECRET is required but not provided in environment variables.");
@@ -174,10 +176,46 @@ export function optionalAuth(req, res, next) {
   next();
 }
 
-export function studentOwnerOrAdmin(req, res, next) {
-  if (req.user?.isAdmin || req.user?.role === 'admin') return next();
-  if (req.user?.studentId && String(req.user.studentId) === String(req.params.id)) return next();
-  return res.status(403).json({ error: 'Forbidden' });
+export async function studentOwnerOrAdmin(req, res, next) {
+  try {
+    // 1. Admin/Moderator Bypass
+    if (req.user?.isAdmin || req.user?.role === 'admin' || req.admin) return next();
+    
+    const urlId = req.params.id;
+    const tokenData = req.user;
+    
+    if (!urlId || !tokenData) return res.status(403).json({ error: 'Forbidden: Missing identity' });
+
+    // 2. Resolve Student from DB (Robust matching for the URL ID)
+    const db = mongoose.connection.db;
+    const student = await db.collection('students').findOne({
+      $or: [
+        { _id: mongoose.Types.ObjectId.isValid(urlId) ? new mongoose.Types.ObjectId(urlId) : null },
+        { id: urlId },
+        { userId: urlId }
+      ].filter(v => v._id || v.id || v.userId)
+    });
+
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    // 3. Match against Token Variants
+    const tokenStudentId = tokenData.studentId || tokenData.id || tokenData._id;
+    const studentVariants = [
+      String(student._id),
+      student.id,
+      student.userId
+    ].filter(Boolean);
+
+    if (studentVariants.includes(String(tokenStudentId))) return next();
+    
+    // Fallback check: If token has other variants
+    if (tokenData._id && studentVariants.includes(String(tokenData._id))) return next();
+
+    return res.status(403).json({ error: 'Forbidden: You do not have access to this resource' });
+  } catch (err) {
+    console.error('[AUTH] studentOwnerOrAdmin Error:', err);
+    return res.status(500).json({ error: 'Internal Auth Error' });
+  }
 }
 
 export { JWT_SECRET, JWT_REFRESH_SECRET };

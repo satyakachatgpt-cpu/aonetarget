@@ -117,6 +117,36 @@ export const studentsAPI = {
       throw new Error(errorData.error || 'Failed to ban user');
     }
     return response.json();
+  },
+
+  enroll: async (studentId: string, courseId: string) => {
+    const response = await fetch(`${API_BASE_URL}/students/${studentId}/enroll`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify({ courseId })
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to enroll student');
+    }
+    return response.json();
+  },
+
+  unenroll: async (studentId: string, courseId: string) => {
+    const response = await fetch(`${API_BASE_URL}/students/${studentId}/unenroll/${courseId}`, {
+      method: 'DELETE',
+      headers: {
+        ...getAdminHeaders()
+      }
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to unenroll student');
+    }
+    return response.json();
   }
 };
 

@@ -1003,13 +1003,28 @@ const Home: React.FC = () => {
                           </div>
 
                           <div className="flex items-center justify-between mt-1">
-                            {(course.price !== undefined && course.price !== null) && (
-                              <div className="flex flex-col pb-0.5">
-                                <span className="text-[15px] font-black text-yellow-400 drop-shadow-md leading-none">
-                                  {course.price === 0 ? 'Free' : `₹${course.price}`}
-                                </span>
-                              </div>
-                            )}
+                            {(() => {
+                              const isEnrolled = isAuthenticated && student?.enrolledCourses?.some(ec => 
+                                String(ec) === String(course.id) || String(ec) === String(course._id)
+                              );
+                              
+                              if (isEnrolled) {
+                                return (
+                                  <div className="flex items-center gap-1.5 py-1">
+                                    <span className="material-symbols-rounded text-yellow-400 text-[14px]">verified</span>
+                                    <span className="text-[10px] font-black text-white uppercase tracking-widest">Enrolled</span>
+                                  </div>
+                                );
+                              }
+
+                              return (course.price !== undefined && course.price !== null) && (
+                                <div className="flex flex-col pb-0.5">
+                                  <span className="text-[15px] font-black text-yellow-400 drop-shadow-md leading-none">
+                                    {course.price === 0 ? 'Free' : `₹${course.price}`}
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </div>
                         </div>
 
@@ -1017,9 +1032,18 @@ const Home: React.FC = () => {
                           <div className="w-6 h-6 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20">
                             <span className="material-symbols-rounded text-white text-[14px]">school</span>
                           </div>
-                          <button className="bg-white text-black text-[11px] font-black px-4 py-2 rounded-xl hover:bg-white transition-all whitespace-nowrap shadow-lg uppercase tracking-widest active:scale-95 border border-white/20">
-                            Join
-                          </button>
+                          {(() => {
+                             const isEnrolled = isAuthenticated && student?.enrolledCourses?.some(ec => 
+                               String(ec) === String(course.id) || String(ec) === String(course._id)
+                             );
+                             return (
+                               <button 
+                                 className="bg-white text-black text-[11px] font-black px-4 py-2 rounded-xl hover:bg-white transition-all whitespace-nowrap shadow-lg uppercase tracking-widest active:scale-95 border border-white/20"
+                               >
+                                 {isEnrolled ? 'Open' : 'Join'}
+                               </button>
+                             );
+                          })()}
                         </div>
                       </div>
                     )}

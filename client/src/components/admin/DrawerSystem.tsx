@@ -74,6 +74,59 @@ export const RightSideDrawer: React.FC<RightSideDrawerProps> = ({
     );
 };
 
+export const CenterModal: React.FC<{
+    isOpen: boolean;
+    onClose: () => void;
+    children: React.ReactNode;
+    maxWidth?: string;
+    maxHeight?: string;
+}> = ({
+    isOpen,
+    onClose,
+    children,
+    maxWidth = 'max-w-6xl',
+    maxHeight = 'max-h-[92vh]'
+}) => {
+    useEffect(() => {
+        if (isOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = 'unset';
+        }
+        return () => {
+            document.body.style.overflow = 'unset';
+        };
+    }, [isOpen]);
+
+    useEffect(() => {
+        const handleEsc = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [onClose]);
+
+    if (!isOpen) return null;
+
+    return createPortal(
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6">
+            {/* Overlay */}
+            <div
+                className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300"
+                onClick={onClose}
+            />
+
+            {/* Modal */}
+            <div
+                className={`relative bg-white w-full ${maxWidth} ${maxHeight} shadow-2xl rounded-[32px] flex flex-col z-[100000] overflow-hidden animate-in zoom-in-95 duration-200`}
+            >
+                {children}
+            </div>
+        </div>,
+        document.body
+    );
+};
+
 export const DrawerHeader: React.FC<{ title: string; onClose: () => void }> = ({ title, onClose }) => (
     <div className="flex justify-between items-center px-8 py-5 border-b border-gray-100 shrink-0 bg-white z-10">
         <h3 className="text-[19px] font-bold text-[#1e1e1e] tracking-tight">{title}</h3>

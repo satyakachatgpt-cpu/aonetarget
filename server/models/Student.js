@@ -55,11 +55,31 @@ const studentSchema = new mongoose.Schema({
     enrolledBatch: { type: mongoose.Schema.Types.ObjectId, ref: 'Course' },
     enrolledCourses: [{ type: String }],
 
-    deviceId: { type: String, default: null },
+    // ACTIVE DEVICE
+    activeDeviceId: { type: String, default: null },
+    activeDeviceName: { type: String, default: null },
+    activeDeviceType: { type: String, default: null },
+    activeDeviceIP: { type: String, default: null },
+    activeDeviceUserAgent: { type: String, default: null },
+    activeDeviceRegisteredAt: { type: Date, default: null },
+    activeDeviceLastLoginAt: { type: Date, default: null },
+
+    // PENDING DEVICE
     pendingDeviceId: { type: String, default: null },
+    pendingDeviceName: { type: String, default: null },
+    pendingDeviceType: { type: String, default: null },
+    pendingDeviceIP: { type: String, default: null },
+    pendingDeviceUserAgent: { type: String, default: null },
+    pendingDeviceRequestedAt: { type: Date, default: null },
+    pendingDeviceStatus: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected', null],
+      default: null
+    },
+
+    deviceId: { type: String, default: null }, // Legacy support
     deviceLocked: { type: Boolean, default: true },
     sessionToken: { type: String, default: null },
-    activeDeviceId: { type: String, default: null },
     activeSessions: [{ type: mongoose.Schema.Types.Mixed }],
     
     isBanned: { type: Boolean, default: false },

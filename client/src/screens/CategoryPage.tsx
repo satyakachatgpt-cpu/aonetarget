@@ -133,7 +133,8 @@ const NeetIitJeePage: React.FC<{
   loading: boolean; 
   subcategories: SubCategory[];
   subjects: Subject[];
-}> = ({ category, courses, loading, subcategories, subjects: allSubjects }) => {
+  enrolledCourseIds: string[];
+}> = ({ category, courses, loading, subcategories, subjects: allSubjects, enrolledCourseIds }) => {
   const navigate = useNavigate();
   const branches = category.branchesL1 || [];
   const [activeBranch, setActiveBranch] = useState<string>(branches[0]?.slug || '');
@@ -351,7 +352,12 @@ const NeetIitJeePage: React.FC<{
                           <span className="bg-gray-50 text-gray-500 text-[9px] font-bold px-2 py-0.5 rounded-full">{ct.title}</span>
                         )}
                         <span className="text-xs font-bold ml-auto">
-                          {isFree ? (
+                          {enrolledCourseIds.some(eid => String(eid) === String(course.id) || String(eid) === String(course._id)) ? (
+                            <span className="text-brandBlue font-black uppercase text-[10px] tracking-widest flex items-center gap-1">
+                              <span className="material-symbols-rounded text-xs">verified</span>
+                              Enrolled
+                            </span>
+                          ) : isFree ? (
                             <span className="text-green-600">Free</span>
                           ) : (
                             <span className="text-[#1A237E]">₹{coursePrice}</span>
@@ -384,7 +390,8 @@ const GeneralClassPage: React.FC<{
   loading: boolean; 
   subcategories: SubCategory[];
   subjects: Subject[];
-}> = ({ category, courses, loading, subcategories, subjects: allSubjects }) => {
+  enrolledCourseIds: string[];
+}> = ({ category, courses, loading, subcategories, subjects: allSubjects, enrolledCourseIds }) => {
   const navigate = useNavigate();
   const branchesL1 = category.branchesL1 || [];
   const branchesL2 = category.branchesL2 || [];
@@ -594,7 +601,14 @@ const GeneralClassPage: React.FC<{
                     <h4 className="text-sm font-bold text-gray-800 line-clamp-2 leading-tight group-hover:text-[#1A237E] transition-colors">{course.name || course.title}</h4>
                     <p className="text-[9px] text-gray-400 mt-1 uppercase font-bold tracking-wider">{activeL1} • {activeL2} • {course.subject}</p>
                     <div className="flex items-center justify-between mt-3">
-                       <span className="text-xs font-black text-[#1A237E]">{course.price ? `₹${course.price}` : 'Free'}</span>
+                       {enrolledCourseIds.some(eid => String(eid) === String(course.id) || String(eid) === String(course._id)) ? (
+                         <span className="text-[10px] font-black text-brandBlue uppercase tracking-widest flex items-center gap-1">
+                           <span className="material-symbols-rounded text-xs">verified</span>
+                           Enrolled
+                         </span>
+                       ) : (
+                         <span className="text-xs font-black text-[#1A237E]">{course.price ? `₹${course.price}` : 'Free'}</span>
+                       )}
                        <span className="text-[9px] bg-green-50 text-green-600 font-bold px-2 py-0.5 rounded-full">New Batch</span>
                     </div>
                   </div>
@@ -625,8 +639,9 @@ const Class11_12Page: React.FC<{
   loading: boolean; 
   subcategories: SubCategory[];
   subjects: Subject[];
-}> = ({ category, courses, loading, subcategories, subjects: allSubjects }) => {
-  return <GeneralClassPage category={category} courses={courses} loading={loading} subcategories={subcategories} subjects={allSubjects} />;
+  enrolledCourseIds: string[];
+}> = ({ category, courses, loading, subcategories, subjects: allSubjects, enrolledCourseIds }) => {
+  return <GeneralClassPage category={category} courses={courses} loading={loading} subcategories={subcategories} subjects={allSubjects} enrolledCourseIds={enrolledCourseIds} />;
 };
 
 
@@ -823,15 +838,15 @@ const CategoryPage: React.FC = () => {
 
   // Specialized Layout Returns
   if (isNeetId || category.hierarchyMode === 'exam-branch') {
-     return <NeetIitJeePage category={category} courses={courses} loading={loading} subcategories={subcategories} subjects={subjects} />;
+     return <NeetIitJeePage category={category} courses={courses} loading={loading} subcategories={subcategories} subjects={subjects} enrolledCourseIds={enrolledCourseIds} />;
   }
 
   if (isJeeId || isBoardId || category.hierarchyMode === 'board-class') {
-     return <GeneralClassPage category={category} courses={courses} loading={loading} subcategories={subcategories} subjects={subjects} />;
+     return <GeneralClassPage category={category} courses={courses} loading={loading} subcategories={subcategories} subjects={subjects} enrolledCourseIds={enrolledCourseIds} />;
   }
 
   if (isGeneralId) {
-    return <GeneralClassPage category={category} courses={courses} loading={loading} subcategories={subcategories} subjects={subjects} />;
+    return <GeneralClassPage category={category} courses={courses} loading={loading} subcategories={subcategories} subjects={subjects} enrolledCourseIds={enrolledCourseIds} />;
   }
 
   if (isNursingId) {
@@ -1003,7 +1018,14 @@ const CategoryPage: React.FC = () => {
                         <span className="material-icons-outlined text-xs">{(course.contentType === 'mock_test' || course.categoryId === 'mock-test') ? 'quiz' : 'play_circle'}</span>
                         {(course.contentType === 'mock_test' || course.categoryId === 'mock-test') ? `${course.tests || 0} Tests` : `${course.videos || 0} Videos`}
                       </span>
-                      <span className="font-bold text-[#303F9F]">{course.price ? `₹${course.price}` : 'Free'}</span>
+                      {enrolledCourseIds.some(eid => String(eid) === String(course.id) || String(eid) === String(course._id)) ? (
+                        <span className="font-black text-brandBlue uppercase tracking-widest flex items-center gap-1">
+                          <span className="material-icons-outlined text-xs">verified</span>
+                          Enrolled
+                        </span>
+                      ) : (
+                        <span className="font-bold text-[#303F9F]">{course.price ? `₹${course.price}` : 'Free'}</span>
+                      )}
                     </div>
                   </div>
                   <span className="material-icons-outlined text-gray-300 self-center">chevron_right</span>
