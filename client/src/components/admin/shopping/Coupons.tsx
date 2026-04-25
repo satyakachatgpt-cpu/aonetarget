@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { couponsAPI } from '../../../services/apiClient';
+import { coursesAPI } from '../../../services/courseService';
 import { RightSideDrawer, DrawerHeader, DrawerBody, DrawerFooter } from '../DrawerSystem';
+
+interface Course {
+  _id: string;
+  title: string;
+  id: string;
+  discountCodes?: string[];
+}
 
 interface Coupon {
   id: string;
@@ -16,6 +24,8 @@ interface Coupon {
   description: string;
   status: 'active' | 'expired' | 'inactive';
   createdDate: string;
+  applicableToAllBatches?: boolean;
+  batchIds?: string[];
 }
 
 interface Props {
@@ -25,6 +35,7 @@ interface Props {
 const Coupons: React.FC<Props> = ({ showToast }) => {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
   const [filteredCoupons, setFilteredCoupons] = useState<Coupon[]>([]);
+  const [batches, setBatches] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -47,11 +58,14 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
     validFrom: '',
     validUpto: '',
     description: '',
-    status: 'active' as 'active' | 'expired' | 'inactive'
+    status: 'active' as 'active' | 'expired' | 'inactive',
+    batchSelectionType: 'all' as 'all' | 'specific',
+    batchIds: [] as string[]
   });
 
   useEffect(() => {
     loadCoupons();
+    loadBatches();
 
     const handleClickOutside = () => setActiveMenuId(null);
     window.addEventListener('click', handleClickOutside);
@@ -72,6 +86,15 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
     if (statusFilter !== 'all') {
       filtered = filtered.filter(c => c.status === statusFilter);
     }
+
+    // Auto-update status to EXPIRED for table display if current date > validUpto
+    const now = new Date();
+    filtered = filtered.map(c => {
+      if (c.validUpto && new Date(c.validUpto) < now && c.status === 'active') {
+        return { ...c, status: 'expired' as const };
+      }
+      return c;
+    });
 
     setFilteredCoupons(filtered);
     setCurrentPage(1);
@@ -95,11 +118,30 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
     }
   };
 
+  const loadBatches = async () => {
+    try {
+      const data = await coursesAPI.getAll();
+      setBatches(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Failed to load batches:', error);
+    }
+  };
+
   const validateForm = () => {
     const codeRegex = /^[A-Z0-9]{3,15}$/;
 
-    if (!codeRegex.test(formData.code.toUpperCase())) {
-      showToast('Coupon code must be 3-15 alphanumeric characters', 'error');
+    if (!codeRegex.test(formData.code.trim().toUpperCase())) {
+      showToast('Coupon code must be 3-15 alphanumeric characters (no spaces)', 'error');
+      return false;
+    }
+
+    // Check for duplicate code in current local state (proactive check)
+    const isDuplicate = coupons.some(c => 
+      c.code.toUpperCase() === formData.code.trim().toUpperCase() && 
+      (!selectedCoupon || c.id !== selectedCoupon.id)
+    );
+    if (isDuplicate) {
+      showToast('Coupon code already exists', 'error');
       return false;
     }
 
@@ -114,19 +156,24 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
       return false;
     }
 
-    const uLimit = parseInt(formData.usageLimit);
-    if (isNaN(uLimit) || uLimit <= 0) {
+    const uLimit = formData.usageLimit.trim() === '' ? null : parseInt(formData.usageLimit);
+    if (uLimit !== null && (isNaN(uLimit) || uLimit < 0)) {
       showToast('Usage limit must be a positive number', 'error');
       return false;
     }
 
-    if (!formData.validFrom || !formData.validUpto) {
-      showToast('Please select both valid dates', 'error');
+    if (!formData.validUpto) {
+      showToast('Please select an expiry date', 'error');
       return false;
     }
 
-    if (new Date(formData.validUpto) < new Date(formData.validFrom)) {
+    if (formData.validFrom && formData.validUpto && new Date(formData.validUpto) < new Date(formData.validFrom)) {
       showToast('Expiry date cannot be before start date', 'error');
+      return false;
+    }
+
+    if (formData.batchSelectionType === 'specific' && formData.batchIds.length === 0) {
+      showToast('Please select at least one batch', 'error');
       return false;
     }
 
@@ -141,18 +188,20 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
     try {
       const newCoupon: Coupon = {
         id: `CPN-${String(Date.now()).slice(-6)}`,
-        code: formData.code.toUpperCase(),
+        code: formData.code.trim().toUpperCase(),
         discountType: formData.discountType,
         discountValue: parseFloat(formData.discountValue),
         maxDiscount: parseFloat(formData.maxDiscount) || 0,
         minPurchase: parseFloat(formData.minPurchase) || 0,
-        usageLimit: parseInt(formData.usageLimit) || 0,
+        usageLimit: formData.usageLimit.trim() === '' ? null : parseInt(formData.usageLimit),
         usedCount: 0,
-        validFrom: formData.validFrom,
+        validFrom: formData.validFrom || new Date().toISOString().split('T')[0],
         validUpto: formData.validUpto,
         description: formData.description,
         status: formData.status,
-        createdDate: new Date().toISOString().split('T')[0]
+        createdDate: new Date().toISOString().split('T')[0],
+        applicableToAllBatches: formData.batchSelectionType === 'all',
+        batchIds: formData.batchSelectionType === 'specific' ? formData.batchIds : []
       };
 
       console.log('Adding new coupon:', newCoupon);
@@ -161,9 +210,9 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
       resetForm();
       setShowAddModal(false);
       showToast(`Coupon ${newCoupon.code} created successfully!`, 'success');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error adding coupon:', error);
-      showToast('Failed to add coupon', 'error');
+      showToast(error.message || 'Failed to add coupon', 'error');
     }
   };
 
@@ -175,16 +224,18 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
     try {
       const updatedCoupon: Coupon = {
         ...selectedCoupon,
-        code: formData.code.toUpperCase(),
+        code: formData.code.trim().toUpperCase(),
         discountType: formData.discountType,
         discountValue: parseFloat(formData.discountValue),
-        maxDiscount: parseFloat(formData.maxDiscount),
-        minPurchase: parseFloat(formData.minPurchase),
-        usageLimit: parseInt(formData.usageLimit),
+        maxDiscount: parseFloat(formData.maxDiscount) || 0,
+        minPurchase: parseFloat(formData.minPurchase) || 0,
+        usageLimit: formData.usageLimit.trim() === '' ? null : parseInt(formData.usageLimit),
         validFrom: formData.validFrom,
         validUpto: formData.validUpto,
         description: formData.description,
-        status: formData.status
+        status: formData.status,
+        applicableToAllBatches: formData.batchSelectionType === 'all',
+        batchIds: formData.batchSelectionType === 'specific' ? formData.batchIds : []
       };
 
       console.log('Updating coupon:', updatedCoupon);
@@ -194,9 +245,9 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
       setShowEditModal(false);
       setSelectedCoupon(null);
       showToast('Coupon updated successfully!', 'success');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating coupon:', error);
-      showToast('Failed to update coupon', 'error');
+      showToast(error.message || 'Failed to update coupon', 'error');
     }
   };
 
@@ -232,18 +283,32 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
   };
 
   const handleEditClick = (coupon: Coupon) => {
+    loadBatches();
     setSelectedCoupon(coupon);
+
+    // Bi-directional sync: Include batches that have this coupon whitelisted in their discountCodes
+    const batchesWithThisCoupon = batches.filter(b => {
+      if (!Array.isArray(b.discountCodes)) return false;
+      return b.discountCodes.some(code =>
+        (code || "").toString().trim().toUpperCase() === (coupon.code || "").toString().trim().toUpperCase()
+      );
+    }).map(b => b._id || b.id);
+
+    const combinedBatchIds = Array.from(new Set([...(coupon.batchIds || []), ...batchesWithThisCoupon]));
+
     setFormData({
       code: coupon.code,
       discountType: coupon.discountType,
       discountValue: coupon.discountValue.toString(),
       maxDiscount: coupon.maxDiscount.toString(),
       minPurchase: coupon.minPurchase.toString(),
-      usageLimit: coupon.usageLimit.toString(),
+      usageLimit: coupon.usageLimit !== null && coupon.usageLimit !== undefined ? coupon.usageLimit.toString() : '',
       validFrom: coupon.validFrom,
       validUpto: coupon.validUpto,
       description: coupon.description,
-      status: coupon.status
+      status: coupon.status,
+      batchSelectionType: combinedBatchIds.length > 0 ? 'specific' : 'all',
+      batchIds: combinedBatchIds
     });
     setShowEditModal(true);
   };
@@ -273,7 +338,9 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
       validFrom: '',
       validUpto: '',
       description: '',
-      status: 'active'
+      status: 'active',
+      batchSelectionType: 'all',
+      batchIds: []
     });
   };
 
@@ -339,7 +406,7 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
             Filters
           </button>
           <button
-            onClick={() => { resetForm(); setShowAddModal(true); }}
+            onClick={() => { loadBatches(); resetForm(); setShowAddModal(true); }}
             className="w-10 h-10 flex items-center justify-center bg-[#1a237e] text-white rounded-full shadow-lg shadow-navy/20 hover:bg-navy/90 transition-all active:scale-95"
           >
             <span className="material-symbols-outlined text-[20px]">add</span>
@@ -373,26 +440,17 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
                   </th>
                   <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                     <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-700">
-                      USER EMAIL(S)
-                      <span className="material-symbols-outlined text-sm">unfold_more</span>
-                    </div>
-                  </th>
-                  <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                    <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-700">
                       DISCOUNT
                     </div>
                   </th>
                   <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                    PRODUCT(S)
+                    BATCHES
                   </th>
                   <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                     <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-700">
                       COUPON CODE
                       <span className="material-symbols-outlined text-sm">unfold_more</span>
                     </div>
-                  </th>
-                  <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-center">
-                    AFFILIATE LINK
                   </th>
                   <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
                     <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-700">
@@ -413,14 +471,24 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
                       <td className="px-6 py-5 text-[13px] font-medium text-gray-600">
                         {startIndex + index + 1}
                       </td>
-                      <td className="px-6 py-5">
-                        <span className="text-[13px] font-medium text-gray-800">All</span>
-                      </td>
                       <td className="px-6 py-5 text-[13px] font-bold text-gray-800">
                         {coupon.discountType === 'percentage' ? `${coupon.discountValue}%` : `₹${coupon.discountValue}/-`}
                       </td>
                       <td className="px-6 py-5">
-                        <span className="text-[13px] font-medium text-gray-800 line-clamp-1">{coupon.description || 'All Products'}</span>
+                        <span className="text-[13px] font-medium text-gray-800 line-clamp-1">
+                          {(() => {
+                            const linkedCount = batches.filter(b => 
+                              (coupon.batchIds || []).includes(b._id || b.id) || 
+                              (Array.isArray(b.discountCodes) && b.discountCodes.some(code => 
+                                (code || "").toString().trim().toUpperCase() === (coupon.code || "").toString().trim().toUpperCase()
+                              ))
+                            ).length;
+                            
+                            if (coupon.applicableToAllBatches) return 'All Batches';
+                            if (linkedCount === 0 && (!coupon.batchIds || coupon.batchIds.length === 0)) return 'All Batches';
+                            return `${linkedCount} Selected Batches`;
+                          })()}
+                        </span>
                       </td>
                       <td className="px-6 py-5">
                         <div className="flex flex-col items-start gap-1">
@@ -441,11 +509,6 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
                             </span>
                           )}
                         </div>
-                      </td>
-                      <td className="px-6 py-5 text-center">
-                        <button className="text-gray-400 hover:text-navy transition-all">
-                          <span className="material-symbols-outlined text-[18px]">link</span>
-                        </button>
                       </td>
                       <td className="px-6 py-5 text-[13px] font-medium text-gray-600">
                         {coupon.validUpto ? new Date(coupon.validUpto).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '/') + ' 23:59:00' : '-'}
@@ -615,8 +678,8 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
               <div className="space-y-1.5">
                 <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider">Usage Limit</label>
                 <input
-                  type="text"
-                  placeholder="Total uses allowed"
+                  type="number"
+                  placeholder="Unlimited if empty"
                   value={formData.usageLimit}
                   onChange={(e) => setFormData({ ...formData, usageLimit: e.target.value })}
                   className="w-full h-12 px-4 border border-gray-200 rounded-xl text-[14px] font-medium placeholder:text-gray-300 outline-none focus:border-navy transition-all"
@@ -650,6 +713,67 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
                   <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">calendar_today</span>
                 </div>
               </div>
+
+              {/* Batch Selection Type */}
+              <div className="space-y-1.5 col-span-2">
+                <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider">Batch Selection Type *</label>
+                <div className="flex gap-4 pt-1">
+                  <label className="flex items-center gap-2 cursor-pointer group">
+                    <input
+                      type="radio"
+                      name="batchSelectionType"
+                      checked={formData.batchSelectionType === 'all'}
+                      onChange={() => setFormData({ ...formData, batchSelectionType: 'all', batchIds: [] })}
+                      className="w-4 h-4 text-navy border-gray-300 focus:ring-navy cursor-pointer"
+                    />
+                    <span className="text-[14px] font-medium text-gray-700 group-hover:text-navy transition-colors">All Batches</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer group">
+                    <input
+                      type="radio"
+                      name="batchSelectionType"
+                      checked={formData.batchSelectionType === 'specific'}
+                      onChange={() => setFormData({ ...formData, batchSelectionType: 'specific' })}
+                      className="w-4 h-4 text-navy border-gray-300 focus:ring-navy cursor-pointer"
+                    />
+                    <span className="text-[14px] font-medium text-gray-700 group-hover:text-navy transition-colors">Specific Batches</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Specific Batches Selection */}
+              {formData.batchSelectionType === 'specific' && (
+                <div className="space-y-1.5 col-span-2">
+                  <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider">Select Batches *</label>
+                  <div className="grid grid-cols-2 gap-3 max-h-48 overflow-y-auto p-4 border border-gray-100 rounded-xl bg-gray-50/50 custom-scrollbar">
+                    {batches.map(batch => (
+                      <label key={batch._id} className="flex items-start gap-2.5 cursor-pointer group p-1.5 hover:bg-white rounded-lg transition-all">
+                        <input
+                          type="checkbox"
+                          checked={formData.batchIds.includes(batch._id)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setFormData({ ...formData, batchIds: [...formData.batchIds, batch._id] });
+                            } else {
+                              setFormData({ ...formData, batchIds: formData.batchIds.filter(id => id !== batch._id) });
+                            }
+                          }}
+                          className="mt-0.5 w-4 h-4 rounded border-gray-300 text-navy focus:ring-navy cursor-pointer"
+                        />
+                        <span className="text-[13px] font-semibold text-gray-600 group-hover:text-navy transition-colors leading-tight">{batch.title}</span>
+                      </label>
+                    ))}
+                    {batches.length === 0 && (
+                      <p className="col-span-2 text-[12px] text-gray-400 italic py-2 text-center">No batches found. Create some courses first.</p>
+                    )}
+                  </div>
+                  {formData.batchIds.length > 0 && (
+                    <p className="text-[11px] font-bold text-navy pt-1 uppercase tracking-tight italic">
+                      {formData.batchIds.length} batch(es) selected
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Description */}
@@ -759,8 +883,8 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
                 <div className="space-y-1.5">
                   <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider">Usage Limit</label>
                   <input
-                    type="text"
-                    placeholder="Total uses allowed"
+                    type="number"
+                    placeholder="Unlimited if empty"
                     value={formData.usageLimit}
                     onChange={(e) => setFormData({ ...formData, usageLimit: e.target.value })}
                     className="w-full h-12 px-4 border border-gray-200 rounded-xl text-[14px] font-medium placeholder:text-gray-300 outline-none focus:border-navy transition-all"
@@ -797,6 +921,67 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
                     <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">calendar_today</span>
                   </div>
                 </div>
+
+                {/* Batch Selection Type */}
+                <div className="space-y-1.5 col-span-2">
+                  <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider">Batch Selection Type *</label>
+                  <div className="flex gap-4 pt-1">
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                      <input
+                        type="radio"
+                        name="batchSelectionTypeEdit"
+                        checked={formData.batchSelectionType === 'all'}
+                        onChange={() => setFormData({ ...formData, batchSelectionType: 'all', batchIds: [] })}
+                        className="w-4 h-4 text-navy border-gray-300 focus:ring-navy cursor-pointer"
+                      />
+                      <span className="text-[14px] font-medium text-gray-700 group-hover:text-navy transition-colors">All Batches</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                      <input
+                        type="radio"
+                        name="batchSelectionTypeEdit"
+                        checked={formData.batchSelectionType === 'specific'}
+                        onChange={() => setFormData({ ...formData, batchSelectionType: 'specific' })}
+                        className="w-4 h-4 text-navy border-gray-300 focus:ring-navy cursor-pointer"
+                      />
+                      <span className="text-[14px] font-medium text-gray-700 group-hover:text-navy transition-colors">Specific Batches</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Specific Batches Selection */}
+                {formData.batchSelectionType === 'specific' && (
+                  <div className="space-y-1.5 col-span-2">
+                    <label className="text-[11px] font-black text-gray-500 uppercase tracking-wider">Select Batches *</label>
+                    <div className="grid grid-cols-2 gap-3 max-h-48 overflow-y-auto p-4 border border-gray-100 rounded-xl bg-gray-50/50 custom-scrollbar">
+                      {batches.map(batch => (
+                        <label key={batch._id} className="flex items-start gap-2.5 cursor-pointer group p-1.5 hover:bg-white rounded-lg transition-all">
+                          <input
+                            type="checkbox"
+                            checked={formData.batchIds.includes(batch._id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData({ ...formData, batchIds: [...formData.batchIds, batch._id] });
+                              } else {
+                                setFormData({ ...formData, batchIds: formData.batchIds.filter(id => id !== batch._id) });
+                              }
+                            }}
+                            className="mt-0.5 w-4 h-4 rounded border-gray-300 text-navy focus:ring-navy cursor-pointer"
+                          />
+                          <span className="text-[13px] font-semibold text-gray-600 group-hover:text-navy transition-colors leading-tight">{batch.title}</span>
+                        </label>
+                      ))}
+                      {batches.length === 0 && (
+                        <p className="col-span-2 text-[12px] text-gray-400 italic py-2 text-center">No batches found.</p>
+                      )}
+                    </div>
+                    {formData.batchIds.length > 0 && (
+                      <p className="text-[11px] font-bold text-navy pt-1 uppercase tracking-tight italic">
+                        {formData.batchIds.length} batch(es) selected
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Description */}

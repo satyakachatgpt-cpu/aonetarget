@@ -169,6 +169,10 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                     setShowTabs(!!courseData.settings.showTabs);
                 }
 
+            if (Array.isArray(courseData.discountCodes)) {
+                setSelectedCoupons(courseData.discountCodes);
+            }
+
             if (courseData.content) {
                 setSelectedTestSeries(courseData.content.testSeries || []);
                 setSelectedBook(courseData.content.book || '');
@@ -409,6 +413,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                     metaDescription,
                     courseLanguage
                 },
+                discountCodes: selectedCoupons,
                 content: {
                     testSeries: selectedTestSeries,
                     book: selectedBook,
