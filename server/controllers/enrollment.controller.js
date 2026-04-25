@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { findCourse, getRelatedCourseIds, getCourseIdVariants } from '../services/course.service.js';
 import { isPurchaseExpired } from '../utils/helpers.js';
 import { sendEmail, templates } from '../utils/email.js';
+import Student from '../models/Student.js';
 
 const { ObjectId } = mongoose.Types;
 
@@ -10,6 +11,8 @@ const { ObjectId } = mongoose.Types;
 export const getStudentCourses = async (req, res) => {
   try {
     const studentId = req.params.id;
+    
+    // 1. Robust Student Resolution
     const student = await db.collection('students').findOne({
       $or: [
         { id: studentId },
@@ -17,71 +20,120 @@ export const getStudentCourses = async (req, res) => {
         { _id: ObjectId.isValid(studentId) ? new ObjectId(studentId) : null }
       ].filter(v => v.id || v.userId || v._id)
     });
+
     if (!student) {
+      console.warn(`[getStudentCourses] Student not found: ${studentId}`);
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    const enrolledCourseIds = student.enrolledCourses || [];
+    const enrolledCourseIds = (student.enrolledCourses || []).map(id => String(id));
     if (enrolledCourseIds.length === 0) {
       return res.json([]);
     }
 
-    // Query courses by both custom id and mongo _id
     const objectIds = enrolledCourseIds
       .filter(id => ObjectId.isValid(id))
       .map(id => new ObjectId(id));
 
-    const courses = await db.collection('courses').find({
-      $or: [
-        { id: { $in: enrolledCourseIds } },
-        { _id: { $in: objectIds } }
-      ]
+    // 2. Multi-Collection Search
+    const collectionsToSearch = ['courses', 'packages', 'testSeries', 'test-series', 'subcourses', 'tests', 'test_series'];
+    let allContent = [];
+
+    for (const col of collectionsToSearch) {
+      try {
+        const results = await db.collection(col).find({
+          $or: [
+            { id: { $in: enrolledCourseIds } },
+            { _id: { $in: enrolledCourseIds } }, // Handle string _id
+            { _id: { $in: objectIds } }
+          ]
+        }).toArray();
+
+        results.forEach(item => {
+          // Tag with collection for logic branching if needed
+          allContent.push({ ...item, _collection: col });
+        });
+      } catch (err) {
+        console.error(`Error searching in ${col}:`, err.message);
+      }
+    }
+
+    // Deduplicate by canonical ID
+    const uniqueContentMap = new Map();
+    allContent.forEach(item => {
+      const idKey = String(item.id || item._id);
+      if (!uniqueContentMap.has(idKey)) {
+        uniqueContentMap.set(idKey, item);
+      }
+    });
+    const uniqueContent = Array.from(uniqueContentMap.values());
+
+    // 3. Process & Map content with progress
+    const watchProgress = await db.collection('videoProgress').find({ 
+      userId: student.userId || student.id || studentId 
     }).toArray();
 
-    // Fetch all watch progress for this student
-    const watchProgress = await db.collection('videoProgress').find({ userId: req.params.id }).toArray();
+    const mappedContent = await Promise.all(uniqueContent.map(async (c) => {
+      const contentIdStr = String(c.id || c._id);
+      const idVariants = await getCourseIdVariants(contentIdStr);
 
-    // Fetch and map courses with progress
-    const mappedCourses = await Promise.all(courses.map(async (c) => {
-      const courseIdStr = c.id || c._id.toString();
-      const idVariants = await getCourseIdVariants(courseIdStr);
+      // Default values
+      let totalLessons = c.lessons || c.videoCount || c.totalTests || 0;
+      let watchedCount = 0;
+      let progress = 0;
 
-      // Total videos in this course
-      const totalVideos = await db.collection('videos').countDocuments({
-        courseId: { $in: idVariants }
-      });
+      // Special handling for courses (videos)
+      if (c._collection === 'courses' || c._collection === 'subcourses' || !c._collection) {
+        const totalVideos = await db.collection('videos').countDocuments({
+          courseId: { $in: idVariants }
+        });
+        totalLessons = totalVideos;
+        
+        watchedCount = watchProgress.filter(wp =>
+          idVariants.includes(wp.courseId) && Number(wp.timestamp || 0) > 0
+        ).length;
+        
+        progress = totalVideos > 0 ? Math.round((watchedCount / totalVideos) * 100) : 0;
+      }
 
-      // Watched videos in this course
-      const watchedCount = watchProgress.filter(wp =>
-        idVariants.includes(wp.courseId) && Number(wp.timestamp || 0) > 0
-      ).length;
+      // Check Expiry (Respect manual assignments)
+      const allStudentIdVariants = [
+        String(student._id),
+        student.id,
+        student.userId
+      ].filter(Boolean);
 
-      const progress = totalVideos > 0 ? Math.round((watchedCount / totalVideos) * 100) : 0;
-
-      // Check for expiry
       const purchase = await db.collection('purchases').findOne({
-        studentId: req.params.id,
+        studentId: { $in: allStudentIdVariants },
         courseId: { $in: idVariants },
         status: 'completed'
       }, { sort: { createdAt: -1 } });
 
       const expired = isPurchaseExpired(purchase, c);
 
+      // Standardize shape for MyCourses.tsx
       return {
-        ...c,
-        id: courseIdStr,
+        _id: c._id,
+        id: contentIdStr,
+        name: c.name || c.title || c.seriesName || 'Untitled Content',
+        title: c.title || c.name || c.seriesName,
+        thumbnail: c.thumbnail || c.imageUrl,
+        subject: c.subject || c.category || (c._collection === 'testSeries' ? 'Test Series' : 'General'),
+        lessons: totalLessons,
+        duration: c.duration || '0',
         progress: progress,
-        totalVideos: totalVideos,
-        watchedCount: watchedCount,
-        expired: expired
+        expired: expired,
+        type: c.type || c.contentType || (c._collection === 'testSeries' ? 'test_series' : 'course')
       };
     }));
 
-    // Filter out expired courses for the main list
-    res.json(mappedCourses.filter(c => !c.expired));
+    // Filter out expired and return
+    const activeContent = mappedContent.filter(c => !c.expired);
+    console.log(`[getStudentCourses] Found ${activeContent.length} active courses for student ${studentId}`);
+    res.json(activeContent);
   } catch (error) {
-    console.error('Error fetching student courses:', error);
-    res.status(500).json({ error: 'Failed to fetch courses' });
+    console.error('Error in getStudentCourses:', error);
+    res.status(500).json({ error: 'Internal server error while fetching courses' });
   }
 };
 
@@ -94,7 +146,13 @@ export const enrollStudent = async (req, res) => {
       return res.status(400).json({ error: 'Course ID is required' });
     }
 
-    const student = await db.collection('students').findOne({ id: req.params.id });
+    const student = await Student.findOne({
+      $or: [
+        { id: req.params.id },
+        { userId: req.params.id },
+        { _id: mongoose.Types.ObjectId.isValid(req.params.id) ? req.params.id : null }
+      ].filter(v => v.id || v.userId || v._id)
+    });
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
@@ -112,8 +170,8 @@ export const enrollStudent = async (req, res) => {
       return res.status(400).json({ error: 'Already enrolled in this course' });
     }
 
-    await db.collection('students').updateOne(
-      { id: req.params.id },
+    await Student.updateOne(
+      { _id: student._id },
       { $addToSet: { enrolledCourses: canonicalId } }
     );
 
@@ -138,32 +196,66 @@ export const enrollStudent = async (req, res) => {
 
 export const checkEnrollment = async (req, res) => {
   try {
-    const student = await db.collection('students').findOne({ id: req.params.id });
+    const { id: studentId, courseId } = req.params;
+    
+    const student = await Student.findOne({
+      $or: [
+        { id: studentId },
+        { userId: studentId },
+        { _id: mongoose.Types.ObjectId.isValid(studentId) ? studentId : null }
+      ].filter(v => v.id || v.userId || v._id)
+    });
+    
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    const course = await findCourse(req.params.courseId);
+    const course = await findCourse(courseId);
     if (!course) {
       return res.json({ enrolled: false });
     }
 
-    const idVariants = await getRelatedCourseIds(course, req.params.courseId);
-    const enrolledCourses = student.enrolledCourses || [];
+    // Get all variants of the course ID (canonical, _id, slugs, etc.)
+    const idVariants = await getRelatedCourseIds(course, courseId);
+    const enrolledCourses = (student.enrolledCourses || []).map(id => String(id));
 
-    // Check if any variant of the course ID is in the student's enrolled list
-    let isEnrolled = idVariants.some(id => enrolledCourses.includes(id));
+    // 1. Primary Check: Is any variant in the student's enrolled list?
+    let isEnrolled = idVariants.some(id => enrolledCourses.includes(String(id)));
 
+    // 2. Expiry Check (Only if already enrolled via the list)
     if (isEnrolled) {
-      // Check for expiry
+      // Find the LATEST completed purchase for this course
       const purchase = await db.collection('purchases').findOne({
-        studentId: req.params.id,
+        studentId: studentId,
         courseId: { $in: idVariants },
         status: 'completed'
       }, { sort: { createdAt: -1 } });
 
-      if (isPurchaseExpired(purchase, course)) {
-        isEnrolled = false;
+      // If a purchase exists, enforce its expiry. 
+      // If NO purchase exists, treat it as a manual/admin assignment (Permanent/No Expiry).
+      if (purchase) {
+        if (isPurchaseExpired(purchase, course)) {
+          // If expired, we only revoke access if there wasn't a manual override.
+          // Heuristic: If they are STILL in enrolledCourses, but the latest purchase is old,
+          // we check if the purchase was made BEFORE the course was (theoretically) manually added.
+          // Since we don't have manual add timestamps, we'll allow access if the admin manually 
+          // keeps them in the list despite an old purchase.
+          isEnrolled = false;
+          
+          // CRITICAL OVERRIDE: If the student is in enrolledCourses but the latest purchase is expired,
+          // it might be a legacy purchase. A manual assignment doesn't create a purchase record.
+          // We allow access if it's a manual assignment that hasn't been unenrolled.
+          // BUT, to satisfy "manual assignment must work", we assume manual = valid.
+          // If the admin wants to unenroll, they should remove from array.
+          
+          // Re-evaluation: If it's in the array, it's a "Manual Intent".
+          // We only enforce expiry if the purchase is the ONLY source of truth.
+          // For now, let's stick to: Presence in array + (No Purchase OR Active Purchase) = Enrolled.
+          isEnrolled = !isPurchaseExpired(purchase, course);
+        }
+      } else {
+        // No purchase record found? It's a manual assignment.
+        isEnrolled = true; 
       }
     }
 
@@ -229,5 +321,51 @@ export const updateCourseProgress = async (req, res) => {
   } catch (error) {
     console.error('Error updating course progress:', error);
     res.status(500).json({ error: 'Failed to update course progress' });
+  }
+};
+
+
+
+export const unenrollStudent = async (req, res) => {
+  try {
+    const { courseId, id: studentId } = req.params;
+
+    if (!courseId) {
+      return res.status(400).json({ error: 'Course ID is required' });
+    }
+
+    // Robust matching for student (supports custom id, userId, and Mongo _id)
+    const student = await Student.findOne({
+      $or: [
+        { id: studentId },
+        { userId: studentId },
+        { _id: mongoose.Types.ObjectId.isValid(studentId) ? studentId : null }
+      ].filter(v => v.id || v.userId || v._id)
+    });
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    // Pull from enrolledCourses array
+    await Student.updateOne(
+      { _id: student._id },
+      { $pull: { enrolledCourses: courseId } }
+    );
+
+    // Update course enrollment count
+    const course = await findCourse(courseId);
+    if (course) {
+      const db = mongoose.connection.db;
+      await db.collection(course._collection || 'courses').updateOne(
+        { _id: course._id },
+        { $inc: { studentsEnrolled: -1 } }
+      );
+    }
+
+    res.json({ success: true, message: 'Unenrolled successfully' });
+  } catch (error) {
+    console.error('Unenrollment error:', error);
+    res.status(500).json({ error: 'Failed to unenroll' });
   }
 };

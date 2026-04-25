@@ -26,6 +26,22 @@ function sanitizeStudent(student) {
   return raw;
 }
 
+function getRealIP(req) {
+  let ip = req.headers['cf-connecting-ip'] || 
+           req.headers['x-real-ip'] || 
+           (req.headers['x-forwarded-for'] ? req.headers['x-forwarded-for'].split(',')[0].trim() : null) || 
+           req.ip || 
+           req.socket?.remoteAddress || 
+           req.connection?.remoteAddress ||
+           '127.0.0.1';
+
+  // Normalize localhost/IPv6-mapped IPv4
+  if (ip === '::1' || ip === '::ffff:127.0.0.1') return '127.0.0.1';
+  if (ip.startsWith('::ffff:')) return ip.replace('::ffff:', '');
+  
+  return ip;
+}
+
 /**
  * Hardened Password Verification with Auto-Migration
  * Handles both bcrypt and legacy plaintext passwords
@@ -88,7 +104,39 @@ async function persistRefreshToken(db, refreshToken, student, ip) {
 
 async function issueStudentSession(req, res, db, student, deviceId) {
   const { accessToken, refreshToken } = generateTokens(student);
-  await persistRefreshToken(db, refreshToken, student, req.ip || req.connection.remoteAddress);
+  const ip = getRealIP(req);
+  const deviceName = req.body.deviceName || 'Unknown Device';
+
+  await persistRefreshToken(db, refreshToken, student, ip);
+  
+  // Sync device info on successful login
+  if (student._id && deviceId) {
+    const incomingDeviceName = req.body.deviceName || req.headers['user-agent'] || 'Unknown Device';
+    const incomingDeviceType = req.body.deviceType || 'Browser Device';
+
+    const updated = await db.collection('students').findOneAndUpdate(
+      { _id: student._id },
+      { 
+        $set: { 
+          activeDeviceId: deviceId,
+          activeDeviceName: incomingDeviceName,
+          activeDeviceType: incomingDeviceType,
+          activeDeviceIP: ip,
+          activeDeviceLastLoginAt: new Date(),
+          updatedAt: new Date()
+        } 
+      },
+      { returnDocument: 'after' }
+    );
+
+    console.log('[DEVICE-IP-DEBUG] issueStudentSession', {
+      studentId: student.id || student._id,
+      ipBefore: student.activeDeviceIP,
+      ipAfter: updated?.activeDeviceIP,
+      incomingIP: ip
+    });
+  }
+
   setAccessCookie(res, accessToken);
   setRefreshCookie(res, refreshToken);
   return {
@@ -243,20 +291,81 @@ export const loginWithPassword = async (req, res) => {
       return res.status(400).json({ error: 'Device ID is required for secure login' });
     }
 
-    // STRICT DEVICE LOCK LOGIC
-    if (!student.deviceId) {
+    const incomingDeviceName = req.body.deviceName || req.headers['user-agent'] || 'Unknown Device';
+    const incomingDeviceType = req.body.deviceType || 'Browser Device';
+    const incomingIP = getRealIP(req);
+
+    console.log('[DEVICE-IP-DEBUG] loginWithPassword', {
+      headers: {
+        host: req.headers.host,
+        origin: req.headers.origin,
+        xForwardedFor: req.headers['x-forwarded-for'],
+        xRealIp: req.headers['x-real-ip'],
+      },
+      reqIp: req.ip,
+      socketRemoteAddress: req.socket?.remoteAddress,
+      extractedIP: incomingIP,
+      studentId: student.id || student._id,
+      currentActiveIP: student.activeDeviceIP
+    });
+
+    // DEVICE BINDING LOGIC
+    const activeDeviceId = student.activeDeviceId || student.deviceId;
+
+    if (!activeDeviceId) {
+      // CASE 1: First time login - Bind device
       await db.collection('students').updateOne(
         { _id: student._id },
-        { $set: { deviceId: incomingDeviceId, deviceLocked: true, pendingDeviceId: null } }
+        { 
+          $set: { 
+            activeDeviceId: incomingDeviceId, 
+            activeDeviceName: incomingDeviceName,
+            activeDeviceType: incomingDeviceType,
+            activeDeviceIP: incomingIP,
+            activeDeviceUserAgent: req.headers['user-agent'],
+            activeDeviceRegisteredAt: new Date(),
+            activeDeviceLastLoginAt: new Date(),
+            deviceId: incomingDeviceId, 
+            deviceLocked: true, 
+            pendingDeviceId: null 
+          } 
+        }
+      );
+    } else if (String(activeDeviceId) === String(incomingDeviceId)) {
+      // CASE 2: Same device - Update metadata
+      await db.collection('students').updateOne(
+        { _id: student._id },
+        { 
+          $set: { 
+            activeDeviceIP: incomingIP,
+            activeDeviceLastLoginAt: new Date()
+          } 
+        }
       );
     } else {
-      if (student.deviceLocked && student.deviceId !== incomingDeviceId) {
-        await db.collection('students').updateOne(
-          { _id: student._id },
-          { $set: { pendingDeviceId: incomingDeviceId } }
-        );
-        return res.status(403).json({ error: 'This account is locked to another device. Please contact admin.' });
-      }
+      // CASE 3: Different device - Create pending request
+      await db.collection('students').updateOne(
+        { _id: student._id },
+        { 
+          $set: { 
+            pendingDeviceId: incomingDeviceId,
+            pendingDeviceName: incomingDeviceName,
+            pendingDeviceType: incomingDeviceType,
+            pendingDeviceIP: incomingIP,
+            pendingDeviceUserAgent: req.headers['user-agent'],
+            pendingDeviceRequestedAt: new Date(),
+            pendingDeviceStatus: 'pending'
+          } 
+        }
+      );
+      return res.status(403).json({ 
+        success: false,
+        requiresApproval: true,
+        code: 'DEVICE_APPROVAL_REQUIRED',
+        message: 'This account is already linked to another device. Admin approval is required for this new device.',
+        deviceName: incomingDeviceName,
+        ip: incomingIP
+      });
     }
 
     const session = await issueStudentSession(req, res, db, student, incomingDeviceId);
@@ -493,18 +602,81 @@ export const verifyOtp = async (req, res) => {
     }
 
     const incomingDeviceId = deviceId || generateDeviceId();
-    if (!student.deviceId) {
+    const incomingDeviceName = req.body.deviceName || req.headers['user-agent'] || 'Unknown Device';
+    const incomingDeviceType = req.body.deviceType || 'Browser Device';
+    const incomingIP = getRealIP(req);
+
+    console.log('[DEVICE-IP-DEBUG] verifyOtp', {
+      headers: {
+        host: req.headers.host,
+        origin: req.headers.origin,
+        xForwardedFor: req.headers['x-forwarded-for'],
+        xRealIp: req.headers['x-real-ip'],
+      },
+      reqIp: req.ip,
+      socketRemoteAddress: req.socket?.remoteAddress,
+      extractedIP: incomingIP,
+      studentId: student.id || student._id,
+      currentActiveIP: student.activeDeviceIP
+    });
+
+    // DEVICE BINDING LOGIC
+    const activeDeviceId = student.activeDeviceId || student.deviceId; // Check both new and legacy fields
+
+    if (!activeDeviceId) {
+      // CASE 1: First time login - Bind device
       await db.collection('students').updateOne(
         { _id: student._id },
-        { $set: { deviceId: incomingDeviceId, deviceLocked: true, pendingDeviceId: null } }
+        { 
+          $set: { 
+            activeDeviceId: incomingDeviceId, 
+            activeDeviceName: incomingDeviceName,
+            activeDeviceType: incomingDeviceType,
+            activeDeviceIP: incomingIP,
+            activeDeviceUserAgent: req.headers['user-agent'],
+            activeDeviceRegisteredAt: new Date(),
+            activeDeviceLastLoginAt: new Date(),
+            deviceId: incomingDeviceId, // Sync legacy field
+            deviceLocked: true, 
+            pendingDeviceId: null 
+          } 
+        }
       );
-      student.deviceId = incomingDeviceId;
-    } else if (student.deviceLocked && student.deviceId !== incomingDeviceId) {
+    } else if (String(activeDeviceId) === String(incomingDeviceId)) {
+      // CASE 2: Same device - Update metadata
       await db.collection('students').updateOne(
         { _id: student._id },
-        { $set: { pendingDeviceId: incomingDeviceId } }
+        { 
+          $set: { 
+            activeDeviceIP: incomingIP,
+            activeDeviceLastLoginAt: new Date()
+          } 
+        }
       );
-      return res.status(403).json({ error: 'This account is locked to another device. Please contact admin.' });
+    } else {
+      // CASE 3: Different device - Create pending request
+      await db.collection('students').updateOne(
+        { _id: student._id },
+        { 
+          $set: { 
+            pendingDeviceId: incomingDeviceId,
+            pendingDeviceName: incomingDeviceName,
+            pendingDeviceType: incomingDeviceType,
+            pendingDeviceIP: incomingIP,
+            pendingDeviceUserAgent: req.headers['user-agent'],
+            pendingDeviceRequestedAt: new Date(),
+            pendingDeviceStatus: 'pending'
+          } 
+        }
+      );
+      return res.status(403).json({ 
+        success: false,
+        requiresApproval: true,
+        code: 'DEVICE_APPROVAL_REQUIRED',
+        message: 'This account is already linked to another device. Admin approval is required for this new device.',
+        deviceName: incomingDeviceName,
+        ip: incomingIP
+      });
     }
 
     await authService.consumeOtp(cleanPhone, purpose);

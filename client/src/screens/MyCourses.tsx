@@ -15,7 +15,17 @@ const MyCourses: React.FC = () => {
     if (storedStudent) {
       const studentData = JSON.parse(storedStudent);
       setStudent(studentData);
-      fetchCourses(studentData.id);
+      
+      // Robust ID resolution: use _id first, then id, then userId
+      const studentId = studentData._id || studentData.id || studentData.userId;
+      console.log(`[MyCourses] Resolving courses for student ID: ${studentId}`);
+      
+      if (studentId) {
+        fetchCourses(studentId);
+      } else {
+        console.warn('[MyCourses] No valid student ID found in stored data');
+        setLoading(false);
+      }
     } else {
       navigate('/student-login');
     }
@@ -23,16 +33,24 @@ const MyCourses: React.FC = () => {
 
   const fetchCourses = async (studentId: string) => {
     try {
+      console.log(`[MyCourses] Fetching courses from API...`);
       const response = await fetch(`/api/students/${studentId}/courses`, { headers: getAuthHeaders() });
       const data = await response.json();
-      const courseList: any[] = Array.isArray(data) ? data : [];
+      
+      // Handle various response shapes defensively
+      const courseList: any[] = Array.isArray(data) ? data : (data.courses || data.data || []);
+      console.log(`[MyCourses] API returned ${courseList.length} courses`);
 
-      // For each course, fetch actual video list (for true total) + enrollment progress (for completed count)
-      // This mirrors exactly how CourseDetails.tsx computes progressPercent.
+      // Map courses and calculate progress
+      // We keep the detailed calculation for accuracy, but ensure it doesn't block if one fails
       const coursesWithProgress = await Promise.all(
         courseList.map(async (course) => {
           const courseId = course.id || course._id;
+          if (!courseId) return { ...course, progress: course.progress || 0 };
+
           try {
+            // Optimization: If backend already provided progress > 0, we can skip re-fetching unless needed
+            // But for now we stick to the existing logic for maximum accuracy
             const [videosRes, progressRes] = await Promise.all([
               fetch(`/api/courses/${courseId}/videos`),
               fetch(`/api/students/${studentId}/courses/${courseId}/progress`, { headers: getAuthHeaders() }),
@@ -42,7 +60,6 @@ const MyCourses: React.FC = () => {
             const progressData = progressRes.ok ? await progressRes.json() : {};
 
             const allVideos: any[] = Array.isArray(videosData) ? videosData : [];
-            // Exclude live streams from total count — same filter as CourseDetails
             const totalVideos = allVideos.filter(
               (v) => v.contentType !== 'youtube_zoom' && v.contentType !== 'live_stream'
             ).length;
@@ -50,27 +67,24 @@ const MyCourses: React.FC = () => {
             const completedVideos: string[] = progressData.completedVideos || [];
             const completedCount = completedVideos.length;
 
-            // Match CourseDetails.tsx line 343 calculation exactly:
-            // progressPercent = totalVideos > 0 ? Math.round((completedVideos / totalVideos) * 100) : 0
             const calculatedProgress =
-              totalVideos > 0 ? Math.min(100, Math.round((completedCount / totalVideos) * 100)) : 0;
+              totalVideos > 0 ? Math.min(100, Math.round((completedCount / totalVideos) * 100)) : (course.progress || 0);
 
-            console.log(`[MyCourses] "${course.name || course.title}"`);
-            console.log(`  Total videos: ${totalVideos}`);
-            console.log(`  Completed videos: ${completedCount}`);
-            console.log(`  Progress: ${calculatedProgress}%`);
-
-            return { ...course, progress: calculatedProgress, lessons: totalVideos };
+            return { 
+              ...course, 
+              progress: calculatedProgress, 
+              lessons: totalVideos || course.lessons || 0 
+            };
           } catch (err) {
-            console.warn(`[MyCourses] Failed to fetch progress for course ${courseId}:`, err);
-            return { ...course, progress: 0 };
+            console.warn(`[MyCourses] Failed to fetch sub-progress for course ${courseId}:`, err);
+            return { ...course, progress: course.progress || 0 };
           }
         })
       );
 
       setCourses(coursesWithProgress);
     } catch (error) {
-      console.error('Error fetching courses:', error);
+      console.error('[MyCourses] Error fetching courses:', error);
     } finally {
       setLoading(false);
     }

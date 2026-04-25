@@ -200,9 +200,29 @@ export const approveDevice = async (req, res) => {
       return res.status(400).json({ error: 'No pending device request found' });
     }
 
+    // Move pending info to active
+    student.activeDeviceId = student.pendingDeviceId;
+    student.activeDeviceName = student.pendingDeviceName;
+    student.activeDeviceType = student.pendingDeviceType;
+    student.activeDeviceIP = student.pendingDeviceIP;
+    student.activeDeviceUserAgent = student.pendingDeviceUserAgent;
+    student.activeDeviceRegisteredAt = new Date();
+    student.activeDeviceLastLoginAt = new Date();
+    
+    // Sync legacy field
     student.deviceId = student.pendingDeviceId;
+    
     student.deviceLocked = true;
+    
+    // Clear pending fields
     student.pendingDeviceId = null;
+    student.pendingDeviceName = null;
+    student.pendingDeviceType = null;
+    student.pendingDeviceIP = null;
+    student.pendingDeviceUserAgent = null;
+    student.pendingDeviceRequestedAt = null;
+    student.pendingDeviceStatus = 'approved';
+    
     await student.save();
     
     res.json({ success: true, message: 'Device approved successfully' });
@@ -222,6 +242,13 @@ export const rejectDevice = async (req, res) => {
     if (!student) return res.status(404).json({ error: 'Student not found' });
     
     student.pendingDeviceId = null;
+    student.pendingDeviceName = null;
+    student.pendingDeviceType = null;
+    student.pendingDeviceIP = null;
+    student.pendingDeviceUserAgent = null;
+    student.pendingDeviceRequestedAt = null;
+    student.pendingDeviceStatus = 'rejected';
+    
     await student.save();
     
     res.json({ success: true, message: 'Device request rejected' });
@@ -241,11 +268,25 @@ export const resetDevice = async (req, res) => {
     if (!student) return res.status(404).json({ error: 'Student not found' });
     
     student.deviceId = null;
+    student.activeDeviceId = null;
+    student.activeDeviceName = null;
+    student.activeDeviceType = null;
+    student.activeDeviceIP = null;
+    student.activeDeviceUserAgent = null;
+    student.activeDeviceRegisteredAt = null;
+    student.activeDeviceLastLoginAt = null;
+    
     student.pendingDeviceId = null;
+    student.pendingDeviceName = null;
+    student.pendingDeviceType = null;
+    student.pendingDeviceIP = null;
+    student.pendingDeviceUserAgent = null;
+    student.pendingDeviceRequestedAt = null;
+    student.pendingDeviceStatus = null;
+    
     student.deviceLocked = true;
     
-    // Also remove any active session traces to force a complete logout mapping.
-    student.activeDeviceId = null;
+    // Also remove any active session traces
     student.sessionToken = null;
     student.activeSessions = [];
     

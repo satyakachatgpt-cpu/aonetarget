@@ -5,9 +5,19 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+const getDevApiBase = () => {
+  if (typeof window === 'undefined') return "http://localhost:5000";
+  const protocol = window.location.protocol;
+  const hostname = window.location.hostname;
+  if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+    return `${protocol}//${hostname}:5000`;
+  }
+  return `${protocol}//localhost:5000`;
+};
+
 export const API_BASE = import.meta.env.PROD
   ? (import.meta.env.VITE_API_URL || "")
-  : (import.meta.env.VITE_API_URL || "http://localhost:5000");
+  : (import.meta.env.VITE_API_URL || getDevApiBase());
 
 // ---------- MEDIA URL HELPERS ----------
 

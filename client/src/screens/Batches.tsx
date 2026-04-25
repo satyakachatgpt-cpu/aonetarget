@@ -104,80 +104,102 @@ const Batches: React.FC = () => {
                   onClick={() => navigate(`/course/${course._id || course.id}`)}
                   className="w-full aspect-[1.6/1] rounded-[1.5rem] overflow-hidden cursor-pointer shadow-sm hover:shadow-md transition-all duration-300 relative group"
                 >
-                  {hasImage ? (
-                    <div className="w-full h-full relative">
-                      {course.settings?.markNewBatch && (
-                        <div className="absolute top-3 left-3 z-30 px-2.5 py-1 bg-gradient-to-r from-orange-600 to-red-600 text-white text-[9px] font-black uppercase tracking-[0.1em] rounded-full shadow-lg border border-white/20 animate-pulse">
-                          NEW BATCH
+                  {(() => {
+                    const studentData = localStorage.getItem('studentData');
+                    const student = studentData ? JSON.parse(studentData) : null;
+                    const isEnrolled = student?.enrolledCourses?.some((ec: any) => 
+                      String(ec) === String(course.id) || String(ec) === String(course._id)
+                    );
+
+                    return hasImage ? (
+                      <div className="w-full h-full relative">
+                        {course.settings?.markNewBatch && (
+                          <div className="absolute top-3 left-3 z-30 px-2.5 py-1 bg-gradient-to-r from-orange-600 to-red-600 text-white text-[9px] font-black uppercase tracking-[0.1em] rounded-full shadow-lg border border-white/20 animate-pulse">
+                            NEW BATCH
+                          </div>
+                        )}
+                        <img 
+                          src={getImageUrl(course.imageUrl || course.thumbnail)} 
+                          alt={batchName} 
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
+                        <div className="absolute inset-0 p-3 flex flex-col justify-between">
+                          <div className="flex justify-between items-start">
+                            <span className="inline-block px-2 py-0.5 bg-white/20 backdrop-blur-md rounded-lg text-[8px] text-white font-black uppercase tracking-widest border border-white/10 shadow-sm">
+                              {course.category || 'BATCH'}
+                            </span>
+                            <div className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20">
+                              <span className="material-symbols-rounded text-white text-[14px]">school</span>
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <h4 className="font-bold text-[13px] text-white leading-tight line-clamp-1 mb-1.5 drop-shadow-md">
+                              {batchName}
+                            </h4>
+                            <div className="flex items-center justify-between">
+                               {isEnrolled ? (
+                                 <span className="text-[10px] font-black text-yellow-400 drop-shadow-md uppercase tracking-widest flex items-center gap-1">
+                                   <span className="material-symbols-rounded text-xs">verified</span>
+                                   Enrolled
+                                 </span>
+                               ) : (
+                                 <span className="text-[16px] font-black text-white drop-shadow-md">
+                                   {course.price === 0 || !course.price ? 'Free' : `₹${course.price}`}
+                                 </span>
+                               )}
+                               <button className="bg-white text-black text-[9px] font-black px-4 py-2 rounded-xl shadow-lg uppercase tracking-wider active:scale-95 transition-all">
+                                 {isEnrolled ? 'Open' : 'Join'}
+                               </button>
+                            </div>
+                          </div>
                         </div>
-                      )}
-                      <img 
-                        src={getImageUrl(course.imageUrl || course.thumbnail)} 
-                        alt={batchName} 
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
-                      <div className="absolute inset-0 p-3 flex flex-col justify-between">
-                        <div className="flex justify-between items-start">
-                          <span className="inline-block px-2 py-0.5 bg-white/20 backdrop-blur-md rounded-lg text-[8px] text-white font-black uppercase tracking-widest border border-white/10 shadow-sm">
+                      </div>
+                    ) : (
+                      <div className={`w-full h-full bg-gradient-to-br ${bgGrad} p-4 flex flex-col justify-between relative overflow-hidden`}>
+                        {course.settings?.markNewBatch && (
+                          <div className="absolute top-3 left-3 z-30 px-2.5 py-1 bg-red-600 text-white text-[9px] font-black uppercase tracking-[0.1em] rounded-full shadow-lg border border-white/20 animate-pulse">
+                            NEW BATCH
+                          </div>
+                        )}
+                        {/* Decorative elements */}
+                        <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
+                        <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-black/10 rounded-full blur-2xl"></div>
+                        
+                        <div className="relative z-10 flex justify-between items-start">
+                          <span className="inline-block px-2 py-0.5 bg-white/20 backdrop-blur-md rounded-lg text-[8px] text-white font-black uppercase tracking-widest border border-white/10">
                             {course.category || 'BATCH'}
                           </span>
-                          <div className="w-7 h-7 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20">
+                          <div className="w-7 h-7 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20">
                             <span className="material-symbols-rounded text-white text-[14px]">school</span>
                           </div>
                         </div>
                         
-                        <div>
-                          <h4 className="font-bold text-[13px] text-white leading-tight line-clamp-1 mb-1.5 drop-shadow-md">
+                        <div className="relative z-10">
+                          <h4 className="font-bold text-[14px] text-white leading-tight line-clamp-2 drop-shadow-sm">
                             {batchName}
                           </h4>
-                          <div className="flex items-center justify-between">
-                             <span className="text-[16px] font-black text-white drop-shadow-md">
+                        </div>
+                        
+                        <div className="relative z-10 flex items-center justify-between">
+                           {isEnrolled ? (
+                             <span className="text-[10px] font-black text-yellow-400 drop-shadow-md uppercase tracking-widest flex items-center gap-1">
+                               <span className="material-symbols-rounded text-xs">verified</span>
+                               Enrolled
+                             </span>
+                           ) : (
+                             <span className="text-[17px] font-black text-white drop-shadow-sm">
                                {course.price === 0 || !course.price ? 'Free' : `₹${course.price}`}
                              </span>
-                             <button className="bg-white text-black text-[9px] font-black px-4 py-2 rounded-xl shadow-lg uppercase tracking-wider active:scale-95 transition-all">
-                               Join
-                             </button>
-                          </div>
+                           )}
+                           <button className="bg-white text-black text-[9px] font-black px-4 py-2 rounded-xl shadow-lg transition-all active:scale-95 uppercase tracking-wider">
+                             {isEnrolled ? 'Open' : 'Join'}
+                           </button>
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div className={`w-full h-full bg-gradient-to-br ${bgGrad} p-4 flex flex-col justify-between relative overflow-hidden`}>
-                      {course.settings?.markNewBatch && (
-                        <div className="absolute top-3 left-3 z-30 px-2.5 py-1 bg-red-600 text-white text-[9px] font-black uppercase tracking-[0.1em] rounded-full shadow-lg border border-white/20 animate-pulse">
-                          NEW BATCH
-                        </div>
-                      )}
-                      {/* Decorative elements */}
-                      <div className="absolute -top-10 -right-10 w-32 h-32 bg-white/10 rounded-full blur-2xl"></div>
-                      <div className="absolute -bottom-10 -left-10 w-32 h-32 bg-black/10 rounded-full blur-2xl"></div>
-                      
-                      <div className="relative z-10 flex justify-between items-start">
-                        <span className="inline-block px-2 py-0.5 bg-white/20 backdrop-blur-md rounded-lg text-[8px] text-white font-black uppercase tracking-widest border border-white/10">
-                          {course.category || 'BATCH'}
-                        </span>
-                        <div className="w-7 h-7 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20">
-                          <span className="material-symbols-rounded text-white text-[14px]">school</span>
-                        </div>
-                      </div>
-                      
-                      <div className="relative z-10">
-                        <h4 className="font-bold text-[14px] text-white leading-tight line-clamp-2 drop-shadow-sm">
-                          {batchName}
-                        </h4>
-                      </div>
-                      
-                      <div className="relative z-10 flex items-center justify-between">
-                         <span className="text-[17px] font-black text-white drop-shadow-sm">
-                           {course.price === 0 || !course.price ? 'Free' : `₹${course.price}`}
-                         </span>
-                         <button className="bg-white text-black text-[9px] font-black px-4 py-2 rounded-xl shadow-lg transition-all active:scale-95 uppercase tracking-wider">
-                           Join
-                         </button>
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
               );
             })}

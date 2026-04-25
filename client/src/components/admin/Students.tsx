@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { indiaStateDistrictMap } from '../../utils/indiaStates';
-import { studentsAPI, coursesAPI, uploadAPI } from '../../services/apiClient';
+import { studentsAPI, coursesAPI, uploadAPI, packagesAPI, testSeriesAPI } from '../../services/apiClient';
 import { getImageUrl, getPdfUrl } from '../../lib/utils';
-import { RightSideDrawer, DrawerHeader, DrawerBody, DrawerFooter, FormInput, FormLabel, FormSelect, PrimaryButton, FormPasswordInput } from './DrawerSystem';
+import { RightSideDrawer, CenterModal, DrawerHeader, DrawerBody, DrawerFooter, FormInput, FormLabel, FormSelect, PrimaryButton, FormPasswordInput } from './DrawerSystem';
 
 interface Student {
   id: string;
@@ -64,13 +65,192 @@ interface Student {
     profilePhoto: string;
   };
   deviceId?: string;
+  activeDeviceId?: string;
+  activeDeviceName?: string;
+  activeDeviceType?: string;
+  activeDeviceIP?: string;
+  activeDeviceUserAgent?: string;
+  activeDeviceRegisteredAt?: string;
+  activeDeviceLastLoginAt?: string;
+
   pendingDeviceId?: string;
+  pendingDeviceName?: string;
+  pendingDeviceType?: string;
+  pendingDeviceIP?: string;
+  pendingDeviceUserAgent?: string;
+  pendingDeviceRequestedAt?: string;
+  pendingDeviceStatus?: string;
+
+  deviceIP?: string;
+  lastIP?: string;
+
   deviceLocked?: boolean;
+  enrolledCourses?: string[];
   _id?: string;
   createdAt?: string;
 }
 
-// Optimized Internal Component for Student Profile to fix lag and handle toggles locally
+const AddPackagesModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  onAssign: (selectedIds: string[]) => void;
+  isAssigning: boolean;
+}> = ({ isOpen, onClose, onAssign, isAssigning }) => {
+  const [products, setProducts] = React.useState<any[]>([]);
+  const [loading, setLoading] = React.useState(false);
+  const [search, setSearch] = React.useState('');
+  const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    if (isOpen) {
+      fetchProducts();
+      setSelectedIds([]);
+      setSearch('');
+    }
+  }, [isOpen]);
+
+  const fetchProducts = async () => {
+    setLoading(true);
+    try {
+      const [courses, pkgs, series] = await Promise.all([
+        coursesAPI.getAll().catch(() => []),
+        packagesAPI.getAll().catch(() => []),
+        testSeriesAPI.getAll().catch(() => [])
+      ]);
+
+      const all = [
+        ...courses.map((c: any) => ({ ...c, type: 'Batch' })),
+        ...pkgs.map((p: any) => ({ ...p, type: 'Package' })),
+        ...series.map((s: any) => ({ ...s, type: 'Test Series' }))
+      ];
+      setProducts(all);
+    } catch (err) {
+      toast.error('Failed to load products');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filtered = products.filter(p => 
+    (p.name || p.title || '').toLowerCase().includes(search.toLowerCase())
+  );
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  if (!isOpen) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[200000] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] animate-in fade-in duration-300" onClick={onClose} />
+      
+      <div className="relative bg-white w-full max-w-3xl rounded-[24px] shadow-2xl border border-slate-200 flex flex-col max-h-[85vh] overflow-hidden animate-in zoom-in-95 duration-200">
+        {/* Compact Header */}
+        <div className="px-6 py-5 border-b border-slate-100 flex justify-between items-center shrink-0">
+          <div>
+            <h3 className="text-[18px] font-bold text-slate-900 leading-tight">Add Packages</h3>
+            <p className="text-[12px] font-medium text-slate-500 mt-0.5">Select products to assign to this student</p>
+          </div>
+          <button onClick={onClose} className="w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center transition-colors text-slate-400 hover:text-slate-900">
+            <span className="material-symbols-outlined text-[20px]">close</span>
+          </button>
+        </div>
+
+        {/* Minimal Search Area */}
+        <div className="px-6 py-4 bg-slate-50/50 border-b border-slate-100 shrink-0">
+          <div className="relative">
+            <input 
+              type="text" 
+              placeholder="Search products by name or type..." 
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full h-11 pl-10 pr-4 bg-white border border-slate-200 rounded-xl text-[14px] font-medium placeholder:text-slate-400 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/5 transition-all"
+            />
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+          </div>
+        </div>
+
+        {/* Clean List Area */}
+        <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0 bg-white">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-3">
+              <div className="w-6 h-6 border-2 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" />
+              <p className="text-[12px] font-bold text-slate-400 uppercase tracking-widest">Refreshing Catalog...</p>
+            </div>
+          ) : filtered.length === 0 ? (
+             <div className="flex flex-col items-center justify-center py-20 text-center px-10">
+                <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300 mb-4">
+                  <span className="material-symbols-outlined text-[32px]">inventory_2</span>
+                </div>
+                <p className="text-[14px] font-bold text-slate-800">No matching products found</p>
+                <p className="text-[12px] font-medium text-slate-400 mt-1">Try adjusting your search terms</p>
+             </div>
+          ) : (
+            <div className="divide-y divide-slate-50">
+              {filtered.map((p) => {
+                const id = p.id || p._id;
+                const isSelected = selectedIds.includes(id);
+                return (
+                  <div 
+                    key={id} 
+                    onClick={() => toggleSelect(id)}
+                    className={`group flex items-center gap-4 px-6 py-4 transition-all cursor-pointer ${isSelected ? 'bg-indigo-50/50' : 'hover:bg-slate-50'}`}
+                  >
+                    <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all shrink-0 ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-200 bg-white group-hover:border-slate-300'}`}>
+                      {isSelected && <span className="material-symbols-outlined text-white text-[14px] font-bold">check</span>}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[14px] font-bold text-slate-800 truncate">{p.name || p.title}</span>
+                        <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-black uppercase tracking-tight shrink-0">{p.type}</span>
+                      </div>
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      <p className="text-[13px] font-bold text-slate-900">₹{p.price || 0}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Sticky Footer */}
+        <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/80 backdrop-blur-md flex items-center justify-between shrink-0">
+           <div className="flex flex-col">
+              <span className="text-[13px] font-bold text-slate-800">{selectedIds.length} items selected</span>
+              <p className="text-[10px] font-medium text-slate-500 uppercase tracking-wider">Ready to assign</p>
+           </div>
+           
+           <div className="flex items-center gap-3">
+              <button 
+                onClick={onClose} 
+                className="px-5 py-2.5 rounded-xl text-[13px] font-bold text-slate-600 hover:bg-slate-200 transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => onAssign(selectedIds)}
+                disabled={selectedIds.length === 0 || isAssigning}
+                className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl font-bold text-[13px] hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-2 shadow-lg shadow-indigo-200"
+              >
+                {isAssigning ? (
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : 'Assign Packages'}
+              </button>
+           </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+
+// Optimized Internal Component for Student Profile
 const StudentProfileContent: React.FC<{
   student: Student;
   onClose: () => void;
@@ -79,6 +259,7 @@ const StudentProfileContent: React.FC<{
   onApproveDevice: (student: Student) => void;
   onRejectDevice: (student: Student) => void;
   onResetDevice: (student: Student) => void;
+  onRefresh: () => void;
 }> = React.memo(({ 
   student, 
   onClose, 
@@ -86,12 +267,116 @@ const StudentProfileContent: React.FC<{
   getStateFromCity,
   onApproveDevice,
   onRejectDevice,
-  onResetDevice
+  onResetDevice,
+  onRefresh
 }) => {
+  const [activeProfileTab, setActiveProfileTab] = React.useState<'identification' | 'packages' | 'security'>('identification');
   const [isResetting, setIsResetting] = React.useState(false);
   const [newPass, setNewPass] = React.useState('');
   const [confirmPass, setConfirmPass] = React.useState('');
   const [isSaving, setIsSaving] = React.useState(false);
+
+  // Packages state
+  const [enrolledDetails, setEnrolledDetails] = React.useState<any[]>([]);
+  const [isLoadingEnrolled, setIsLoadingEnrolled] = React.useState(false);
+  const [showAddPackages, setShowAddPackages] = React.useState(false);
+  const [isAssigning, setIsAssigning] = React.useState(false);
+
+  // Profile photo upload
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = React.useState(false);
+
+  const fetchEnrolledDetails = React.useCallback(async () => {
+    if (!student.enrolledCourses || student.enrolledCourses.length === 0) {
+      setEnrolledDetails([]);
+      return;
+    }
+    setIsLoadingEnrolled(true);
+    try {
+      const [allCourses, allPkgs, allSeries] = await Promise.all([
+        coursesAPI.getAll().catch(() => []),
+        packagesAPI.getAll().catch(() => []),
+        testSeriesAPI.getAll().catch(() => [])
+      ]);
+
+      const details = student.enrolledCourses.map(id => {
+        const item = 
+          allCourses.find((c: any) => (c.id || c._id) === id) ||
+          allPkgs.find((p: any) => (p.id || p._id) === id) ||
+          allSeries.find((s: any) => (s.id || s._id) === id);
+        
+        if (item) {
+          return {
+            id: id,
+            name: item.name || item.title || 'Unnamed Content',
+            type: allCourses.some((c: any) => (c.id || c._id) === id) ? 'Batch' : 
+                  allPkgs.some((p: any) => (p.id || p._id) === id) ? 'Package' : 'Test Series',
+            price: item.price || 0
+          };
+        }
+        return { id: id, name: 'Unknown/Deleted Content', type: 'Unknown', price: 0 };
+      });
+      setEnrolledDetails(details);
+    } catch (error) {
+      console.error('Failed to fetch enrolled details:', error);
+    } finally {
+      setIsLoadingEnrolled(false);
+    }
+  }, [student.enrolledCourses]);
+
+  React.useEffect(() => {
+    fetchEnrolledDetails();
+  }, [fetchEnrolledDetails]);
+
+  const handleUnenroll = async (courseId: string) => {
+    if (!window.confirm('Are you sure you want to remove this access?')) return;
+    try {
+      await studentsAPI.unenroll(student.id, courseId);
+      toast.success('Package removed successfully');
+      onRefresh();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to remove package');
+    }
+  };
+
+  const handleAssignPackages = async (selectedIds: string[]) => {
+    try {
+      setIsAssigning(true);
+      for (const courseId of selectedIds) {
+        await studentsAPI.enroll(student.id, courseId);
+      }
+      toast.success('Packages assigned successfully');
+      setShowAddPackages(false);
+      onRefresh();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to assign packages');
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
+  const handleAvatarClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsUploading(true);
+      const res = await uploadAPI.uploadImage(file);
+      await studentsAPI.update(student.id, { 
+        documents: { ...student.documents, profilePhoto: res.url } 
+      });
+      toast.success('Profile photo updated successfully');
+      onRefresh();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to upload image');
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const handleResetPassword = async () => {
     if (!newPass) {
@@ -114,7 +399,6 @@ const StudentProfileContent: React.FC<{
       setIsResetting(false);
       setNewPass('');
       setConfirmPass('');
-      // We don't necessarily need to reload here as the parent will handle closures/updates
     } catch (err: any) {
       toast.error(err.message || 'Failed to reset password');
     } finally {
@@ -124,260 +408,467 @@ const StudentProfileContent: React.FC<{
 
   if (isResetting) {
     return (
-      <div className="space-y-8 pb-10 animate-in fade-in slide-in-from-right-4 duration-300">
-        <div className="p-8 bg-gray-50 rounded-[32px] border border-gray-100 shadow-inner">
-          <div className="flex items-center gap-4 mb-8">
-             <div className="w-12 h-12 bg-gray-900 rounded-2xl flex items-center justify-center text-white shadow-lg">
-                <span className="material-symbols-outlined text-[24px]">lock_reset</span>
-             </div>
-             <div>
-                <h3 className="text-[18px] font-black text-gray-900 uppercase tracking-tight">Set New Password</h3>
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Resetting Access for Student</p>
-             </div>
-          </div>
-
-          <div className="space-y-6">
-            <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md">
-               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Student Identifier</p>
-               <div className="w-full h-14 px-4 bg-gray-50 border border-gray-100 rounded-xl flex items-center">
-                  <span className="text-[14px] font-black text-[#1a237e] tracking-wider">{student.userId || student.id}</span>
-               </div>
-            </div>
-
-            <div className="space-y-4 pt-2">
-              <div className="space-y-2">
-                <FormLabel label="NEW PASSWORD" required />
-                <FormPasswordInput 
-                  value={newPass}
-                  onChange={(e) => setNewPass(e.target.value)}
-                  placeholder="Enter secure password"
-                  autoFocus
-                />
+      <div className="h-[95vh] md:h-[90vh] max-h-[95vh] md:max-h-[90vh] flex flex-col bg-white overflow-hidden animate-in fade-in slide-in-from-right-4 duration-300">
+        <div className="flex justify-between items-center px-8 py-5 border-b border-gray-100 bg-white z-[100] shrink-0">
+           <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gray-900 rounded-xl flex items-center justify-center text-white shadow-lg shadow-gray-200">
+                <span className="material-symbols-outlined text-[20px]">lock_reset</span>
               </div>
-
-              <div className="space-y-2">
-                <FormLabel label="CONFIRM NEW PASSWORD" required />
-                <FormPasswordInput 
-                  value={confirmPass}
-                  onChange={(e) => setConfirmPass(e.target.value)}
-                  placeholder="Re-enter password"
-                />
+              <div>
+                <h3 className="text-[16px] font-black text-gray-900 uppercase tracking-tight leading-none">Security Reset</h3>
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest mt-1">Updating student credentials</p>
               </div>
-            </div>
-          </div>
+           </div>
+           <button onClick={() => setIsResetting(false)} className="w-10 h-10 rounded-xl hover:bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-900 transition-all">
+              <span className="material-symbols-outlined">close</span>
+           </button>
         </div>
 
-        <div className="space-y-3 pt-4">
-          <PrimaryButton 
-            onClick={handleResetPassword}
-            disabled={isSaving}
-            className="rounded-2xl"
-          >
-            {isSaving ? (
-              <div className="flex items-center gap-3">
-                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span className="uppercase tracking-[0.1em]">Processing...</span>
+        <div className="flex-1 min-h-0 overflow-y-auto p-8 custom-scrollbar">
+          <div className="max-w-2xl mx-auto space-y-8">
+            <div className="p-8 bg-gray-50/50 rounded-[32px] border border-gray-100 shadow-inner">
+              <div className="space-y-6">
+                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm transition-all hover:shadow-md">
+                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 ml-1">Student Identifier</p>
+                   <div className="w-full h-14 px-4 bg-gray-50 border border-gray-100 rounded-xl flex items-center">
+                      <span className="text-[15px] font-black text-[#1a237e] tracking-wider font-mono">{student.userId || student.id}</span>
+                   </div>
+                </div>
+
+                <div className="space-y-5 pt-2">
+                  <div className="space-y-2">
+                    <FormLabel label="NEW PASSWORD" required />
+                    <FormPasswordInput 
+                      placeholder="Create secure new password"
+                      value={newPass}
+                      onChange={(e) => setNewPass(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <FormLabel label="CONFIRM NEW PASSWORD" required />
+                    <FormPasswordInput 
+                      placeholder="Repeat new password exactly"
+                      value={confirmPass}
+                      onChange={(e) => setConfirmPass(e.target.value)}
+                    />
+                  </div>
+                </div>
               </div>
-            ) : 'CONFIRM RESET'}
-          </PrimaryButton>
-          
-          <button
-            onClick={() => { setIsResetting(false); setNewPass(''); setConfirmPass(''); }}
-            disabled={isSaving}
-            className="w-full h-14 bg-white border-2 border-gray-100 text-gray-400 rounded-2xl font-black text-[11px] uppercase tracking-widest hover:border-gray-300 hover:text-gray-900 transition-all active:scale-95 disabled:opacity-50"
-          >
-            Cancel & Return
-          </button>
+            </div>
+
+            <div className="space-y-3">
+              <PrimaryButton 
+                onClick={handleResetPassword}
+                disabled={isSaving}
+                className="rounded-2xl h-16 shadow-xl shadow-indigo-100"
+              >
+                {isSaving ? (
+                  <div className="flex items-center gap-3">
+                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span className="uppercase tracking-[0.1em]">Processing...</span>
+                  </div>
+                ) : 'CONFIRM RESET'}
+              </PrimaryButton>
+              
+              <button
+                onClick={() => { setIsResetting(false); setNewPass(''); setConfirmPass(''); }}
+                disabled={isSaving}
+                className="w-full h-16 bg-white border-2 border-gray-100 text-gray-400 rounded-2xl font-black text-[12px] uppercase tracking-widest hover:border-gray-300 hover:text-gray-900 transition-all active:scale-95 disabled:opacity-50"
+              >
+                Cancel & Return
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 pb-10 animate-in fade-in slide-in-from-left-4 duration-300">
-      {/* Header Profile Info */}
-      <div className="p-6 bg-white rounded-3xl border border-gray-100 shadow-sm flex items-center gap-5">
-        <div className="w-20 h-20 rounded-2xl bg-[#1a237e]/5 border border-[#1a237e]/10 overflow-hidden flex items-center justify-center">
-          {student.documents?.profilePhoto ? (
-            <img src={getImageUrl(student.documents.profilePhoto)} alt="" className="w-full h-full object-cover" />
-          ) : (
-            <span className="material-symbols-outlined text-[#1a237e] text-[40px]">person</span>
-          )}
-        </div>
-        <div>
-          <h3 className="text-[18px] font-black text-gray-900 leading-tight">{student.name}</h3>
-          <div className="flex items-center gap-2 mt-1.5">
-            <span className="px-2 py-0.5 bg-blue-50 text-blue-600 rounded text-[10px] font-black uppercase tracking-wider">{student.id}</span>
-            <span className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-black uppercase border ${student.status === 'active' ? 'bg-green-50 text-green-600 border-green-100' : 'bg-red-50 text-red-600 border-red-100'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${student.status === 'active' ? 'bg-green-500' : 'bg-red-500'}`} />
-              {student.status}
-            </span>
+    <div className="h-[86vh] flex flex-col bg-white overflow-hidden animate-in fade-in zoom-in-95 duration-300 rounded-[22px] shadow-2xl border border-slate-200">
+      {/* Pixel Minimal Header */}
+      <div className="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-white z-[100] shrink-0">
+        <div className="flex items-center gap-4">
+          <div 
+            onClick={handleAvatarClick}
+            className="relative w-14 h-14 rounded-2xl bg-slate-50 border border-slate-100 overflow-hidden flex items-center justify-center cursor-pointer group shadow-sm transition-transform active:scale-95"
+          >
+            {student.documents?.profilePhoto ? (
+              <img src={getImageUrl(student.documents.profilePhoto)} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+            ) : (
+              <span className="material-symbols-outlined text-slate-300 text-[28px]">person</span>
+            )}
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+               <span className="material-symbols-outlined text-white text-[20px]">photo_camera</span>
+            </div>
+            {isUploading && (
+              <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
+                 <div className="w-5 h-5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+            <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
           </div>
+          <div>
+            <h3 className="text-[18px] font-bold text-slate-900 leading-tight">{student.name}</h3>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[10px] font-bold uppercase tracking-wider font-mono">{student.id}</span>
+              <span className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${student.status === 'active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>
+                <span className={`w-1 h-1 rounded-full ${student.status === 'active' ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                {student.status}
+              </span>
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          className="w-9 h-9 flex items-center justify-center hover:bg-slate-50 text-slate-400 hover:text-slate-900 rounded-xl transition-all border border-transparent hover:border-slate-200"
+        >
+          <span className="material-symbols-outlined text-[22px]">close</span>
+        </button>
+      </div>
+
+      {/* Pixel Minimal Tab Selector */}
+      <div className="px-6 py-3 bg-slate-50/50 border-b border-slate-100 shrink-0">
+        <div className="max-w-4xl mx-auto flex gap-2">
+          {[
+            { id: 'identification', label: 'Identity', icon: 'badge' },
+            { id: 'packages', label: 'Packages', icon: 'package_2' },
+            { id: 'security', label: 'Security', icon: 'security' }
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveProfileTab(tab.id as any)}
+              className={`flex-1 h-11 flex items-center justify-center gap-2 rounded-xl transition-all active:scale-[0.98] text-[12px] font-bold uppercase tracking-wide border ${
+                activeProfileTab === tab.id 
+                ? 'bg-indigo-50 border-indigo-100 text-indigo-700' 
+                : 'bg-white border-slate-100 text-slate-400 hover:border-slate-200 hover:text-slate-600'
+              }`}
+            >
+              <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
+              <span className="hidden sm:inline">{tab.label}</span>
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="px-1">
-        <div className="bg-white rounded-[32px] border border-gray-100 shadow-[0_4px_20px_rgb(0,0,0,0.03)]">
-          <div className="p-6 space-y-6">
-            <div className="flex items-center gap-3 border-b border-gray-50 pb-4">
-              <span className="material-symbols-outlined text-indigo-600 text-[20px]">badge</span>
-              <h4 className="text-[14px] font-black text-gray-900 uppercase tracking-wider">Identification</h4>
-            </div>
-
-            <div className="grid grid-cols-2 gap-x-8 gap-y-6">
-              {[
-                { label: 'Full Name', value: student.name },
-                { label: 'Email Address', value: student.email },
-                { label: 'Phone Number', value: student.phone },
-                { label: 'State', value: student.state || getStateFromCity(student.city) },
-                { label: 'District', value: student.district || student.city },
-                { label: 'Gender', value: student.gender || student.admission?.gender },
-                { label: 'Address', value: student.admission?.fullAddress || (student as any).address || (student as any).fullAddress },
-                { label: 'Class', value: student.class },
-                { label: 'Higher Education', value: student.highQualification },
-                { label: 'Age / DOB', value: student.dob ? new Date(student.dob).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A' }
-              ].map((item, idx) => (
-                <div key={idx} className="space-y-1">
-                   <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{item.label}</p>
-                   <p className="text-[13px] font-bold text-gray-800 truncate">{item.value || 'N/A'}</p>
+      {/* Main Content Area - Optimized Spacing */}
+      <div className="flex-1 min-h-0 overflow-y-auto bg-white custom-scrollbar scroll-smooth">
+        <div className="p-6 max-w-6xl mx-auto">
+          {activeProfileTab === 'identification' && (
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-400">
+              <div className="bg-slate-50/50 rounded-2xl border border-slate-100 p-6">
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-4 mb-6">
+                  <span className="material-symbols-outlined text-slate-400 text-[18px]">info</span>
+                  <h4 className="text-[13px] font-bold text-slate-900 uppercase tracking-wider">Identification Details</h4>
                 </div>
-              ))}
-            </div>
 
-            {/* Referral & Coins Section */}
-            <div className="pt-6 border-t border-gray-100">
-              <div className="flex items-center gap-3 mb-4">
-                <span className="material-symbols-outlined text-amber-600 text-[20px]">payments</span>
-                <h4 className="text-[14px] font-black text-gray-900 uppercase tracking-wider">Referral & Coins</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[
+                    { label: 'Full Name', value: student.name },
+                    { label: 'Email Address', value: student.email },
+                    { label: 'Phone Number', value: student.phone },
+                    { label: 'State', value: student.state || getStateFromCity(student.city) },
+                    { label: 'District', value: student.district || student.city },
+                    { label: 'Gender', value: student.gender || student.admission?.gender },
+                    { label: 'Address', value: student.admission?.fullAddress || student.address },
+                    { label: 'Class', value: student.class },
+                    { label: 'Higher Education', value: student.highQualification },
+                    { label: 'Age / DOB', value: student.dob ? new Date(student.dob).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A' }
+                  ].map((item, idx) => (
+                    <div key={idx} className="space-y-1">
+                       <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">{item.label}</p>
+                       <p className="text-[14px] font-semibold text-slate-800 truncate" title={item.value || 'N/A'}>{item.value || 'N/A'}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="bg-amber-50/50 p-5 rounded-2xl border border-amber-100/50">
-                <div className="grid grid-cols-2 gap-y-4">
-                  <div>
-                    <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Referrer Code</p>
-                    <p className="text-[13px] font-bold text-gray-900">{ (student as any).referredBy || 'Direct Signup' }</p>
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Welcome Bonus</p>
-                    <p className="text-[13px] font-bold text-gray-900">{ (student as any).welcomeBonus || 0 } Coins</p>
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Total Coins Earned</p>
-                    <p className="text-[14px] font-black text-[#1a237e]">{ (student as any).coins || 0 } <span className="text-[10px] font-bold text-gray-400 ml-0.5">Coins</span></p>
-                  </div>
-                  <div>
-                    <p className="text-[9px] font-black text-amber-600 uppercase tracking-widest mb-1">Available to Use</p>
-                    <p className="text-[14px] font-black text-green-600">{ (student as any).availableCoins || 0 } <span className="text-[10px] font-bold text-gray-400 ml-0.5">Coins</span></p>
-                  </div>
-                </div>
-                { (student as any).usedCoins > 0 && (
-                  <div className="mt-4 pt-4 border-t border-amber-100/50 flex items-center justify-between">
-                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-widest">Total Redeemed</p>
-                    <p className="text-[12px] font-black text-red-500">{ (student as any).usedCoins } Coins</p>
-                  </div>
-                )}
-              </div>
-            </div>
 
-            {/* Account Security Section */}
-            <div className="pt-4 mt-2">
-              <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100 flex items-center justify-between h-16">
-                <div className="flex-1">
-                   <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-0.5">Password Status</p>
-                   <div className="flex items-center gap-2 mt-1">
-                     <span className={`w-2 h-2 rounded-full ${student.hasPassword ? 'bg-green-500' : 'bg-red-500'}`}></span>
-                     <p className={`text-[12px] font-black uppercase tracking-widest ${student.hasPassword ? 'text-gray-900' : 'text-red-600'}`}>
-                       {student.hasPassword ? 'SECURELY SET' : 'NOT SET'}
-                     </p>
-                   </div>
+              {/* Compact Wallet & Referral */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-white rounded-2xl border border-slate-100 p-5 flex items-center justify-between group hover:border-amber-200 transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-600 shadow-sm group-hover:bg-amber-100 transition-colors">
+                      <span className="material-symbols-outlined text-[20px] fill-1">monetization_on</span>
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Available Coins</p>
+                      <p className="text-[20px] font-black text-slate-900 leading-none">{(student as any).coins || 0}</p>
+                    </div>
+                  </div>
+                  <span className="material-symbols-outlined text-slate-100 text-[32px] group-hover:text-amber-100 transition-colors">savings</span>
                 </div>
-                
-                <div className="flex items-center gap-2">
+
+                <div className="bg-white rounded-2xl border border-slate-100 p-5 flex items-center justify-between group hover:border-blue-200 transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center text-blue-600 shadow-sm group-hover:bg-blue-100 transition-colors">
+                      <span className="material-symbols-outlined text-[20px]">share</span>
+                    </div>
+                    <div>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Referral Code</p>
+                      <p className="text-[16px] font-black text-slate-900 font-mono tracking-wider leading-none uppercase">{(student as any).referralCode || 'N/A'}</p>
+                    </div>
+                  </div>
                   <button 
-                    onClick={() => setIsResetting(true)}
-                    className="h-10 px-4 rounded-xl flex items-center gap-2 bg-gray-900 text-white hover:bg-black transition-all shadow-sm active:scale-95"
-                    title="Edit Profile to Reset Password"
+                    onClick={() => {
+                      const code = (student as any).referralCode;
+                      if (code) {
+                        navigator.clipboard.writeText(code);
+                        toast.success('Referral code copied!');
+                      }
+                    }}
+                    className="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all active:scale-90"
                   >
-                    <span className="material-symbols-outlined text-[18px]">key</span>
-                    <span className="text-[10px] font-black uppercase tracking-wider">Reset</span>
+                     <span className="material-symbols-outlined text-[18px]">content_copy</span>
                   </button>
                 </div>
               </div>
             </div>
+          )}
 
-            {/* Device Management Section */}
-            <div className="pt-4 border-t border-gray-100">
-              <div className="flex items-center gap-3 mb-4">
-                <span className="material-symbols-outlined text-indigo-600 text-[20px]">devices</span>
-                <h4 className="text-[14px] font-black text-gray-900 uppercase tracking-wider">Device Security</h4>
-              </div>
-              <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Current Status</p>
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11px] font-black uppercase tracking-wider ${
-                      student.deviceId ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-200 text-gray-600'
-                    }`}>
-                      <span className="material-symbols-outlined text-[14px]">
-                        {student.deviceId ? 'lock' : 'lock_open'}
-                      </span>
-                      {student.deviceId ? 'Device Locked' : 'Not Set'}
-                    </span>
+          {activeProfileTab === 'packages' && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-400">
+              <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden flex flex-col">
+                <div className="px-6 py-5 border-b border-slate-100 bg-slate-50/30 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600">
+                      <span className="material-symbols-outlined text-[20px]">package_2</span>
+                    </div>
+                    <div>
+                      <h4 className="text-[14px] font-bold text-slate-900 uppercase tracking-wide">Assigned Packages</h4>
+                      <p className="text-[10px] font-medium text-slate-400 uppercase mt-0.5">Active course and catalog access</p>
+                    </div>
                   </div>
-                  {student.deviceId && (
-                    <button
-                      onClick={() => onResetDevice(student)}
-                      className="px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-gray-50 hover:text-red-600 transition-colors shadow-sm active:scale-95 flex items-center gap-2"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">device_reset</span>
-                      Reset Device
-                    </button>
-                  )}
+                  <button 
+                    onClick={() => setShowAddPackages(true)}
+                    className="h-10 px-5 bg-indigo-600 text-white rounded-xl text-[11px] font-bold uppercase tracking-wider hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-1.5 shadow-sm shadow-indigo-100"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">add</span>
+                    Assign New
+                  </button>
                 </div>
 
-                {student.pendingDeviceId && (
-                  <div className="mt-4 p-4 bg-orange-50 border border-orange-200 rounded-xl">
-                    <div className="flex items-start gap-3">
-                      <span className="material-symbols-outlined text-orange-500 mt-0.5">warning</span>
-                      <div>
-                        <h5 className="text-[12px] font-black text-orange-800 uppercase tracking-wider mb-1">New Device Request Pending</h5>
-                        <p className="text-[11px] font-bold text-orange-600 mb-4 opacity-80">
-                          This student is trying to login from a new device. Do you want to allow this device and block the old one?
-                        </p>
-                        <div className="flex items-center gap-3">
+                <div className="max-h-[500px] overflow-y-auto custom-scrollbar">
+                  <table className="w-full">
+                    <thead className="sticky top-0 bg-slate-50/90 backdrop-blur-md z-10 border-b border-slate-100">
+                      <tr>
+                        <th className="px-6 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">#</th>
+                        <th className="px-6 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Package</th>
+                        <th className="px-6 py-3.5 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Category</th>
+                        <th className="px-6 py-3.5 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Price</th>
+                        <th className="px-6 py-3.5 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50 bg-white">
+                      {isLoadingEnrolled ? (
+                        <tr>
+                          <td colSpan={5} className="py-20 text-center">
+                             <div className="w-8 h-8 border-3 border-indigo-50 border-t-indigo-600 rounded-full animate-spin mx-auto" />
+                             <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest mt-3">Syncing Catalog...</p>
+                          </td>
+                        </tr>
+                      ) : enrolledDetails.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="py-20 text-center">
+                             <span className="material-symbols-outlined text-[40px] text-slate-200">inventory_2</span>
+                             <p className="text-[12px] font-bold text-slate-400 mt-2">No active packages assigned.</p>
+                          </td>
+                        </tr>
+                      ) : (
+                        enrolledDetails.map((pkg, idx) => (
+                          <tr key={pkg.id || idx} className="hover:bg-slate-50/50 transition-colors group">
+                            <td className="px-6 py-4 text-[11px] font-bold text-slate-300">{idx + 1}</td>
+                            <td className="px-6 py-4">
+                              <p className="text-[14px] font-medium text-slate-800 line-clamp-1" title={pkg.name}>{pkg.name}</p>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[9px] font-bold uppercase tracking-wider">{pkg.type}</span>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <p className="text-[14px] font-bold text-slate-900">₹{pkg.price}</p>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <button 
+                                onClick={() => handleUnenroll(pkg.id)}
+                                className="w-8 h-8 rounded-lg text-slate-300 hover:bg-rose-50 hover:text-rose-600 transition-all flex items-center justify-center ml-auto border border-transparent hover:border-rose-100 shadow-none active:scale-90"
+                                title="Remove Access"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">delete_sweep</span>
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeProfileTab === 'security' && (
+            <div className="space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-400">
+              <div className="bg-white rounded-2xl border border-slate-100 p-6">
+                <div className="flex items-center justify-between gap-4 border-b border-slate-50 pb-5 mb-6">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center text-orange-600">
+                      <span className="material-symbols-outlined text-[20px]">security</span>
+                    </div>
+                    <div>
+                      <h4 className="text-[14px] font-bold text-slate-900 uppercase tracking-wide">Access & Device Security</h4>
+                      <p className="text-[10px] font-medium text-slate-400 uppercase mt-0.5">Control login binding and credentials</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => setIsResetting(true)}
+                    className="h-10 px-5 bg-slate-900 text-white rounded-xl text-[11px] font-bold uppercase tracking-wider hover:bg-black transition-all active:scale-95 flex items-center gap-1.5 shadow-sm"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">lock_reset</span>
+                    Update Password
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <div className="p-5 bg-slate-50 rounded-2xl border border-slate-100">
+                      <div className="flex items-center justify-between mb-4">
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">Active Device Security</p>
+                        {student.activeDeviceLastLoginAt && (
+                          <span className="text-[9px] font-bold text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-md">
+                            LAST LOGIN: {new Date(student.activeDeviceLastLoginAt).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
+                      
+                      <div className="space-y-3">
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] font-bold text-slate-400">HARDWARE INFO</span>
+                          <div className="flex items-center gap-2 px-3 py-2.5 bg-white rounded-xl border border-slate-100 text-[12px] font-bold text-slate-700">
+                            <span className="material-symbols-outlined text-[18px] text-indigo-400">devices</span>
+                            {student.activeDeviceType || student.activeDeviceName || 'Unknown Device'}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="flex flex-col gap-1.5">
+                            <span className="text-[10px] font-bold text-slate-400">IP ADDRESS</span>
+                            <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl border border-slate-100 text-[11px] font-bold text-slate-700 font-mono">
+                              {student.activeDeviceIP || (student as any).deviceIP || (student as any).lastIP || 'N/A'}
+                            </div>
+                          </div>
+                          <div className="flex flex-col gap-1.5">
+                            <span className="text-[10px] font-bold text-slate-400">REGISTRATION</span>
+                            <div className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl border border-slate-100 text-[11px] font-bold text-slate-700">
+                              {student.activeDeviceRegisteredAt ? new Date(student.activeDeviceRegisteredAt).toLocaleDateString() : 'N/A'}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[10px] font-bold text-slate-400">UNIQUE DEVICE IDENTIFIER (UID)</span>
+                          <div className="px-3 py-2 bg-white rounded-xl border border-slate-100 font-mono text-[10px] text-slate-500 break-all select-all leading-tight">
+                            {student.activeDeviceId || student.deviceId || 'NO DEVICE REGISTERED'}
+                          </div>
+                        </div>
+                      </div>
+
+                      {(student.activeDeviceId || student.deviceId) && (
+                         <button 
+                           onClick={() => onResetDevice(student)}
+                           className="mt-5 w-full h-11 px-4 bg-white border border-slate-200 text-slate-600 rounded-xl text-[11px] font-bold uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all group shadow-sm"
+                         >
+                           <span className="material-symbols-outlined text-[18px] transition-transform group-hover:rotate-180">logout</span>
+                           Unlink Active Device
+                         </button>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-3 px-4 py-3 bg-indigo-50/50 rounded-xl border border-indigo-100/30">
+                       <span className="material-symbols-outlined text-indigo-400 text-[18px]">lock</span>
+                       <p className="text-[10px] font-medium text-indigo-900 leading-tight">Secure 1:1 hardware binding is active. Shared logins are automatically blocked.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-4">
+                    {student.pendingDeviceId ? (
+                      <div className="p-6 bg-orange-50 rounded-2xl border border-orange-200/50 shadow-sm flex-1">
+                        <div className="flex items-center justify-between gap-3 mb-5">
+                          <div className="flex items-center gap-2">
+                            <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center text-orange-600 animate-pulse">
+                              <span className="material-symbols-outlined text-[18px]">notifications_active</span>
+                            </div>
+                            <h5 className="text-[12px] font-bold text-orange-900 uppercase tracking-wider">Approval Request</h5>
+                          </div>
+                          {student.pendingDeviceRequestedAt && (
+                            <span className="text-[9px] font-black text-orange-400 uppercase">{new Date(student.pendingDeviceRequestedAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                          )}
+                        </div>
+                        
+                        <div className="space-y-4 mb-6">
+                          <div className="flex flex-col gap-1.5">
+                            <span className="text-[9px] font-bold text-orange-400 uppercase">Requested Device</span>
+                            <div className="p-3 bg-white rounded-xl border border-orange-100 font-bold text-[12px] text-orange-900 leading-snug shadow-sm">
+                              {student.pendingDeviceType || student.pendingDeviceName || 'New Unknown Device'}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center justify-between p-3 bg-white/50 rounded-xl border border-orange-100 border-dashed">
+                             <div className="flex flex-col">
+                               <span className="text-[9px] font-bold text-orange-400 uppercase tracking-tighter">Incoming IP Address</span>
+                               <span className="text-[12px] font-bold text-orange-900 font-mono">{student.pendingDeviceIP || 'N/A'}</span>
+                             </div>
+                             <div className="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center text-orange-600">
+                               <span className="material-symbols-outlined text-[18px]">location_searching</span>
+                             </div>
+                          </div>
+
+                          <div className="flex flex-col gap-1.5">
+                            <span className="text-[9px] font-bold text-orange-400 uppercase">Hardware UID</span>
+                            <div className="p-2 bg-orange-100/30 rounded-lg border border-orange-100/50 font-mono text-[9px] text-orange-800 break-all select-all">
+                              {student.pendingDeviceId}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-3 mt-auto">
                           <button
                             onClick={() => onApproveDevice(student)}
-                            className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-xl text-[11px] font-black uppercase tracking-wider shadow-sm hover:bg-indigo-700 transition-colors active:scale-95 flex items-center justify-center gap-1.5"
+                            className="flex-1 h-12 bg-emerald-600 text-white rounded-xl text-[12px] font-black uppercase tracking-wider hover:bg-emerald-700 transition-all active:scale-95 flex items-center justify-center gap-2 shadow-lg shadow-emerald-100"
                           >
-                            <span className="material-symbols-outlined text-[16px]">check_circle</span>
+                            <span className="material-symbols-outlined text-[18px]">verified</span>
                             Approve
                           </button>
                           <button
                             onClick={() => onRejectDevice(student)}
-                            className="flex-1 px-4 py-2 bg-white border border-orange-200 text-orange-700 rounded-xl text-[11px] font-black uppercase tracking-wider shadow-sm hover:bg-orange-100 transition-colors active:scale-95 flex items-center justify-center gap-1.5"
+                            className="w-12 h-12 bg-white border border-orange-200 text-orange-700 rounded-xl hover:bg-rose-50 hover:text-rose-600 hover:border-rose-100 transition-all active:scale-95 flex items-center justify-center shadow-sm"
+                            title="Reject Request"
                           >
-                            <span className="material-symbols-outlined text-[16px]">cancel</span>
-                            Reject
+                            <span className="material-symbols-outlined text-[20px]">close</span>
                           </button>
                         </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex flex-col items-center text-center justify-center flex-1 border-dashed">
+                         <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-slate-200 mb-4 shadow-sm">
+                            <span className="material-symbols-outlined text-[28px]">verified_user</span>
+                         </div>
+                         <h5 className="text-[12px] font-black text-slate-400 uppercase tracking-widest">Security Status: CLEAR</h5>
+                         <p className="text-[10px] font-bold text-slate-300 mt-1 uppercase tracking-tight">No pending approval requests</p>
+                      </div>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
             </div>
-
-          </div>
+          )}
         </div>
       </div>
 
-      <div className="pt-4">
-        <button
-          onClick={onClose}
-          className="w-full h-14 bg-gray-900 text-white rounded-2xl font-black text-[12px] uppercase tracking-[0.22em] shadow-lg hover:bg-black transition-all active:scale-95"
-        >
-          Close Detail
-        </button>
-      </div>
+      <AddPackagesModal 
+        isOpen={showAddPackages}
+        onClose={() => setShowAddPackages(false)}
+        onAssign={handleAssignPackages}
+        isAssigning={isAssigning}
+      />
     </div>
   );
 });
@@ -1611,10 +2102,8 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       </RightSideDrawer>
 
 
-      {/* View Student Drawer - Optimized Sub-component */}
-      <RightSideDrawer isOpen={showViewModal} onClose={() => setShowViewModal(false)} width="500px">
-        <DrawerHeader title="Student Profile Details" onClose={() => setShowViewModal(false)} />
-        <DrawerBody className="bg-gray-50/30">
+      {/* View Student Modal - Refined Premium Centered Layout */}
+      <CenterModal isOpen={showViewModal} onClose={() => setShowViewModal(false)}>
           {selectedStudent && (
              <StudentProfileContent 
                 student={selectedStudent} 
@@ -1624,10 +2113,19 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
                 onApproveDevice={handleApproveDevice}
                 onRejectDevice={handleRejectDevice}
                 onResetDevice={handleResetDevice}
+                onRefresh={async () => {
+                   await loadStudents();
+                   // Re-sync selected student if it exists
+                   if (selectedStudent) {
+                      // We fetch all students again, then find the one we are viewing
+                      const data = await studentsAPI.getAll();
+                      const updated = (Array.isArray(data) ? data : []).find((s: any) => s.id === selectedStudent.id);
+                      if (updated) setSelectedStudent(updated);
+                   }
+                }}
              />
           )}
-        </DrawerBody>
-      </RightSideDrawer>
+      </CenterModal>
 
       {/* Fees Management Drawer */}
       <RightSideDrawer isOpen={showFeesModal} onClose={() => setShowFeesModal(false)} width="440px">
