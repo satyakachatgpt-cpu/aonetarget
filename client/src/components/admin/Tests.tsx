@@ -1560,10 +1560,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       showToast("Please fill Test Title", "error");
       return;
     }
-    if (!effectiveCourseId) {
-      showToast("Please select a Course / Test Series", "error");
-      return;
-    }
+
 
     const selectedCourse =
       courses.find(
