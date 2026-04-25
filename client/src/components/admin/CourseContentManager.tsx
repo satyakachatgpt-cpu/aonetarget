@@ -282,13 +282,13 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     }));
 
     const updateLocalState = (type: string, id: string, order: number) => {
-      const updateList = (list: any[], setter: any) => {
-        setter(list.map(i => normalizeId(i._id || i.id) === id ? { ...i, order, sortingOrder: order } : i));
+      const updateList = (setter: any) => {
+        setter((prevList: any[]) => prevList.map(i => normalizeId(i._id || i.id) === id ? { ...i, order, sortingOrder: order } : i));
       };
-      if (type === 'folder') updateList(folders, setFolders);
-      else if (type === 'video') updateList(videos, setVideos);
-      else if (type === 'note') updateList(notes, setNotes);
-      else if (type === 'test') updateList(tests, setTests);
+      if (type === 'folder') updateList(setFolders);
+      else if (type === 'video') updateList(setVideos);
+      else if (type === 'note') updateList(setNotes);
+      else if (type === 'test') updateList(setTests);
     };
 
     updates.forEach(u => updateLocalState(u.type, normalizeId(u._id || u.id)!, u.order));
