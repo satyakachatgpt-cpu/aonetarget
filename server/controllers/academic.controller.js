@@ -314,7 +314,6 @@ export const createFolder = async (req, res) => {
 };
 
 export const updateFolder = async (req, res) => {
-  console.log(`PUT /api/courses/${req.params.courseId}/folders/${req.params.folderId}`);
   try {
     const course = await findCourse(req.params.courseId);
     const folderId = req.params.folderId;

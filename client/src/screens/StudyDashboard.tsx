@@ -73,10 +73,10 @@ const StudyDashboard: React.FC = () => {
           fetch(`/api/courses/${id}/folders`).then(r => r.ok ? r.json() : [])
         ]);
         setCourse(courseRes);
-        setVideos(Array.isArray(vRes) ? vRes : []);
-        setNotes(Array.isArray(nRes) ? nRes : []);
-        setTests(Array.isArray(tRes) ? tRes : []);
-        setFolders(Array.isArray(fRes) ? fRes : []);
+        setVideos(Array.isArray(vRes) ? vRes.sort((a: any, b: any) => (Number(a.order) || 0) - (Number(b.order) || 0)) : []);
+        setNotes(Array.isArray(nRes) ? nRes.sort((a: any, b: any) => (Number(a.order) || 0) - (Number(b.order) || 0)) : []);
+        setTests(Array.isArray(tRes) ? tRes.sort((a: any, b: any) => (Number(a.order) || 0) - (Number(b.order) || 0)) : []);
+        setFolders(Array.isArray(fRes) ? fRes.sort((a: any, b: any) => (Number(a.order) || Number(a.sortingOrder) || 0) - (Number(b.order) || Number(b.sortingOrder) || 0)) : []);
         // Fetch Enrollment Status
         if (sId) {
           try {

@@ -254,8 +254,13 @@ export const getTestById = async (req, res) => {
       questionFilter.$or.push({ testId: new ObjectId(test._id.toString()) });
     }
 
+    console.log(`[getTestById] Searching questions for test ${id} (testIdStr: ${testIdStr}) with filter:`, JSON.stringify(questionFilter));
+
     const separateQuestions = await db.collection('questions').find(questionFilter).sort({ orderIndex: 1, id: 1 }).toArray();
     const embeddedQuestions = Array.isArray(test.questions) ? test.questions : [];
+    
+    console.log(`[getTestById] Found ${separateQuestions.length} separate questions and ${embeddedQuestions.length} embedded questions`);
+    
     const questions = separateQuestions.length > 0 ? separateQuestions : embeddedQuestions;
     res.json({ ...test, questions });
   } catch (error) {
@@ -706,11 +711,71 @@ export const getCourseTests = async (req, res) => {
 // POST /api/courses/:courseId/tests
 export const addTestToCourse = async (req, res) => {
   try {
-    const testData = { ...req.body, courseId: req.params.courseId };
+    const { sourceTestId, ...body } = req.body;
+    
+    // FETCH SOURCE DATA FROM DATABASE (Never trust questions array from frontend list view, as it may be truncated to a count)
+    let sourceTestData = null;
+    if (sourceTestId) {
+      const orConditions = [
+        { id: sourceTestId },
+        { id: !isNaN(sourceTestId) ? Number(sourceTestId) : null },
+        { _id: sourceTestId }
+      ].filter(v => v.id || v._id);
+      if (ObjectId.isValid(sourceTestId)) orConditions.push({ _id: new ObjectId(sourceTestId) });
+      
+      sourceTestData = await db.collection('tests').findOne({ $or: orConditions });
+    }
+
+    const testData = { ...body, courseId: req.params.courseId };
+    
+    // 1. Handle embedded questions (Common in many Test Series modules)
+    // If the source test has an array of questions, set the count in the new test document
+    if (sourceTestData && Array.isArray(sourceTestData.questions)) {
+      testData.questions = sourceTestData.questions.length;
+      console.log(`[Import] Set question count to ${testData.questions} from embedded source test ${sourceTestId}`);
+    }
+
+    // Ensure we don't carry over the old MongoDB _id
+    delete testData._id;
+
     const result = await db.collection('tests').insertOne(testData);
+    
+    // 2. Handle separate questions (MCQ Framework pattern)
+    // If importing from an existing test, also check the 'questions' collection
+    if (sourceTestId) {
+      console.log(`[Import] Checking separate questions collection for source test: ${sourceTestId}`);
+      
+      const sourceIdStr = String(sourceTestId);
+      const questionFilter = {
+        $or: [
+          { testId: sourceIdStr },
+          { testId: sourceTestId },
+          { testId: "test_" + sourceIdStr }
+        ]
+      };
+      if (!isNaN(sourceIdStr)) questionFilter.$or.push({ testId: Number(sourceIdStr) });
+      if (ObjectId.isValid(sourceIdStr)) {
+        questionFilter.$or.push({ testId: new ObjectId(sourceIdStr) });
+      }
+
+      const questions = await db.collection('questions').find(questionFilter).toArray();
+
+      if (questions.length > 0) {
+        const newQuestions = questions.map(({ _id, ...q }) => ({
+          ...q,
+          testId: testData.id, // Link to the new unique test ID
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }));
+        await db.collection('questions').insertMany(newQuestions);
+        console.log(`[Import] Successfully copied ${newQuestions.length} separate questions`);
+      }
+    }
+
     res.status(201).json({ _id: result.insertedId, ...testData });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to add test to course' });
+    console.error('Error adding test to course:', error);
+    res.status(500).json({ error: 'Failed to add test to course', details: error.message });
   }
 };
 
