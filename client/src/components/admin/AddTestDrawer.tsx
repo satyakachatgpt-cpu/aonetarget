@@ -213,7 +213,7 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
                                 {/* Category */}
                                 <div className="">
                                     <div className="space-y-2">
-                                        <label className="text-[13px] font-bold text-[#2d3748] ml-1 uppercase tracking-wider opacity-60">Category (Exam)<span className="text-red-500 ml-0.5">*</span></label>
+                                        <label className="text-[13px] font-bold text-[#2d3748] ml-1 uppercase tracking-wider opacity-60">Category (Exam)</label>
                                         <CustomDropdown
                                             options={courses.map(c => ({ value: c.id, label: c.name || c.title || '' }))}
                                             value={formData.courseId}
