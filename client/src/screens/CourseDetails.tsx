@@ -458,28 +458,28 @@ const CourseDetails: React.FC = () => {
     return vFolderId === currentFolderId ||
       (vFolderId && currentFolder?._id && vFolderId === normalizeId(currentFolder._id)) ||
       (vFolderId && currentFolder?.id && vFolderId === normalizeId(currentFolder.id));
-  });
+  }).sort((a: any, b: any) => (Number(a.order) || Number(a.sortingOrder) || 0) - (Number(b.order) || Number(b.sortingOrder) || 0));
 
   const filteredNotes = notes.filter(n => {
     const nFolderId = normalizeId((n as any).folderId);
     return nFolderId === currentFolderId ||
       (nFolderId && currentFolder?._id && nFolderId === normalizeId(currentFolder._id)) ||
       (nFolderId && currentFolder?.id && nFolderId === normalizeId(currentFolder.id));
-  });
+  }).sort((a: any, b: any) => (Number(a.order) || Number(a.sortingOrder) || 0) - (Number(b.order) || Number(b.sortingOrder) || 0));
 
   const filteredTests = tests.filter(t => {
     const tFolderId = normalizeId((t as any).folderId);
     return tFolderId === currentFolderId ||
       (tFolderId && currentFolder?._id && tFolderId === normalizeId(currentFolder._id)) ||
       (tFolderId && currentFolder?.id && tFolderId === normalizeId(currentFolder.id));
-  });
+  }).sort((a: any, b: any) => (Number(a.order) || Number(a.sortingOrder) || 0) - (Number(b.order) || Number(b.sortingOrder) || 0));
 
   const filteredFolders = folders.filter(f => {
     const fParentId = normalizeId(f.parentId);
     return fParentId === currentFolderId ||
       (fParentId && currentFolder?._id && fParentId === normalizeId(currentFolder._id)) ||
       (fParentId && currentFolder?.id && fParentId === normalizeId(currentFolder.id));
-  });
+  }).sort((a: any, b: any) => (Number(a.order) || Number(a.sortingOrder) || 0) - (Number(b.order) || Number(b.sortingOrder) || 0));
 
   const totalVideos = recordedVideos.length;
   const completedVideos = progress.completedVideos.length;

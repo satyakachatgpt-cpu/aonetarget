@@ -217,6 +217,110 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
   const [expandedFolders, setExpandedFolders] = useState<string[]>([]);
   const currentFolder = folderStack.length > 0 ? folderStack[folderStack.length - 1] : null;
 
+  const [draggedItem, setDraggedItem] = useState<any>(null);
+  const [dragOverItem, setDragOverItem] = useState<any>(null);
+
+  const handleDragStart = (e: React.DragEvent, item: any) => {
+    e.stopPropagation();
+    setDraggedItem(item);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: React.DragEvent, item: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (dragOverItem !== item) {
+      setDragOverItem(item);
+    }
+  };
+
+  const handleDragEnd = () => {
+    setDraggedItem(null);
+    setDragOverItem(null);
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetItem: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!draggedItem || draggedItem === targetItem) {
+      handleDragEnd();
+      return;
+    }
+
+    const draggedParentId = normalizeId(draggedItem.parentId || draggedItem.folderId);
+    const targetParentId = normalizeId(targetItem.parentId || targetItem.folderId);
+
+    if (draggedParentId !== targetParentId) {
+      showToast('Can only reorder items within the same folder', 'error');
+      handleDragEnd();
+      return;
+    }
+
+    const exactSiblings = [
+      ...folders.filter(f => normalizeId(f.parentId) === draggedParentId).map(f => ({...f, type: 'folder', order: f.order || f.sortingOrder})),
+      ...videos.filter(v => normalizeId(v.folderId) === draggedParentId).map(v => ({...v, type: 'video', order: v.order})),
+      ...notes.filter(n => normalizeId(n.folderId) === draggedParentId).map(n => ({...n, type: 'note', order: n.order})),
+      ...tests.filter(t => normalizeId(t.folderId) === draggedParentId).map(t => ({...t, type: 'test', order: t.order || 0}))
+    ].sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0));
+
+    const draggedIndex = exactSiblings.findIndex(s => normalizeId(s._id || s.id) === normalizeId(draggedItem._id || draggedItem.id));
+    const targetIndex = exactSiblings.findIndex(s => normalizeId(s._id || s.id) === normalizeId(targetItem._id || targetItem.id));
+
+    if (draggedIndex === -1 || targetIndex === -1) {
+      handleDragEnd();
+      return;
+    }
+
+    const newSiblings = [...exactSiblings];
+    newSiblings.splice(draggedIndex, 1);
+    newSiblings.splice(targetIndex, 0, draggedItem);
+
+    const updates = newSiblings.map((item, index) => ({
+      ...item,
+      order: index + 1
+    }));
+
+    const updateLocalState = (type: string, id: string, order: number) => {
+      const updateList = (list: any[], setter: any) => {
+        setter(list.map(i => normalizeId(i._id || i.id) === id ? { ...i, order, sortingOrder: order } : i));
+      };
+      if (type === 'folder') updateList(folders, setFolders);
+      else if (type === 'video') updateList(videos, setVideos);
+      else if (type === 'note') updateList(notes, setNotes);
+      else if (type === 'test') updateList(tests, setTests);
+    };
+
+    updates.forEach(u => updateLocalState(u.type, normalizeId(u._id || u.id)!, u.order));
+
+    handleDragEnd();
+
+    const courseId = (selectedCourse as any)?._id || selectedCourse?.id;
+    if (!courseId) return;
+
+    try {
+      for (const item of updates) {
+        const itemId = normalizeId(item._id || item.id);
+        let endpoint = '';
+        if (item.type === 'folder') endpoint = `/api/courses/${courseId}/folders/${itemId}`;
+        else if (item.type === 'video') endpoint = `/api/courses/${courseId}/videos/${itemId}`;
+        else if (item.type === 'note') endpoint = `/api/courses/${courseId}/notes/${itemId}`;
+        else if (item.type === 'test') endpoint = `/api/tests/${itemId}`;
+        
+        if (endpoint) {
+          fetch(endpoint, {
+            method: 'PUT',
+            headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ order: item.order, sortingOrder: item.order })
+          }).catch(console.error);
+        }
+      }
+    } catch (e) {
+      console.error(e);
+      showToast('Failed to save order', 'error');
+    }
+  };
+
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [showCourseEditModal, setShowCourseEditModal] = useState(false);
   const [courseFormData, setCourseFormData] = useState<any>({ name: '', description: '', imageUrl: '', price: '0', categoryId: '' });
@@ -2283,8 +2387,17 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
             }
           }}
           title={(isFolder || isLiveStream || isVideo || isNote || isTest) ? `Click to ${isFolder ? 'open folder' : 'view content'}` : ''}
-          style={{ marginLeft: `${level * 24}px` }}
+          style={{ 
+            marginLeft: `${level * 24}px`,
+            opacity: draggedItem && normalizeId(draggedItem._id || draggedItem.id) === itemId ? 0.5 : 1,
+            borderTop: dragOverItem && normalizeId(dragOverItem._id || dragOverItem.id) === itemId ? '2px solid #3b82f6' : ''
+          }}
           className={`bg-white border ${isActiveUploadFolder ? 'border-blue-400 shadow-md ring-2 ring-blue-100' : 'border-gray-50'} rounded-[12px] py-4 px-4 flex items-center gap-4 group hover:bg-gray-50/50 transition-all ${(isFolder || isLiveStream || isVideo || isNote || isTest) ? 'cursor-pointer' : ''} mb-3`}
+          draggable={contentSearchQuery.trim() === ''}
+          onDragStart={(e) => handleDragStart(e, item)}
+          onDragOver={(e) => handleDragOver(e, item)}
+          onDrop={(e) => handleDrop(e, item)}
+          onDragEnd={handleDragEnd}
         >
           {/* Drag Handle */}
           <div className="text-gray-300 shrink-0 flex items-center gap-1">
