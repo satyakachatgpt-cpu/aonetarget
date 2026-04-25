@@ -4291,7 +4291,13 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
           showToast(`Adding ${testList.length} OMR test(s)...`, 'success');
           try {
             await Promise.all(testList.map(async (test: any) => {
-              const testData = { ...test, courseId, folderId, id: `test_${Date.now()}_${Math.random().toString(36).substr(2, 5)}` };
+              const testData = { 
+                ...test, 
+                sourceTestId: test.id || test._id, // Store source ID for question copying
+                courseId, 
+                folderId, 
+                id: `test_${Date.now()}_${Math.random().toString(36).substr(2, 5)}` 
+              };
               await fetch(`${API_BASE_URL}/courses/${courseId}/tests`, {
                 method: 'POST',
                 headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
@@ -4323,7 +4329,13 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
           showToast(`Adding ${testList.length} test(s)...`, 'success');
           try {
             await Promise.all(testList.map(async (test: any) => {
-              const testData = { ...test, courseId, folderId, id: `test_${Date.now()}_${Math.random().toString(36).substr(2, 5)}` };
+              const testData = { 
+                ...test, 
+                sourceTestId: test.id || test._id, // Store source ID for question copying
+                courseId, 
+                folderId, 
+                id: `test_${Date.now()}_${Math.random().toString(36).substr(2, 5)}` 
+              };
               await fetch(`${API_BASE_URL}/courses/${courseId}/tests`, {
                 method: 'POST',
                 headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
