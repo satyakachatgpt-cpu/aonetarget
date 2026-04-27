@@ -343,7 +343,8 @@ const Home: React.FC = () => {
 
     const fetchTestSeries = async () => {
       try {
-        const data = await testSeriesAPI.getAll();
+        const sId = student?.id || student?._id;
+        const data = await testSeriesAPI.getAll({ studentId: sId });
         setTestSeries(Array.isArray(data) ? data : []);
       } catch (error) { /* Silent fail */ }
     };
@@ -1184,7 +1185,15 @@ const Home: React.FC = () => {
                       <span className="material-symbols-rounded text-[12px]">description</span>
                       {ts.totalTests || ts.tests?.length || 0} Tests
                     </span>
-                    {(ts.price !== undefined && ts.price !== null) && (
+                    {ts.isDirect ? (
+                      <span className="text-[10px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-lg border border-green-100 uppercase tracking-tighter">
+                         Open
+                      </span>
+                    ) : ts.isIncluded ? (
+                      <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg border border-blue-100 uppercase tracking-tighter">
+                         Included
+                      </span>
+                    ) : (ts.price !== undefined && ts.price !== null) && (
                       <span className="text-xs font-medium text-primary bg-primary-50 px-2.5 py-0.5 rounded-full">
                         {ts.price === 0 ? 'Free' : `₹${ts.price}`}
                       </span>

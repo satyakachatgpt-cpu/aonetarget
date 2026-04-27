@@ -56,11 +56,54 @@ const TestTaking: React.FC = () => {
         console.error('Failed to parse student data', e);
       }
     }
-    fetchTestData();
+
+    if (location.state?.review && location.state?.resultId) {
+      fetchReviewData(location.state.resultId);
+    } else {
+      fetchTestData();
+    }
+
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [testId]);
+  }, [testId, location.state]);
+
+  const fetchReviewData = async (resultId: string) => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/test-results/${resultId}`, {
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(`${errData.error || 'Result not found'} (ID: ${resultId})`);
+      }
+      const resultData = await res.json();
+      
+      // Fetch the test data as well to get questions
+      const testRes = await fetch(`/api/tests/${testId}`, {
+        headers: { ...getAuthHeaders(), ...getAdminHeaders() }
+      });
+      if (!testRes.ok) throw new Error('Test not found');
+      const testData = await testRes.json();
+
+      setTest(testData);
+      const q = (Array.isArray(testData.questions) ? testData.questions : []).map((qn: any) => ({
+        ...qn,
+        id: qn.id || qn._id || `q_${Math.random()}`,
+        correctAnswer: (qn.correctAnswer || qn.correct_answer || qn.answer || qn['Correct Answer'] || qn.correctOption || 'A').toString().toUpperCase()
+      }));
+      setQuestions(q);
+      
+      setAnswers(resultData.answers || {});
+      setResult(resultData);
+      setSubmitted(true);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load review data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleReportSubmit = async () => {
     if (!reportIssue || !reportModal) return;
@@ -316,6 +359,15 @@ const TestTaking: React.FC = () => {
             <div className="mt-3 text-lg font-bold text-gray-800">
               {result.obtainedMarks} / {result.totalMarks} Marks
             </div>
+
+            {result.rank !== undefined && result.rank !== null && (
+              <div className="mt-4 inline-flex items-center gap-2 bg-[#1A237E]/5 px-4 py-2 rounded-full border border-[#1A237E]/10">
+                <span className="material-symbols-rounded text-[#1A237E] text-[20px]">emoji_events</span>
+                <span className="text-[14px] font-black text-[#1A237E]">
+                  RANK: {result.rank} / {result.totalStudents || result.rank}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-3 gap-3 mb-4">
