@@ -224,6 +224,9 @@ const WatchPage: React.FC = () => {
       courseId={batchId || (location.state as any)?.courseId}
       courseTitle={currentVideo.courseTitle || (location.state as any)?.courseTitle}
       isAdmin={isAdmin}
+      pdf1={currentVideo.pdf1 || currentVideo.pdf1Url || currentVideo.pdfUrl}
+      pdf2={currentVideo.pdf2 || currentVideo.pdf2Url}
+      studyMaterial={currentVideo.studyMaterial || currentVideo.studyMaterialUrl || currentVideo.documentUrl || currentVideo.material}
     />
   );
 };

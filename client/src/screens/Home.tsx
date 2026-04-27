@@ -514,8 +514,9 @@ const Home: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex flex-col bg-surface-100 min-h-screen pb-4 animate-fade-in overflow-x-hidden">
-      <header className="sticky top-0 z-40 shadow-lg" style={{ background: '#283593' }}>
+    <div className="flex flex-col bg-surface-100 min-h-screen pb-4 overflow-x-hidden">
+      <div className="animate-fade-in">
+        <header className="sticky top-0 z-40 shadow-lg" style={{ background: '#283593' }}>
         <div className="px-4 py-2 flex items-center justify-between gap-3 min-h-[68px]">
           {isSearching ? (
             <div className="flex-1 flex items-center gap-3 animate-slide-in-left">
@@ -1334,6 +1335,7 @@ const Home: React.FC = () => {
           </div>
         </button>
       </div>
+    </div>
 
       <StudentSidebar
         isOpen={sidebarOpen}
@@ -1479,53 +1481,63 @@ const Home: React.FC = () => {
 
       {
         showNewsModal && newsModal && (
-          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-            <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl transform animate-scale-in">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-[9999] flex items-center justify-center p-4 animate-fade-in pb-24">
+            <div className="bg-white rounded-[32px] w-[95%] max-w-[360px] overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.3)] transform animate-scale-in flex flex-col max-h-[70vh] border border-white/20">
               {newsModal.imageUrl && (
-                <div className="relative">
+                <div className="relative shrink-0">
                   <img
                     src={newsModal.imageUrl}
                     alt={newsModal.title}
-                    className="w-full h-48 object-cover"
+                    className="w-full h-36 object-cover"
                   />
                   {newsModal.priority === 'high' && (
-                    <div className="absolute top-3 left-3 bg-accent text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-button">
+                    <div className="absolute top-3 left-3 bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full flex items-center gap-1 shadow-lg border border-white/20 uppercase tracking-tighter">
                       <span className="material-symbols-rounded text-sm">priority_high</span>
-                      Urgent
+                      URGENT
                     </div>
                   )}
                 </div>
               )}
-              <div className="p-6">
+              <div className="p-5 flex flex-col overflow-hidden">
                 {!newsModal.imageUrl && newsModal.priority === 'high' && (
-                  <div className="inline-block bg-accent-50 text-accent text-xs font-bold px-3 py-1 rounded-full mb-3">
+                  <div className="inline-block bg-red-50 text-red-600 text-[10px] font-black px-3 py-1 rounded-full mb-3 uppercase tracking-widest border border-red-100 w-fit shrink-0">
                     <span className="material-symbols-rounded text-sm align-middle mr-1">priority_high</span>
                     Urgent Notice
                   </div>
                 )}
-                <div className="flex items-start gap-3 mb-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-primary to-primary-600 rounded-2xl flex items-center justify-center text-white flex-shrink-0 shadow-button">
+                
+                <div className="flex items-start gap-3 mb-4 shrink-0">
+                  <div className="w-11 h-11 bg-gradient-to-br from-[#283593] to-[#1A237E] rounded-[18px] flex items-center justify-center text-white flex-shrink-0 shadow-lg">
                     <span className="material-symbols-rounded text-xl">campaign</span>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-gray-800">{newsModal.title}</h3>
-                    <p className="text-xs text-gray-400 mt-1">Aone Target Institute</p>
+                  <div className="min-w-0">
+                    <h3 className="text-base font-black text-gray-900 leading-tight tracking-tight">{newsModal.title}</h3>
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">Aone Target Institute</p>
                   </div>
                 </div>
-                <p className="text-sm text-gray-600 leading-relaxed mb-6">{newsModal.message}</p>
-                <button
-                  onClick={dismissNewsModal}
-                  className="w-full btn-primary py-3.5 rounded-2xl font-semibold text-sm flex items-center justify-center gap-2 active:scale-[0.97] transition-all duration-200"
-                >
-                  <span className="material-symbols-rounded text-sm">check_circle</span>
-                  Got it, Thanks!
-                </button>
+
+                <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar min-h-[100px]">
+                  <div 
+                    className="text-[13px] text-gray-600 leading-relaxed news-content-html"
+                    dangerouslySetInnerHTML={{ __html: newsModal.message }}
+                  />
+                </div>
+
+                <div className="pt-5 shrink-0">
+                  <button
+                    onClick={dismissNewsModal}
+                    className="w-full bg-[#283593] text-white py-3.5 rounded-2xl font-black text-[13px] flex items-center justify-center gap-2 active:scale-[0.97] transition-all duration-200 shadow-xl shadow-indigo-900/20 uppercase tracking-widest"
+                  >
+                    <span className="material-symbols-rounded text-[18px]">check_circle</span>
+                    Got it, Thanks!
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         )
       }
-    </div >
+    </div>
   );
 };
 

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import SecureVideoPlayer from '../components/SecureVideoPlayer';
-import { getImageUrl, getVideoUrl, toYouTubeEmbed } from '../lib/utils';
+import { getImageUrl, getVideoUrl, toYouTubeEmbed, getPdfUrl } from '../lib/utils';
 
 const VideoPlayer: React.FC = () => {
   const location = useLocation();
@@ -104,7 +104,7 @@ const VideoPlayer: React.FC = () => {
         <div className="bg-[#0A0A0A] p-6 text-white rounded-t-[3rem] -mt-10 relative z-10 shadow-[0_-20px_50px_rgba(0,0,0,0.5)] border-t border-white/5 flex-shrink-0 animate-slide-up">
           <div className="w-16 h-1.5 bg-white/10 rounded-full mx-auto mb-8" />
 
-          <div className="flex justify-between items-start gap-4 mb-8">
+          <div className="flex justify-between items-start gap-4 mb-6">
             <div className="flex-1">
               <h2 className="text-2xl font-black leading-tight tracking-tight bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">{video.title}</h2>
               <div className="flex items-center gap-3 mt-4">
@@ -116,6 +116,45 @@ const VideoPlayer: React.FC = () => {
               </div>
             </div>
           </div>
+
+          {/* Lesson Resources - PDF/Materials */}
+          {(video.pdf1 || video.pdf2 || video.studyMaterial || video.pdf1Url || video.pdf2Url || video.pdfUrl || video.documentUrl || video.material) && (
+            <div className="mb-8 p-4 bg-white/5 rounded-3xl border border-white/5 animate-in slide-in-from-bottom-2 duration-500">
+               <p className="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                 <span className="material-symbols-rounded text-sm">attachment</span>
+                 Lesson Resources
+               </p>
+               <div className="flex flex-wrap gap-3">
+                  {(video.pdf1 || video.pdf1Url || video.pdfUrl) && (
+                    <button 
+                      onClick={() => window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(video.pdf1 || video.pdf1Url || video.pdfUrl))}&title=${encodeURIComponent('PDF 1')}`, '_blank')}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 text-red-500 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-red-500/20 active:scale-95 transition-all"
+                    >
+                      <span className="material-symbols-rounded text-base">picture_as_pdf</span>
+                      PDF 1
+                    </button>
+                  )}
+                  {(video.pdf2 || video.pdf2Url) && (
+                    <button 
+                      onClick={() => window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(video.pdf2 || video.pdf2Url))}&title=${encodeURIComponent('PDF 2')}`, '_blank')}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-red-500/10 text-red-500 rounded-2xl text-[10px] font-black uppercase tracking-widest border border-red-500/20 active:scale-95 transition-all"
+                    >
+                      <span className="material-symbols-rounded text-base">picture_as_pdf</span>
+                      PDF 2
+                    </button>
+                  )}
+                  {(video.studyMaterial || video.studyMaterialUrl || video.documentUrl || video.material) && (
+                    <button 
+                      onClick={() => window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(video.studyMaterial || video.studyMaterialUrl || video.documentUrl || video.material))}&title=${encodeURIComponent('Study Material')}`, '_blank')}
+                      className="flex items-center gap-2 px-4 py-2.5 bg-brandBlue/10 text-brandBlue rounded-2xl text-[10px] font-black uppercase tracking-widest border border-brandBlue/20 active:scale-95 transition-all"
+                    >
+                      <span className="material-symbols-rounded text-base">auto_stories</span>
+                      Material
+                    </button>
+                  )}
+               </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-4 gap-4 mb-10">
             {[
