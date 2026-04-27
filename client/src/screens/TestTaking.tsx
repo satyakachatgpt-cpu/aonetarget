@@ -316,6 +316,15 @@ const TestTaking: React.FC = () => {
             <div className="mt-3 text-lg font-bold text-gray-800">
               {result.obtainedMarks} / {result.totalMarks} Marks
             </div>
+
+            {result.rank !== undefined && result.rank !== null && (
+              <div className="mt-4 inline-flex items-center gap-2 bg-[#1A237E]/5 px-4 py-2 rounded-full border border-[#1A237E]/10">
+                <span className="material-symbols-rounded text-[#1A237E] text-[20px]">emoji_events</span>
+                <span className="text-[14px] font-black text-[#1A237E]">
+                  RANK: {result.rank} / {result.totalStudents || result.rank}
+                </span>
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-3 gap-3 mb-4">

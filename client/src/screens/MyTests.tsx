@@ -150,6 +150,21 @@ const MyTests: React.FC = () => {
                         </span>
                       </div>
                     </div>
+
+                    {result.rank && (
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center text-amber-600">
+                          <span className="material-symbols-rounded text-base">emoji_events</span>
+                        </div>
+                        <div>
+                          <p className="text-[8px] text-gray-400 font-black uppercase tracking-widest leading-none mb-0.5">RANK</p>
+                          <div className="flex items-baseline gap-0.5 leading-none">
+                            <span className="text-base font-black text-amber-600">{result.rank}</span>
+                            <span className="text-[9px] text-gray-400 font-bold">/{result.totalStudents || result.rank}</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <div className="flex gap-2 mt-1">
