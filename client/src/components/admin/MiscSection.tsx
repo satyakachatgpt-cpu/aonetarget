@@ -377,9 +377,13 @@ const MiscSection: React.FC<Props> = ({ showToast }) => {
         rows={2}
         className="w-full bg-white border border-gray-200 p-3 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-orange-300"
       />
+      <div className="flex items-center justify-between">
+        <label className="text-[11px] font-bold text-gray-500">File URL (Google Drive, Dropbox link) *</label>
+        <span className="text-[10px] font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-100 uppercase tracking-widest">PDF Preferred</span>
+      </div>
       <input
         type="url"
-        placeholder="File URL (Google Drive, Dropbox link) *"
+        placeholder="https://drive.google.com/..."
         value={examDocForm.fileUrl}
         onChange={(e) => setExamDocForm({ ...examDocForm, fileUrl: e.target.value })}
         className="w-full bg-white border border-gray-200 p-3 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-orange-300"
@@ -441,9 +445,13 @@ const MiscSection: React.FC<Props> = ({ showToast }) => {
         rows={3}
         className="w-full bg-white border border-gray-200 p-3 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-300"
       />
+      <div className="flex items-center justify-between">
+        <label className="text-[11px] font-bold text-gray-500">Image URL (optional)</label>
+        <span className="text-[10px] font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full border border-teal-100">Recommended: 300x210 px</span>
+      </div>
       <input
         type="url"
-        placeholder="Image URL (optional)"
+        placeholder="https://..."
         value={newsForm.imageUrl}
         onChange={(e) => setNewsForm({ ...newsForm, imageUrl: e.target.value })}
         className="w-full bg-white border border-gray-200 p-3 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-teal-300"

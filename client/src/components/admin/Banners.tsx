@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { bannersAPI, uploadAPI } from '../../services/apiClient';
+import { bannersAPI, uploadAPI, coursesAPI } from '../../services/apiClient';
 import { getImageUrl } from '../../lib/utils';
 
 interface Banner {
@@ -8,6 +8,7 @@ interface Banner {
   title: string;
   imageUrl: string;
   linkUrl?: string;
+  courseId?: string;
   order: number;
   active: boolean;
 }
@@ -21,7 +22,14 @@ const Banners: React.FC<Props> = ({ showToast }) => {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingBanner, setEditingBanner] = useState<Banner | null>(null);
-  const [formData, setFormData] = useState({ title: '', imageUrl: '', linkUrl: '', active: true, order: 1 });
+  const [formData, setFormData] = useState({ 
+    title: '', 
+    imageUrl: '', 
+    linkUrl: '', 
+    courseId: '',
+    active: true, 
+    order: 1 
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
@@ -29,12 +37,32 @@ const Banners: React.FC<Props> = ({ showToast }) => {
   const [activeActionMenuId, setActiveActionMenuId] = useState<string | null>(null);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [courses, setCourses] = useState<any[]>([]);
+  const [isCoursesLoading, setIsCoursesLoading] = useState(false);
+  const [courseSearchQuery, setCourseSearchQuery] = useState('');
+  const [isCourseDropdownOpen, setIsCourseDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const loadCourses = async () => {
+    setIsCoursesLoading(true);
+    try {
+      const data = await coursesAPI.getAll();
+      setCourses(Array.isArray(data) ? data : (data?.data || []));
+    } catch (error) {
+      console.error('Failed to load courses:', error);
+    } finally {
+      setIsCoursesLoading(false);
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       if (!target.closest('.action-menu-container')) {
         setActiveActionMenuId(null);
+      }
+      if (dropdownRef.current && !dropdownRef.current.contains(target)) {
+        setIsCourseDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -43,6 +71,7 @@ const Banners: React.FC<Props> = ({ showToast }) => {
 
   useEffect(() => {
     loadBanners();
+    loadCourses();
   }, []);
 
   const loadBanners = async () => {
@@ -63,6 +92,7 @@ const Banners: React.FC<Props> = ({ showToast }) => {
         title: formData.title,
         imageUrl: formData.imageUrl,
         linkUrl: formData.linkUrl,
+        courseId: formData.courseId,
         order: formData.order,
         active: formData.active
       };
@@ -77,7 +107,7 @@ const Banners: React.FC<Props> = ({ showToast }) => {
 
       setShowModal(false);
       setEditingBanner(null);
-      setFormData({ title: '', imageUrl: '', linkUrl: '', active: true, order: banners.length + 1 });
+      setFormData({ title: '', imageUrl: '', linkUrl: '', courseId: '', active: true, order: banners.length + 1 });
       loadBanners();
     } catch (error) {
       showToast('Failed to save banner', 'error');
@@ -102,6 +132,7 @@ const Banners: React.FC<Props> = ({ showToast }) => {
       title: banner.title,
       imageUrl: banner.imageUrl,
       linkUrl: banner.linkUrl || '',
+      courseId: banner.courseId || '',
       active: banner.active,
       order: banner.order || 1
     });
@@ -171,7 +202,7 @@ const Banners: React.FC<Props> = ({ showToast }) => {
             </button>
 
             <button
-              onClick={() => { setEditingBanner(null); setFormData({ title: '', imageUrl: '', linkUrl: '', active: true, order: banners.length + 1 }); setShowModal(true); }}
+              onClick={() => { setEditingBanner(null); setFormData({ title: '', imageUrl: '', linkUrl: '', courseId: '', active: true, order: banners.length + 1 }); setShowModal(true); }}
               className="w-9 h-9 bg-black text-white rounded-full flex items-center justify-center hover:bg-gray-800 transition-all shadow-md"
             >
               <span className="material-symbols-outlined text-[20px]">add</span>
@@ -473,14 +504,138 @@ const Banners: React.FC<Props> = ({ showToast }) => {
 
               {/* Navigation Target */}
               <div className="space-y-4">
-                <label className="text-[11px] font-black text-[#AAB4C8] uppercase tracking-widest">Navigation Target</label>
-                <input
-                  type="text"
-                  placeholder="https://destination.com/path"
-                  value={formData.linkUrl}
-                  onChange={(e) => setFormData({ ...formData, linkUrl: e.target.value })}
-                  className="w-full h-[70px] px-8 bg-[#F9FBFF] border border-transparent rounded-[1.2rem] text-[15px] font-bold text-[#1A2138] outline-none focus:border-[#E1E8F5] transition-all placeholder:text-[#AAB4C8]"
-                />
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-black text-[#AAB4C8] uppercase tracking-widest">Navigation Target</label>
+                  <span className="text-[9px] font-bold text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100 uppercase tracking-widest">Optional</span>
+                </div>
+                
+                <div className="space-y-6">
+                  {/* Course Picker */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-[#AAB4C8] uppercase tracking-wider ml-1">Link to Course/Batch</label>
+                    <div className="relative" ref={dropdownRef}>
+                      {/* Dropdown Trigger */}
+                      <div 
+                        onClick={() => setIsCourseDropdownOpen(!isCourseDropdownOpen)}
+                        className={`w-full h-[60px] px-8 bg-[#F9FBFF] border ${isCourseDropdownOpen ? 'border-indigo-200 ring-4 ring-indigo-50' : 'border-transparent'} rounded-[1.2rem] flex items-center justify-between cursor-pointer transition-all hover:bg-[#F2F6FF]`}
+                      >
+                        <span className={`text-[14px] font-bold ${formData.courseId ? 'text-[#1A2138]' : 'text-[#AAB4C8]'}`}>
+                          {formData.courseId 
+                            ? (courses.find(c => (c._id || c.id) === formData.courseId)?.name || courses.find(c => (c._id || c.id) === formData.courseId)?.title || 'Selected Batch')
+                            : 'Select Batch'
+                          }
+                        </span>
+                        <span className={`material-symbols-outlined text-gray-400 transition-transform duration-300 ${isCourseDropdownOpen ? 'rotate-180 text-indigo-500' : ''}`}>
+                          expand_more
+                        </span>
+                      </div>
+
+                      {/* Dropdown Menu */}
+                      {isCourseDropdownOpen && (
+                        <div className="absolute top-[calc(100%+8px)] left-0 right-0 bg-white border border-slate-100 rounded-[1.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.1)] z-[100] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+                          {/* Search Area */}
+                          <div className="p-4 border-b border-slate-50 sticky top-0 bg-white z-10">
+                            <div className="relative">
+                              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-[18px] text-slate-400">search</span>
+                              <input 
+                                type="text"
+                                placeholder="Search batch by name..."
+                                value={courseSearchQuery}
+                                onChange={(e) => setCourseSearchQuery(e.target.value)}
+                                onClick={(e) => e.stopPropagation()}
+                                className="w-full h-11 pl-11 pr-4 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-100 transition-all placeholder:text-slate-300"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Options List */}
+                          <div className="max-h-[250px] overflow-y-auto custom-scrollbar py-2">
+                            <div 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setFormData({ ...formData, courseId: '', linkUrl: '' });
+                                setIsCourseDropdownOpen(false);
+                                setCourseSearchQuery('');
+                              }}
+                              className="px-6 py-3 hover:bg-slate-50 cursor-pointer flex items-center justify-between group"
+                            >
+                              <span className="text-xs font-bold text-slate-400 uppercase tracking-widest group-hover:text-red-400 transition-colors">-- None (Clear Selection) --</span>
+                            </div>
+
+                            {isCoursesLoading ? (
+                              <div className="px-6 py-8 text-center">
+                                <div className="w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-2"></div>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Fetching courses...</span>
+                              </div>
+                            ) : (
+                              (() => {
+                                const filtered = courses.filter(c => 
+                                  (c.name || c.title || '').toLowerCase().includes(courseSearchQuery.toLowerCase())
+                                );
+
+                                if (filtered.length === 0) {
+                                  return (
+                                    <div className="px-6 py-10 text-center">
+                                      <span className="material-symbols-outlined text-slate-200 text-4xl mb-2">search_off</span>
+                                      <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">No matching batches</p>
+                                    </div>
+                                  );
+                                }
+
+                                return filtered.map(c => {
+                                  const id = c._id || c.id;
+                                  const isSelected = formData.courseId === id;
+                                  return (
+                                    <div 
+                                      key={id}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setFormData({ 
+                                          ...formData, 
+                                          courseId: id,
+                                          linkUrl: `/courses/${id}`
+                                        });
+                                        setIsCourseDropdownOpen(false);
+                                        setCourseSearchQuery('');
+                                      }}
+                                      className={`px-6 py-4 flex items-center justify-between cursor-pointer transition-all ${isSelected ? 'bg-indigo-50/50' : 'hover:bg-slate-50'}`}
+                                    >
+                                      <div className="flex flex-col">
+                                        <span className={`text-sm font-bold ${isSelected ? 'text-indigo-600' : 'text-slate-700'}`}>{c.name || c.title}</span>
+                                        <span className="text-[9px] font-black text-slate-300 uppercase tracking-tighter mt-0.5">ID: {id}</span>
+                                      </div>
+                                      {isSelected && (
+                                        <span className="material-symbols-outlined text-indigo-500 text-[20px]">check_circle</span>
+                                      )}
+                                    </div>
+                                  );
+                                });
+                              })()
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 px-4 overflow-hidden py-1">
+                    <div className="h-[1px] flex-1 bg-gray-50"></div>
+                    <span className="text-[10px] font-bold text-gray-200 uppercase tracking-widest italic">Or enter manual URL</span>
+                    <div className="h-[1px] flex-1 bg-gray-50"></div>
+                  </div>
+
+                  {/* Manual URL Input */}
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-bold text-[#AAB4C8] uppercase tracking-wider ml-1">Redirect URL</label>
+                    <input
+                      type="text"
+                      placeholder="https://destination.com/path"
+                      value={formData.linkUrl}
+                      onChange={(e) => setFormData({ ...formData, linkUrl: e.target.value })}
+                      className="w-full h-[60px] px-8 bg-[#F9FBFF] border border-transparent rounded-[1.2rem] text-[15px] font-bold text-[#1A2138] outline-none focus:border-[#E1E8F5] transition-all placeholder:text-[#AAB4C8]"
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* Row: Sequence and Active Status */}
