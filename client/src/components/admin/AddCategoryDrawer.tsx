@@ -365,7 +365,10 @@ const AddCategoryDrawer: React.FC<AddCategoryDrawerProps> = ({ isOpen, onClose, 
           </div>
 
           <div>
-            <FormLabel label="Category Image" />
+            <div className="flex items-center justify-between mb-1">
+              <FormLabel label="Category Image" />
+              <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">Recommended: 400x320 px (1.25:1 Ratio)</span>
+            </div>
             <div className="flex gap-2">
               <FormInput
                 value={formData.imageUrl}

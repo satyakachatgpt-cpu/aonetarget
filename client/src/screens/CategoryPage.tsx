@@ -114,13 +114,45 @@ function normalizeSubcategoryId(val: string = "") {
     .trim();
 }
 
-function isCategoryMatch(courseCatId: string, targetCatId: string) {
-  const cId = String(courseCatId || "").toLowerCase();
-  const tId = String(targetCatId || "").toLowerCase();
-  if (cId === tId) return true;
-  // Handle aliases
-  if (tId === 'neet-iitjee') return cId === 'neet' || cId === 'iit-jee' || cId === 'iit_jee';
-  if (tId === 'nursing-cet') return cId === 'nursing';
+function isCategoryMatch(course: any, targetCategory: any) {
+  if (!course || !targetCategory) return false;
+  
+  const norm = (s: any) => String(s || "").toLowerCase().trim();
+
+  const targetId = norm(targetCategory.id || targetCategory._id);
+  const targetTitle = norm(targetCategory.title);
+  
+  const courseCatId = norm(course.categoryId);
+  const courseCatName = norm(course.category || course.categoryName || course.primaryCategory);
+  const courseCats = Array.isArray(course.categories) ? course.categories.map(c => norm(c)) : [];
+
+  // 1. Direct ID match (Stable)
+  if (courseCatId && targetId && courseCatId === targetId) return true;
+  
+  // 2. Exact Title Match
+  if (targetTitle && (courseCatName === targetTitle || courseCats.includes(targetTitle))) return true;
+
+  // 3. Special Case: Nursing (as requested)
+  const isNursingTarget = targetId.includes('nursing') || targetTitle.includes('nursing');
+  if (isNursingTarget) {
+    // For Nursing, we want to be inclusive of "nursing" and "nursing-cet" but exclusive of others
+    if (courseCatId.includes('nursing')) return true;
+    if (courseCatName === 'nursing' || courseCatName === 'nursing cet' || courseCatName === 'nursing-cet') return true;
+    if (courseCats.includes('nursing') || courseCats.includes('nursing cet') || courseCats.includes('nursing-cet')) return true;
+    
+    // Only allow fuzzy match if it's explicitly nursing related and not a school class
+    if (courseCatName.includes('nursing') && !courseCatName.includes('class') && !courseCatName.match(/\d+th/)) return true;
+    
+    return false;
+  }
+
+  // 4. Special Case: NEET/IIT-JEE
+  if (targetId === 'neet-iitjee' || targetId === 'neet_iitjee' || targetTitle.includes('neet') || targetTitle.includes('jee')) {
+    const isNeet = courseCatId === 'neet' || courseCatName.includes('neet') || courseCats.some(c => c.includes('neet'));
+    const isJee = courseCatId === 'iit-jee' || courseCatId === 'iit_jee' || courseCatName.includes('jee') || courseCats.some(c => c.includes('jee'));
+    return isNeet || isJee;
+  }
+  
   return false;
 }
 
@@ -142,14 +174,14 @@ const NeetIitJeePage: React.FC<{
 
   const subjects = useMemo(() => {
     return allSubjects.filter(s => 
-        isCategoryMatch(s.categoryId || "", category.id) && 
+        isCategoryMatch(s, category) && 
         (String(s.level1Branch || "").toLowerCase() === String(activeBranch || "").toLowerCase() || s.course === activeBranch) &&
         !s.subcategoryId // ONLY category-level/global subjects
     ).map(s => ({
        ...s,
        id: s.id || s._id || "" // Normalize ID
     }));
-  }, [allSubjects, activeBranch, category.id]);
+  }, [allSubjects, activeBranch, category]);
 
   const categorySubcategories = useMemo(() => {
     return subcategories.filter(s => s.categoryId === category.id && (s.level1Branch === activeBranch || !s.level1Branch));
@@ -157,7 +189,7 @@ const NeetIitJeePage: React.FC<{
 
   const filteredCourses = useMemo(() => {
     return courses.filter(c => {
-      const matchesCat = isCategoryMatch(c.categoryId || "", category.id);
+      const matchesCat = isCategoryMatch(c, category);
       if (!matchesCat) return false;
       
       const cL1 = String(c.level1Branch || c.examType || c.boardType || "").toLowerCase().trim();
@@ -187,12 +219,12 @@ const NeetIitJeePage: React.FC<{
 
       return true;
     });
-  }, [courses, activeBranch, selectedSubject, subjects, category.id]);
+  }, [courses, activeBranch, selectedSubject, subjects, category]);
 
   const getContentCount = (subId: string) => {
     const requested = normalizeSubcategoryId(subId);
     return courses.filter(c => {
-      const matchesCat = isCategoryMatch(c.categoryId || "", category.id);
+      const matchesCat = isCategoryMatch(c, category);
       
       const cL1 = String(c.level1Branch || c.examType || "").toLowerCase().trim();
       const aL1 = String(activeBranch || "").toLowerCase().trim();
@@ -220,7 +252,7 @@ const NeetIitJeePage: React.FC<{
             </button>
             <div>
               <h1 className="text-xl font-black tracking-tight">{category.title}</h1>
-              <p className="text-white/60 text-xs mt-0.5">Aone Target Institute</p>
+              <p className="text-white/60 text-xs mt-0.5">{category.subtitle || 'Aone Target Institute'}</p>
             </div>
           </div>
 
@@ -402,7 +434,7 @@ const GeneralClassPage: React.FC<{
 
   const subjects = useMemo(() => {
     return allSubjects.filter(s => 
-        isCategoryMatch(s.categoryId || "", category.id) && 
+        isCategoryMatch(s, category) && 
         String(s.level1Branch || "").toLowerCase() === String(activeL1 || "").toLowerCase() &&
         String(s.level2Branch || "").toLowerCase() === String(activeL2 || "").toLowerCase() &&
         !s.subcategoryId // ONLY category-level/global subjects
@@ -410,7 +442,7 @@ const GeneralClassPage: React.FC<{
        ...s,
        id: s.id || s._id || "" // Normalize ID
     }));
-  }, [allSubjects, activeL1, activeL2, category.id]);
+  }, [allSubjects, activeL1, activeL2, category]);
 
   const categorySubcategories = useMemo(() => {
     return subcategories.filter(s => s.categoryId === category.id && (s.level1Branch === activeL1 || !s.level1Branch));
@@ -418,7 +450,7 @@ const GeneralClassPage: React.FC<{
 
   const filteredCourses = useMemo(() => {
     return courses.filter(c => {
-      const matchesCat = isCategoryMatch(c.categoryId || "", category.id);
+      const matchesCat = isCategoryMatch(c, category);
       if (!matchesCat) return false;
       
       const cL1 = String(c.level1Branch || c.boardType || "").toLowerCase().trim();
@@ -455,7 +487,7 @@ const GeneralClassPage: React.FC<{
 
       return true;
     });
-  }, [courses, activeL1, activeL2, selectedSubject, subjects, category.id]);
+  }, [courses, activeL1, activeL2, selectedSubject, subjects, category]);
 
   return (
     <div className="flex flex-col w-full min-h-screen bg-gray-50">
@@ -646,7 +678,8 @@ const Class11_12Page: React.FC<{
 
 
 
-const NursingPage: React.FC<{ categoryId: string; subcategories: SubCategory[]; courses: Course[]; loading: boolean; enrolledCourseIds: string[] }> = ({ categoryId, subcategories, courses, loading, enrolledCourseIds }) => {
+const NursingPage: React.FC<{ category: Category; subcategories: SubCategory[]; courses: Course[]; loading: boolean; enrolledCourseIds: string[] }> = ({ category, subcategories, courses, loading, enrolledCourseIds }) => {
+  const categoryId = category.id;
   const navigate = useNavigate();
 
   return (
@@ -659,18 +692,18 @@ const NursingPage: React.FC<{ categoryId: string; subcategories: SubCategory[]; 
               <span className="material-symbols-rounded">arrow_back</span>
             </button>
             <div>
-              <h1 className="text-xl font-black tracking-tight">Nursing CET</h1>
-              <p className="text-white/60 text-xs">Medical & Paramedical Entrance</p>
+              <h1 className="text-xl font-black tracking-tight">{category.title}</h1>
+              <p className="text-white/60 text-xs">{category.subtitle || 'Aone Target Institute'}</p>
             </div>
           </div>
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center shadow-lg transform rotate-3">
-                <span className="material-symbols-rounded text-teal-600 text-2xl">local_hospital</span>
+                <span className="material-symbols-rounded text-teal-600 text-2xl">{category.icon || 'local_hospital'}</span>
               </div>
               <div>
                 <h2 className="font-bold text-sm">Specialized Coaching</h2>
-                <p className="text-white/70 text-[10px]">Preparation with expert medical faculty</p>
+                <p className="text-white/70 text-[10px]">{category.description || 'Preparation with expert medical faculty'}</p>
               </div>
             </div>
           </div>
@@ -681,8 +714,8 @@ const NursingPage: React.FC<{ categoryId: string; subcategories: SubCategory[]; 
         <div className="grid grid-cols-2 gap-3 pb-8">
           {subcategories.map((item) => {
             const count = courses.filter(c => 
-              c.categoryId === categoryId && 
-              (c.subcategoryId === item.id || (c.name || '').toLowerCase().includes(item.title.toLowerCase()))
+              isCategoryMatch(c, category) && 
+              (c.subcategoryId === item.id || (c.name || '').toLowerCase().includes(item.title.toLowerCase()) || (c.subcategoryId || '').toLowerCase().includes(item.id.toLowerCase()))
             ).length;
 
             return (
@@ -714,6 +747,56 @@ const NursingPage: React.FC<{ categoryId: string; subcategories: SubCategory[]; 
               </button>
             );
           })}
+        </div>
+
+        <div className="mt-8 space-y-4">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-sm font-black text-gray-700 uppercase tracking-tight">
+              {courses.length} {courses.length === 1 ? 'Available Course' : 'Available Courses'}
+            </h3>
+          </div>
+          
+          {courses.length > 0 ? (
+            courses.map((course, idx) => {
+              const cId = course.id || course._id || '';
+              return (
+                <button
+                  key={cId || idx}
+                  onClick={() => navigate(`/course/${cId}`)}
+                  className="w-full bg-white rounded-2xl p-4 shadow-sm flex gap-4 text-left active:scale-[0.98] transition-all border border-gray-100 hover:shadow-md group"
+                >
+                  <div className="w-16 h-16 bg-gradient-to-br from-teal-600 to-emerald-700 rounded-2xl flex items-center justify-center flex-shrink-0 overflow-hidden relative shadow-inner">
+                    {(course.imageUrl || course.thumbnail) ? (
+                      <img src={getImageUrl(course.imageUrl || course.thumbnail)} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-white text-2xl font-black opacity-30">{(course.name || course.title || '?').charAt(0).toUpperCase()}</span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="text-sm font-bold text-gray-800 line-clamp-2 leading-tight group-hover:text-teal-600 transition-colors">{course.name || course.title}</h4>
+                    <p className="text-[9px] text-gray-400 mt-1 uppercase font-bold tracking-wider">{category.title} • {course.subject || 'General'}</p>
+                    <div className="flex items-center justify-between mt-3">
+                       {enrolledCourseIds.some(eid => String(eid) === String(course.id) || String(eid) === String(course._id)) ? (
+                         <span className="text-[10px] font-black text-teal-600 uppercase tracking-widest flex items-center gap-1">
+                           <span className="material-symbols-rounded text-xs">verified</span>
+                           Enrolled
+                         </span>
+                       ) : (
+                         <span className="text-xs font-black text-teal-600">{course.price ? `₹${course.price}` : 'Free'}</span>
+                       )}
+                       <span className="text-[9px] bg-green-50 text-green-600 font-bold px-2 py-0.5 rounded-full">Active</span>
+                    </div>
+                  </div>
+                  <span className="material-symbols-rounded text-gray-300 self-center group-hover:text-teal-600 transition-colors">chevron_right</span>
+                </button>
+              );
+            })
+          ) : (
+            <div className="text-center py-12 bg-white rounded-3xl border border-gray-100 shadow-sm">
+              <span className="material-symbols-rounded text-4xl text-gray-200">school</span>
+              <p className="text-xs text-gray-400 mt-2">No courses found in this category</p>
+            </div>
+          )}
         </div>
       </main>
     </div>
@@ -748,7 +831,10 @@ const CategoryPage: React.FC = () => {
           sId ? fetch(`/api/students/${sId}/courses`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []) : Promise.resolve([])
         ]);
 
-        const cat = (Array.isArray(cats) ? cats : []).find((c: Category) => c.id === categoryId);
+        const cat = (Array.isArray(cats) ? cats : []).find((c: Category) => 
+          String(c.id).toLowerCase() === String(categoryId).toLowerCase() || 
+          String(c._id).toLowerCase() === String(categoryId).toLowerCase()
+        );
         setCategory(cat || null);
         setSubcategories((Array.isArray(subs) ? subs : []).filter((s: SubCategory) => s.isActive));
         setSubjects((Array.isArray(subjs) ? subjs : []).filter((s: Subject) => s.status === 'active'));
@@ -768,14 +854,32 @@ const CategoryPage: React.FC = () => {
   const categoryCourses = useMemo(() => {
     if (categoryId === 'mock-test') {
       return courses.filter(c =>
-        isCategoryMatch(c.categoryId || "", 'mock-test') ||
+        isCategoryMatch(c, { id: 'mock-test' }) ||
         normalizeSubcategoryId(c.contentType || "") === 'mock_test' ||
         (c.name || c.title || '').toLowerCase().includes('mock test') ||
         (c.name || c.title || '').toLowerCase().includes('test series')
       );
     }
-    return courses.filter(c => isCategoryMatch(c.categoryId || "", categoryId || ""));
-  }, [courses, categoryId]);
+
+    if (categoryId?.toLowerCase().includes('nursing')) {
+      const normalizedTarget = "nursing";
+      return courses.filter(course => {
+        const values = [
+          course.category,
+          course.categoryName,
+          course.primaryCategory,
+          course.categoryId,
+          course.categorySlug,
+        ]
+          .filter(Boolean)
+          .map(v => String(v).trim().toLowerCase());
+
+        return values.includes("nursing") || values.includes("nursing-cet");
+      });
+    }
+
+    return courses.filter(c => isCategoryMatch(c, category || { id: categoryId }));
+  }, [courses, categoryId, category]);
 
   const subcategoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -838,19 +942,19 @@ const CategoryPage: React.FC = () => {
 
   // Specialized Layout Returns
   if (isNeetId || category.hierarchyMode === 'exam-branch') {
-     return <NeetIitJeePage category={category} courses={courses} loading={loading} subcategories={subcategories} subjects={subjects} enrolledCourseIds={enrolledCourseIds} />;
+     return <NeetIitJeePage category={category} courses={categoryCourses} loading={loading} subcategories={subcategories} subjects={subjects} enrolledCourseIds={enrolledCourseIds} />;
   }
 
   if (isJeeId || isBoardId || category.hierarchyMode === 'board-class') {
-     return <GeneralClassPage category={category} courses={courses} loading={loading} subcategories={subcategories} subjects={subjects} enrolledCourseIds={enrolledCourseIds} />;
+     return <GeneralClassPage category={category} courses={categoryCourses} loading={loading} subcategories={subcategories} subjects={subjects} enrolledCourseIds={enrolledCourseIds} />;
   }
 
   if (isGeneralId) {
-    return <GeneralClassPage category={category} courses={courses} loading={loading} subcategories={subcategories} subjects={subjects} enrolledCourseIds={enrolledCourseIds} />;
+    return <GeneralClassPage category={category} courses={categoryCourses} loading={loading} subcategories={subcategories} subjects={subjects} enrolledCourseIds={enrolledCourseIds} />;
   }
 
   if (isNursingId) {
-    return <NursingPage categoryId={categoryId || 'nursing'} subcategories={subcategories} courses={courses} loading={loading} enrolledCourseIds={enrolledCourseIds} />;
+    return <NursingPage category={category} subcategories={subcategories} courses={categoryCourses} loading={loading} enrolledCourseIds={enrolledCourseIds} />;
   }
 
   return (

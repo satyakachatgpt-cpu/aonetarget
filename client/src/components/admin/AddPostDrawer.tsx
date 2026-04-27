@@ -206,7 +206,10 @@ const AddPostDrawer: React.FC<AddPostDrawerProps> = ({ isOpen, onClose, courseId
                     <div className="grid grid-cols-2 gap-12 mt-8">
                         {/* Image Column */}
                         <div className="space-y-4">
-                            <label className="text-[17px] font-extrabold text-[#3b4b5e] tracking-tight">Image *</label>
+                            <div className="flex items-center justify-between">
+                                <label className="text-[17px] font-extrabold text-[#3b4b5e] tracking-tight">Image *</label>
+                                <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">Recommended: 800x560 px (1.4:1 Ratio)</span>
+                            </div>
                             <div className="flex gap-4">
                                 {/* Preview Box */}
                                 <div className="w-[145px] h-[145px] bg-[#f7f8fa] border border-[#eef0f2] rounded-[18px] flex flex-col items-center justify-center text-[#9ca7b6] shrink-0">

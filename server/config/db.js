@@ -36,7 +36,7 @@ export function getDb() {
 export const connectDB = async (isInitialConnect = true) => {
   try {
     await mongoose.connect(MONGODB_URI, {
-      dbName: 'AoneTarget',
+      dbName: 'aonetarget',
       serverSelectionTimeoutMS: 30000 // Allow slow Atlas handshakes
     });
 

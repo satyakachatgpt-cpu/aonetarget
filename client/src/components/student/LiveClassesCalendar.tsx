@@ -124,10 +124,15 @@ function getScheduledISO(cls: any): string {
 
 // ─── Helper: compute live status client-side ──────────────────────────────────
 function computeStatus(cls: any): 'live' | 'upcoming' | 'ended' | 'scheduled' | 'recorded' {
-  const raw = (cls.streamStatus || cls.status || 'upcoming').toLowerCase();
-  if (['ended', 'completed', 'inactive'].includes(raw)) return 'ended';
-  if (raw === 'recorded') return 'recorded';
-  if (raw === 'live') return 'live';
+  const raw = (cls.streamStatus || cls.status || cls.liveStatus || cls.eventStatus || 'upcoming').toLowerCase();
+  
+  const isExplicitlyEnded = ['ended', 'completed', 'inactive', 'recorded', 'disable', 'finished'].includes(raw);
+  const isImplicitlyEnded = (cls.isLive === false && (cls.endedAt || cls.endTime)) || 
+                           (cls.type === 'recorded' || cls.contentType === 'recorded' || cls.contentType === 'video');
+  const hasEndedLabel = cls.statusLabel === 'EVENT ENDED' || cls.label === 'EVENT ENDED';
+
+  if (isExplicitlyEnded || isImplicitlyEnded || hasEndedLabel) return 'ended';
+  if (raw === 'live' || cls.isLive === true) return 'live';
   return 'upcoming';
 }
 
@@ -224,10 +229,10 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
         return { ...c, date: normalizedDate, startTime: normalizedTime };
       })
       .filter(c => {
-        const isFutureOrToday = !c.date || c.date >= todayStr;
+        const effectiveStatus = computeStatus(c);
+        const isNotEnded = effectiveStatus !== 'ended' && effectiveStatus !== 'recorded';
         const isNotCancelled = c.status !== 'cancelled';
-        const shouldShowStatus = ['live', 'upcoming', 'scheduled', 'ended', 'completed', 'recorded'].includes(c.status);
-        return isFutureOrToday && isNotCancelled && shouldShowStatus;
+        return isNotEnded && isNotCancelled;
       })
       .sort((a, b) => {
         if (a.date !== b.date) return (a.date || '').localeCompare(b.date || '');

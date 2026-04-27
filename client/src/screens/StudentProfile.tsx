@@ -28,6 +28,7 @@ const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
     class: '',
     higherEducation: ''
   });
+  const [categories, setCategories] = useState<any[]>([]);
 
   useEffect(() => {
     if (isEditing) {
@@ -88,6 +89,23 @@ const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
       setLoading(false);
     }
   };
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch(`/api/categories`, { headers: getAuthHeaders() });
+      if (response.ok) {
+        const data = await response.json();
+        setCategories((Array.isArray(data) ? data : []).filter((c: any) => c.isActive));
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
 
   const handleLogout = () => {
     clearAuth();
@@ -346,14 +364,21 @@ const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
                       onChange={(e) => setEditForm({ ...editForm, class: e.target.value })}
                       className="w-full pl-10 pr-4 py-3 bg-surface-100 border border-surface-200 rounded-2xl text-sm focus:outline-none focus:ring-2 focus:ring-brandBlue/20 focus:border-brandBlue appearance-none transition-all duration-200 font-bold"
                     >
-                      <option value="9th">9th</option>
-                      <option value="10th">10th</option>
-                      <option value="11th">11th</option>
-                      <option value="12th">12th</option>
-                      <option value="Neet">Neet</option>
-                      <option value="iit-Jee">iit-Jee</option>
-                      <option value="Nursing-CET">Nursing-CET</option>
-                      <option value="Dropper">Dropper</option>
+                      {categories.map(cat => (
+                        <option key={cat.id || cat._id} value={cat.title}>{cat.title}</option>
+                      ))}
+                      {categories.length === 0 && (
+                        <>
+                          <option value="9th">9th</option>
+                          <option value="10th">10th</option>
+                          <option value="11th">11th</option>
+                          <option value="12th">12th</option>
+                          <option value="Neet">Neet</option>
+                          <option value="iit-Jee">iit-Jee</option>
+                          <option value="Nursing-CET">Nursing-CET</option>
+                          <option value="Dropper">Dropper</option>
+                        </>
+                      )}
                     </select>
                   </div>
                 </div>

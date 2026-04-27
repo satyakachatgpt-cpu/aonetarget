@@ -117,8 +117,14 @@ const FreeContent: React.FC = () => {
 
     const handleVideoClick = (video: any) => {
         if (video.videoUrl || video.youtubeUrl || video.url || video.link) {
-            const vUrl = toYouTubeEmbed(video.youtubeUrl || video.videoUrl || video.url || video.link);
-            navigate('/video-player', { state: { video: { ...video, videoUrl: vUrl }, courseTitle: 'Free Content', courseId: video.courseId || video._id || '' } });
+            const videoId = video._id || video.id;
+            navigate(`/watch/${videoId}`, { 
+                state: { 
+                    video: { ...video }, 
+                    courseTitle: 'Free Content', 
+                    courseId: video.courseId || videoId || '' 
+                } 
+            });
         } else {
             toast.error('Video link not available');
         }

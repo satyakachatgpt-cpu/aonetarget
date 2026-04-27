@@ -1,48 +1,5 @@
 import { API_BASE_URL, getAdminHeaders } from './baseService';
 
-// Buyers API
-export const buyersAPI = {
-  getAll: async () => {
-    const response = await fetch(`${API_BASE_URL}/buyers`, { headers: getAdminHeaders() });
-    if (!response.ok) throw new Error('Failed to fetch buyers');
-    return response.json();
-  },
-
-  create: async (buyerData: any) => {
-    const response = await fetch(`${API_BASE_URL}/buyers`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        ...getAdminHeaders()
-      },
-      body: JSON.stringify(buyerData),
-    });
-    if (!response.ok) throw new Error('Failed to create buyer');
-    return response.json();
-  },
-
-  update: async (id: string, buyerData: any) => {
-    const response = await fetch(`${API_BASE_URL}/buyers/${id}`, {
-      method: 'PUT',
-      headers: { 
-        'Content-Type': 'application/json',
-        ...getAdminHeaders()
-      },
-      body: JSON.stringify(buyerData),
-    });
-    if (!response.ok) throw new Error('Failed to update buyer');
-    return response.json();
-  },
-
-  delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/buyers/${id}`, {
-      method: 'DELETE',
-      headers: { ...getAdminHeaders() }
-    });
-    if (!response.ok) throw new Error('Failed to delete buyer');
-    return response.json();
-  }
-};
 
 // Tokens API
 export const tokensAPI = {

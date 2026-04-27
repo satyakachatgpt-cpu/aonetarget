@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { coursesAPI, getAuthHeaders } from '../services/apiClient';
+import { coursesAPI, categoriesAPI, getAuthHeaders } from '../services/apiClient';
 import { getImageUrl } from '../lib/utils';
 
 interface Course {
@@ -11,6 +11,7 @@ interface Course {
   description?: string;
   thumbnail?: string;
   category?: string;
+  categoryId?: string;
   price?: number;
   originalPrice?: number;
   instructor?: string;
@@ -36,17 +37,26 @@ const CoursesScreen: React.FC = () => {
   const studentData = localStorage.getItem('studentData');
   const student = studentData ? JSON.parse(studentData) : null;
 
-  const categories = [
-    { key: 'all', label: 'All Courses' },
-    { key: 'neet', label: 'NEET' },
-    { key: 'jee', label: 'IIT-JEE' },
-    { key: 'foundation', label: 'Foundation' },
-    { key: 'boards', label: 'Boards' }
-  ];
+  const [categories, setCategories] = useState<{key: string, label: string}[]>([]);
 
   useEffect(() => {
     fetchCourses();
+    fetchCategories();
   }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const data = await categoriesAPI.getAll();
+      const active = (Array.isArray(data) ? data : []).filter((c: any) => c.isActive);
+      const cats = active.map((c: any) => ({
+        key: c.id.toLowerCase(),
+        label: c.title
+      }));
+      setCategories([{ key: 'all', label: 'All Courses' }, ...cats]);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
 
   const fetchCourses = async () => {
     try {
@@ -193,7 +203,7 @@ const CoursesScreen: React.FC = () => {
                   )}
                   <div className="absolute inset-0 p-4 flex flex-col justify-end">
                     <span className="bg-white/20 text-white text-[10px] font-bold px-2 py-1 rounded w-fit uppercase">
-                      {course.category || 'NEET'}
+                      {course.category || categories.find(cat => cat.key === course.categoryId?.toLowerCase())?.label || 'General'}
                     </span>
                   </div>
                 </div>
