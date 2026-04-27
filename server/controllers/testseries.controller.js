@@ -10,8 +10,23 @@ const { ObjectId } = mongoose.Types;
 // GET /api/test-series
 export const getAllTestSeries = async (req, res) => {
   try {
+    const { studentId } = req.query;
     const seriesFromCollection = await db.collection('testSeries').find({}).toArray();
     const seriesFromTests = await db.collection('tests').find({ isSeries: true }).toArray();
+
+    // 1. Fetch student enrollment if studentId is provided
+    let enrolledCourseIds = [];
+    if (studentId) {
+      const student = await db.collection('students').findOne({
+        $or: [
+          { id: studentId },
+          { _id: mongoose.Types.ObjectId.isValid(studentId) ? new mongoose.Types.ObjectId(studentId) : null }
+        ]
+      });
+      if (student) {
+        enrolledCourseIds = (student.enrolledCourses || []).map(id => String(id));
+      }
+    }
 
     const mergedMap = new Map();
     for (const s of seriesFromCollection) {
@@ -40,16 +55,32 @@ export const getAllTestSeries = async (req, res) => {
 
     const combined = Array.from(mergedMap.values());
 
-    // Calculate actual test count for each series
+    // 2. Pre-fetch parent links for enrollment calculation if needed
+    let parentMap = new Map(); // seriesId -> Set of Batch/Package IDs
+    if (studentId) {
+       const [allCourses, allPackages] = await Promise.all([
+           db.collection('courses').find({ "content.testSeries": { $exists: true } }).project({ id: 1, _id: 1, "content.testSeries": 1 }).toArray(),
+           db.collection('packages').find({ "content.testSeries": { $exists: true } }).project({ id: 1, _id: 1, "content.testSeries": 1 }).toArray()
+       ]);
+       [...allCourses, ...allPackages].forEach(c => {
+           const cId = String(c.id || c._id);
+           (c.content?.testSeries || []).forEach(tsId => {
+               if (!parentMap.has(String(tsId))) parentMap.set(String(tsId), new Set());
+               parentMap.get(String(tsId)).add(cId);
+           });
+       });
+    }
+
+    // 3. Calculate actual test count AND enrollment status
     try {
       const allTestsLightweight = await db.collection('tests').find({}).toArray();
-      console.log('[DEBUG] allTestsLightweight length:', allTestsLightweight.length);
       
       for (const series of combined) {
         const seriesIdStr = String(series.id || series._id);
+        
+        // Count tests
         const seriesTestIdsArray = Array.isArray(series.testIds) ? series.testIds.map(String) : [];
         const seriesTestsObjectsIds = Array.isArray(series.tests) ? series.tests.map(st => String(st.id || st._id)) : [];
-        
         const count = allTestsLightweight.filter(t => {
           const tIdStr = String(t.id || t._id);
           return (
@@ -61,15 +92,27 @@ export const getAllTestSeries = async (req, res) => {
             seriesTestsObjectsIds.includes(tIdStr)
           );
         }).length;
-        
-        // console.log(`[DEBUG] Series: ${seriesIdStr}, Count: ${count}`);
         series.totalTests = count;
+
+        // Determine enrollment
+        if (studentId) {
+            let isEnrolled = enrolledCourseIds.includes(seriesIdStr);
+            if (!isEnrolled) {
+                // Check if series links to a batch the student has
+                const linkedBatchIds = (series.courseIds || []).concat(series.courseId ? [series.courseId] : []);
+                // Check if a batch links to this series
+                const batchIdsThatIncludeThis = parentMap.get(seriesIdStr) || new Set();
+                const allPossibleParents = [...new Set([...linkedBatchIds, ...Array.from(batchIdsThatIncludeThis)])];
+                
+                isEnrolled = allPossibleParents.some(pid => enrolledCourseIds.includes(String(pid)));
+            }
+            series.isEnrolled = isEnrolled;
+        }
       }
     } catch (countError) {
-      console.error('Error calculating test counts for series:', countError);
+      console.error('Error calculating stats for series:', countError);
     }
 
-    console.log('GET /api/test-series - Found', combined.length, 'series (collection:', seriesFromCollection.length, '+ tests:', seriesFromTests.length, ')');
     res.json(combined);
   } catch (error) {
     console.error('Error fetching test series:', error);
@@ -93,32 +136,55 @@ export const createTestSeries = async (req, res) => {
 // PUT /api/test-series/:id
 export const updateTestSeries = async (req, res) => {
   try {
-    console.log('PUT /api/test-series/:id - Updating series:', req.params.id, req.body);
+    const seriesId = req.params.id;
+    console.log('PUT /api/test-series/:id - Updating series:', seriesId, req.body);
     const { _id, ...updateData } = req.body;
-    const result = await db.collection('testSeries').updateOne(
-      { id: req.params.id },
+
+    // 1. Try updating in 'testSeries' collection
+    let result = await db.collection('testSeries').updateOne(
+      { id: seriesId },
       { $set: updateData }
     );
-    if (result.matchedCount === 0) return res.status(404).json({ error: 'Series not found' });
-    console.log('Series updated successfully:', req.params.id);
-    res.json({ success: true, message: 'Series updated' });
+
+    // 2. If not found, try updating in 'tests' collection (for series stored there)
+    if (result.matchedCount === 0) {
+      console.log('Series not found in testSeries, trying tests collection...');
+      result = await db.collection('tests').updateOne(
+        { id: seriesId, isSeries: true },
+        { $set: updateData }
+      );
+    }
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Test series not found' });
+    }
+
+    console.log('Series updated successfully');
+    res.json({ message: 'Series updated successfully' });
   } catch (error) {
     console.error('Error updating test series:', error);
-    res.status(500).json({ error: 'Failed to update test series', details: error.message });
+    res.status(500).json({ error: 'Failed to update test series' });
   }
 };
 
 // DELETE /api/test-series/:id
 export const deleteTestSeries = async (req, res) => {
   try {
-    console.log('DELETE /api/test-series/:id - Deleting series:', req.params.id);
-    const result = await db.collection('testSeries').deleteOne({ id: req.params.id });
-    if (result.deletedCount === 0) return res.status(404).json({ error: 'Series not found' });
-    console.log('Series deleted successfully:', req.params.id);
-    res.json({ success: true, message: 'Series deleted' });
+    const seriesId = req.params.id;
+    console.log('DELETE /api/test-series/:id - Deleting series:', seriesId);
+
+    // Try deleting from both collections
+    const result1 = await db.collection('testSeries').deleteOne({ id: seriesId });
+    const result2 = await db.collection('tests').deleteOne({ id: seriesId, isSeries: true });
+
+    if (result1.deletedCount === 0 && result2.deletedCount === 0) {
+      return res.status(404).json({ error: 'Test series not found' });
+    }
+
+    res.json({ message: 'Series deleted successfully' });
   } catch (error) {
     console.error('Error deleting test series:', error);
-    res.status(500).json({ error: 'Failed to delete test series', details: error.message });
+    res.status(500).json({ error: 'Failed to delete test series' });
   }
 };
 

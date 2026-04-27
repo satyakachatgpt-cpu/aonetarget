@@ -23,6 +23,7 @@ const MockTests: React.FC = () => {
   const [activeSeries, setActiveSeries] = useState<any | null>(null);
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
+  const [enrolledSeriesIds, setEnrolledSeriesIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const storedStudent = localStorage.getItem('studentData');
@@ -37,9 +38,13 @@ const MockTests: React.FC = () => {
 
   const fetchData = async () => {
     try {
+      const storedStudent = localStorage.getItem('studentData');
+      const studentData = storedStudent ? JSON.parse(storedStudent) : null;
+      const sId = studentData?.id || studentData?._id;
+
       const [testsData, seriesData, coursesData] = await Promise.all([
         testsAPI.getAll(),
-        testSeriesAPI.getAll(),
+        testSeriesAPI.getAll({ studentId: sId }),
         coursesAPI.getAll()
       ]);
 
@@ -89,6 +94,14 @@ const MockTests: React.FC = () => {
       setTests(extractFinalTests(testsData));
       setTestSeries(Array.isArray(seriesData) ? seriesData : []);
       setCourses(Array.isArray(coursesData) ? coursesData : []);
+
+      // Pre-check which series student is already enrolled in (using server-provided status)
+      if (Array.isArray(seriesData)) {
+          const alreadyEnrolled = new Set(
+              seriesData.filter((s: any) => s.isEnrolled).map((s: any) => String(s.id || s._id || ''))
+          );
+          setEnrolledSeriesIds(alreadyEnrolled);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
     } finally {
@@ -123,6 +136,10 @@ const MockTests: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         setIsEnrolled(data.enrolled || false);
+        // Keep enrolledSeriesIds in sync
+        if (data.enrolled) {
+          setEnrolledSeriesIds(prev => new Set([...prev, String(seriesId)]));
+        }
       }
     } catch (e) {
       setIsEnrolled(false);
@@ -131,7 +148,13 @@ const MockTests: React.FC = () => {
 
   const handleSeriesClick = async (series: any) => {
     setActiveSeries(series);
+    const seriesId = String(series.id || series._id);
+    const preEnrolled = enrolledSeriesIds.has(seriesId);
+    
+    setIsEnrolled(preEnrolled);
     setCurrentView('tests');
+    
+    // Refresh status from server to be sure
     await checkEnrollment(series);
   };
 
@@ -256,7 +279,9 @@ const MockTests: React.FC = () => {
                 </div>
                 <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between">
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{series.category || 'General'}</span>
-                  {series.price > 0 ? (
+                  {enrolledSeriesIds.has(String(series.id || series._id)) ? (
+                    <span className="text-[11px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-lg">✓ Included</span>
+                  ) : series.price > 0 ? (
                     <span className="text-[11px] font-black text-primary bg-primary-50 px-2 py-0.5 rounded-lg">₹{series.price}</span>
                   ) : (
                     <span className="text-[11px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-lg">FREE</span>

@@ -222,40 +222,46 @@ export const checkEnrollment = async (req, res) => {
     // 1. Primary Check: Is any variant in the student's enrolled list?
     let isEnrolled = idVariants.some(id => enrolledCourses.includes(String(id)));
 
-    // 2. Expiry Check (Only if already enrolled via the list)
+    // 2. Parental/Linked Check: Does student have a batch/package that includes this series?
+    if (!isEnrolled) {
+      // Find all Courses or Packages that contain this series ID in content.testSeries
+      const [parentCourses, parentPackages] = await Promise.all([
+        db.collection('courses').find({ "content.testSeries": { $in: idVariants } }).toArray(),
+        db.collection('packages').find({ "content.testSeries": { $in: idVariants } }).toArray()
+      ]);
+      
+      const parentCourseIds = [...parentCourses, ...parentPackages].map(c => c.id || c._id.toString());
+
+      // Also check if the series itself links to a batch/package the student has
+      const linkedBatchIds = (course.courseIds || []).concat(course.courseId ? [course.courseId] : []);
+      
+      // DEEP MATCH: Get all variants for every linked batch to ensure we catch the enrollment
+      const allParentIds = new Set(parentCourseIds);
+      for (const bid of linkedBatchIds) {
+          allParentIds.add(String(bid));
+          // Find the batch document to get its other IDs (slug, custom id, etc)
+          const bDoc = await findCourse(bid);
+          if (bDoc) {
+              const bVariants = await getRelatedCourseIds(bDoc, String(bid));
+              bVariants.forEach(v => allParentIds.add(String(v)));
+          }
+      }
+
+      if (Array.from(allParentIds).some(pid => enrolledCourses.includes(String(pid)))) {
+        isEnrolled = true;
+      }
+    }
+
+    // 3. Expiry Check (Only if already enrolled via direct or parental links)
     if (isEnrolled) {
-      // Find the LATEST completed purchase for this course
       const purchase = await db.collection('purchases').findOne({
         studentId: studentId,
         courseId: { $in: idVariants },
         status: 'completed'
       }, { sort: { createdAt: -1 } });
 
-      // If a purchase exists, enforce its expiry. 
-      // If NO purchase exists, treat it as a manual/admin assignment (Permanent/No Expiry).
       if (purchase) {
-        if (isPurchaseExpired(purchase, course)) {
-          // If expired, we only revoke access if there wasn't a manual override.
-          // Heuristic: If they are STILL in enrolledCourses, but the latest purchase is old,
-          // we check if the purchase was made BEFORE the course was (theoretically) manually added.
-          // Since we don't have manual add timestamps, we'll allow access if the admin manually 
-          // keeps them in the list despite an old purchase.
-          isEnrolled = false;
-          
-          // CRITICAL OVERRIDE: If the student is in enrolledCourses but the latest purchase is expired,
-          // it might be a legacy purchase. A manual assignment doesn't create a purchase record.
-          // We allow access if it's a manual assignment that hasn't been unenrolled.
-          // BUT, to satisfy "manual assignment must work", we assume manual = valid.
-          // If the admin wants to unenroll, they should remove from array.
-          
-          // Re-evaluation: If it's in the array, it's a "Manual Intent".
-          // We only enforce expiry if the purchase is the ONLY source of truth.
-          // For now, let's stick to: Presence in array + (No Purchase OR Active Purchase) = Enrolled.
-          isEnrolled = !isPurchaseExpired(purchase, course);
-        }
-      } else {
-        // No purchase record found? It's a manual assignment.
-        isEnrolled = true; 
+        isEnrolled = !isPurchaseExpired(purchase, course);
       }
     }
 

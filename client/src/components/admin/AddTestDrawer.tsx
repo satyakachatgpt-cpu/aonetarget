@@ -20,7 +20,8 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
     const [formData, setFormData] = useState({
         name: '',
         description: '',
-        courseId: '',
+        courseId: '',        // keep for backward compatibility
+        courseIds: [] as string[],
         price: '',
         mrp: '',
         sortBy: '0.00',
@@ -47,10 +48,14 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
     useEffect(() => {
         if (isOpen) {
             if (editingTest) {
+                const rawIds = editingTest.courseIds || (editingTest.courseId ? [editingTest.courseId] : []);
+                const normalizedIds = Array.isArray(rawIds) ? rawIds.map((id: any) => String(id)) : [];
+                
                 setFormData({
                     name: editingTest.seriesName || editingTest.name || editingTest.title || '',
                     description: editingTest.description || '',
-                    courseId: editingTest.courseId || '',
+                    courseId: normalizedIds[0] || '',
+                    courseIds: normalizedIds,
                     price: editingTest.price?.toString() || '',
                     mrp: editingTest.mrp?.toString() || '',
                     sortBy: editingTest.sortBy?.toString() || '0.00',
@@ -86,6 +91,7 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
                     name: '',
                     description: '',
                     courseId: '',
+                    courseIds: [],
                     price: '',
                     mrp: '',
                     sortBy: '0.00',
@@ -210,18 +216,68 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
 
 
 
-                                {/* Category */}
-                                <div className="">
-                                    <div className="space-y-2">
-                                        <label className="text-[13px] font-bold text-[#2d3748] ml-1 uppercase tracking-wider opacity-60">Category (Exam)</label>
-                                        <CustomDropdown
-                                            options={courses.map(c => ({ value: c.id, label: c.name || c.title || '' }))}
-                                            value={formData.courseId}
-                                            onChange={(val: any) => setFormData({ ...formData, courseId: val })}
-                                            placeholder="Choose Course or Exam"
-                                            searchPlaceholder="Type to filter..."
-                                        />
-                                    </div>
+                                 {/* Linked Batches */}
+                                 <div className="">
+                                   <div className="space-y-2">
+                                     <label className="text-[13px] font-bold text-[#2d3748] ml-1 uppercase tracking-wider opacity-60">
+                                       Linked Batches (Optional)
+                                     </label>
+                                     <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm">
+                                       <div className="p-3 border-b border-gray-100">
+                                         <input
+                                           type="text"
+                                           placeholder="Search batches..."
+                                           className="w-full text-[13px] outline-none text-gray-600 placeholder:text-gray-300"
+                                           onChange={(e) => {
+                                             // inline filter — no extra state needed
+                                             const val = e.target.value.toLowerCase();
+                                             e.target.dataset.filter = val;
+                                             const items = e.target.closest('.batch-list-wrap')?.querySelectorAll('.batch-item');
+                                             items?.forEach((item: any) => {
+                                               const label = item.dataset.label?.toLowerCase() || '';
+                                               item.style.display = label.includes(val) ? '' : 'none';
+                                             });
+                                           }}
+                                         />
+                                       </div>
+                                       <div className="batch-list-wrap max-h-[180px] overflow-y-auto divide-y divide-gray-50">
+                                         {courses.length === 0 && (
+                                           <p className="text-[12px] text-gray-400 text-center py-4">No batches available</p>
+                                         )}
+                                         {courses.map(c => {
+                                           const batchId = c.id || c._id?.toString() || '';
+                                           const batchName = c.name || c.title || '';
+                                           const isChecked = formData.courseIds.includes(batchId);
+                                           return (
+                                             <div
+                                               key={batchId}
+                                               data-label={batchName}
+                                               className="batch-item flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-gray-50 transition-colors"
+                                               onClick={() => {
+                                                 const newIds = isChecked
+                                                   ? formData.courseIds.filter(id => id !== batchId)
+                                                   : [...formData.courseIds, batchId];
+                                                 setFormData({ ...formData, courseIds: newIds, courseId: newIds[0] || '' });
+                                               }}
+                                             >
+                                               <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all duration-200 ${isChecked ? 'bg-[#283593] border-[#283593] scale-105' : 'border-gray-300'}`}>
+                                                 {isChecked && <span className="material-symbols-rounded text-white text-[14px]">check</span>}
+                                               </div>
+                                               <div className="flex-1 min-w-0">
+                                                 <p className={`text-[13px] font-bold truncate transition-colors ${isChecked ? 'text-[#283593]' : 'text-gray-700'}`}>{batchName}</p>
+                                                 <p className="text-[10px] text-gray-400 font-medium uppercase tracking-tight">ID: {batchId}</p>
+                                               </div>
+                                             </div>
+                                           );
+                                         })}
+                                       </div>
+                                     </div>
+                                     {formData.courseIds.length > 0 && (
+                                       <p className="text-[11px] text-gray-400 mt-1 pl-1">
+                                         {formData.courseIds.length} batch{formData.courseIds.length > 1 ? 'es' : ''} selected
+                                       </p>
+                                     )}
+                                   </div>
                                     {!showCategoryOptions ? (
                                         <div className="flex justify-start pl-1 mt-4">
                                             <button

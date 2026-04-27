@@ -135,9 +135,17 @@ const Batches: React.FC = () => {
                           </div>
                           
                           <div>
-                            <h4 className="font-bold text-[13px] text-white leading-tight line-clamp-1 mb-1.5 drop-shadow-md">
+                            <h4 className="font-bold text-[13px] text-white leading-tight line-clamp-1 mb-1 drop-shadow-md">
                               {batchName}
                             </h4>
+                            {(course.tsCount || 0) > 0 && (
+                              <div className="flex items-center gap-1 mb-2">
+                                <div className="px-1.5 py-0.5 bg-green-500/90 backdrop-blur-md rounded-md flex items-center gap-1 border border-green-400/30">
+                                  <span className="material-symbols-rounded text-white text-[10px]">quiz</span>
+                                  <span className="text-white text-[9px] font-black uppercase tracking-wider">Includes {course.tsCount} Test Series</span>
+                                </div>
+                              </div>
+                            )}
                             <div className="flex items-center justify-between">
                                {isEnrolled ? (
                                  <span className="text-[10px] font-black text-yellow-400 drop-shadow-md uppercase tracking-widest flex items-center gap-1">
@@ -180,6 +188,14 @@ const Batches: React.FC = () => {
                           <h4 className="font-bold text-[14px] text-white leading-tight line-clamp-2 drop-shadow-sm">
                             {batchName}
                           </h4>
+                          {(course.tsCount || 0) > 0 && (
+                            <div className="flex items-center gap-1 mt-2">
+                              <div className="px-1.5 py-0.5 bg-white/20 backdrop-blur-md rounded-md flex items-center gap-1 border border-white/10">
+                                <span className="material-symbols-rounded text-white text-[10px]">quiz</span>
+                                <span className="text-white text-[9px] font-black uppercase tracking-wider">Includes {course.tsCount} Test Series</span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                         
                         <div className="relative z-10 flex items-center justify-between">

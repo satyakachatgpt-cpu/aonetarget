@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 const { ObjectId } = mongoose.Types;
 import crypto from 'crypto';
 import { getDb } from '../config/db.js';
-import { findCourse } from '../services/course.service.js';
+import { findCourse, getRelatedCourseIds } from '../services/course.service.js';
 import { calculatePriceBreakdown } from '../utils/helpers.js';
 import { sendEmail, templates } from '../utils/email.js';
 import sendSMS from '../utils/sendSMS.js';
@@ -274,9 +274,36 @@ export const verifyRazorpayPayment = async (req, res) => {
       // Already enrolled, but this is a new purchase record (manual or retry)
       // Usually verifyRazorpayPayment shouldn't hit this if existingPurchase check above works
     } else {
+      // Get linked test series IDs (Bidirectional & Multi-ID matching)
+      const directLinkedSeriesIds = (course.content?.testSeries || []).filter(id => id && typeof id === 'string');
+      
+      const batchVariants = await getRelatedCourseIds(course, actualCourseId);
+
+      const [reverseSeriesColl, reverseSeriesTests] = await Promise.all([
+        db.collection('testSeries').find({
+          $or: [
+            { courseId: { $in: batchVariants } },
+            { courseIds: { $in: batchVariants } }
+          ]
+        }).toArray(),
+        db.collection('tests').find({
+          isSeries: true,
+          $or: [
+            { courseId: { $in: batchVariants } },
+            { courseIds: { $in: batchVariants } }
+          ]
+        }).toArray()
+      ]);
+
+      const reverseLinkedSeriesIds = [
+        ...reverseSeriesColl.map(ts => ts.id || ts._id.toString()),
+        ...reverseSeriesTests.map(ts => ts.id || ts._id.toString())
+      ];
+      const allLinkedSeriesIds = [...new Set([...directLinkedSeriesIds, ...reverseLinkedSeriesIds])];
+
       await db.collection('students').updateOne(
         getStudentFilter(studentId),
-        { $addToSet: { enrolledCourses: actualCourseId } }
+        { $addToSet: { enrolledCourses: { $each: [actualCourseId, ...batchVariants, ...allLinkedSeriesIds] } } }
       );
 
       // Coin Deduction (Internal Helper)
@@ -388,9 +415,36 @@ export const createPurchase = async (req, res) => {
     if (enrolledCourses.includes(actualCourseId)) {
        // Already enrolled
     } else {
+       // Get linked test series IDs (Bidirectional & Multi-ID matching)
+      const directLinkedSeriesIds = (course.content?.testSeries || []).filter(id => id && typeof id === 'string');
+      
+      const batchVariants = await getRelatedCourseIds(course, actualCourseId);
+
+      const [reverseSeriesColl, reverseSeriesTests] = await Promise.all([
+        db.collection('testSeries').find({
+          $or: [
+            { courseId: { $in: batchVariants } },
+            { courseIds: { $in: batchVariants } }
+          ]
+        }).toArray(),
+        db.collection('tests').find({
+          isSeries: true,
+          $or: [
+            { courseId: { $in: batchVariants } },
+            { courseIds: { $in: batchVariants } }
+          ]
+        }).toArray()
+      ]);
+
+      const reverseLinkedSeriesIds = [
+        ...reverseSeriesColl.map(ts => ts.id || ts._id.toString()),
+        ...reverseSeriesTests.map(ts => ts.id || ts._id.toString())
+      ];
+      const allLinkedSeriesIds = [...new Set([...directLinkedSeriesIds, ...reverseLinkedSeriesIds])];
+
       await db.collection('students').updateOne(
         getStudentFilter(studentId),
-        { $addToSet: { enrolledCourses: actualCourseId } }
+        { $addToSet: { enrolledCourses: { $each: [actualCourseId, ...batchVariants, ...allLinkedSeriesIds] } } }
       );
 
       // Coin Deduction
