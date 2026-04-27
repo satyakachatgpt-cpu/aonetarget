@@ -38,6 +38,84 @@ export const enrichResult = async (r, db) => {
   return r;
 };
 
+// GET /api/test-results/:id
+export const getResultById = async (req, res) => {
+  try {
+    const db = getDb();
+    const resultId = String(req.params.id || '').trim();
+    console.log('DEBUG: getResultById looking for:', resultId);
+    
+    // Support custom id (string/number) and MongoDB _id (ObjectId or string)
+    const orFilters = [
+      { id: resultId },
+      { id: !isNaN(Number(resultId)) ? Number(resultId) : null },
+      { _id: resultId }
+    ].filter(v => (v.id !== null && v.id !== undefined) || (v._id !== null && v._id !== undefined));
+    
+    if (ObjectId.isValid(resultId)) {
+      orFilters.push({ _id: new ObjectId(resultId) });
+    }
+
+    const filter = { $or: orFilters };
+    console.log('DEBUG: Final Filter:', JSON.stringify(filter));
+
+    const result = await db.collection('testResults').findOne(filter);
+    if (!result) {
+        console.log('DEBUG: Result NOT found in DB for ID:', resultId);
+        return res.status(404).json({ error: 'Result record not found' });
+    }
+    console.log('DEBUG: Result found! studentId:', result.studentId);
+    
+    // Check ownership
+    const isAdmin = req.user?.isAdmin || req.user?.role === 'admin';
+    const sessionStudentId = req.user?.studentId || req.user?.id;
+    console.log('DEBUG: Ownership check - result.studentId:', result.studentId, 'sessionStudentId:', sessionStudentId, 'isAdmin:', isAdmin);
+    
+    if (!isAdmin && String(result.studentId) !== String(sessionStudentId)) {
+      console.log('DEBUG: Ownership check FAILED');
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const enriched = await enrichResult(result, db);
+
+    // --- Live Ranking Logic (same as history) ---
+    try {
+      const tid = enriched.testId;
+      const allTestResults = await db.collection('testResults').find({ testId: tid }).toArray();
+      const studentBestScores = {};
+      allTestResults.forEach(r => {
+        const sid = r.studentId;
+        const score = Number(r.obtainedMarks) || 0;
+        const time = Number(r.timeTaken) || 999999;
+        if (!studentBestScores[sid] || 
+            score > studentBestScores[sid].score || 
+            (score === studentBestScores[sid].score && time < studentBestScores[sid].time)) {
+          studentBestScores[sid] = { score, time };
+        }
+      });
+      const lb = Object.values(studentBestScores).sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.time - b.time;
+      });
+
+      const currentScore = Number(enriched.obtainedMarks) || 0;
+      const currentTime = Number(enriched.timeTaken) || 999999;
+      enriched.rank = lb.findIndex(s => s.score === currentScore && s.time === currentTime) + 1;
+      if (enriched.rank === 0) {
+        enriched.rank = lb.filter(s => s.score > currentScore || (s.score === currentScore && s.time < currentTime)).length + 1;
+      }
+      enriched.totalStudents = lb.length;
+    } catch (rankErr) {
+      console.error('Live ranking failed in single fetch:', rankErr);
+    }
+
+    res.json(enriched);
+  } catch (error) {
+    logError({ action: 'GET_RESULT_BY_ID', error, context: { id: req.params.id } });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
+
 // GET /api/students/:id/test-results
 export const getStudentTestResults = async (req, res) => {
   try {

@@ -56,11 +56,54 @@ const TestTaking: React.FC = () => {
         console.error('Failed to parse student data', e);
       }
     }
-    fetchTestData();
+
+    if (location.state?.review && location.state?.resultId) {
+      fetchReviewData(location.state.resultId);
+    } else {
+      fetchTestData();
+    }
+
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [testId]);
+  }, [testId, location.state]);
+
+  const fetchReviewData = async (resultId: string) => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/test-results/${resultId}`, {
+        headers: getAuthHeaders()
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(`${errData.error || 'Result not found'} (ID: ${resultId})`);
+      }
+      const resultData = await res.json();
+      
+      // Fetch the test data as well to get questions
+      const testRes = await fetch(`/api/tests/${testId}`, {
+        headers: { ...getAuthHeaders(), ...getAdminHeaders() }
+      });
+      if (!testRes.ok) throw new Error('Test not found');
+      const testData = await testRes.json();
+
+      setTest(testData);
+      const q = (Array.isArray(testData.questions) ? testData.questions : []).map((qn: any) => ({
+        ...qn,
+        id: qn.id || qn._id || `q_${Math.random()}`,
+        correctAnswer: (qn.correctAnswer || qn.correct_answer || qn.answer || qn['Correct Answer'] || qn.correctOption || 'A').toString().toUpperCase()
+      }));
+      setQuestions(q);
+      
+      setAnswers(resultData.answers || {});
+      setResult(resultData);
+      setSubmitted(true);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load review data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleReportSubmit = async () => {
     if (!reportIssue || !reportModal) return;

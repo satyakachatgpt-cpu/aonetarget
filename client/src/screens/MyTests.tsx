@@ -169,7 +169,15 @@ const MyTests: React.FC = () => {
 
                   <div className="flex gap-2 mt-1">
                     <button
-                      onClick={() => navigate(`/test/${result.testId || result.id}`)}
+                      onClick={() => {
+                        const rId = result._id?.$oid || result._id || result.id;
+                        navigate(`/test/${result.testId || result.id}`, { 
+                          state: { 
+                            review: true, 
+                            resultId: String(rId) 
+                          } 
+                        });
+                      }}
                       className="flex-1 bg-brandBlue text-white py-2.5 rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all duration-200 active:scale-[0.98] shadow-sm"
                     >
                       <span className="material-symbols-rounded text-[16px]">visibility</span>
