@@ -1303,21 +1303,22 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                                                  </div>
                                                  <div className="max-h-[200px] overflow-y-auto">
                                                      {testSeriesList.filter(tsObj => (tsObj.name || tsObj.title || '').toLowerCase().includes(testSeriesSearch.toLowerCase())).map((tsObj) => {
-                                                         const ts = tsObj.name || tsObj.title || '';
+                                                         const tsId = tsObj.id || tsObj._id?.toString() || '';
+                                                         const tsName = tsObj.seriesName || tsObj.name || tsObj.title || '';
                                                          return (
                                                          <div
-                                                             key={tsObj._id || ts}
+                                                             key={tsId}
                                                              onClick={() => {
-                                                                 const newSelected = selectedTestSeries.includes(ts)
-                                                                     ? selectedTestSeries.filter(t => t !== ts)
-                                                                     : [...selectedTestSeries, ts];
+                                                                 const newSelected = selectedTestSeries.includes(tsId)
+                                                                     ? selectedTestSeries.filter(t => t !== tsId)
+                                                                     : [...selectedTestSeries, tsId];
                                                                  setSelectedTestSeries(newSelected);
-                                                                 setShowTestSeriesList(false);
+                                                                 // Do NOT close the dropdown here
                                                              }}
-                                                             className={`px-4 py-2 cursor-pointer flex items-center justify-between text-[13px] hover:bg-gray-50 ${selectedTestSeries.includes(ts) ? 'bg-gray-50 font-semibold' : 'text-gray-600'}`}
+                                                             className={`px-4 py-2 cursor-pointer flex items-center justify-between text-[13px] hover:bg-gray-50 ${selectedTestSeries.includes(tsId) ? 'bg-gray-50 font-semibold' : 'text-gray-600'}`}
                                                          >
-                                                             <span>{ts}</span>
-                                                             {selectedTestSeries.includes(ts) && <span className="material-symbols-outlined text-[16px]">check</span>}
+                                                             <span>{tsName}</span>
+                                                             {selectedTestSeries.includes(tsId) && <span className="material-symbols-outlined text-[16px]">check</span>}
                                                          </div>
                                                      )})}
                                                  </div>

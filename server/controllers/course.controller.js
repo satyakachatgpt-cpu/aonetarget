@@ -46,16 +46,22 @@ export const getCourses = async (req, res) => {
     const aggregation = [
       { $match: filter },
       {
+        $addFields: {
+          id: { $ifNull: ['$id', { $toString: '$_id' }] }
+        }
+      },
+      {
         $lookup: {
           from: 'videos',
-          let: { cId: '$id', cStrId: { $toString: '$_id' } },
+          let: { cId: '$id' },
           pipeline: [
             {
               $match: {
                 $expr: {
-                  $or: [
-                    { $eq: ['$courseId', '$$cId'] },
-                    { $eq: ['$courseId', '$$cStrId'] }
+                  $and: [
+                    { $ne: ['$$cId', ''] },
+                    { $ne: ['$$cId', null] },
+                    { $eq: ['$courseId', '$$cId'] }
                   ]
                 }
               }
@@ -66,10 +72,89 @@ export const getCourses = async (req, res) => {
         }
       },
       {
+        $lookup: {
+          from: 'testSeries',
+          let: { cId: '$id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $ne: ['$$cId', ''] },
+                    { $ne: ['$$cId', null] },
+                    {
+                      $or: [
+                        { $eq: ['$courseId', '$$cId'] },
+                        { $in: ['$$cId', { $ifNull: ['$courseIds', []] }] }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            { $project: { _id: 1, id: 1 } }
+          ],
+          as: 'linkedSeriesColl'
+        }
+      },
+      {
+        $lookup: {
+          from: 'tests',
+          let: { cId: '$id' },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ['$isSeries', true] },
+                    { $ne: ['$$cId', ''] },
+                    { $ne: ['$$cId', null] },
+                    {
+                      $or: [
+                        { $eq: ['$courseId', '$$cId'] },
+                        { $in: ['$$cId', { $ifNull: ['$courseIds', []] }] }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            { $project: { _id: 1, id: 1 } }
+          ],
+          as: 'linkedSeriesTests'
+        }
+      },
+      {
         $addFields: {
-          id: { $ifNull: ['$id', { $toString: '$_id' }] },
           lessons: { $ifNull: [{ $arrayElemAt: ['$videoCount.count', 0] }, 0] },
           videoCount: { $ifNull: [{ $arrayElemAt: ['$videoCount.count', 0] }, 0] },
+          directSeries: { $ifNull: ['$content.testSeries', []] },
+          reverseSeries1: { $map: { 
+            input: '$linkedSeriesColl', 
+            as: 'ls', 
+            in: { $ifNull: ['$$ls.id', { $toString: '$$ls._id' }] } 
+          }},
+          reverseSeries2: { $map: { 
+            input: '$linkedSeriesTests', 
+            as: 'ls', 
+            in: { $ifNull: ['$$ls.id', { $toString: '$$ls._id' }] } 
+          }}
+        }
+      },
+      {
+        $addFields: {
+          allTsIds: {
+            $filter: {
+              input: { $setUnion: ['$directSeries', '$reverseSeries1', '$reverseSeries2'] },
+              as: "tid",
+              cond: { $and: [ { $ne: ["$$tid", ""] }, { $ne: ["$$tid", null] } ] }
+            }
+          }
+        }
+      },
+      {
+        $addFields: {
+          tsCount: { $size: { $ifNull: ['$allTsIds', []] } },
           sortOrder: {
             $cond: {
               if: { $or: [{ $eq: ['$settings.sortingOrder', 0] }, { $not: ['$settings.sortingOrder'] }] },
@@ -84,7 +169,13 @@ export const getCourses = async (req, res) => {
           videoCount: 0,
           longDescription: 0,
           syllabus: 0,
-          curriculum: 0
+          curriculum: 0,
+          allTsIds: 0,
+          directSeries: 0,
+          reverseSeries1: 0,
+          reverseSeries2: 0,
+          linkedSeriesColl: 0,
+          linkedSeriesTests: 0
         }
       },
       { $sort: { sortOrder: 1, createdAt: -1 } }

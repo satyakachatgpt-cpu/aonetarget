@@ -1301,7 +1301,13 @@ const CourseDetails: React.FC = () => {
         {!isEnrolled ? (
           <div className="mt-8 mb-24 px-4 sticky bottom-4 z-40">
             <div className="bg-[#0D1B2A] p-5 rounded-[2.2rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex items-center justify-between border border-white/10 mx-auto max-w-sm animate-fade-in-up">
-              <div className="flex flex-col gap-0.5 ml-1">
+              <div className="flex flex-col gap-1 ml-1">
+                {(course.tsCount || 0) > 0 && (
+                   <div className="flex items-center gap-1.5 mb-1 animate-pulse">
+                      <span className="material-symbols-rounded text-green-400 text-[14px]">card_membership</span>
+                      <span className="text-green-400 text-[9px] font-black uppercase tracking-widest">Includes {course.tsCount} Test Series</span>
+                   </div>
+                )}
                 <span className="text-[9px] font-black text-white/30 uppercase tracking-[0.15em]">ENROLLMENT FEE</span>
                 <div className="flex items-center gap-2.5">
                   <span className="text-2xl font-[900] text-white tracking-tight">₹{course.price}</span>

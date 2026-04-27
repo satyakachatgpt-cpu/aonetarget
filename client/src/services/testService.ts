@@ -156,8 +156,13 @@ export const testsAPI = {
 
 // Test Series API
 export const testSeriesAPI = {
-  getAll: async () => {
-    return cachedFetch(`${API_BASE_URL}/test-series`);
+  getAll: async (params?: any) => {
+    let url = `${API_BASE_URL}/test-series`;
+    if (params) {
+      const query = new URLSearchParams(params).toString();
+      url += `?${query}`;
+    }
+    return cachedFetch(url);
   },
   create: async (data: any) => {
     try {
