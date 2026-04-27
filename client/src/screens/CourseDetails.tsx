@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getImageUrl, getVideoUrl, getPdfUrl, getYouTubeThumbnail, getGradientPlaceholder, toYouTubeEmbed, isYouTubeUrl, isLiveUrl } from '../lib/utils';
 import StudentVideoPlayer from '../components/student/StudentVideoPlayer';
 import { Course, Video, Progress } from '../types';
@@ -60,6 +60,11 @@ const CourseDetails: React.FC = () => {
   const [isLandscape, setIsLandscape] = useState(window.innerWidth > window.innerHeight);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const pollRef = useRef<any>(null);
+
+  // 1. STABLE VIDEO ID GENERATOR (CRITICAL FOR PROGRESS SYNC)
+  const getVideoId = useCallback((v: any, index: number) => {
+    return String(v._id || v.id || v.sourceVideoId || `${v.title}-${index}`);
+  }, []);
 
   useEffect(() => {
     const handleResize = () => setIsLandscape(window.innerWidth > window.innerHeight);
@@ -252,7 +257,8 @@ const CourseDetails: React.FC = () => {
     if (studentData) {
       try {
         const parsed = JSON.parse(studentData);
-        return parsed.id || '';
+        // Standardize resolution logic to match backend variants
+        return parsed._id || parsed.id || parsed.userId || parsed.studentId || '';
       } catch {
         return '';
       }
@@ -268,6 +274,34 @@ const CourseDetails: React.FC = () => {
     setShowVideoPlayer(false);
     setSelectedVideo(null);
   };
+
+  const fetchCourseProgress = useCallback(async () => {
+    if (!studentId || !id) return;
+    try {
+      const progressRes = await fetch(`/api/students/${studentId}/courses/${id}/progress`, { headers: getAuthHeaders() });
+      if (progressRes.ok) {
+        const progressData = await progressRes.json();
+        
+        // STRICT SAFETY: Do not overwrite if response is missing critical arrays
+        if (progressData && Array.isArray(progressData.completedVideos)) {
+          setProgress(prev => {
+            // MERGE rather than replace to prevent "zero-flicker" on stale responses
+            const merged = new Set([
+              ...prev.completedVideos.map(v => String(v)),
+              ...progressData.completedVideos.map((v: any) => String(v))
+            ]);
+            return {
+              ...prev,
+              ...progressData,
+              completedVideos: Array.from(merged)
+            };
+          });
+        }
+      }
+    } catch (e) { 
+      console.warn('[Progress] Fetch failed, keeping local state');
+    }
+  }, [studentId, id]);
 
   const fetchCourseData = async () => {
     try {
@@ -297,11 +331,7 @@ const CourseDetails: React.FC = () => {
             setIsEnrolled(enrolledData.enrolled || false);
 
             if (enrolledData.enrolled) {
-              const progressRes = await fetch(`/api/students/${studentId}/courses/${id}/progress`, { headers: getAuthHeaders() });
-              if (progressRes.ok) {
-                const progressData = await progressRes.json();
-                setProgress(progressData);
-              }
+              await fetchCourseProgress();
             }
           }
         } catch { }
@@ -355,18 +385,42 @@ const CourseDetails: React.FC = () => {
   };
 
   const markVideoComplete = async (videoId: string) => {
+    if (!videoId || !studentId) return;
+
+    // 1. Prevent redundant calls if already completed in local state
+    const currentCompleted = new Set(progress.completedVideos.map(vid => String(vid)));
+    if (currentCompleted.has(videoId)) return;
+
     try {
-      await fetch(`/api/students/${studentId}/courses/${id}/progress`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ videoId, action: 'complete' })
-      });
+      // 2. Update local UI instantly for snappy feel (Optimistic Update)
       setProgress(prev => ({
         ...prev,
-        completedVideos: [...prev.completedVideos, videoId]
+        completedVideos: [...new Set([...prev.completedVideos.map(v => String(v)), videoId])]
       }));
+
+      const res = await fetch(`/api/students/${studentId}/courses/${id}/progress`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ videoId: String(videoId), action: 'complete' })
+      });
+
+      if (res.ok) {
+        const latestProgress = await res.json();
+        // 3. MERGE, DO NOT OVERWRITE (Safety against race conditions)
+        setProgress(prev => {
+          const merged = new Set([
+            ...prev.completedVideos.map(v => String(v)),
+            ...(latestProgress.completedVideos || []).map((v: any) => String(v))
+          ]);
+          return {
+            ...prev,
+            ...latestProgress,
+            completedVideos: Array.from(merged)
+          };
+        });
+      }
     } catch (error) {
-      // Update failed
+      console.error('[Progress] Update failed:', error);
     }
   };
 
@@ -390,9 +444,14 @@ const CourseDetails: React.FC = () => {
     }
   }, [course]);
 
+  const location = useLocation();
+
   useEffect(() => {
     fetchCourseData();
-  }, [id]);
+    fetchCourseProgress(); // Force initial sync
+    window.addEventListener('focus', fetchCourseProgress);
+    return () => window.removeEventListener('focus', fetchCourseProgress);
+  }, [id, location.pathname]);
 
   useEffect(() => {
     if (course) {
@@ -496,8 +555,17 @@ const CourseDetails: React.FC = () => {
   }).sort((a: any, b: any) => (Number(a.order) || Number(a.sortingOrder) || 0) - (Number(b.order) || Number(b.sortingOrder) || 0));
 
   const totalVideos = recordedVideos.length;
-  const completedVideos = progress.completedVideos.length;
-  const progressPercent = totalVideos > 0 ? Math.round((completedVideos / totalVideos) * 100) : 0;
+  // Deduplicate using Set to prevent > 100% progress if backend/frontend state has duplicates
+  const uniqueCompletedVideos = new Set(progress.completedVideos || []);
+  
+  // Calculate count of uniquely completed videos that actually exist in the current recordedVideos list
+  const validCompletedCount = recordedVideos.filter((v, idx) => {
+    const vId = getVideoId(v, idx);
+    return uniqueCompletedVideos.has(vId);
+  }).length;
+
+  const completedVideosCount = Math.min(validCompletedCount, totalVideos);
+  const progressPercent = totalVideos > 0 ? Math.min(100, Math.round((completedVideosCount / totalVideos) * 100)) : 0;
   const isPaidCourse = course?.price && course.price > 0;
 
   if (loading) {
@@ -635,7 +703,7 @@ const CourseDetails: React.FC = () => {
           {isEnrolled && (
             <div className="mt-4 bg-surface-100 rounded-2xl p-3">
               <div className="flex justify-between text-xs mb-2">
-                <span className="text-gray-500 font-medium">{completedVideos}/{totalVideos} videos completed</span>
+                <span className="text-gray-500 font-medium">{completedVideosCount}/{totalVideos} videos completed</span>
                 <span className="font-bold text-primary-600">{progressPercent}%</span>
               </div>
               <div className="h-2.5 bg-surface-200 rounded-full overflow-hidden">
@@ -797,8 +865,8 @@ const CourseDetails: React.FC = () => {
               </div>
             ) : (
               filteredVideos.map((video, index) => {
-                const videoId = video.id || video._id;
-                const isCompleted = progress.completedVideos.includes(videoId as string);
+                const videoId = getVideoId(video, index);
+                const isCompleted = uniqueCompletedVideos.has(videoId);
                 const canPlay = isEnrolled || video.isFree || video.isDemo || (index === 0 && navigationHistory.length === 0);
                 const isLocked = !canPlay;
                 return (
@@ -862,13 +930,13 @@ const CourseDetails: React.FC = () => {
                           </div>
                         </div>
                       </div>
-                      {isEnrolled && !isCompleted && !isLocked && (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); markVideoComplete(video.id); }}
-                          className="self-center w-8 h-8 rounded-full bg-surface-100 flex items-center justify-center text-gray-400 hover:text-green-500 hover:bg-green-50 transition-all duration-200 flex-shrink-0"
+                      {isEnrolled && !isLocked && (
+                        <div
+                          className={`self-center w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 flex-shrink-0 ${isCompleted ? 'bg-green-100 text-green-600 shadow-sm' : 'bg-surface-100 text-gray-300 opacity-50'}`}
+                          title={isCompleted ? 'Completed' : 'Watching progress...'}
                         >
-                          <span className="material-symbols-rounded text-lg">check_circle</span>
-                        </button>
+                          <span className="material-symbols-rounded text-lg">{isCompleted ? 'check_circle' : 'circle'}</span>
+                        </div>
                       )}
                     </div>
                     {/* DEFENSIVE RENDERING FOR ATTACHMENTS (PRESERVED FROM LIVE) */}
@@ -1424,8 +1492,8 @@ const CourseDetails: React.FC = () => {
           onClose={closeVideoPlayer}
           onMarkComplete={() => {
             const vId = selectedVideo.id || selectedVideo._id;
-            if (vId) markVideoComplete(vId as string);
-            closeVideoPlayer();
+            const stableVId = vId ? getVideoId(selectedVideo, videos.indexOf(selectedVideo)) : '';
+            if (stableVId) markVideoComplete(stableVId as string);
           }}
           chatMessages={liveMessages}
           onSendMessage={(msg) => {

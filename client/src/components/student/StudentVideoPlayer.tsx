@@ -86,6 +86,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const intervalRef = useRef<any>(null);
   const hlsRef = useRef<Hls | null>(null);
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const completedSentRef = useRef<Record<string, boolean>>({}); // Prevent duplicate calls for same video in same session
 
   // HANDLE ORIENTATION & VIEWPORT (Debounced for stability)
   useEffect(() => {
@@ -390,6 +391,20 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
         if (Math.floor(time) % 10 === 0) {
           saveProgress(time, total);
         }
+
+        // AUTOMATIC COMPLETION TRACKING (STRICT 90% OR LAST 10 SECONDS)
+        if (total > 0 && propVideoId && !isLive && onMarkComplete) {
+          const watchedPercent = (time / total) * 100;
+          const remainingSeconds = total - time;
+          
+          if ((watchedPercent >= 90 || remainingSeconds <= 10) && !completedSentRef.current[propVideoId]) {
+            if (process.env.NODE_ENV !== 'production') {
+              console.log(`[Player] Auto-completing video ${propVideoId}: ${watchedPercent.toFixed(1)}% watched, ${remainingSeconds.toFixed(1)}s remaining`);
+            }
+            completedSentRef.current[propVideoId] = true;
+            onMarkComplete();
+          }
+        }
       }, 500);
     } else { 
       clearInterval(intervalRef.current);
@@ -397,7 +412,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
       if (currentTime > 0) saveProgress(currentTime, duration);
     }
     return () => clearInterval(intervalRef.current);
-  }, [isPlaying, isYoutube, saveProgress, currentTime, duration]);
+  }, [isPlaying, isYoutube, saveProgress, currentTime, duration, propVideoId, isLive, onMarkComplete]);
 
   const handleUserActivity = useCallback(() => {
     setShowControls(true);
