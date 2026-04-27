@@ -1170,6 +1170,21 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         );
         await questionsAPI.update(questionId, payload);
         showToast("Question updated successfully", "success");
+
+        // ✅ Update the question IN-PLACE to preserve the current display order.
+        // Re-fetching from the server would re-sort by orderIndex/id and cause
+        // the edited question to jump to a different position in the list.
+        setEditorQuestions((prev: any[]) =>
+          prev.map((q: any) => {
+            const qId = String(q.id || q._id || "");
+            if (qId === questionId) {
+              // Merge the updated payload into the existing question object.
+              // We intentionally do NOT change the position in the array.
+              return { ...q, ...payload };
+            }
+            return q;
+          })
+        );
       } else {
         console.log(
           "[handleSaveQuestion] Creating new question for test:",
@@ -1177,15 +1192,18 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         );
         await questionsAPI.create({ ...payload, testId: editorId });
         showToast("Question created successfully", "success");
+
+        // For new questions, a full refresh is needed to get the server-assigned ID.
+        if (editorId) {
+          invalidateCache("tests");
+          const qs = await testsAPI.getQuestions(editorId);
+          setEditorQuestions(qs);
+        }
       }
-      invalidateCache("tests"); // Force refresh for questions list
+
+      invalidateCache("tests");
       setViewingAddQuestionForm(null);
       setQuestionFormData(null);
-      // Refresh questions list for the editor
-      if (editorId) {
-        const qs = await testsAPI.getQuestions(editorId);
-        setEditorQuestions(qs);
-      }
     } catch (err: any) {
       console.error("[handleSaveQuestion] Error:", err);
       showToast(err.message || "Failed to save question", "error");
