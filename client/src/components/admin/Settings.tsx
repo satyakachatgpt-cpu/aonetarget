@@ -145,7 +145,10 @@ const SettingsComponent: React.FC<Props> = ({ showToast }) => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
                 <div className="space-y-8">
                   <div className="space-y-3">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Source Image URI</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Source Image URI</label>
+                      <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">Recommended: 1080x1920 px (9:16 Ratio)</span>
+                    </div>
                     <input
                       type="text"
                       value={splash.imageUrl}

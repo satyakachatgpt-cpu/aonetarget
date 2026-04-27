@@ -25,6 +25,13 @@ interface Banner {
   linkUrl?: string;
   isActive?: boolean;
   order?: number;
+  courseId?: string;
+  batchId?: string;
+  targetId?: string;
+  packageId?: string;
+  actionUrl?: string;
+  redirectUrl?: string;
+  type?: string;
 }
 
 import { CATEGORY_ICONS, CATEGORY_GRADIENTS } from '../constants';
@@ -105,6 +112,56 @@ const Home: React.FC = () => {
   const [allNews, setAllNews] = useState<any[]>([]);
   const [newsLoading, setNewsLoading] = useState(true);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const bannerDragInfo = useRef({ startX: 0, startTime: 0 });
+
+  const handleBannerClick = useCallback((banner: Banner) => {
+    const b = banner as any;
+    // 1. Prioritize direct IDs
+    const targetId = b.courseId || b.batchId || b.packageId || b.targetId;
+    if (targetId) {
+      navigate(`/course/${targetId}`);
+      return;
+    }
+
+    // 2. Handle URL fields
+    const link = b.linkUrl || b.actionUrl || b.redirectUrl || b.link || b.url;
+    if (!link) return;
+
+    if (link.startsWith('http')) {
+      // Check if it's an internal course link pasted as full URL
+      if (link.includes('/course/')) {
+        const parts = link.split('/course/');
+        const id = parts[parts.length - 1].split(/[?#]/)[0];
+        if (id) {
+          navigate(`/course/${id}`);
+          return;
+        }
+      }
+      window.open(link, '_blank');
+    } else {
+      // Internal path
+      const path = link.startsWith('/') ? link : `/${link}`;
+      navigate(path);
+    }
+  }, [navigate]);
+
+  const onBannerTouchStart = (e: React.TouchEvent) => {
+    bannerDragInfo.current = { startX: e.touches[0].clientX, startTime: Date.now() };
+  };
+
+  const onBannerTouchEnd = (e: React.TouchEvent, banner: Banner) => {
+    const diffX = e.changedTouches[0].clientX - bannerDragInfo.current.startX;
+    const diffTime = Date.now() - bannerDragInfo.current.startTime;
+
+    if (Math.abs(diffX) > 50) {
+      // Swipe detected
+      if (diffX > 0) setCurrentSlide(prev => (prev - 1 + banners.length) % banners.length);
+      else setCurrentSlide(prev => (prev + 1) % banners.length);
+    } else if (Math.abs(diffX) < 10 && diffTime < 300) {
+      // Clean click detected
+      handleBannerClick(banner);
+    }
+  };
 
   const featuredToDisplay = useMemo(() => {
     // 1. Get explicitly featured courses
@@ -622,23 +679,39 @@ const Home: React.FC = () => {
           <div className="relative w-full overflow-hidden rounded-3xl shadow-elevated aspect-[2/1] animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
             <div className="flex transition-transform duration-700 ease-in-out h-full" style={{ transform: `translateX(-${currentSlide * 100}%)` }}>
               {banners.map((banner, index) => (
-                <div key={banner._id || banner.id || index} className="w-full flex-shrink-0 h-full bg-gradient-to-br from-primary-800 to-primary-600 flex items-center justify-center">
+                <div 
+                  key={banner._id || banner.id || index} 
+                  className="w-full flex-shrink-0 h-full bg-gradient-to-br from-primary-800 to-primary-600 flex items-center justify-center relative touch-pan-y"
+                  onTouchStart={onBannerTouchStart}
+                  onTouchEnd={(e) => onBannerTouchEnd(e, banner)}
+                  onMouseDown={(e) => {
+                    bannerDragInfo.current = { startX: e.clientX, startTime: Date.now() };
+                  }}
+                  onMouseUp={(e) => {
+                    const diffX = Math.abs(e.clientX - bannerDragInfo.current.startX);
+                    const diffTime = Date.now() - bannerDragInfo.current.startTime;
+                    if (diffX < 10 && diffTime < 300) {
+                      handleBannerClick(banner);
+                    }
+                  }}
+                >
                   {banner.imageUrl ? (
                     <img
                       src={getImageUrl(banner.imageUrl)}
                       alt={banner.title || `Banner ${index + 1}`}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover select-none pointer-events-none"
                       loading={index === 0 ? 'eager' : 'lazy'}
-                      onClick={() => banner.linkUrl && navigate(banner.linkUrl)}
-                      style={{ cursor: banner.linkUrl ? 'pointer' : 'default' }}
                     />
                   ) : (
-                    <div className="w-full h-full bg-gradient-to-r from-primary-800 to-primary-600 flex items-center justify-center p-4">
+                    <div className="w-full h-full bg-gradient-to-r from-primary-800 to-primary-600 flex items-center justify-center p-4 select-none">
                       <div className="text-center text-white">
                         <h3 className="text-xl font-medium">{banner.title}</h3>
                         {banner.subtitle && <p className="text-sm opacity-80 mt-1">{banner.subtitle}</p>}
                       </div>
                     </div>
+                  )}
+                  {(banner.linkUrl || banner.courseId || banner.batchId || banner.actionUrl) && (
+                    <div className="absolute inset-0 bg-black/5 opacity-0 active:opacity-100 transition-opacity pointer-events-none"></div>
                   )}
                 </div>
               ))}
