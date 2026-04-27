@@ -51,12 +51,24 @@ export async function syncLiveStream(id, data, operation = 'update') {
       }
     }
 
+    // Standardize PDF fields (Support both variants for zero-breaking)
     if (data.pdf1Url) syncData.pdf1 = data.pdf1Url;
     if (data.pdf1) syncData.pdf1Url = data.pdf1;
+    if (data.pdfUrl) { syncData.pdf1 = data.pdfUrl; syncData.pdfUrl = data.pdfUrl; }
+    
     if (data.pdf2Url) syncData.pdf2 = data.pdf2Url;
     if (data.pdf2) syncData.pdf2Url = data.pdf2;
+
     if (data.studyMaterialUrl) syncData.studyMaterial = data.studyMaterialUrl;
     if (data.studyMaterial) syncData.studyMaterialUrl = data.studyMaterial;
+    if (data.documentUrl) { syncData.studyMaterial = data.documentUrl; syncData.documentUrl = data.documentUrl; }
+    if (data.material) { syncData.studyMaterial = data.material; syncData.material = data.material; }
+
+    // Preserve all attachments if exists
+    if (data.attachments) syncData.attachments = data.attachments;
+    if (data.courseId) syncData.courseId = data.courseId;
+    if (data.folderId) syncData.folderId = data.folderId;
+    if (data.batchId) syncData.batchId = data.batchId;
 
     syncData.updatedAt = new Date().toISOString();
 

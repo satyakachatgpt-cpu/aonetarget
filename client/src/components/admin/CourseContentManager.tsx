@@ -2322,7 +2322,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     const itemId = normalizeId(item._id || item.id);
     const isExpanded = itemId ? expandedFolders.includes(itemId) : false;
     const isActiveUploadFolder = isFolder && currentFolder && normalizeId(currentFolder._id || currentFolder.id) === itemId;
-    const isLiveStream = (item?.contentType === 'live_stream' || item?.type === 'live' || item?.streamType === 'live' || item?.platform === 'youtube_zoom') && item?.streamStatus !== 'recorded' && item?.status !== 'recorded';
+    const isLiveStream = (item?.contentType === 'live_stream' || item?.type === 'live' || item?.streamType === 'live' || item?.platform === 'youtube_zoom' || item?.streamStatus === 'recorded' || item?.contentType === 'recorded');
 
     const getCalculatedLiveStatus = (item: any) => {
       if (!isLiveStream) return null;
@@ -2476,8 +2476,46 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                     `Date & Time: ${item.datetime || '09:31 AM 06th March 2026'}`}
               </span>
             </div>
-            <div className="mt-2.5 px-3 py-0.5 rounded-full text-[10px] font-bold text-gray-500 bg-gray-100 w-fit uppercase tracking-wider">
-              {isLiveStream ? 'Live stream' : isNote ? 'PDF' : isTest ? 'Test' : isFolder ? 'Folder' : isVideo ? 'Video' : 'Content'}
+            <div className="flex items-center gap-2 mt-2.5">
+              <div className="px-3 py-0.5 rounded-full text-[10px] font-bold text-gray-500 bg-gray-100 w-fit uppercase tracking-wider">
+                {isLiveStream ? 'Live stream' : isNote ? 'PDF' : isTest ? 'Test' : isFolder ? 'Folder' : isVideo ? 'Video' : 'Content'}
+              </div>
+              {(item.pdf1 || item.pdf1Url || item.pdfUrl) && (
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const url = item.pdf1 || item.pdf1Url || item.pdfUrl;
+                    window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent('PDF 1')}`, '_blank');
+                  }}
+                  className="px-2 py-0.5 rounded-md text-[9px] font-black text-red-600 bg-red-50 border border-red-100 uppercase tracking-tighter hover:bg-red-100 transition-colors cursor-pointer"
+                >
+                  PDF 1
+                </button>
+              )}
+              {(item.pdf2 || item.pdf2Url) && (
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const url = item.pdf2 || item.pdf2Url;
+                    window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent('PDF 2')}`, '_blank');
+                  }}
+                  className="px-2 py-0.5 rounded-md text-[9px] font-black text-red-600 bg-red-50 border border-red-100 uppercase tracking-tighter hover:bg-red-100 transition-colors cursor-pointer"
+                >
+                  PDF 2
+                </button>
+              )}
+              {(item.studyMaterial || item.studyMaterialUrl || item.documentUrl || item.material) && (
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const url = item.studyMaterial || item.studyMaterialUrl || item.documentUrl || item.material;
+                    window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent('Material')}`, '_blank');
+                  }}
+                  className="px-2 py-0.5 rounded-md text-[9px] font-black text-indigo-600 bg-indigo-50 border border-indigo-100 uppercase tracking-tighter hover:bg-indigo-100 transition-colors cursor-pointer"
+                >
+                  Material
+                </button>
+              )}
             </div>
           </div>
 
@@ -2610,8 +2648,12 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                     e.stopPropagation();
                     if (isFolder) handleEditFolder(item);
                     else if (isVideo) {
-                      if (isLiveStream) handleEditYoutubeZoom(item);
-                      else handleEditVideo(item);
+                      // Use advanced drawer for live streams and recorded classes that have attachments
+                      if (isLiveStream || item.streamStatus === 'recorded' || item.contentType === 'recorded' || item.pdf1 || item.pdf2 || item.studyMaterial) {
+                        handleEditYoutubeZoom(item);
+                      } else {
+                        handleEditVideo(item);
+                      }
                     }
                     else if (isNote) handleEditNote(item);
                     else if (isTest) handleEditTest(item);

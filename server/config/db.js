@@ -36,7 +36,7 @@ export function getDb() {
 export const connectDB = async (isInitialConnect = true) => {
   try {
     await mongoose.connect(MONGODB_URI, {
-      dbName: 'aonetarget',
+      dbName: 'AoneTarget',
       serverSelectionTimeoutMS: 30000 // Allow slow Atlas handshakes
     });
 
@@ -58,8 +58,20 @@ export const connectDB = async (isInitialConnect = true) => {
       }
       await _db.collection('videos').createIndex({ courseId: 1 });
       await _db.collection('videos').createIndex({ folderId: 1 });
-      await _db.collection('courses').createIndex({ id: 1 }, { sparse: true });
-      await _db.collection('packages').createIndex({ id: 1 }, { sparse: true });
+      // Ensure other indexes with existence checks to avoid warnings
+      const ensureIndex = async (collName, keys, options) => {
+        try {
+          const coll = _db.collection(collName);
+          const indexes = await coll.indexes();
+          const name = options.name || Object.keys(keys).map(k => `${k}_${keys[k]}`).join('_');
+          if (!indexes.some(idx => idx.name === name)) {
+            await coll.createIndex(keys, options);
+          }
+        } catch (e) { /* Silent ignore for non-fatal conflicts */ }
+      };
+
+      await ensureIndex('courses', { id: 1 }, { sparse: true });
+      await ensureIndex('packages', { id: 1 }, { sparse: true });
       await _db.collection('folders').createIndex({ courseId: 1, parentId: 1 });
       await _db.collection('tests').createIndex({ courseId: 1 });
       await _db.collection('tests').createIndex({ isSeries: 1 });

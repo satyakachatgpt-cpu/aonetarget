@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Hls from 'hls.js';
 import { useDispatch } from 'react-redux';
 import { updateProgress, setPlaybackSpeed as setReduxSpeed } from '../../store/slices/playerSlice';
-import { getImageUrl, extractYouTubeId, isYouTubeUrl, toYouTubeEmbed } from '../../lib/utils';
+import { getImageUrl, extractYouTubeId, isYouTubeUrl, toYouTubeEmbed, getPdfUrl } from '../../lib/utils';
 import { useAuthStore } from '../../store/authStore';
 import { getAuthHeaders } from '../../services/apiClient';
 
@@ -31,6 +31,9 @@ interface StudentVideoPlayerProps {
   streamUrl?: string;
   youtubeUrl?: string;
   onNext?: () => void;
+  pdf1?: string;
+  pdf2?: string;
+  studyMaterial?: string;
 }
 
 const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
@@ -51,6 +54,9 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   streamUrl,
   youtubeUrl,
   onNext,
+  pdf1,
+  pdf2,
+  studyMaterial,
 }) => {
   const dispatch = useDispatch();
   const { student } = useAuthStore();
@@ -618,6 +624,20 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                     className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all pointer-events-auto"
                   >
                     <span className="material-symbols-rounded text-xl">{isLandscape ? 'stay_primary_portrait' : 'stay_primary_landscape'}</span>
+                  </button>
+                )}
+                
+                {(pdf1 || pdf2 || studyMaterial) && (
+                  <button 
+                    onClick={() => {
+                      // Toggle a resources view or just show first one
+                      const url = pdf1 || pdf2 || studyMaterial;
+                      if (url) window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent('Lesson Material')}`, '_blank');
+                    }}
+                    className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 flex items-center justify-center text-white active:scale-90 transition-all pointer-events-auto"
+                    title="View Materials"
+                  >
+                    <span className="material-symbols-rounded text-xl">description</span>
                   </button>
                 )}
             </div>

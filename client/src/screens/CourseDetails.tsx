@@ -794,7 +794,7 @@ const CourseDetails: React.FC = () => {
                     className={`card-premium overflow-hidden cursor-pointer active:scale-[0.97] transition-all duration-200 animate-fade-in-up ${isLocked ? 'opacity-70' : ''}`}
                     style={{ animationDelay: `${index * 60}ms` }}
                   >
-                    <div className="flex gap-3 p-3">
+                    <div className="flex gap-3 p-3 pb-2">
                       <div className="relative w-28 h-20 rounded-2xl overflow-hidden flex-shrink-0">
                         {!failedImages.has(video.id) ? (
                           <img
@@ -857,6 +857,50 @@ const CourseDetails: React.FC = () => {
                         </button>
                       )}
                     </div>
+                    {/* DEFENSIVE RENDERING FOR ATTACHMENTS (PRESERVED FROM LIVE) */}
+                    {(video.pdf1 || video.pdf2 || video.studyMaterial || video.pdf1Url || video.pdf2Url || video.studyMaterialUrl || video.pdfUrl || video.documentUrl) && !isLocked && (
+                      <div className="flex flex-wrap gap-2 px-3 pb-3 relative z-10 border-t border-gray-50 pt-2 mx-3">
+                        {(video.pdf1 || video.pdf1Url || video.pdfUrl) && (
+                          <button
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              const url = video.pdf1 || video.pdf1Url || video.pdfUrl;
+                              window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent('PDF 1')}`, '_blank'); 
+                            }}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-50 text-red-600 text-[9px] font-black uppercase tracking-widest border border-red-100/50 shadow-sm"
+                          >
+                            <span className="material-symbols-rounded text-[14px]">picture_as_pdf</span>
+                            PDF 1
+                          </button>
+                        )}
+                        {(video.pdf2 || video.pdf2Url) && (
+                          <button
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              const url = video.pdf2 || video.pdf2Url;
+                              window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent('PDF 2')}`, '_blank'); 
+                            }}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-50 text-red-600 text-[9px] font-black uppercase tracking-widest border border-red-100/50 shadow-sm"
+                          >
+                            <span className="material-symbols-rounded text-[14px]">picture_as_pdf</span>
+                            PDF 2
+                          </button>
+                        )}
+                        {(video.studyMaterial || video.studyMaterialUrl || video.documentUrl || video.material) && (
+                          <button
+                            onClick={(e) => { 
+                              e.stopPropagation(); 
+                              const url = video.studyMaterial || video.studyMaterialUrl || video.documentUrl || video.material;
+                              window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent('Study Material')}`, '_blank'); 
+                            }}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-widest border border-indigo-100/50 shadow-sm"
+                          >
+                            <span className="material-symbols-rounded text-[14px]">auto_stories</span>
+                            Material
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -1368,6 +1412,9 @@ const CourseDetails: React.FC = () => {
             handleSendLiveMessage(msg);
           }}
           onNext={handleAutoNext}
+          pdf1={selectedVideo.pdf1 || selectedVideo.pdf1Url || selectedVideo.pdfUrl}
+          pdf2={selectedVideo.pdf2 || selectedVideo.pdf2Url}
+          studyMaterial={selectedVideo.studyMaterial || selectedVideo.studyMaterialUrl || selectedVideo.documentUrl || selectedVideo.material}
         />
       )}
     </div>
