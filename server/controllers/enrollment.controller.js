@@ -1,4 +1,3 @@
-import { db } from '../config/db.js';
 import mongoose from 'mongoose';
 import { findCourse, getRelatedCourseIds, getCourseIdVariants } from '../services/course.service.js';
 import { isPurchaseExpired } from '../utils/helpers.js';
@@ -9,9 +8,16 @@ const { ObjectId } = mongoose.Types;
 
 // --- Student Course Access Controllers ---
 export const getStudentCourses = async (req, res) => {
+  const studentId = req.params.id;
+  if (import.meta.env?.DEV || true) console.log(`[getStudentCourses] Fetching courses for: ${studentId}`);
+  
   try {
-    const studentId = req.params.id;
-    
+    const db = mongoose.connection.db;
+    if (!db) {
+      console.error('[getStudentCourses] Database connection not ready');
+      return res.status(503).json({ error: 'Database not ready' });
+    }
+
     // 1. Robust Student Resolution
     const student = await db.collection('students').findOne({
       $or: [
@@ -26,16 +32,50 @@ export const getStudentCourses = async (req, res) => {
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    const enrolledCourseIds = (student.enrolledCourses || []).map(id => String(id));
-    if (enrolledCourseIds.length === 0) {
+    // 2. Aggregate Enrollment Sources (Robust Resolution)
+    const studentIdVariants = [
+      String(student._id),
+      student.id,
+      student.userId
+    ].filter(Boolean);
+
+    console.log(`[DEBUG_MYCOURSES] Student ${studentId} resolved to variants:`, studentIdVariants);
+
+    // Source A: Standard Enrolled Courses Array
+    const enrolledArray = Array.isArray(student.enrolledCourses) ? student.enrolledCourses : [];
+    console.log(`[DEBUG_MYCOURSES] enrolledArray:`, enrolledArray);
+    
+    // Source B: Legacy single enrolled batch
+    const enrolledBatch = student.enrolledBatch ? [String(student.enrolledBatch)] : [];
+    console.log(`[DEBUG_MYCOURSES] enrolledBatch:`, enrolledBatch);
+
+    // Source C: Successful Purchases (Completed/Captured/Paid)
+    const purchases = await db.collection('purchases').find({
+      studentId: { $in: studentIdVariants },
+      status: { $in: ['completed', 'success', 'captured', 'paid'] }
+    }).toArray();
+    const purchasedCourseIds = purchases.map(p => String(p.courseId));
+    console.log(`[DEBUG_MYCOURSES] purchases count: ${purchases.length}, courseIds:`, purchasedCourseIds);
+
+    // Merge and deduplicate all IDs
+    const allEnrolledIds = [...new Set([
+      ...enrolledArray.map(id => String(id)),
+      ...enrolledBatch,
+      ...purchasedCourseIds
+    ])].filter(Boolean);
+
+    console.log(`[DEBUG_MYCOURSES] Combined unique course IDs:`, allEnrolledIds);
+
+    if (allEnrolledIds.length === 0) {
+      console.log(`[getStudentCourses] No active enrollments found for student: ${studentId}`);
       return res.json([]);
     }
 
-    const objectIds = enrolledCourseIds
+    const objectIds = allEnrolledIds
       .filter(id => ObjectId.isValid(id))
       .map(id => new ObjectId(id));
 
-    // 2. Multi-Collection Search
+    // 3. Multi-Collection Search (Hydration)
     const collectionsToSearch = ['courses', 'packages', 'testSeries', 'test-series', 'subcourses', 'tests', 'test_series'];
     let allContent = [];
 
@@ -43,22 +83,25 @@ export const getStudentCourses = async (req, res) => {
       try {
         const results = await db.collection(col).find({
           $or: [
-            { id: { $in: enrolledCourseIds } },
-            { _id: { $in: enrolledCourseIds } }, // Handle string _id
+            { id: { $in: allEnrolledIds } },
+            { _id: { $in: allEnrolledIds } },
             { _id: { $in: objectIds } }
           ]
         }).toArray();
 
+        if (results.length > 0) {
+          console.log(`[DEBUG_MYCOURSES] Found ${results.length} items in collection: ${col}`);
+        }
+
         results.forEach(item => {
-          // Tag with collection for logic branching if needed
           allContent.push({ ...item, _collection: col });
         });
       } catch (err) {
-        console.error(`Error searching in ${col}:`, err.message);
+        console.error(`[getStudentCourses] Error searching in ${col}:`, err.message);
       }
     }
 
-    // Deduplicate by canonical ID
+    // Deduplicate by canonical ID to prevent double cards
     const uniqueContentMap = new Map();
     allContent.forEach(item => {
       const idKey = String(item.id || item._id);
@@ -67,49 +110,38 @@ export const getStudentCourses = async (req, res) => {
       }
     });
     const uniqueContent = Array.from(uniqueContentMap.values());
+    console.log(`[DEBUG_MYCOURSES] Hydrated unique content count: ${uniqueContent.length}`);
 
-    // 3. Process & Map content with progress
-    const watchProgress = await db.collection('videoProgress').find({ 
-      userId: student.userId || student.id || studentId 
+    // 4. Batch fetch all course progress records for these variants
+    const allProgress = await db.collection('courseProgress').find({
+      studentId: { $in: studentIdVariants }
     }).toArray();
 
     const mappedContent = await Promise.all(uniqueContent.map(async (c) => {
       const contentIdStr = String(c.id || c._id);
       const idVariants = await getCourseIdVariants(contentIdStr);
 
-      // Default values
-      let totalLessons = c.lessons || c.videoCount || c.totalTests || 0;
-      let watchedCount = 0;
-      let progress = 0;
+      // Resolve specific progress for THIS course
+      const progRecord = allProgress.find(p => 
+        idVariants.includes(String(p.courseId))
+      );
 
-      // Special handling for courses (videos)
-      if (c._collection === 'courses' || c._collection === 'subcourses' || !c._collection) {
-        const totalVideos = await db.collection('videos').countDocuments({
-          courseId: { $in: idVariants }
-        });
-        totalLessons = totalVideos;
-        
-        watchedCount = watchProgress.filter(wp =>
-          idVariants.includes(wp.courseId) && Number(wp.timestamp || 0) > 0
-        ).length;
-        
-        progress = totalVideos > 0 ? Math.round((watchedCount / totalVideos) * 100) : 0;
+      // Calculate Metrics
+      const totalVideos = await db.collection('videos').countDocuments({
+        courseId: { $in: idVariants }
+      });
+      
+      const completedVideos = (progRecord?.completedVideos || []).map(v => String(v));
+      const completedCount = Math.min(completedVideos.length, totalVideos);
+      const progressPercent = totalVideos > 0 ? Math.min(100, Math.round((completedCount / totalVideos) * 100)) : 0;
+
+      // Expiry Check (Handles manual vs purchased)
+      const purchaseForThisCourse = purchases.find(p => idVariants.includes(String(p.courseId)));
+      const expired = isPurchaseExpired(purchaseForThisCourse, c);
+
+      if (process.env.NODE_ENV !== 'production' && progressPercent > 0) {
+        console.log(`[DEBUG_MYCOURSES] Progress for ${contentIdStr}: ${progressPercent}% (${completedCount}/${totalVideos})`);
       }
-
-      // Check Expiry (Respect manual assignments)
-      const allStudentIdVariants = [
-        String(student._id),
-        student.id,
-        student.userId
-      ].filter(Boolean);
-
-      const purchase = await db.collection('purchases').findOne({
-        studentId: { $in: allStudentIdVariants },
-        courseId: { $in: idVariants },
-        status: 'completed'
-      }, { sort: { createdAt: -1 } });
-
-      const expired = isPurchaseExpired(purchase, c);
 
       // Standardize shape for MyCourses.tsx
       return {
@@ -119,17 +151,20 @@ export const getStudentCourses = async (req, res) => {
         title: c.title || c.name || c.seriesName,
         thumbnail: c.thumbnail || c.imageUrl,
         subject: c.subject || c.category || (c._collection === 'testSeries' ? 'Test Series' : 'General'),
-        lessons: totalLessons,
+        lessons: totalVideos, // Display total videos as lessons
         duration: c.duration || '0',
-        progress: progress,
+        progress: progressPercent,
+        progressPercent: progressPercent,
+        completedCount: completedCount,
+        totalVideos: totalVideos,
         expired: expired,
         type: c.type || c.contentType || (c._collection === 'testSeries' ? 'test_series' : 'course')
       };
     }));
 
-    // Filter out expired and return
+    // Return active content only
     const activeContent = mappedContent.filter(c => !c.expired);
-    console.log(`[getStudentCourses] Found ${activeContent.length} active courses for student ${studentId}`);
+    console.log(`[getStudentCourses] Success: ${activeContent.length} active courses for ${studentId}`);
     res.json(activeContent);
   } catch (error) {
     console.error('Error in getStudentCourses:', error);
@@ -176,6 +211,7 @@ export const enrollStudent = async (req, res) => {
     );
 
     // Update course enrollment count
+    const db = mongoose.connection.db;
     await db.collection('courses').updateOne(
       { _id: course._id },
       { $inc: { studentsEnrolled: 1 } }
@@ -224,6 +260,7 @@ export const checkEnrollment = async (req, res) => {
 
     // 2. Parental/Linked Check: Does student have a batch/package that includes this series?
     if (!isEnrolled) {
+      const db = mongoose.connection.db;
       // Find all Courses or Packages that contain this series ID in content.testSeries
       const [parentCourses, parentPackages] = await Promise.all([
         db.collection('courses').find({ "content.testSeries": { $in: idVariants } }).toArray(),
@@ -254,6 +291,7 @@ export const checkEnrollment = async (req, res) => {
 
     // 3. Expiry Check (Only if already enrolled via direct or parental links)
     if (isEnrolled) {
+      const db = mongoose.connection.db;
       const purchase = await db.collection('purchases').findOne({
         studentId: studentId,
         courseId: { $in: idVariants },
@@ -274,18 +312,54 @@ export const checkEnrollment = async (req, res) => {
 
 export const getCourseProgress = async (req, res) => {
   try {
-    const dbProgress = await db.collection('courseProgress').findOne({
-      studentId: req.params.id,
-      courseId: req.params.courseId
+    const db = mongoose.connection.db;
+    const studentId = req.params.id;
+    const courseId = req.params.courseId;
+
+    // Resolve student variants for robust matching
+    const student = await db.collection('students').findOne({
+      $or: [
+        { id: studentId },
+        { userId: studentId },
+        { _id: mongoose.Types.ObjectId.isValid(studentId) ? new mongoose.Types.ObjectId(studentId) : null }
+      ].filter(v => v.id || v.userId || v._id)
     });
 
-    res.json(dbProgress || {
+    const studentIdVariants = student 
+      ? [String(student._id), student.id, student.userId].filter(Boolean)
+      : [studentId];
+
+    const dbProgress = await db.collection('courseProgress').findOne({
+      studentId: { $in: studentIdVariants },
+      courseId: courseId
+    });
+
+    const idVariants = await getCourseIdVariants(courseId);
+    const totalVideos = await db.collection('videos').countDocuments({
+      courseId: { $in: idVariants }
+    });
+
+    const completedVideos = (dbProgress?.completedVideos || []).map(v => String(v));
+    const completedCount = Math.min(completedVideos.length, totalVideos);
+    const progressPercent = totalVideos > 0 ? Math.min(100, Math.round((completedCount / totalVideos) * 100)) : 0;
+
+    const response = {
+      success: true,
       studentId: req.params.id,
       courseId: req.params.courseId,
-      completedVideos: [],
-      completedTests: [],
-      completedNotes: []
-    });
+      completedVideos,
+      completedCount,
+      totalVideos,
+      progressPercent,
+      completedTests: (dbProgress?.completedTests || []).map(t => String(t)),
+      completedNotes: (dbProgress?.completedNotes || []).map(n => String(n))
+    };
+
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[getCourseProgress] Found record for ${courseId}: ${progressPercent}% (${completedCount}/${totalVideos})`);
+    }
+
+    res.json(response);
   } catch (error) {
     console.error('Error fetching course progress:', error);
     res.status(500).json({ error: 'Failed to fetch course progress' });
@@ -294,22 +368,41 @@ export const getCourseProgress = async (req, res) => {
 
 export const updateCourseProgress = async (req, res) => {
   try {
+    const db = mongoose.connection.db;
     const { videoId, testId, noteId, action = 'complete' } = req.body;
     const field = videoId ? 'completedVideos' : testId ? 'completedTests' : noteId ? 'completedNotes' : null;
-    const itemId = videoId || testId || noteId;
+    const rawItemId = videoId || testId || noteId;
+    const itemId = String(rawItemId); // STREICT TYPE SYNC: Always store as string
 
-    if (!field || !itemId) {
+    if (!field || !rawItemId) {
       return res.status(400).json({ error: 'videoId, testId, or noteId is required' });
     }
 
-    const query = { studentId: req.params.id, courseId: req.params.courseId };
+    const rawStudentId = req.params.id;
+    const courseId = req.params.courseId;
+
+    // 1. Resolve Student (Robust matching)
+    const student = await db.collection('students').findOne({
+      $or: [
+        { id: rawStudentId },
+        { userId: rawStudentId },
+        { _id: mongoose.Types.ObjectId.isValid(rawStudentId) ? new mongoose.Types.ObjectId(rawStudentId) : null }
+      ].filter(v => v.id || v.userId || v._id)
+    });
+
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    // 2. Use canonical student ID for consistency
+    const canonicalStudentId = student.id || String(student._id);
+    const studentIdVariants = [String(student._id), student.id, student.userId].filter(Boolean);
+
+    // 3. Find existing progress record by ANY variant
+    const query = { studentId: { $in: studentIdVariants }, courseId: courseId };
+    
     const update = {
       $setOnInsert: {
-        studentId: req.params.id,
-        courseId: req.params.courseId,
-        completedVideos: [],
-        completedTests: [],
-        completedNotes: [],
+        studentId: canonicalStudentId,
+        courseId: courseId,
         createdAt: new Date()
       },
       $set: { updatedAt: new Date() }
@@ -322,7 +415,19 @@ export const updateCourseProgress = async (req, res) => {
     }
 
     await db.collection('courseProgress').updateOne(query, update, { upsert: true });
-    const progress = await db.collection('courseProgress').findOne(query);
+    
+    // 4. Return the updated record with normalized string arrays
+    const progress = await db.collection('courseProgress').findOne({
+      studentId: { $in: studentIdVariants },
+      courseId: courseId
+    });
+
+    if (progress) {
+        progress.completedVideos = (progress.completedVideos || []).map(v => String(v));
+        progress.completedTests = (progress.completedTests || []).map(t => String(t));
+        progress.completedNotes = (progress.completedNotes || []).map(n => String(n));
+    }
+
     res.json(progress);
   } catch (error) {
     console.error('Error updating course progress:', error);

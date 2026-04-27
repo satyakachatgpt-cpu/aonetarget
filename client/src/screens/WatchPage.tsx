@@ -141,6 +141,25 @@ const WatchPage: React.FC = () => {
     navigate(`/watch/${batchId}/${vId}`, { replace: true });
   };
 
+  const markVideoComplete = async (vId: string) => {
+    const sId = student?.id || student?._id;
+    if (!vId || !sId || !batchId || isAdmin) return;
+
+    try {
+      if (process.env.NODE_ENV !== 'production') {
+        console.log(`[WatchPage] Auto-completing video ${vId} for course ${batchId}`);
+      }
+      
+      await fetch(`/api/students/${sId}/courses/${batchId}/progress`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ videoId: String(vId), action: 'complete' })
+      });
+    } catch (error) {
+      console.error('[WatchPage] Progress update failed:', error);
+    }
+  };
+
   const playNext = useCallback(() => {
     if (!autoPlayEnabled || !playlist.length || !currentVideo) return;
     const currentIndex = playlist.findIndex(v => (v._id || v.id) === (currentVideo._id || currentVideo.id));
@@ -207,10 +226,13 @@ const WatchPage: React.FC = () => {
   }
 
   const isLive = currentVideo.contentType === 'live_stream' && computeEffectiveStatus(currentVideo) === 'live';
+  
+  // STABLE VIDEO ID FOR PROGRESS SYNC
+  const stableVideoId = String(currentVideo.id || currentVideo._id || currentVideo.sourceVideoId || `v-${currentVideo.title}`);
 
   return (
     <StudentVideoPlayer
-      videoId={String(currentVideo.id || currentVideo._id || '')}
+      videoId={stableVideoId}
       src={toYouTubeEmbed(currentVideo.recordedLink || currentVideo.youtubeUrl || currentVideo.videoUrl || currentVideo.url || currentVideo.embedUrl || '')}
       title={currentVideo.title}
       isLive={isLive}
@@ -227,6 +249,7 @@ const WatchPage: React.FC = () => {
           else navigate('/live-classes', { replace: true });
         }
       }}
+      onMarkComplete={() => markVideoComplete(stableVideoId)}
       courseId={batchId || (location.state as any)?.courseId}
       courseTitle={currentVideo.courseTitle || (location.state as any)?.courseTitle}
       isAdmin={isAdmin}

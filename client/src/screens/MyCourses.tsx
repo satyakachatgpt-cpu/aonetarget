@@ -1,86 +1,60 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import { getAuthHeaders } from '../services/apiClient';
 
 const MyCourses: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [student, setStudent] = useState<any>(null);
   const [courses, setCourses] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const storedStudent = localStorage.getItem('studentData');
-    if (storedStudent) {
-      const studentData = JSON.parse(storedStudent);
-      setStudent(studentData);
-      
-      // Robust ID resolution: use _id first, then id, then userId
-      const studentId = studentData._id || studentData.id || studentData.userId;
-      console.log(`[MyCourses] Resolving courses for student ID: ${studentId}`);
-      
-      if (studentId) {
-        fetchCourses(studentId);
+    const init = () => {
+      const storedStudent = localStorage.getItem('studentData');
+      if (storedStudent) {
+        const studentData = JSON.parse(storedStudent);
+        setStudent(studentData);
+        const studentId = studentData._id || studentData.id || studentData.userId;
+        if (studentId) fetchCourses(studentId);
+        else setLoading(false);
       } else {
-        console.warn('[MyCourses] No valid student ID found in stored data');
-        setLoading(false);
+        navigate('/student-login');
       }
-    } else {
-      navigate('/student-login');
-    }
-  }, []);
+    };
+
+    init();
+    window.addEventListener('focus', init);
+    return () => window.removeEventListener('focus', init);
+  }, [location.pathname]);
 
   const fetchCourses = async (studentId: string) => {
     try {
-      console.log(`[MyCourses] Fetching courses from API...`);
+      if (import.meta.env.DEV) console.log(`[MyCourses] API URL: /api/students/${studentId}/courses`);
       const response = await fetch(`/api/students/${studentId}/courses`, { headers: getAuthHeaders() });
-      const data = await response.json();
       
-      // Handle various response shapes defensively
-      const courseList: any[] = Array.isArray(data) ? data : (data.courses || data.data || []);
-      console.log(`[MyCourses] API returned ${courseList.length} courses`);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[MyCourses] API Error (${response.status}):`, errorText);
+        setLoading(false);
+        return;
+      }
 
-      // Map courses and calculate progress
-      // We keep the detailed calculation for accuracy, but ensure it doesn't block if one fails
-      const coursesWithProgress = await Promise.all(
-        courseList.map(async (course) => {
-          const courseId = course.id || course._id;
-          if (!courseId) return { ...course, progress: course.progress || 0 };
+      const data = await response.json();
+      if (import.meta.env.DEV) console.log(`[MyCourses] Raw API Response:`, data);
+      
+      // Handle various response shapes defensively (STRICT ZERO-BREAKING)
+      const courseList: any[] = Array.isArray(data) ? data : (data.courses || data.enrolledCourses || data.data || []);
+      if (import.meta.env.DEV) console.log(`[MyCourses] Parsed Course List Length: ${courseList.length}`);
 
-          try {
-            // Optimization: If backend already provided progress > 0, we can skip re-fetching unless needed
-            // But for now we stick to the existing logic for maximum accuracy
-            const [videosRes, progressRes] = await Promise.all([
-              fetch(`/api/courses/${courseId}/videos`),
-              fetch(`/api/students/${studentId}/courses/${courseId}/progress`, { headers: getAuthHeaders() }),
-            ]);
-
-            const videosData = videosRes.ok ? await videosRes.json() : [];
-            const progressData = progressRes.ok ? await progressRes.json() : {};
-
-            const allVideos: any[] = Array.isArray(videosData) ? videosData : [];
-            const totalVideos = allVideos.filter(
-              (v) => v.contentType !== 'youtube_zoom' && v.contentType !== 'live_stream'
-            ).length;
-
-            const completedVideos: string[] = progressData.completedVideos || [];
-            const completedCount = completedVideos.length;
-
-            const calculatedProgress =
-              totalVideos > 0 ? Math.min(100, Math.round((completedCount / totalVideos) * 100)) : (course.progress || 0);
-
-            return { 
-              ...course, 
-              progress: calculatedProgress, 
-              lessons: totalVideos || course.lessons || 0 
-            };
-          } catch (err) {
-            console.warn(`[MyCourses] Failed to fetch sub-progress for course ${courseId}:`, err);
-            return { ...course, progress: course.progress || 0 };
-          }
-        })
-      );
+      // Map courses using progress provided by backend (Final Sync)
+      const coursesWithProgress = courseList.map((course: any) => ({
+        ...course,
+        progress: course.progressPercent ?? course.progress ?? 0,
+        lessons: course.totalVideos ?? course.lessons ?? 0
+      }));
 
       setCourses(coursesWithProgress);
     } catch (error) {
@@ -111,33 +85,41 @@ const MyCourses: React.FC = () => {
             ))}
           </div>
         ) : courses.length > 0 ? (
-          courses.map((course, idx) => (
-            <div
-              key={idx}
-              className="bg-white rounded-xl p-4 shadow-sm flex gap-4 cursor-pointer hover:shadow-md transition-all"
-              onClick={() => navigate(`/course/${course.id}`)}
-            >
-              <div className="w-20 h-20 bg-gradient-to-br from-brandBlue to-[#1A237E] rounded-xl flex items-center justify-center shrink-0">
-                <span className="material-symbols-rounded text-white text-3xl">play_circle</span>
-              </div>
-              <div className="flex-1">
-                <h4 className="font-bold text-sm">{course.name || course.title}</h4>
-                <p className="text-[10px] text-gray-400 mt-1">{course.subject || 'NEET Preparation'}</p>
-                <p className="text-[10px] text-gray-400">{course.lessons || 0} Lessons | {course.duration || '0'} Hours</p>
-                <div className="mt-2 flex items-center gap-2">
-                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-green-500 transition-all duration-500"
-                      style={{ width: `${Number(course.progress) || 0}%` }}
-                    ></div>
+          courses.map((course, idx) => {
+            const courseId = course.id || course._id || course.courseId || course.sourceCourseId;
+            if (!courseId) return null;
+
+            return (
+              <div
+                key={courseId || idx}
+                className="bg-white rounded-xl p-4 shadow-sm flex gap-4 cursor-pointer hover:shadow-md transition-all"
+                onClick={() => navigate(`/course/${courseId}`)}
+              >
+                <div className="w-20 h-20 bg-gradient-to-br from-brandBlue to-[#1A237E] rounded-xl flex items-center justify-center shrink-0 overflow-hidden">
+                  {course.thumbnail || course.image ? (
+                    <img src={course.thumbnail || course.image} alt={course.name || course.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="material-symbols-rounded text-white text-3xl">play_circle</span>
+                  )}
+                </div>
+                <div className="flex-1">
+                  <h4 className="font-bold text-sm line-clamp-1">{course.name || course.title || 'Untitled Course'}</h4>
+                  <p className="text-[10px] text-gray-400 mt-1">{course.subject || 'Enrolled Course'}</p>
+                  <div className="mt-2 flex items-center gap-2">
+                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-green-500 transition-all duration-500"
+                        style={{ width: `${Number(course.progress) || 0}%` }}
+                      ></div>
+                    </div>
+                    <span className="text-[10px] font-bold text-gray-500">
+                      {(Number(course.progress) || 0).toFixed(0)}%
+                    </span>
                   </div>
-                  <span className="text-[10px] font-bold text-gray-500">
-                    {(Number(course.progress) || 0).toFixed(0)}%
-                  </span>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         ) : (
           <div className="bg-white rounded-xl p-8 text-center shadow-sm">
             <span className="material-symbols-rounded text-6xl text-gray-300">school</span>
