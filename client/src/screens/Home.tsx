@@ -1057,7 +1057,7 @@ const Home: React.FC = () => {
                           <button 
                             className="bg-white text-black text-[11px] font-black px-4 py-2 rounded-xl hover:bg-white transition-all whitespace-nowrap shadow-lg uppercase tracking-widest active:scale-95 border border-white/20"
                           >
-                            {isEnrolled ? 'Open' : 'Join'}
+                            {isEnrolled ? 'OPEN' : 'JOIN NOW'}
                           </button>
                         </div>
                       </div>
