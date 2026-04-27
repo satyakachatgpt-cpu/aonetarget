@@ -1477,7 +1477,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
             ? availableDistricts.sort()
             : selectionModal.type === 'higherEducation'
               ? ['10th Pass', '12th Pass', 'Graduate', 'Post Graduate', 'Other']
-              : ['9th', '10th', '11th', '12th', 'Neet','iit-Jee','Nursing-CET', 'Dropper']
+              : categories.length > 0 ? categories.map(c => c.title) : ['9th', '10th', '11th', '12th', 'Neet','iit-Jee','Nursing-CET', 'Dropper']
         }
         selectedValue={selectionModal.type === 'state' ? selectedState : selectionModal.type === 'district' ? profileWatch('district') : selectionModal.type === 'higherEducation' ? profileWatch('higherEducation') : profileWatch('class')}
         onSelect={handleSelection}

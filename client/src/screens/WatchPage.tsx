@@ -6,9 +6,15 @@ import { getVideoUrl, toYouTubeEmbed, getEmbedUrl, normalizeId } from '../lib/ut
 import { getAuthHeaders, getAdminHeaders } from '../services/apiClient';
 
 function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
-  const raw = (lc.streamStatus || lc.status || 'upcoming').toLowerCase();
-  if (['ended', 'completed', 'inactive', 'recorded'].includes(raw)) return 'ended';
-  if (raw === 'live') return 'live';
+  const raw = (lc.streamStatus || lc.status || lc.liveStatus || lc.eventStatus || 'upcoming').toLowerCase();
+  
+  const isExplicitlyEnded = ['ended', 'completed', 'inactive', 'recorded', 'disable', 'finished'].includes(raw);
+  const isImplicitlyEnded = (lc.isLive === false && (lc.endedAt || lc.endTime)) || 
+                           (lc.type === 'recorded' || lc.contentType === 'recorded' || lc.contentType === 'video');
+  const hasEndedLabel = lc.statusLabel === 'EVENT ENDED' || lc.label === 'EVENT ENDED';
+
+  if (isExplicitlyEnded || isImplicitlyEnded || hasEndedLabel) return 'ended';
+  if (raw === 'live' || lc.isLive === true) return 'live';
   return 'upcoming';
 }
 
@@ -92,7 +98,7 @@ const WatchPage: React.FC = () => {
   useEffect(() => {
     const loadContent = async () => {
       // Priority 1: Check if video is passed via state (e.g. from Live Classes)
-      if (location.state?.video && (location.state.video.videoUrl || location.state.video.youtubeUrl || location.state.video.url)) {
+      if (location.state?.video && (location.state.video.videoUrl || location.state.video.youtubeUrl || location.state.video.url || location.state.video.recordedLink || location.state.video.link)) {
         setCurrentVideo(location.state.video);
         setLoading(false);
         return;

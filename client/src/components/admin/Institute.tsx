@@ -201,7 +201,10 @@ const Institute: React.FC<Props> = ({ showToast }) => {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.1em] ml-1">Logo Asset URL</label>
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.1em] ml-1">Logo Asset URL</label>
+                <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 mb-1">Recommended: 512x512 px (1:1 Ratio)</span>
+              </div>
               <div className="flex gap-4 items-center">
                 <div className="relative group flex-1">
                   <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-[18px] group-focus-within:text-[#1A237E] transition-colors font-light">link</span>

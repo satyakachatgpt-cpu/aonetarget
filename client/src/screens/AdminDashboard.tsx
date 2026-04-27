@@ -179,8 +179,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
       icon: 'assignment',
       color: 'text-gray-700',
         submenu: [
-          { id: 'tests', label: 'Tests', icon: 'quiz' },
-          { id: 'test-series', label: 'Test Series', icon: 'library_books' }
+          { id: 'tests', label: 'Tests', icon: 'quiz' }
         ]
     },
     {
@@ -193,7 +192,6 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         { id: 'push-notifications', label: 'Notifications', icon: 'notifications_active' },
         { id: 'referrals', label: 'Referral', icon: 'leaderboard' },
         { id: 'coupons', label: 'Coupons', icon: 'confirmation_number' },
-        { id: 'buyers', label: 'Payment Pages', icon: 'payments' },
         { id: 'blog', label: 'News', icon: 'newspaper' }
       ]
     },
@@ -274,7 +272,6 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         <Route path="misc" element={<MiscSection {...props} />} />
         <Route path="students" element={<Students {...props} />} />
         <Route path="blocked-users" element={<Students {...props} initialStatus="inactive" viewMode="blocked" />} />
-        <Route path="buyers" element={<Buyers {...props} />} />
         <Route path="tokens" element={<Tokens {...props} />} />
         <Route path="coupons" element={<Coupons {...props} />} />
         <Route path="store" element={<Store {...props} />} />

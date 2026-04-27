@@ -11,13 +11,19 @@ const { ObjectId } = mongoose.Types;
  * Matches the 'Strict manual control' implementation from server.js.
  */
 const calculateStreamStatus = (item) => {
-  const lifecycleStatus = (item.streamStatus || item.status || 'upcoming').toLowerCase();
+  const lifecycleStatus = (item.streamStatus || item.status || item.liveStatus || item.eventStatus || 'upcoming').toLowerCase();
   
-  if (['ended', 'inactive', 'completed', 'disable', 'finished'].includes(lifecycleStatus)) {
+  // Robust Ended Detection
+  const isExplicitlyEnded = ['ended', 'inactive', 'completed', 'disable', 'finished'].includes(lifecycleStatus);
+  const isImplicitlyEnded = (item.isLive === false && (item.endedAt || item.endTime)) || 
+                           (item.type === 'recorded' || item.contentType === 'recorded' || item.contentType === 'video');
+  const hasEndedLabel = item.statusLabel === 'EVENT ENDED' || item.label === 'EVENT ENDED';
+
+  if (isExplicitlyEnded || isImplicitlyEnded || hasEndedLabel) {
     return 'ended';
   }
   
-  if (lifecycleStatus === 'live') {
+  if (lifecycleStatus === 'live' || item.isLive === true) {
     return 'live';
   }
   

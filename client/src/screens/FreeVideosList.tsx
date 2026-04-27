@@ -42,8 +42,14 @@ const FreeVideosList: React.FC = () => {
 
 
     const handleVideoClick = (video: any) => {
-        const vUrl = toYouTubeEmbed(video.youtubeUrl || video.videoUrl || video.url || video.fileUrl);
-        navigate('/video-player', { state: { video: { ...video, videoUrl: vUrl }, courseTitle: 'Free Content', courseId: video.courseId || '' } });
+        const videoId = video._id || video.id;
+        navigate(`/watch/${videoId}`, { 
+            state: { 
+                video: { ...video }, 
+                courseTitle: 'Free Content', 
+                courseId: video.courseId || videoId || '' 
+            } 
+        });
     };
 
     const filteredVideos = freeVideos.filter(v => activeSubject === 'All Subjects' || v.subject === activeSubject);

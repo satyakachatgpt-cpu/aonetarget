@@ -115,7 +115,10 @@ const AddFolderDrawer: React.FC<AddFolderDrawerProps> = ({
 
                     {/* Image Section */}
                     <div className="space-y-2">
-                        <label className="text-[13px] font-bold text-gray-700">Image</label>
+                        <div className="flex items-center justify-between">
+                            <label className="text-[13px] font-bold text-gray-700">Image</label>
+                            <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">Recommended: 1280x720 px (16:9 Ratio)</span>
+                        </div>
                         <div className="flex gap-4">
                             <div className="w-[170px] h-[110px] bg-[#f2f2f2] rounded-[22px] flex flex-col items-center justify-center gap-1 border border-gray-100 overflow-hidden shrink-0">
                                 {isUploading ? (

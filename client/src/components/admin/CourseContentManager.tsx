@@ -136,7 +136,7 @@ interface YoutubeZoomForm {
   description: string;
   image: string;
   isFree: boolean;
-  publishOn: string;
+  publishOn?: string;
   link: string;
   pdf1: string;
   pdf2: string;
@@ -161,7 +161,7 @@ interface WebinarForm {
   description: string;
   image: string;
   isFree: boolean;
-  publishOn: string;
+  publishOn?: string;
   link: string;
   streamStatus: string;
   pdf1: string;
@@ -725,7 +725,6 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       description: video.description || '',
       image: video.image || video.thumbnail || '',
       isFree: video.isFree || false,
-      publishOn: video.publishOn || video.date || video.startTime || new Date().toISOString().slice(0, 16).replace('T', ' '),
       link: video.link || video.url || video.videoUrl || video.meetingLink || '',
       pdf1: video.pdf1 || '',
       pdf2: video.pdf2 || '',
@@ -964,7 +963,6 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         url: webinarForm.link,
         status: 'active',
         isFree: webinarForm.isFree,
-        publishOn: webinarForm.publishOn,
         order: webinarForm.order || '0.00',
         pdf1: webinarForm.pdf1,
         pdf2: webinarForm.pdf2,
@@ -1018,7 +1016,6 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         streamId: liveStreamForm.streamId,
         status: 'active',
         isFree: liveStreamForm.isFree,
-        publishOn: liveStreamForm.publishOn,
         order: liveStreamForm.order || '0.00',
         pdf1: liveStreamForm.pdf1,
         pdf2: liveStreamForm.pdf2,
@@ -1051,8 +1048,8 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
   };
 
   const handleYoutubeZoomSubmit = async () => {
-    if (!youtubeZoomForm.title || !youtubeZoomForm.link || !youtubeZoomForm.publishOn || !selectedCourse) {
-      showToast('Please fill required fields (Title, Link, Start Time)', 'error');
+    if (!youtubeZoomForm.title || !youtubeZoomForm.link || !selectedCourse) {
+      showToast('Please fill required fields (Title, Link)', 'error');
       return;
     }
 
@@ -1081,8 +1078,6 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         meetingLink: parsedLink,
         url: parsedLink,
         thumbnail: youtubeZoomForm.image,
-        startTime: youtubeZoomForm.publishOn,
-        publishOn: youtubeZoomForm.publishOn,
 
         type: 'live',
         contentType: 'live_stream', // Legacy compatibility
@@ -1201,7 +1196,6 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     description: '',
     image: '',
     isFree: false,
-    publishOn: '2026-03-02T10:15',
     pdf1: '',
     pdf2: '',
     studyMaterial: '',
@@ -1224,7 +1218,6 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     description: '',
     image: '',
     isFree: false,
-    publishOn: new Date().toISOString().slice(0, 16).replace('T', ' '),
     link: '',
     pdf1: '',
     pdf2: '',
@@ -1249,7 +1242,6 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
     description: '',
     image: '',
     isFree: false,
-    publishOn: '2026-03-02 10:15',
     link: '',
     streamStatus: 'Live',
     pdf1: '',
@@ -2225,7 +2217,6 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       description: '',
       image: '',
       isFree: false,
-      publishOn: '2026-03-02T10:15',
       pdf1: '',
       pdf2: '',
       studyMaterial: '',
@@ -2250,7 +2241,6 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       description: '',
       image: '',
       isFree: false,
-      publishOn: new Date().toISOString().slice(0, 16).replace('T', ' '),
       link: '',
       pdf1: '',
       pdf2: '',
@@ -2276,7 +2266,6 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       description: '',
       image: '',
       isFree: false,
-      publishOn: '2026-03-02 10:15',
       link: '',
       streamStatus: 'Live',
       pdf1: '',
@@ -3442,7 +3431,10 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
                       {/* Image Upload */}
                       <div className="space-y-2">
-                        <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Image</label>
+                        <div className="flex items-center justify-between">
+                          <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Image</label>
+                          <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">Recommended: 1280x720 px (16:9 Ratio)</span>
+                        </div>
                         <div className="flex gap-4">
                           <input type="file" ref={liveStreamImageRef} className="hidden" accept="image/*" onChange={handleLiveStreamImageUpload} />
                           <div className="w-[170px] h-[130px] bg-[#f2f2f2] rounded-[18px] flex flex-col items-center justify-center gap-2 shrink-0 border border-gray-100 overflow-hidden relative group">
@@ -3484,19 +3476,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                         </div>
                       </div>
 
-                      {/* Publish On */}
-                      <div className="space-y-2">
-                        <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Publish On <span className="text-red-500">*</span></label>
-                        <div className="relative">
-                          <input
-                            type="datetime-local"
-                            value={liveStreamForm.publishOn}
-                            onChange={(e) => setLiveStreamForm({ ...liveStreamForm, publishOn: e.target.value })}
-                            className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all appearance-none"
-                          />
-                          <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-[22px] pointer-events-none">calendar_today</span>
-                        </div>
-                      </div>
+
                     </div>
 
                     {/* Additional Content Section */}
@@ -3751,7 +3731,10 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
                       {/* Image Upload */}
                       <div className="space-y-2">
-                        <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Image</label>
+                        <div className="flex items-center justify-between">
+                          <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Image</label>
+                          <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">Recommended: 1280x720 px (16:9 Ratio)</span>
+                        </div>
                         <div className="flex gap-4">
                           <input type="file" ref={youtubeZoomImageRef} className="hidden" accept="image/*" onChange={handleYoutubeZoomImageUpload} />
                           <div className="w-[170px] h-[130px] bg-[#f2f2f2] rounded-[18px] flex flex-col items-center justify-center gap-2 shrink-0 border border-gray-100 overflow-hidden relative group">
@@ -3774,18 +3757,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                         </div>
                       </div>
 
-                      {/* Dates & Times */}
-                      <div className="space-y-6">
-                        <div className="space-y-2">
-                          <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Start Date & Time <span className="text-red-500">*</span></label>
-                          <input
-                            type="datetime-local"
-                            value={(youtubeZoomForm.publishOn || "").replace(' ', 'T')}
-                            onChange={(e) => setYoutubeZoomForm({ ...youtubeZoomForm, publishOn: e.target.value.replace('T', ' ') })}
-                            className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-bold outline-none focus:border-gray-400 transition-all shadow-sm [color-scheme:light]"
-                          />
-                        </div>
-                      </div>
+
 
 
                     </div>
@@ -4040,7 +4012,10 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
                     {/* Image Upload */}
                     <div className="space-y-2">
-                      <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Image</label>
+                      <div className="flex items-center justify-between">
+                        <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Image</label>
+                        <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">Recommended: 1280x720 px (16:9 Ratio)</span>
+                      </div>
                       <div className="flex gap-4">
                         <div className="w-[120px] h-[100px] bg-gray-100 rounded-[12px] flex flex-col items-center justify-center gap-2 border border-gray-200 shrink-0 relative overflow-hidden group">
                           {webinarForm.image ? (
@@ -4129,19 +4104,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
                       </div>
                     </div>
 
-                    {/* Publish On */}
-                    <div className="space-y-2">
-                      <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Publish On</label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={webinarForm.publishOn}
-                          onChange={(e) => setWebinarForm({ ...webinarForm, publishOn: e.target.value })}
-                          className="w-full h-[54px] px-5 bg-gray-100 border border-gray-100 rounded-[12px] text-[15px] font-medium outline-none text-gray-500 cursor-default"
-                          readOnly
-                        />
-                      </div>
-                    </div>
+
 
                     {/* Additional Content Header */}
                     <div className="pt-2">

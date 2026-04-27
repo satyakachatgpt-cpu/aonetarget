@@ -375,6 +375,8 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                 price: price ? parseFloat(price) : 0,
                 originalPrice: originalPrice ? parseFloat(originalPrice) : 0,
                 categories: selectedCategories,
+                category: selectedCategories[0] || '',
+                categoryName: selectedCategories[0] || '',
                 categoryId: selectedCategoryId,
                 subcategoryId: finalSubcategoryId,
                 contentType: normalizeSubcategoryToContentType(finalSubcategoryId),
@@ -557,7 +559,10 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                                 {/* Media Row */}
                                 <div className="grid grid-cols-2 gap-6 mb-8">
                                     <div className="space-y-1.5">
-                                        <label className="text-[13px] font-semibold text-gray-700">Cover Image</label>
+                                        <div className="flex items-center justify-between mb-1">
+                                            <label className="text-[13px] font-semibold text-gray-700">Cover Image</label>
+                                            <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">Recommended: 680x400 px (1.7:1 Ratio)</span>
+                                        </div>
                                         <input type="file" ref={imageInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
                                         <div onClick={() => !isUploadingImage && !coverImage && imageInputRef.current?.click()} className={`border border-dashed border-gray-300 rounded-sm p-6 flex flex-col items-center justify-center bg-white transition-all min-h-[140px] relative overflow-hidden shadow-sm ${coverImage ? '' : 'hover:bg-gray-50 cursor-pointer'}`}>
                                             {isUploadingImage ? (

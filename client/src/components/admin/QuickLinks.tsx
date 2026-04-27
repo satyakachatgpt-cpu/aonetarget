@@ -515,7 +515,10 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
                         {/* Image Section - Only for regular links */}
                         {formData.type === 'link' && (
                             <div className="space-y-2">
-                                <label className="text-[14px] font-bold text-gray-700 ml-1">Image <span className="text-red-500">*</span></label>
+                                <div className="flex items-center justify-between">
+                                    <label className="text-[14px] font-bold text-gray-700 ml-1">Image <span className="text-red-500">*</span></label>
+                                    <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">Recommended: 200x200 px (1:1 Ratio)</span>
+                                </div>
                                 <div className="flex gap-4">
                                     {/* No Image Placeholder */}
                                     <div className="w-[140px] h-[105px] bg-[#f2f2f2] rounded-2xl flex flex-col items-center justify-center gap-1.5 shrink-0 border border-gray-100 overflow-hidden">

@@ -485,7 +485,10 @@ const Blog: React.FC<Props> = ({ showToast }) => {
             {/* Media Uploads */}
             <div className="grid grid-cols-1 gap-6">
               <div className="space-y-3">
-                <label className="text-[14px] font-bold text-gray-700 ml-1 uppercase tracking-wider">Thumbnail Image</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[14px] font-bold text-gray-700 ml-1 uppercase tracking-wider">Thumbnail Image</label>
+                  <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 mb-1">Recommended: 800x560 px (1.4:1 Ratio)</span>
+                </div>
                 <div
                   onDrop={(e) => {
                     e.preventDefault();

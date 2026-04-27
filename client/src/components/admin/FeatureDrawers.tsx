@@ -923,7 +923,10 @@ export const LinkDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSubm
 
                     {/* Image Section */}
                     <div className="space-y-2">
-                        <label className="text-[14px] font-bold text-gray-700 mb-1 ml-1">Image</label>
+                        <div className="flex items-center justify-between mb-1">
+                            <label className="text-[14px] font-bold text-gray-700 mb-1 ml-1">Image</label>
+                            <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">Recommended: 400x400 px (1:1 Ratio)</span>
+                        </div>
                         <div className="flex gap-4">
                             {/* No Image Placeholder */}
                             <div className="w-[140px] aspect-[4/3] bg-[#f2f2f2] rounded-2xl flex flex-col items-center justify-center gap-2 shrink-0 border border-gray-100">
@@ -1245,7 +1248,6 @@ export const LiveStreamDrawer: React.FC<{
 }> = ({ isOpen, onClose, onSubmit, courses = [], subjects = [], fixedCourseId }) => {
     const [formData, setFormData] = useState({
         title: '',
-        scheduledTime: '',
         streamSource: 'YouTube',
         streamId: '',
         courseId: '',
@@ -1261,7 +1263,6 @@ export const LiveStreamDrawer: React.FC<{
         if (!isOpen) {
             setFormData({
                 title: '',
-                scheduledTime: '',
                 streamSource: 'YouTube',
                 streamId: '',
                 courseId: fixedCourseId || '',
@@ -1295,13 +1296,7 @@ export const LiveStreamDrawer: React.FC<{
                         </div>
 
                         <div className="space-y-2">
-                            <FormLabel label="Scheduled For" required />
-                            <FormInput
-                                type="datetime-local"
-                                value={formData.scheduledTime}
-                                onChange={(e) => setFormData({ ...formData, scheduledTime: e.target.value })}
-                                placeholder="Select Date and Time"
-                            />
+
                         </div>
 
                         <div className="space-y-2">

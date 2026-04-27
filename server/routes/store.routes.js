@@ -22,14 +22,6 @@ const userOwnerOrAdmin = (req, res, next) => {
 router.post('/orders', authMiddleware, userOwnerOrAdmin, storeController.createOrder);
 router.get('/orders/:userId', authMiddleware, userOwnerOrAdmin, storeController.getOrdersByUser);
 
-// Buyers
-router.get('/buyers', adminMiddleware, storeController.getBuyers);
-router.post('/buyers', adminMiddleware, storeController.createBuyer);
-router.post('/buyers/bulk', adminMiddleware, storeController.bulkCreateBuyers);
-router.put('/buyers/update-all', adminMiddleware, storeController.updateAllBuyers);
-router.put('/buyers/:id', adminMiddleware, storeController.updateBuyer);
-router.delete('/buyers', adminMiddleware, storeController.deleteAllBuyers);
-router.delete('/buyers/:id', adminMiddleware, storeController.deleteBuyer);
 
 // Tokens
 router.get('/tokens', adminMiddleware, storeController.getTokens);

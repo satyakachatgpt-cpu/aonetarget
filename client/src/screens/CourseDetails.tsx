@@ -19,9 +19,15 @@ interface Note {
 }
 
 function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' | 'recorded' {
-  const raw = (lc.streamStatus || lc.status || 'upcoming').toLowerCase();
-  if (['ended', 'completed', 'inactive', 'recorded'].includes(raw)) return 'ended';
-  if (raw === 'live') return 'live';
+  const raw = (lc.streamStatus || lc.status || lc.liveStatus || lc.eventStatus || 'upcoming').toLowerCase();
+  
+  const isExplicitlyEnded = ['ended', 'completed', 'inactive', 'recorded', 'disable', 'finished'].includes(raw);
+  const isImplicitlyEnded = (lc.isLive === false && (lc.endedAt || lc.endTime)) || 
+                           (lc.type === 'recorded' || lc.contentType === 'recorded' || lc.contentType === 'video');
+  const hasEndedLabel = lc.statusLabel === 'EVENT ENDED' || lc.label === 'EVENT ENDED';
+
+  if (isExplicitlyEnded || isImplicitlyEnded || hasEndedLabel) return 'ended';
+  if (raw === 'live' || lc.isLive === true) return 'live';
   return 'upcoming';
 }
 
@@ -448,8 +454,16 @@ const CourseDetails: React.FC = () => {
 
   const currentFolder = navigationHistory.length > 0 ? navigationHistory[navigationHistory.length - 1] : null;
 
-  const recordedVideos = videos.filter(v => v.contentType === 'video' || v.contentType === 'recorded' || !v.contentType);
-  const liveStreams = videos.filter(v => v.contentType === 'live_stream' || v.contentType === 'youtube_zoom');
+  const recordedVideos = videos.filter(v => 
+    v.contentType === 'video' || 
+    v.contentType === 'recorded' || 
+    !v.contentType || 
+    computeEffectiveStatus(v) === 'ended'
+  );
+  const liveStreams = videos.filter(v => 
+    (v.contentType === 'live_stream' || v.contentType === 'youtube_zoom') && 
+    computeEffectiveStatus(v) !== 'ended'
+  );
 
   const currentFolderId = normalizeId(currentFolder?._id || currentFolder?.id);
 

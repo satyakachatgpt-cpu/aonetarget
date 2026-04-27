@@ -32,9 +32,15 @@ import { getImageUrl, getPdfUrl, isLiveUrl, getEmbedUrl } from '../lib/utils';
 
 // ━━━ Shared Live Status Helpers (same as LiveClasses.tsx) ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
-  const raw = (lc.streamStatus || lc.status || 'upcoming').toLowerCase();
-  if (['ended', 'completed', 'inactive'].includes(raw)) return 'ended';
-  if (raw === 'live') return 'live';
+  const raw = (lc.streamStatus || lc.status || lc.liveStatus || lc.eventStatus || 'upcoming').toLowerCase();
+  
+  const isExplicitlyEnded = ['ended', 'completed', 'inactive', 'disable', 'finished'].includes(raw);
+  const isImplicitlyEnded = (lc.isLive === false && (lc.endedAt || lc.endTime)) || 
+                           (lc.type === 'recorded' || lc.contentType === 'recorded' || lc.contentType === 'video');
+  const hasEndedLabel = lc.statusLabel === 'EVENT ENDED' || lc.label === 'EVENT ENDED';
+
+  if (isExplicitlyEnded || isImplicitlyEnded || hasEndedLabel) return 'ended';
+  if (raw === 'live' || lc.isLive === true) return 'live';
   return 'upcoming';
 }
 
