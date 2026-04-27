@@ -395,12 +395,22 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
   };
 
   const buildSubmissionData = () => {
+    // Find which option is marked as correct → derive the letter ("A", "B", "C", "D")
+    const correctIndex = (form.options || []).findIndex(opt => opt.isCorrect);
+    const correctAnswer = correctIndex >= 0 ? String.fromCharCode(65 + correctIndex) : 'A';
+
     const data: any = {
       ...form,
       question: form.questionText,
       questionEn: form.questionText,
       marks: form.positiveMarks,     
       negative: form.negativeMarks,
+      // ✅ Correct answer as a letter — this is what the backend stores and the UI reads
+      correctAnswer,
+      // Plain string array (legacy format used by old questions in DB)
+      options: (form.options || [])
+        .filter(opt => opt?.text)
+        .map(opt => opt.text),
       optionsContent: (form.options || []).map((opt, i) => ({
         id: String.fromCharCode(97 + i),
         label: opt?.text || ''
