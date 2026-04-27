@@ -949,6 +949,10 @@ const Home: React.FC = () => {
               {featuredToDisplay.map((course: any, i: number) => {
                 const bgGrad = CATEGORY_GRADIENTS[i % CATEGORY_GRADIENTS.length] || 'from-primary to-primary-600';
                 const hasImage = !!(course.imageUrl || course.thumbnail);
+                const isEnrolled = isAuthenticated && student?.enrolledCourses?.some((ec: any) => 
+                  String(ec) === String(course.id) || String(ec) === String(course._id)
+                );
+                const testSeriesCount = course.tsCount || course.testSeriesCount || (Array.isArray(course.content?.testSeries) ? course.content.testSeries.length : 0);
 
                 return (
                   <div
@@ -959,10 +963,18 @@ const Home: React.FC = () => {
                     {hasImage ? (
                       <div className="w-full h-full relative">
                         {course.settings?.markNewBatch && (
-                          <div className="absolute top-3 left-3 z-30 px-2.5 py-1 bg-red-600 text-white text-[9px] font-black uppercase tracking-[0.1em] rounded-full shadow-lg border border-white/20 animate-pulse">
+                          <div className="absolute top-2 left-2 z-30 px-2.5 py-1 bg-red-600 text-white text-[8px] font-black uppercase tracking-[0.1em] rounded-full shadow-lg border border-white/20 animate-pulse">
                             NEW BATCH
                           </div>
                         )}
+                        
+                        {testSeriesCount > 0 && (
+                           <div className="absolute top-2 right-2 z-30 px-2 py-0.5 bg-green-500 text-white text-[7px] font-black uppercase tracking-widest rounded-full shadow-md flex items-center gap-1 border border-white/20">
+                             <span className="material-symbols-rounded text-[10px]">verified</span>
+                             INCLUDES {testSeriesCount} TEST SERIES
+                           </div>
+                        )}
+
                         <img
                           src={getImageUrl(course.imageUrl || course.thumbnail)}
                           alt={course.title}
@@ -972,14 +984,24 @@ const Home: React.FC = () => {
 
                         {/* Name Overlay Gradient */}
                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 rounded-b-xl">
-                          <p className="text-white font-bold text-sm leading-tight">
+                          <p className="text-white font-bold text-[13px] leading-tight line-clamp-1">
                             {course.name || course.title || course.courseName}
                           </p>
+                          {isEnrolled ? (
+                            <div className="flex items-center gap-1 mt-0.5">
+                               <span className="material-symbols-rounded text-yellow-400 text-[12px]">verified</span>
+                               <span className="text-[8px] font-black text-white uppercase tracking-widest">Enrolled</span>
+                            </div>
+                          ) : (
+                            <p className="text-yellow-400 font-black text-[11px] mt-0.5">
+                               {course.price === 0 ? 'FREE' : `₹${course.price}`}
+                            </p>
+                          )}
                         </div>
 
                         <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-30">
                           <button className="bg-white text-black text-[9px] font-black px-4 py-2 rounded-xl shadow-lg border border-white/20 uppercase tracking-widest active:scale-95 transition-all">
-                            JOIN NOW
+                            {isEnrolled ? 'OPEN' : 'JOIN NOW'}
                           </button>
                         </div>
                       </div>
@@ -990,6 +1012,14 @@ const Home: React.FC = () => {
                             NEW BATCH
                           </div>
                         )}
+
+                        {testSeriesCount > 0 && (
+                           <div className="absolute top-2 right-2 z-30 px-2 py-0.5 bg-green-500 text-white text-[7px] font-black uppercase tracking-widest rounded-full shadow-md flex items-center gap-1 border border-white/20">
+                             <span className="material-symbols-rounded text-[10px]">verified</span>
+                             {testSeriesCount} TEST SERIES
+                           </div>
+                        )}
+
                         {/* Decorative circles to emulate a neat banner background */}
                         <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full blur-xl"></div>
                         <div className="absolute -bottom-6 -left-6 w-20 h-20 bg-black/10 rounded-full blur-xl"></div>
@@ -997,34 +1027,26 @@ const Home: React.FC = () => {
                         <div className="flex-1 pr-1 flex flex-col justify-between z-10">
                           <div>
                             <span className="inline-block px-2 py-0.5 bg-white/20 rounded-[6px] text-[10px] text-white font-bold uppercase tracking-wider mb-1.5 backdrop-blur-sm shadow-sm border border-white/10">
-                              {course.category || 'TEST SERIES'}
+                              {course.category || 'BATCH'}
                             </span>
                             <h4 className="font-bold text-[14px] text-white leading-tight line-clamp-2 shadow-sm">{course.title || course.name}</h4>
                           </div>
 
                           <div className="flex items-center justify-between mt-1">
-                            {(() => {
-                              const isEnrolled = isAuthenticated && student?.enrolledCourses?.some(ec => 
-                                String(ec) === String(course.id) || String(ec) === String(course._id)
-                              );
-                              
-                              if (isEnrolled) {
-                                return (
-                                  <div className="flex items-center gap-1.5 py-1">
-                                    <span className="material-symbols-rounded text-yellow-400 text-[14px]">verified</span>
-                                    <span className="text-[10px] font-black text-white uppercase tracking-widest">Enrolled</span>
-                                  </div>
-                                );
-                              }
-
-                              return (course.price !== undefined && course.price !== null) && (
+                            {isEnrolled ? (
+                              <div className="flex items-center gap-1.5 py-1">
+                                <span className="material-symbols-rounded text-yellow-400 text-[14px]">verified</span>
+                                <span className="text-[10px] font-black text-white uppercase tracking-widest">Enrolled</span>
+                              </div>
+                            ) : (
+                              (course.price !== undefined && course.price !== null) && (
                                 <div className="flex flex-col pb-0.5">
                                   <span className="text-[15px] font-black text-yellow-400 drop-shadow-md leading-none">
                                     {course.price === 0 ? 'Free' : `₹${course.price}`}
                                   </span>
                                 </div>
-                              );
-                            })()}
+                              )
+                            )}
                           </div>
                         </div>
 
@@ -1032,18 +1054,11 @@ const Home: React.FC = () => {
                           <div className="w-6 h-6 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20">
                             <span className="material-symbols-rounded text-white text-[14px]">school</span>
                           </div>
-                          {(() => {
-                             const isEnrolled = isAuthenticated && student?.enrolledCourses?.some(ec => 
-                               String(ec) === String(course.id) || String(ec) === String(course._id)
-                             );
-                             return (
-                               <button 
-                                 className="bg-white text-black text-[11px] font-black px-4 py-2 rounded-xl hover:bg-white transition-all whitespace-nowrap shadow-lg uppercase tracking-widest active:scale-95 border border-white/20"
-                               >
-                                 {isEnrolled ? 'Open' : 'Join'}
-                               </button>
-                             );
-                          })()}
+                          <button 
+                            className="bg-white text-black text-[11px] font-black px-4 py-2 rounded-xl hover:bg-white transition-all whitespace-nowrap shadow-lg uppercase tracking-widest active:scale-95 border border-white/20"
+                          >
+                            {isEnrolled ? 'Open' : 'Join'}
+                          </button>
                         </div>
                       </div>
                     )}
