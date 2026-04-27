@@ -96,17 +96,24 @@ export const getAllTestSeries = async (req, res) => {
 
         // Determine enrollment
         if (studentId) {
-            let isEnrolled = enrolledCourseIds.includes(seriesIdStr);
-            if (!isEnrolled) {
-                // Check if series links to a batch the student has
-                const linkedBatchIds = (series.courseIds || []).concat(series.courseId ? [series.courseId] : []);
-                // Check if a batch links to this series
-                const batchIdsThatIncludeThis = parentMap.get(seriesIdStr) || new Set();
-                const allPossibleParents = [...new Set([...linkedBatchIds, ...Array.from(batchIdsThatIncludeThis)])];
-                
-                isEnrolled = allPossibleParents.some(pid => enrolledCourseIds.includes(String(pid)));
-            }
-            series.isEnrolled = isEnrolled;
+            const isDirect = enrolledCourseIds.includes(seriesIdStr);
+            let isIncluded = false;
+            
+            // Check if series links to a batch the student has
+            const linkedBatchIds = (series.courseIds || []).concat(series.courseId ? [series.courseId] : []);
+            // Check if a batch links to this series
+            const batchIdsThatIncludeThis = parentMap.get(seriesIdStr) || new Set();
+            const allPossibleParents = [...new Set([...linkedBatchIds, ...Array.from(batchIdsThatIncludeThis)])];
+            
+            isIncluded = allPossibleParents.some(pid => enrolledCourseIds.includes(String(pid)));
+            
+            series.isEnrolled = isDirect || isIncluded;
+            series.isDirect = isDirect;
+            series.isIncluded = isIncluded && !isDirect; // Only mark as included if not directly bought
+        } else {
+            series.isEnrolled = false;
+            series.isDirect = false;
+            series.isIncluded = false;
         }
       }
     } catch (countError) {
