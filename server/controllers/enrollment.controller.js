@@ -117,19 +117,38 @@ export const getStudentCourses = async (req, res) => {
       studentId: { $in: studentIdVariants }
     }).toArray();
 
+    // 4. Batch pre-calculate metrics (Optimization: Remove N+1 queries)
+    const contentIdMap = new Map();
+    const allEnrolledVariantsSet = new Set();
+    
+    // First pass: Resolve all variants for enrolled content
+    for (const c of uniqueContent) {
+      const contentIdStr = String(c.id || c._id);
+      const variants = await getCourseIdVariants(contentIdStr);
+      contentIdMap.set(contentIdStr, variants);
+      variants.forEach(v => allEnrolledVariantsSet.add(v));
+    }
+
+    // Single bulk aggregation for all video counts
+    const videoCounts = await db.collection('videos').aggregate([
+      { $match: { courseId: { $in: Array.from(allEnrolledVariantsSet) } } },
+      { $group: { _id: "$courseId", count: { $sum: 1 } } }
+    ]).toArray();
+    
+    const videoCountMap = new Map();
+    videoCounts.forEach(vc => videoCountMap.set(String(vc._id), vc.count));
+
     const mappedContent = await Promise.all(uniqueContent.map(async (c) => {
       const contentIdStr = String(c.id || c._id);
-      const idVariants = await getCourseIdVariants(contentIdStr);
+      const idVariants = contentIdMap.get(contentIdStr) || [contentIdStr];
 
       // Resolve specific progress for THIS course
       const progRecord = allProgress.find(p => 
         idVariants.includes(String(p.courseId))
       );
 
-      // Calculate Metrics
-      const totalVideos = await db.collection('videos').countDocuments({
-        courseId: { $in: idVariants }
-      });
+      // Calculate Metrics from Pre-fetched Map
+      const totalVideos = idVariants.reduce((acc, vid) => acc + (videoCountMap.get(vid) || 0), 0);
       
       const completedVideos = (progRecord?.completedVideos || []).map(v => String(v));
       const completedCount = Math.min(completedVideos.length, totalVideos);
