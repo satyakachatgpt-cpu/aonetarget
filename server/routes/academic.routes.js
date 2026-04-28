@@ -10,7 +10,7 @@ import {
   getInstructors, bulkCreateCourses
 } from '../controllers/academic.controller.js';
 import { publicLimiter } from '../middleware/security.js';
-import { adminMiddleware } from '../middleware/auth.js';
+import { adminMiddleware, optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -40,7 +40,7 @@ router.put('/topics/:id', adminMiddleware, updateTopic);
 router.delete('/topics/:id', adminMiddleware, deleteTopic);
 
 // Folders
-router.get('/courses/:courseId/folders', getFoldersByCourse);
+router.get('/courses/:courseId/folders', optionalAuth, getFoldersByCourse);
 router.post('/courses/:courseId/folders', adminMiddleware, createFolder);
 router.put('/courses/:courseId/folders/:folderId', adminMiddleware, updateFolder);
 router.delete('/courses/:courseId/folders/:folderId', adminMiddleware, deleteFolder);
