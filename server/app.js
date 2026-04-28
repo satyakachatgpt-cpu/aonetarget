@@ -11,8 +11,10 @@ import compression from 'compression';
 import mongoose from 'mongoose';
 // Config & DB
 import cloudinary from './config/cloudinary.config.js';
+import { db } from './config/db.js';
 
 // Middleware
+import { optionalAuth } from './middleware/auth.js';
 import { securityHeaders, sanitizeInput } from './middleware/security.js';
 
 // Routes
@@ -146,7 +148,7 @@ const isValidProxyUrl = (urlStr) => {
   } catch (e) { return false; }
 };
 
-app.get('/api/proxy-resource', async (req, res) => {
+app.get('/api/proxy-resource', optionalAuth, async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).send('URL is required');
 
@@ -157,6 +159,77 @@ app.get('/api/proxy-resource', async (req, res) => {
       console.warn(`[SECURITY] Blocked SSRF attempt to: ${targetUrl}`);
       return res.status(403).send('Forbidden: Invalid resource domain');
     }
+
+    // --- ENROLLMENT & ACCESS CHECK ---
+    const studentId = req.user?.studentId;
+    const adminId = req.user?.adminId;
+    
+    // 1. Admin always has access
+    let hasAccess = !!adminId;
+
+    if (!hasAccess) {
+      // 2. Check if it's a public asset (Images, Icons, Banners)
+      // Standard image extensions are typically public in this app
+      const isPublicAsset = /\.(jpg|jpeg|png|webp|gif|svg|ico)$/i.test(targetUrl.split('?')[0]);
+      
+      if (isPublicAsset) {
+        hasAccess = true;
+      } else {
+        // 3. Sensitive Asset (PDF, Video, etc.) -> Check Catalog & Enrollment
+        // Search across notes, pdfs, and videos collections for this URL
+        const query = { $or: [{ url: targetUrl }, { fileUrl: targetUrl }, { videoUrl: targetUrl }, { streamUrl: targetUrl }] };
+        const [note, pdf, video] = await Promise.all([
+          db.collection('notes').findOne(query),
+          db.collection('pdfs').findOne(query),
+          db.collection('videos').findOne(query)
+        ]);
+
+        const item = note || pdf || video;
+        
+        if (!item) {
+          // If not in catalog, check if it's a known public resource type (e.g. demo video)
+          // or just allow it if it doesn't match sensitive patterns (STRICT ZERO BREAKING)
+          hasAccess = !/\.(pdf|mp4|m3u8|mov|avi)$/i.test(targetUrl.split('?')[0]);
+        } else {
+          // Found in catalog! Check if item is free or user is enrolled
+          if (item.isFree === true) {
+            hasAccess = true;
+          } else if (studentId) {
+            const student = await db.collection('students').findOne({
+              $or: [
+                { id: studentId },
+                { _id: ObjectId.isValid(studentId) ? new ObjectId(studentId) : null }
+              ].filter(f => f.id || f._id)
+            });
+            
+            if (student) {
+              const enrolledCourses = (student.enrolledCourses || []).map(id => String(id));
+              const itemCourseId = String(item.courseId);
+              
+              // Direct enrollment check
+              hasAccess = enrolledCourses.includes(itemCourseId);
+              
+              // Deep check for related batches if primary check fails
+              if (!hasAccess && itemCourseId) {
+                const course = await db.collection('courses').findOne({
+                  $or: [{ id: itemCourseId }, { _id: ObjectId.isValid(itemCourseId) ? new ObjectId(itemCourseId) : null }]
+                });
+                if (course && course.relatedBatches) {
+                  const related = (course.relatedBatches || []).map(rb => String(rb.id || rb));
+                  hasAccess = enrolledCourses.some(ec => related.includes(ec));
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    if (!hasAccess) {
+      console.warn(`[SECURITY] Blocked unauthorized proxy access to: ${targetUrl} by user: ${studentId || 'Guest'}`);
+      return res.status(403).send('Forbidden: Access to this paid content requires enrollment');
+    }
+    // --- END ACCESS CHECK ---
 
     let fetchUrl = targetUrl;
 
