@@ -92,6 +92,22 @@ export const connectDB = async (isInitialConnect = true) => {
       await _db.collection('banners').createIndex({ isActive: 1 });
       await _db.collection('posts').createIndex({ status: 1 });
 
+      // 🚀 P1: Production Performance Indexes
+      // 1. Purchases: Speed up standalone access checks and enrollment verification
+      await ensureIndex('purchases', { studentId: 1, courseId: 1, status: 1 }, { name: 'student_course_status' });
+      await ensureIndex('purchases', { studentId: 1, createdAt: -1 }, { name: 'student_purchase_history' });
+
+      // 2. Test Results: Optimize ranking aggregations and student history views
+      await ensureIndex('testResults', { testId: 1, studentId: 1, createdAt: -1 }, { name: 'test_student_history' });
+      await ensureIndex('testResults', { studentId: 1, createdAt: -1 }, { name: 'student_results_history' });
+
+      // 3. Tests & Series: Fast filtering for course/series test lists
+      await ensureIndex('tests', { courseId: 1, isSeries: 1, status: 1 }, { name: 'course_tests_listing' });
+      await ensureIndex('tests', { testSeriesId: 1, isSeries: 1, status: 1 }, { name: 'series_tests_listing' });
+
+      // 4. Questions: Faster countDocuments and grouped fetches
+      await ensureIndex('questions', { courseId: 1, testId: 1 }, { name: 'course_test_questions' });
+
       // Auth security indexes
       await _db.collection('auth_attempts').createIndex({ identifier: 1, ip: 1 }, { unique: true });
       await _db.collection('auth_attempts').createIndex({ lockUntil: 1 }, { expireAfterSeconds: 0 });
