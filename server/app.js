@@ -148,6 +148,27 @@ const isValidProxyUrl = (urlStr) => {
   } catch (e) { return false; }
 };
 
+// --- PROXY ACCESS CACHE (STABILITY) ---
+const PROXY_ACCESS_CACHE = new Map();
+const PROXY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const MAX_PROXY_CACHE_SIZE = 2000;
+
+const getCachedAccess = (identity, url) => {
+  const key = `${identity}:${url}`;
+  const cached = PROXY_ACCESS_CACHE.get(key);
+  if (cached && (Date.now() - cached.ts < PROXY_CACHE_TTL)) return cached.val;
+  if (cached) PROXY_ACCESS_CACHE.delete(key); // Cleanup expired
+  return null;
+};
+
+const setCachedAccess = (identity, url, hasAccess) => {
+  if (PROXY_ACCESS_CACHE.size >= MAX_PROXY_CACHE_SIZE) {
+    const firstKey = PROXY_ACCESS_CACHE.keys().next().value;
+    PROXY_ACCESS_CACHE.delete(firstKey);
+  }
+  PROXY_ACCESS_CACHE.set(`${identity}:${url}`, { val: hasAccess, ts: Date.now() });
+};
+
 app.get('/api/proxy-resource', optionalAuth, async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).send('URL is required');
@@ -163,19 +184,21 @@ app.get('/api/proxy-resource', optionalAuth, async (req, res) => {
     // --- ENROLLMENT & ACCESS CHECK ---
     const studentId = req.user?.studentId;
     const adminId = req.user?.adminId;
+    const identity = adminId ? `admin:${adminId}` : (studentId ? `student:${studentId}` : 'guest');
     
-    // 1. Admin always has access
-    let hasAccess = !!adminId;
+    // 0. Cache Check
+    const cached = getCachedAccess(identity, targetUrl);
+    let hasAccess = cached !== null ? cached : !!adminId;
 
-    if (!hasAccess) {
-      // 2. Check if it's a public asset (Images, Icons, Banners)
+    if (cached === null && !hasAccess) {
+      // 1. Check if it's a public asset (Images, Icons, Banners)
       // Standard image extensions are typically public in this app
       const isPublicAsset = /\.(jpg|jpeg|png|webp|gif|svg|ico)$/i.test(targetUrl.split('?')[0]);
       
       if (isPublicAsset) {
         hasAccess = true;
       } else {
-        // 3. Sensitive Asset (PDF, Video, etc.) -> Check Catalog & Enrollment
+        // 2. Sensitive Asset (PDF, Video, etc.) -> Check Catalog & Enrollment
         // Search across notes, pdfs, and videos collections for this URL
         const query = { $or: [{ url: targetUrl }, { fileUrl: targetUrl }, { videoUrl: targetUrl }, { streamUrl: targetUrl }] };
         const [note, pdf, video] = await Promise.all([
@@ -187,8 +210,7 @@ app.get('/api/proxy-resource', optionalAuth, async (req, res) => {
         const item = note || pdf || video;
         
         if (!item) {
-          // If not in catalog, check if it's a known public resource type (e.g. demo video)
-          // or just allow it if it doesn't match sensitive patterns (STRICT ZERO BREAKING)
+          // If not in catalog, allow if it doesn't match sensitive patterns
           hasAccess = !/\.(pdf|mp4|m3u8|mov|avi)$/i.test(targetUrl.split('?')[0]);
         } else {
           // Found in catalog! Check if item is free or user is enrolled
@@ -206,10 +228,8 @@ app.get('/api/proxy-resource', optionalAuth, async (req, res) => {
               const enrolledCourses = (student.enrolledCourses || []).map(id => String(id));
               const itemCourseId = String(item.courseId);
               
-              // Direct enrollment check
               hasAccess = enrolledCourses.includes(itemCourseId);
               
-              // Deep check for related batches if primary check fails
               if (!hasAccess && itemCourseId) {
                 const course = await db.collection('courses').findOne({
                   $or: [{ id: itemCourseId }, { _id: ObjectId.isValid(itemCourseId) ? new ObjectId(itemCourseId) : null }]
@@ -223,6 +243,8 @@ app.get('/api/proxy-resource', optionalAuth, async (req, res) => {
           }
         }
       }
+      // Save result to cache
+      setCachedAccess(identity, targetUrl, hasAccess);
     }
 
     if (!hasAccess) {
@@ -307,8 +329,16 @@ app.get('/api/proxy-resource', optionalAuth, async (req, res) => {
 
     // Stream the body directly to the response
     if (response.body) {
-      // Readable.fromWeb handles the conversion from WHATWG stream to Node stream
-      Readable.fromWeb(response.body).pipe(res);
+      const stream = Readable.fromWeb(response.body);
+      stream.pipe(res);
+      
+      // Cleanup on client disconnect to prevent memory leaks/dangling sockets
+      res.on('close', () => {
+        try {
+          if (stream.destroy) stream.destroy();
+          if (response.body.cancel) response.body.cancel().catch(() => {});
+        } catch (e) { /* ignore cleanup errors */ }
+      });
     } else {
       res.status(500).send('Response body is empty');
     }
