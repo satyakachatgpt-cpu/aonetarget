@@ -2,6 +2,7 @@ import express from 'express';
 import { uploadImage, uploadPDF, uploadVideo } from '../middleware/upload.middleware.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { uploadToCloudinary, deleteFromCloudinary, uploadBase64ToCloudinary } from '../services/cloudinary.service.js';
+import fs from 'fs';
 
 const router = express.Router();
 
@@ -68,8 +69,8 @@ router.post('/v2/upload/pdf', authMiddleware, uploadPDF.single('file'), async (r
   }
 
   try {
-    // Using auto resource_type for documents
-    const result = await uploadToCloudinary(req.file.buffer, {
+    // Using auto resource_type for documents. req.file.path is available from diskStorage
+    const result = await uploadToCloudinary(req.file.path, {
       folder: 'aot/documents',
       resource_type: 'auto'
     });
@@ -84,6 +85,13 @@ router.post('/v2/upload/pdf', authMiddleware, uploadPDF.single('file'), async (r
   } catch (error) {
     console.error('Document upload failed:', error);
     return res.status(500).json({ success: false, error: "Failed to upload document" });
+  } finally {
+    // Cleanup temporary file
+    if (req.file && req.file.path) {
+      fs.unlink(req.file.path, (err) => {
+        if (err) console.error('Failed to delete temp file:', req.file.path, err);
+      });
+    }
   }
 });
 
@@ -103,9 +111,12 @@ router.post('/v2/upload/video', authMiddleware, uploadVideo.single('file'), asyn
     return res.status(400).json({ success: false, error: "No video provided" });
   }
 
-  // Check file size against Cloudinary free plan limit
+  // Check file size (req.file.size is provided by multer)
   const MAX_VIDEO_BYTES = (parseInt(process.env.VIDEO_MAX_SIZE_MB) || 95) * 1024 * 1024;
-  if (req.file.buffer.length > MAX_VIDEO_BYTES) {
+  if (req.file.size > MAX_VIDEO_BYTES) {
+    // Cleanup before returning
+    if (req.file.path) fs.unlinkSync(req.file.path);
+
     return res.status(400).json({
       success: false,
       error: `Video too large. Maximum size is ${process.env.VIDEO_MAX_SIZE_MB || 95}MB`,
@@ -115,7 +126,7 @@ router.post('/v2/upload/video', authMiddleware, uploadVideo.single('file'), asyn
   }
 
   try {
-    const result = await uploadToCloudinary(req.file.buffer, {
+    const result = await uploadToCloudinary(req.file.path, {
       folder: 'aot/videos',
       resource_type: 'video',
       allowed_formats: ['mp4', 'mov', 'webm', 'avi']
@@ -129,7 +140,15 @@ router.post('/v2/upload/video', authMiddleware, uploadVideo.single('file'), asyn
       duration: result.duration || null
     });
   } catch (error) {
+    console.error('Video upload failed:', error);
     return res.status(500).json({ success: false, error: "Failed to upload video" });
+  } finally {
+    // Cleanup temporary file
+    if (req.file && req.file.path && fs.existsSync(req.file.path)) {
+      fs.unlink(req.file.path, (err) => {
+        if (err) console.error('Failed to delete temp video file:', req.file.path, err);
+      });
+    }
   }
 });
 

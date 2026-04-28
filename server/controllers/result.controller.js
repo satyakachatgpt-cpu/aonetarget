@@ -5,6 +5,38 @@ import { findCourse } from '../services/course.service.js';
 import { evaluateTest } from '../services/grading.service.js';
 import { logReevaluation, logError, logSubmission } from '../utils/logger.js';
 
+/**
+ * Internal helper to fetch a sorted leaderboard (best attempt per student) for a test.
+ * Returns an array of { score, time } objects.
+ */
+const getLeaderboard = async (db, testId) => {
+  return await db.collection('testResults').aggregate([
+    { $match: { testId: String(testId) } },
+    {
+      $group: {
+        _id: "$studentId",
+        score: { $max: "$obtainedMarks" },
+        attempts: { $push: { m: "$obtainedMarks", t: "$timeTaken" } }
+      }
+    },
+    {
+      $addFields: {
+        time: {
+          $min: {
+            $map: {
+              input: { $filter: { input: "$attempts", as: "att", cond: { $eq: ["$$att.m", "$score"] } } },
+              as: "top",
+              in: "$$top.t"
+            }
+          }
+        }
+      }
+    },
+    { $project: { _id: 1, score: 1, time: 1 } },
+    { $sort: { score: -1, time: 1 } }
+  ]).toArray();
+};
+
 const REEVALUATE_BATCH_SIZE = 50;
 
 /**
@@ -78,32 +110,20 @@ export const getResultById = async (req, res) => {
 
     const enriched = await enrichResult(result, db);
 
-    // --- Live Ranking Logic (same as history) ---
+    // --- Optimized Live Ranking Logic ---
     try {
       const tid = enriched.testId;
-      const allTestResults = await db.collection('testResults').find({ testId: tid }).toArray();
-      const studentBestScores = {};
-      allTestResults.forEach(r => {
-        const sid = r.studentId;
-        const score = Number(r.obtainedMarks) || 0;
-        const time = Number(r.timeTaken) || 999999;
-        if (!studentBestScores[sid] || 
-            score > studentBestScores[sid].score || 
-            (score === studentBestScores[sid].score && time < studentBestScores[sid].time)) {
-          studentBestScores[sid] = { score, time };
-        }
-      });
-      const lb = Object.values(studentBestScores).sort((a, b) => {
-        if (b.score !== a.score) return b.score - a.score;
-        return a.time - b.time;
-      });
-
+      const lb = await getLeaderboard(db, tid);
+      
       const currentScore = Number(enriched.obtainedMarks) || 0;
       const currentTime = Number(enriched.timeTaken) || 999999;
-      enriched.rank = lb.findIndex(s => s.score === currentScore && s.time === currentTime) + 1;
-      if (enriched.rank === 0) {
-        enriched.rank = lb.filter(s => s.score > currentScore || (s.score === currentScore && s.time < currentTime)).length + 1;
-      }
+      
+      // Calculate rank: count students better than current result
+      enriched.rank = lb.filter(s => 
+        (Number(s.score) > currentScore) || 
+        (Number(s.score) === currentScore && Number(s.time) < currentTime)
+      ).length + 1;
+      
       enriched.totalStudents = lb.length;
     } catch (rankErr) {
       console.error('Live ranking failed in single fetch:', rankErr);
@@ -295,29 +315,14 @@ export const getStudentTestResults = async (req, res) => {
       .aggregate(pipeline, { allowDiskUse: true })
       .toArray();
 
-    // --- Start Live Ranking Calculation for History ---
+    // --- Optimized Live Ranking Calculation for History ---
     try {
       const uniqueTestIds = [...new Set(results.map(r => r.testId))];
       const testLeaderboards = {};
 
       // Build leaderboards for each test mentioned in the results
       await Promise.all(uniqueTestIds.map(async (tid) => {
-        const allTestResults = await db.collection('testResults').find({ testId: tid }).toArray();
-        const studentBestScores = {};
-        allTestResults.forEach(r => {
-          const sid = r.studentId;
-          const score = Number(r.obtainedMarks) || 0;
-          const time = Number(r.timeTaken) || 999999;
-          if (!studentBestScores[sid] || 
-              score > studentBestScores[sid].score || 
-              (score === studentBestScores[sid].score && time < studentBestScores[sid].time)) {
-            studentBestScores[sid] = { score, time };
-          }
-        });
-        testLeaderboards[tid] = Object.values(studentBestScores).sort((a, b) => {
-          if (b.score !== a.score) return b.score - a.score;
-          return a.time - b.time;
-        });
+        testLeaderboards[tid] = await getLeaderboard(db, tid);
       }));
 
       // Map fresh ranks to results
@@ -326,10 +331,12 @@ export const getStudentTestResults = async (req, res) => {
         if (lb) {
           const currentScore = Number(r.obtainedMarks) || 0;
           const currentTime = Number(r.timeTaken) || 999999;
-          r.rank = lb.findIndex(s => s.score === currentScore && s.time === currentTime) + 1;
-          if (r.rank === 0) {
-             r.rank = lb.filter(s => s.score > currentScore || (s.score === currentScore && s.time < currentTime)).length + 1;
-          }
+          
+          r.rank = lb.filter(s => 
+            (Number(s.score) > currentScore) || 
+            (Number(s.score) === currentScore && Number(s.time) < currentTime)
+          ).length + 1;
+          
           r.totalStudents = lb.length;
         }
       });
@@ -453,28 +460,13 @@ export const getAdminTestResults = async (req, res) => {
       .aggregate(pipeline, { allowDiskUse: true })
       .toArray();
 
-    // --- Start Live Ranking Calculation for Admin ---
+    // --- Optimized Live Ranking Calculation for Admin ---
     try {
       const uniqueTestIds = [...new Set(results.map(r => r.testId))];
       const testLeaderboards = {};
 
       for (const tid of uniqueTestIds) {
-        const allTestResults = await db.collection('testResults').find({ testId: tid }).toArray();
-        const studentBestScores = {};
-        allTestResults.forEach(r => {
-          const sid = r.studentId;
-          const score = Number(r.obtainedMarks) || 0;
-          const time = Number(r.timeTaken) || 999999;
-          if (!studentBestScores[sid] || 
-              score > studentBestScores[sid].score || 
-              (score === studentBestScores[sid].score && time < studentBestScores[sid].time)) {
-            studentBestScores[sid] = { score, time };
-          }
-        });
-        testLeaderboards[tid] = Object.values(studentBestScores).sort((a, b) => {
-          if (b.score !== a.score) return b.score - a.score;
-          return a.time - b.time;
-        });
+        testLeaderboards[tid] = await getLeaderboard(db, tid);
       }
 
       results.forEach(r => {
@@ -482,10 +474,12 @@ export const getAdminTestResults = async (req, res) => {
         if (lb) {
           const currentScore = Number(r.obtainedMarks) || 0;
           const currentTime = Number(r.timeTaken) || 999999;
-          r.rank = lb.findIndex(s => s.score === currentScore && s.time === currentTime) + 1;
-          if (r.rank === 0) {
-            r.rank = lb.filter(s => s.score > currentScore || (s.score === currentScore && s.time < currentTime)).length + 1;
-          }
+          
+          r.rank = lb.filter(s => 
+            (Number(s.score) > currentScore) || 
+            (Number(s.score) === currentScore && Number(s.time) < currentTime)
+          ).length + 1;
+          
           r.totalStudents = lb.length;
         }
       });
@@ -736,37 +730,28 @@ export const submitTest = async (req, res) => {
       submittedAt: new Date()
     };
 
-    // --- Start Ranking Calculation ---
+    // --- Optimized Ranking Calculation ---
     let rank = 0;
     let totalStudents = 0;
     try {
-      // Find all results for this test
-      const allResults = await db.collection('testResults').find({ 
-        testId: req.params.testId 
-      }).toArray();
-
-      // Get OTHER unique students with their BEST marks
-      const otherStudentsBestScores = {};
-      allResults.forEach(r => {
-        if (String(r.studentId) === String(effectiveStudentId)) return; // Skip current student's past attempts
-        const sid = r.studentId;
-        const score = Number(r.obtainedMarks) || 0;
-        const time = Number(r.timeTaken) || 999999;
-        
-        if (!otherStudentsBestScores[sid] || 
-            score > otherStudentsBestScores[sid].score || 
-            (score === otherStudentsBestScores[sid].score && time < otherStudentsBestScores[sid].time)) {
-          otherStudentsBestScores[sid] = { score, time };
-        }
-      });
-
-      const otherScores = Object.values(otherStudentsBestScores);
-      totalStudents = otherScores.length + 1; // Current student + all other unique students
+      const tid = req.params.testId;
+      const lb = await getLeaderboard(db, tid);
+      
       const studentScore = Number(evaluation.obtainedMarks) || 0;
       const studentTime = Number(timeTaken) || 999999;
       
-      // Calculate rank of current attempt among others' best attempts
-      rank = otherScores.filter(s => s.score > studentScore || (s.score === studentScore && s.time < studentTime)).length + 1;
+      // Calculate rank among others' best attempts
+      // lb already contains best attempts per student (including current student's past attempts if any)
+      // To strictly rank among OTHERS, we could filter lb by studentId, but the leaderboard concept 
+      // usually includes the current best too. The existing code filtered out current student.
+      const otherStudentsBest = lb.filter(s => String(s._id) !== String(effectiveStudentId));
+      
+      totalStudents = otherStudentsBest.length + 1;
+      rank = otherStudentsBest.filter(s => 
+        (Number(s.score) > studentScore) || 
+        (Number(s.score) === studentScore && Number(s.time) < studentTime)
+      ).length + 1;
+      
     } catch (rankErr) {
       console.error('Ranking calculation failed:', rankErr);
     }
