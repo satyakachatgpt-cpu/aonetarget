@@ -71,28 +71,51 @@ export const getAllTestSeries = async (req, res) => {
        });
     }
 
-    // 3. Calculate actual test count AND enrollment status
+    // 3. Optimized Count Calculation: O(N+M) instead of O(N*M)
     try {
-      const allTestsLightweight = await db.collection('tests').find({}).toArray();
+      // Fetch only necessary fields for mapping
+      const allTestsLightweight = await db.collection('tests').find(
+          { isSeries: { $ne: true }, status: { $ne: 'inactive' } },
+          { projection: { id: 1, _id: 1, seriesId: 1, courseId: 1, courseIds: 1, testSeries: 1 } }
+      ).toArray();
       
+      // Indexing Maps
+      const seriesToTestsMap = new Map(); // Map<SeriesId, Set<TestId>>
+      const testIdToDocMap = new Map();   // Map<TestId, Boolean> (Exists check)
+
+      for (const t of allTestsLightweight) {
+        const tId = String(t.id || t._id);
+        testIdToDocMap.set(tId, true);
+        
+        // Find all series this test belongs to
+        const parentSeriesIds = new Set();
+        if (t.seriesId) parentSeriesIds.add(String(t.seriesId));
+        if (t.courseId) parentSeriesIds.add(String(t.courseId));
+        if (Array.isArray(t.courseIds)) t.courseIds.forEach(id => parentSeriesIds.add(String(id)));
+        if (Array.isArray(t.testSeries)) t.testSeries.forEach(id => parentSeriesIds.add(String(id)));
+        
+        for (const sId of parentSeriesIds) {
+          if (!seriesToTestsMap.has(sId)) seriesToTestsMap.set(sId, new Set());
+          seriesToTestsMap.get(sId).add(tId);
+        }
+      }
+
       for (const series of combined) {
         const seriesIdStr = String(series.id || series._id);
+        const testSet = seriesToTestsMap.get(seriesIdStr) || new Set();
         
-        // Count tests
+        // Add tests explicitly listed in the series document (Source: series.testIds / series.tests)
         const seriesTestIdsArray = Array.isArray(series.testIds) ? series.testIds.map(String) : [];
         const seriesTestsObjectsIds = Array.isArray(series.tests) ? series.tests.map(st => String(st.id || st._id)) : [];
-        const count = allTestsLightweight.filter(t => {
-          const tIdStr = String(t.id || t._id);
-          return (
-            String(t.seriesId) === seriesIdStr || 
-            String(t.courseId) === seriesIdStr ||
-            (Array.isArray(t.courseIds) && t.courseIds.map(String).includes(seriesIdStr)) ||
-            (Array.isArray(t.testSeries) && t.testSeries.map(String).includes(seriesIdStr)) ||
-            seriesTestIdsArray.includes(tIdStr) ||
-            seriesTestsObjectsIds.includes(tIdStr)
-          );
-        }).length;
-        series.totalTests = count;
+        
+        for (const tId of [...seriesTestIdsArray, ...seriesTestsObjectsIds]) {
+          // Only add if the test actually exists and is active (checked via our map)
+          if (testIdToDocMap.has(tId)) {
+            testSet.add(tId);
+          }
+        }
+        
+        series.totalTests = testSet.size;
 
         // Determine enrollment
         if (studentId) {
