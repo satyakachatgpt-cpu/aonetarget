@@ -301,6 +301,7 @@ const Checkout: React.FC = () => {
     const student = getStudentData();
     if (!student) {
       alert('Please login first');
+      sessionStorage.setItem('postLoginRedirect', location.pathname + location.search);
       navigate('/student-login', { state: { from: location.pathname + location.search } });
       return;
     }
@@ -387,7 +388,7 @@ const Checkout: React.FC = () => {
 
   const handleFreePurchase = async () => {
     const student = getStudentData();
-    if (!student) { navigate('/student-login', { state: { from: location.pathname + location.search } }); return; }
+    if (!student) { sessionStorage.setItem('postLoginRedirect', location.pathname + location.search); navigate('/student-login', { state: { from: location.pathname + location.search } }); return; }
     if (!agreed) {
       alert('Please agree to the Terms of Service and Privacy Policy to continue.');
       return;

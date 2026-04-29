@@ -32,6 +32,7 @@ const MockTests: React.FC = () => {
       setStudent(studentData);
       fetchData();
     } else {
+      sessionStorage.setItem('postLoginRedirect', location.pathname + location.search);
       navigate('/student-login', { state: { from: location.pathname + location.search } });
     }
   }, []);

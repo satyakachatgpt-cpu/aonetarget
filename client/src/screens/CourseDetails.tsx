@@ -346,6 +346,7 @@ const CourseDetails: React.FC = () => {
   const handleEnroll = async () => {
     if (!studentId) {
       alert('Please login first to enroll in this course');
+      sessionStorage.setItem('postLoginRedirect', location.pathname);
       navigate('/student-login', { state: { from: location.pathname } });
       return;
     }
@@ -378,6 +379,7 @@ const CourseDetails: React.FC = () => {
   const handleBuyNow = () => {
     if (!studentId) {
       alert('Please login first');
+      sessionStorage.setItem('postLoginRedirect', location.pathname);
       navigate('/student-login', { state: { from: location.pathname } });
       return;
     }

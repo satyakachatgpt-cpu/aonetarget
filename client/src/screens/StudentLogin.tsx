@@ -210,6 +210,37 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({ value, options, onChange, l
 const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   const navigate = useNavigate();
   const location = useLocation();
+
+  // REDIRECT MEMORY: sessionStorage fallback so state survives page reloads during auth flow
+  const peekPostLoginRedirect = () => {
+    const fromState = (location.state as any)?.from;
+    const fromSession = sessionStorage.getItem('postLoginRedirect');
+    const redirect = fromState || fromSession;
+
+    if (
+      redirect &&
+      typeof redirect === 'string' &&
+      redirect.startsWith('/') &&
+      !redirect.startsWith('/student-login')
+    ) {
+      return redirect;
+    }
+
+    return null;
+  };
+
+  const getPostLoginRedirect = () => {
+    const redirect = peekPostLoginRedirect();
+
+    if (redirect) {
+      sessionStorage.removeItem('postLoginRedirect');
+      return redirect;
+    }
+
+    sessionStorage.removeItem('postLoginRedirect');
+    return null;
+  };
+
   const [step, setStep] = useState<'login' | 'otp' | 'signup' | 'profile' | 'category' | 'subcategory' | 'forgot-password' | 'reset-otp' | 'new-password' | 'signup-otp'>('login');
 
   const {
@@ -355,10 +386,16 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   }, [resendTimer]);
 
   useEffect(() => {
-    // If user is already logged in, take them to home
     const isAuth = localStorage.getItem('isStudentAuthenticated') === 'true';
-    if (isAuth && step !== 'otp' && step !== 'profile') {
-      navigate('/');
+    const pendingRedirect = peekPostLoginRedirect();
+
+    if (isAuth && pendingRedirect && step !== 'otp' && step !== 'profile') {
+      navigate(pendingRedirect, { replace: true });
+      return;
+    }
+
+    if (isAuth && !pendingRedirect && step !== 'otp' && step !== 'profile') {
+      navigate('/', { replace: true });
     }
   }, [navigate, step]);
 
@@ -465,8 +502,8 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
       setAuth(data.student, data.accessToken, data.deviceId, data.refreshToken);
       toast.success('Login successful!');
-      const redirect = location.state?.from || '/';
-      navigate(redirect);
+      const redirect = getPostLoginRedirect() || '/student-dashboard';
+      navigate(redirect, { replace: true });
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -527,7 +564,6 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
     try {
       setLoading(true);
       const loginUrl = `${API_BASE_URL}/students/login-password`;
-      console.log('[LOGIN_API_URL]', loginUrl);
       const response = await fetch(loginUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -545,8 +581,8 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
         toast.success('Login successful!');
         setAuth(data.student, data.accessToken, data.deviceId, data.refreshToken);
         if (onSuccess) onSuccess();
-        const redirect = location.state?.from || '/student-dashboard';
-        navigate(redirect);
+        const redirect = getPostLoginRedirect() || '/student-dashboard';
+        navigate(redirect, { replace: true });
       } else {
         if (data.code === 'DEVICE_APPROVAL_REQUIRED') {
           toast.error(data.message || 'New device approval pending. Please contact admin.', { duration: 6000 });
@@ -1181,16 +1217,13 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
       <form onSubmit={handleProfileSubmit(async (data) => {
         setLoading(true);
-        console.log('Profile Submission data:', data);
         try {
           const response = await fetch('/api/students/register', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
           });
-          console.log('Registration response status:', response.status);
           const resData = await response.json();
-          console.log('Registration response data:', resData);
           
           if (!response.ok) throw new Error(resData.error || 'Registration failed');
           
