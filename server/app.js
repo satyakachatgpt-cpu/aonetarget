@@ -77,11 +77,14 @@ app.use(cors({
 }));
 
 // --- Body Parser Configuration ---
-// Increase limit specifically for bulk question uploads (Parsed test papers can be large)
-app.post('/api/questions/bulk', express.json({ limit: '50mb' }));
 
 // Global limits for all other routes
-app.use(express.json({ limit: '2mb' }));
+app.use((req, res, next) => {
+  if (req.path === '/api/questions/bulk') {
+    return next();
+  }
+  express.json({ limit: '2mb' })(req, res, next);
+});
 app.use(express.urlencoded({ limit: '2mb', extended: true }));
 app.use(sanitizeInput);
 app.use(cookieParser());
