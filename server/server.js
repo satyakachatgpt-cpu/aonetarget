@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import app from './app.js';
 import http from 'http';
+import dns from 'dns';
 import { connectDB } from './config/db.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -13,6 +14,14 @@ const currentPort = process.env.PORT || 5000;
 /**
  * server.js - CLEAN BOOTSTRAP LAYER
  */
+
+// Fix for SRV resolution issues in some Node.js versions/environments
+dns.setDefaultResultOrder('ipv4first');
+try {
+  dns.setServers(['8.8.8.8', '8.8.4.4']); // Use Google DNS as fallback for SRV lookups
+} catch (e) {
+  console.warn('[DNS] Could not set custom DNS servers:', e.message);
+}
 
 // --- ENV VALIDATION ---
 const criticalEnv = ['JWT_SECRET', 'JWT_REFRESH_SECRET', 'MONGODB_URI'];

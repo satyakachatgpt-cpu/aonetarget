@@ -1,20 +1,8 @@
 import axios from 'axios';
 
-const getDevApiBaseUrl = () => {
-  const protocol = window.location.protocol;
-  const hostname = window.location.hostname;
 
-  // If app is opened using LAN IP, backend must use same LAN IP
-  if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    return `${protocol}//${hostname}:5000/api`;
-  }
 
-  return `${protocol}//localhost:5000/api`;
-};
-
-export const API_BASE_URL = import.meta.env.DEV
-  ? getDevApiBaseUrl()
-  : '/api';
+export const API_BASE_URL = '/api';
 
 console.log('[API_BASE_URL]', API_BASE_URL, window.location.href);
 

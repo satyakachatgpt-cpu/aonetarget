@@ -34,6 +34,7 @@ interface StudentVideoPlayerProps {
   pdf1?: string;
   pdf2?: string;
   studyMaterial?: string;
+  onChatVisibilityChange?: (isVisible: boolean) => void;
 }
 
 const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
@@ -57,6 +58,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   pdf1,
   pdf2,
   studyMaterial,
+  onChatVisibilityChange,
 }) => {
   const dispatch = useDispatch();
   const { student } = useAuthStore();
@@ -370,6 +372,8 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   }, [activeSrc, isHls, isDirect, isYoutube]);
 
   // PROGRESS TICK & AUTO-SAVE
+  const lastSavedTimeRef = useRef<number>(-1);
+
   useEffect(() => {
     let saveTimeout: any;
     if (isPlaying) {
@@ -387,8 +391,10 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
           setCurrentTime(time);
         }
         
-        // Auto-save every 10 seconds
-        if (Math.floor(time) % 10 === 0) {
+        // Auto-save every 30 seconds (throttled to once per second)
+        const currentSecond = Math.floor(time);
+        if (currentSecond > 0 && currentSecond % 30 === 0 && lastSavedTimeRef.current !== currentSecond) {
+          lastSavedTimeRef.current = currentSecond;
           saveProgress(time, total);
         }
 
@@ -621,7 +627,11 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
             <div className="flex items-center gap-3">
                {isLive && (
                  <button 
-                   onClick={() => setShowChat(!showChat)}
+                   onClick={() => {
+                     const next = !showChat;
+                     setShowChat(next);
+                     if (onChatVisibilityChange) onChatVisibilityChange(next);
+                   }}
                    className={`h-9 px-4 rounded-full border transition-all flex items-center gap-2 pointer-events-auto ${showChat ? 'bg-white text-black border-white' : 'bg-white/10 text-white border-white/20 hover:bg-white/20 hover:border-white/30'}`}
                  >
                     <span className="material-symbols-rounded text-lg">chat</span>

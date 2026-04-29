@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { bannersAPI, uploadAPI, coursesAPI } from '../../services/apiClient';
-import { getImageUrl } from '../../lib/utils';
+import { uploadAPI, bannersAPI, coursesAPI } from '../../services/apiClient';
+import { getImageUrl, validateImage } from '../../lib/utils';
+import FileUploadButton from '../shared/FileUploadButton';
 
 interface Banner {
   id: string;
@@ -422,7 +423,7 @@ const Banners: React.FC<Props> = ({ showToast }) => {
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <label className="text-[11px] font-black text-[#AAB4C8] uppercase tracking-widest">Asset Source</label>
-                  <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">Recommended: 1200x600 px (2:1 Ratio)</span>
+                  <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">Recommended: 1200x600 (2:1 ratio). Keep text in center to avoid cropping.</span>
                 </div>
 
                 <div className="space-y-4">
@@ -478,6 +479,20 @@ const Banners: React.FC<Props> = ({ showToast }) => {
                           onChange={async (e) => {
                             const file = e.target.files?.[0];
                             if (file) {
+                              const result = await validateImage(file, {
+                                minWidth: 1200,
+                                minHeight: 600,
+                                aspectRatio: 2,
+                                tolerance: 0.10,
+                                label: 'Banner'
+                              });
+
+                              if (!result.valid) {
+                                showToast(result.message || 'Invalid image', 'error');
+                                e.target.value = '';
+                                return;
+                              }
+                              
                               setIsUploading(true);
                               try {
                                 const data = await uploadAPI.uploadImage(file);
@@ -486,9 +501,10 @@ const Banners: React.FC<Props> = ({ showToast }) => {
                                 }
                               } catch (err: any) {
                                 console.error('Upload failed:', err);
-                                alert(err.message || 'Upload failed');
+                                showToast(err.message || 'Upload failed', 'error');
                               } finally {
                                 setIsUploading(false);
+                                e.target.value = '';
                               }
                             }
                           }}

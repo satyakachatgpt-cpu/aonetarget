@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useDebounce } from '../hooks/useDebounce';
 import { useNavigate } from 'react-router-dom';
 import { coursesAPI, blogAPI, newsAPI, categoriesAPI, bannersAPI, testsAPI, testSeriesAPI, liveVideosAPI, quickLinksAPI } from '../services/apiClient';
 import StudentSidebar from '../components/StudentSidebar';
@@ -107,6 +108,7 @@ const Home: React.FC = () => {
   const [examDocs, setExamDocs] = useState<any[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [isSearching, setIsSearching] = useState(false);
   const [quickLinks, setQuickLinks] = useState<any[]>([]);
   const [allNews, setAllNews] = useState<any[]>([]);
@@ -201,17 +203,17 @@ const Home: React.FC = () => {
 
   useEffect(() => {
     // Filter categories based on search query
-    if (!searchQuery.trim()) {
+    if (!debouncedSearchQuery.trim()) {
       setFilteredCategories(categories);
     } else {
       const filtered = categories.filter(cat =>
-        cat.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        cat.subtitle?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        cat.description?.toLowerCase().includes(searchQuery.toLowerCase())
+        cat.title?.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        cat.subtitle?.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        cat.description?.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
       );
       setFilteredCategories(filtered);
     }
-  }, [categories, searchQuery]);
+  }, [categories, debouncedSearchQuery]);
 
   useEffect(() => {
     const fetchCourses = async () => {

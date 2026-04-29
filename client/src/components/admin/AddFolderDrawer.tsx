@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { RightSideDrawer, DrawerHeader, DrawerBody, DrawerFooter, PrimaryButton } from './DrawerSystem';
-import { getImageUrl } from '../../lib/utils';
+import { getImageUrl, validateImage } from '../../lib/utils';
+import BatchMultiSelect from './course-content/BatchMultiSelect';
 
 interface AddFolderDrawerProps {
     isOpen: boolean;
@@ -8,6 +9,11 @@ interface AddFolderDrawerProps {
     onSubmit: (data: any) => void;
     onUploadImage: (file: File) => Promise<string>;
     editingFolder?: any;
+    showToast?: (msg: string, type?: 'success' | 'error') => void;
+    globalCreateMode?: boolean;
+    selectedBatchIds?: string[];
+    setSelectedBatchIds?: (ids: string[]) => void;
+    availableCourses?: any[];
 }
 
 const AddFolderDrawer: React.FC<AddFolderDrawerProps> = ({
@@ -15,7 +21,12 @@ const AddFolderDrawer: React.FC<AddFolderDrawerProps> = ({
     onClose,
     onSubmit,
     onUploadImage,
-    editingFolder
+    editingFolder,
+    showToast,
+    globalCreateMode = false,
+    selectedBatchIds = [],
+    setSelectedBatchIds,
+    availableCourses = []
 }) => {
     const [formData, setFormData] = useState({
         name: '',
@@ -60,14 +71,34 @@ const AddFolderDrawer: React.FC<AddFolderDrawerProps> = ({
     };
 
     const uploadFile = async (file: File) => {
+        const result = await validateImage(file, {
+            minWidth: 1280,
+            minHeight: 720,
+            aspectRatio: 16/9,
+            tolerance: 0.10,
+            label: 'Folder Image'
+        });
+
+        if (!result.valid) {
+            if (showToast) {
+                showToast(result.message || 'Invalid image', 'error');
+            } else {
+                alert(result.message);
+            }
+            if (fileInputRef.current) fileInputRef.current.value = '';
+            return;
+        }
+
         setIsUploading(true);
         try {
             const url = await onUploadImage(file);
             setFormData(prev => ({ ...prev, thumbnail: url }));
         } catch (error) {
             console.error('Upload failed:', error);
+            if (showToast) showToast('Upload failed', 'error');
         } finally {
             setIsUploading(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
         }
     };
 
@@ -90,6 +121,15 @@ const AddFolderDrawer: React.FC<AddFolderDrawerProps> = ({
             <DrawerHeader title={editingFolder ? `Edit Folder (#${editingFolder._id || editingFolder.id || 'NEW'})` : 'Add Folder'} onClose={onClose} />
             <DrawerBody className="bg-[#fcfcfc]">
                 <div className="space-y-7 pb-10">
+                    {/* Batch Multi-Select for Global Mode */}
+                    {globalCreateMode && (
+                        <BatchMultiSelect 
+                            courses={availableCourses}
+                            selectedIds={selectedBatchIds}
+                            onChange={(ids) => setSelectedBatchIds?.(ids)}
+                        />
+                    )}
+
                     {/* Name Field */}
                     <div className="space-y-2">
                         <label className="text-[13px] font-bold text-gray-700"> Name <span className="text-red-500">*</span> </label>
@@ -206,7 +246,13 @@ const AddFolderDrawer: React.FC<AddFolderDrawerProps> = ({
                         </button>
                         <button
                             type="button"
-                            onClick={() => onSubmit(formData)}
+                            onClick={() => {
+                                if (globalCreateMode && selectedBatchIds.length === 0) {
+                                    showToast?.('Please select at least one batch', 'error');
+                                    return;
+                                }
+                                onSubmit(formData);
+                            }}
                             className="flex-[2] h-[60px] bg-[#1a1c1e] text-white rounded-2xl font-bold text-[15px] hover:bg-black transition-all shadow-lg active:scale-[0.98]"
                         >
                             {editingFolder ? 'SAVE FOLDER' : 'ADD FOLDER'}

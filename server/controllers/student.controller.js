@@ -36,12 +36,28 @@ export const createUser = async (req, res) => {
 
 export const getStudents = async (req, res) => {
   try {
-    const students = await Student.find({}, {
+    const page = parseInt(req.query.page);
+    const limit = parseInt(req.query.limit);
+    
+    let query = Student.find({}, {
       academic: 0,
       documents: 0,
       fees: 0,
       notes: 0
     }).sort({ _id: -1 }).lean();
+
+    if (!isNaN(page) && !isNaN(limit) && limit > 0) {
+      const totalStudents = await Student.countDocuments();
+      const skip = (page - 1) * limit;
+      query = query.skip(skip).limit(limit);
+      
+      res.setHeader('X-Total-Count', totalStudents);
+      res.setHeader('X-Page', page);
+      res.setHeader('X-Limit', limit);
+      res.setHeader('Access-Control-Expose-Headers', 'X-Total-Count, X-Page, X-Limit');
+    }
+
+    const students = await query;
     
     // Map to include hasPassword and strip password
     const safeStudents = students.map(s => {
@@ -49,7 +65,7 @@ export const getStudents = async (req, res) => {
       return { ...safeS, hasPassword: !!password };
     });
 
-    console.log('GET /api/students - Optimized Payload - Found', students.length, 'students');
+    console.log(`GET /api/students - Optimized Payload - Found ${students.length} students (Paginated: ${!isNaN(limit)})`);
     res.json(safeStudents);
   } catch (error) {
     console.error('Error fetching students:', error);
@@ -345,6 +361,37 @@ export const banStudent = async (req, res) => {
   } catch (error) {
     console.error('Error banning student:', error);
     res.status(500).json({ error: 'Failed to ban student', details: error.message });
+  }
+};
+
+export const unbanStudent = async (req, res) => {
+  try {
+    const { userId } = req.body;
+    console.log('POST /api/security-admin/unban-user - Unbanning user:', userId);
+    
+    if (!userId) return res.status(400).json({ error: 'userId is required' });
+
+    const student = await Student.findOneAndUpdate(
+      { id: userId },
+      { 
+        $set: { 
+          isBanned: false, 
+          banReason: null,
+          status: 'active'
+        } 
+      },
+      { new: true }
+    );
+
+    if (!student) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    console.log('Student unbanned successfully:', userId);
+    res.json({ success: true, message: 'User has been unbanned' });
+  } catch (error) {
+    console.error('Error unbanning student:', error);
+    res.status(500).json({ error: 'Failed to unban student', details: error.message });
   }
 };
 

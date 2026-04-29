@@ -47,7 +47,7 @@ import {
   signVideoUrl,
   importCourseContent
 } from '../controllers/content.controller.js';
-import { authMiddleware, adminMiddleware } from '../middleware/auth.js';
+import { authMiddleware, adminMiddleware, optionalAuth } from '../middleware/auth.js';
 import { publicLimiter } from '../middleware/security.js';
 
 const router = express.Router();
@@ -82,14 +82,8 @@ router.post('/blog', adminMiddleware, createBlogPost);
 router.put('/blog/:id', adminMiddleware, updateBlogPost);
 router.delete('/blog/:id', adminMiddleware, deleteBlogPost);
 
-// Exam Documents
-router.get('/exam-documents', getExamDocuments);
-router.post('/exam-documents', adminMiddleware, createExamDocument);
-router.put('/exam-documents/:id', adminMiddleware, updateExamDocument);
-router.delete('/exam-documents/:id', adminMiddleware, deleteExamDocument);
-
 // Notes (Course-specific)
-router.get('/courses/:id/notes', getCourseNotes);
+router.get('/courses/:id/notes', optionalAuth, getCourseNotes);
 router.post('/courses/:id/notes', adminMiddleware, createCourseNote);
 router.put('/courses/:id/notes/:noteId', adminMiddleware, updateCourseNote);
 router.delete('/courses/:id/notes/:noteId', adminMiddleware, deleteCourseNote);
@@ -112,7 +106,7 @@ router.post('/courses/:id/posts', adminMiddleware, createCoursePost);
 router.delete('/courses/:id/posts/:postId', adminMiddleware, deleteCoursePost);
 
 // Videos (Phase 19H & Stabilization)
-router.get('/courses/:id/videos', getCourseVideos);
+router.get('/courses/:id/videos', optionalAuth, getCourseVideos);
 router.post('/courses/:id/videos', adminMiddleware, createCourseVideo);
 router.put('/courses/:id/videos/:videoId', adminMiddleware, updateCourseVideo);
 router.delete('/courses/:id/videos/:videoId', adminMiddleware, deleteCourseVideo);
@@ -121,5 +115,11 @@ router.post('/video/sign-url', authMiddleware, signVideoUrl);
 // Course Import
 // Course Import (Changed to avoid route shadowing with /courses/:id)
 router.post('/content/import', adminMiddleware, importCourseContent);
+
+// Exam Documents
+router.get('/exam-documents', getExamDocuments);
+router.post('/exam-documents', adminMiddleware, createExamDocument);
+router.put('/exam-documents/:id', adminMiddleware, updateExamDocument);
+router.delete('/exam-documents/:id', adminMiddleware, deleteExamDocument);
 
 export default router;

@@ -205,6 +205,19 @@ export const enrollStudent = async (req, res) => {
       return res.status(400).json({ error: 'Already enrolled in this course' });
     }
 
+    // SECURITY GATE: Only allow free courses to be enrolled via this direct endpoint for students.
+    // Paid courses MUST be enrolled via the payment flow (razorpay/purchase controllers).
+    const isPaid = (course.price > 0) && !course.isFree && course.free !== true;
+    const isAdmin = req.admin || req.user?.isAdmin || req.user?.role === 'admin';
+
+    if (isPaid && !isAdmin) {
+      console.warn(`[SECURITY] Blocked free enrollment attempt for paid course: ${courseId} by student ${req.params.id}`);
+      return res.status(403).json({ 
+        error: 'This is a paid course. Please complete payment to enroll.', 
+        code: 'PAID_COURSE_REQUIRED' 
+      });
+    }
+
     await Student.updateOne(
       { _id: student._id },
       { $addToSet: { enrolledCourses: canonicalId } }

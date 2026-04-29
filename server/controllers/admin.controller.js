@@ -8,22 +8,24 @@ import mongoose from 'mongoose';
  */
 export const verifyAdmin = async (req, res) => {
   try {
-    const adminId = req.headers['x-admin-id'];
+    const admin = req.admin;
 
-    if (!adminId) {
+    if (!admin) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const admin = await db.collection('admins').findOne({ adminId });
+    // Optional: Fetch fresh data from DB if needed, but since it's already verified by middleware,
+    // we can use the context or just confirm the ID still exists.
+    const adminDoc = await db.collection('admins').findOne({ adminId: admin.id });
 
-    if (!admin) {
+    if (!adminDoc) {
       return res.status(401).json({ error: 'Admin not found' });
     }
 
     res.json({
       success: true,
-      adminId: admin.adminId,
-      name: admin.name
+      adminId: adminDoc.adminId,
+      name: adminDoc.name
     });
   } catch (error) {
     res.status(500).json({ error: 'Verification failed' });

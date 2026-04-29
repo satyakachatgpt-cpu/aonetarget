@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { packagesAPI, coursesAPI, testSeriesAPI, liveVideosAPI, subjectsAPI } from '../../services/apiClient';
+import parse from 'html-react-parser';
+import { packagesAPI, coursesAPI, testSeriesAPI, liveVideosAPI, subjectsAPI, uploadAPI } from '../../services/apiClient';
 import AddCourse from './AddCourse';
 import LiveSessions from './LiveSessions';
 import ForumManager from './ForumManager';
@@ -16,13 +17,15 @@ import {
   QuizDrawer,
   UploadDrawer,
   LinkDrawer,
-  ImportContentDrawer,
   VideoDrawer,
   LiveStreamDrawer,
   WebinarDrawer
 } from './FeatureDrawers';
 import AddFolderDrawer from './AddFolderDrawer';
 import RichTextEditor from '../shared/RichTextEditor';
+import BatchMultiSelect from './course-content/BatchMultiSelect';
+import { toYouTubeEmbed } from '../../lib/utils';
+import { getAdminHeaders, API_BASE_URL, apiRequest, invalidateCache } from '../../services/apiClient';
 
 interface Package {
   id: string;
@@ -158,6 +161,8 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [globalCreateMode, setGlobalCreateMode] = useState(false);
+  const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([]);
 
   useEffect(() => {
     loadData();
@@ -347,6 +352,255 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
       console.error(error);
       showToast('Failed to schedule live stream', 'error');
     }
+  };
+
+  const handleGlobalFolderSubmit = async (data: any) => {
+    if (selectedBatchIds.length === 0) {
+      showToast('Please select at least one batch', 'error');
+      return;
+    }
+    
+    let successCount = 0;
+    for (const batchId of selectedBatchIds) {
+      try {
+        const folderData = {
+          title: data.name,
+          description: data.description || '',
+          thumbnail: data.thumbnail || '',
+          isFree: data.status === 'Free',
+          status: 'active',
+          sortingOrder: data.sortingOrder || '0.00',
+          parentId: null,
+          courseId: batchId
+        };
+        await apiRequest(`${API_BASE_URL}/courses/${batchId}/folders`, {
+          method: 'POST',
+          headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify(folderData)
+        });
+        successCount++;
+      } catch (err) {
+        console.error(`Failed for batch ${batchId}`, err);
+      }
+    }
+    showToast(`Added folder to ${successCount} batches`, 'success');
+    setShowFolderDrawer(false);
+    setGlobalCreateMode(false);
+    setSelectedBatchIds([]);
+  };
+
+  const handleGlobalVideoSubmit = async (data: any) => {
+    if (selectedBatchIds.length === 0) {
+      showToast('Please select at least one batch', 'error');
+      return;
+    }
+
+    let successCount = 0;
+    for (const batchId of selectedBatchIds) {
+      try {
+        if (data.youtubeLinks) {
+          // Multiple links
+          for (const link of data.youtubeLinks) {
+            const videoData = {
+              title: link.title || data.title || 'Video',
+              description: data.description || '',
+              youtubeUrl: toYouTubeEmbed(link.url),
+              videoUrl: toYouTubeEmbed(link.url),
+              url: toYouTubeEmbed(link.url),
+              platform: 'YouTube',
+              status: 'active',
+              isFree: data.status === 'Free' || data.isFree === true,
+              order: 1,
+              courseId: batchId,
+              folderId: null
+            };
+            await apiRequest(`${API_BASE_URL}/courses/${batchId}/videos`, {
+              method: 'POST',
+              headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+              body: JSON.stringify(videoData)
+            });
+          }
+        } else {
+          // Single link
+          const videoData = {
+            title: data.title,
+            description: data.description || '',
+            youtubeUrl: toYouTubeEmbed(data.link || data.youtubeUrl || ''),
+            videoUrl: toYouTubeEmbed(data.link || data.youtubeUrl || ''),
+            url: toYouTubeEmbed(data.link || data.youtubeUrl || ''),
+            platform: 'YouTube',
+            status: 'active',
+            isFree: data.status === 'Free' || data.isFree === true,
+            order: 1,
+            courseId: batchId,
+            folderId: null
+          };
+          await apiRequest(`${API_BASE_URL}/courses/${batchId}/videos`, {
+            method: 'POST',
+            headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify(videoData)
+          });
+        }
+        successCount++;
+      } catch (err) {
+        console.error(`Failed for batch ${batchId}`, err);
+      }
+    }
+    showToast(`Added video to ${successCount} batches`, 'success');
+    setShowVideoDrawer(false);
+    setGlobalCreateMode(false);
+    setSelectedBatchIds([]);
+    invalidateCache('course-content');
+  };
+
+  const handleGlobalUploadSubmit = async (files: File[]) => {
+    if (selectedBatchIds.length === 0) {
+      showToast('Please select at least one batch', 'error');
+      return;
+    }
+
+    try {
+      let successBatchCount = 0;
+      for (const file of files) {
+        const res = await uploadAPI.uploadDocument(file);
+        const fileUrl = res.url || res.data?.url;
+
+        if (!fileUrl) continue;
+
+        for (const batchId of selectedBatchIds) {
+          try {
+            const noteData = {
+              title: file.name,
+              description: '',
+              fileUrl: fileUrl,
+              fileSize: (file.size / 1024).toFixed(2) + ' KB',
+              isFree: false,
+              status: 'active',
+              order: 1,
+              courseId: batchId,
+              folderId: null,
+              type: 'note'
+            };
+            await apiRequest(`${API_BASE_URL}/courses/${batchId}/notes`, {
+              method: 'POST',
+              headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+              body: JSON.stringify(noteData)
+            });
+          } catch (err) {
+            console.error(`Failed for batch ${batchId}`, err);
+          }
+        }
+        successBatchCount++;
+      }
+      showToast(`Added ${files.length} file(s) to ${selectedBatchIds.length} batches`, 'success');
+      setShowUploadDrawer(false);
+      setGlobalCreateMode(false);
+      setSelectedBatchIds([]);
+      invalidateCache('course-content');
+    } catch (error) {
+      console.error(error);
+      showToast('Failed to upload files', 'error');
+    }
+  };
+
+  const handleGlobalTestSubmit = async (tests: any[]) => {
+    if (selectedBatchIds.length === 0) {
+      showToast('Please select at least one batch', 'error');
+      return;
+    }
+
+    let successCount = 0;
+    for (const test of tests) {
+      for (const batchId of selectedBatchIds) {
+        try {
+          const testData = {
+            ...test,
+            id: `test_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            courseId: batchId,
+            folderId: null,
+            questions: test.questions || []
+          };
+          delete testData._id;
+          
+          await apiRequest(`${API_BASE_URL}/courses/${batchId}/tests`, {
+            method: 'POST',
+            headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify(testData)
+          });
+          successCount++;
+        } catch (err) {
+          console.error(`Failed for batch ${batchId}`, err);
+        }
+      }
+    }
+    showToast(`Added ${tests.length} test(s) to ${selectedBatchIds.length} batches`, 'success');
+    setShowOMRDrawer(false);
+    setShowTestDrawer(false);
+    setGlobalCreateMode(false);
+    setSelectedBatchIds([]);
+    invalidateCache('course-content');
+  };
+
+  const handleGlobalLiveStreamSubmit = async (data: any) => {
+    if (selectedBatchIds.length === 0) {
+      showToast('Please select at least one batch', 'error');
+      return;
+    }
+
+    let successCount = 0;
+    for (const batchId of selectedBatchIds) {
+      try {
+        await apiRequest(`${API_BASE_URL}/live-videos`, {
+          method: 'POST',
+          headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...data,
+            status: 'upcoming',
+            courseId: batchId,
+            subjectId: data.subjectId || ''
+          })
+        });
+        successCount++;
+      } catch (err) {
+        console.error(`Failed for batch ${batchId}`, err);
+      }
+    }
+    showToast(`Scheduled live stream for ${successCount} batches`, 'success');
+    setShowLiveStreamDrawer(false);
+    setGlobalCreateMode(false);
+    setSelectedBatchIds([]);
+    invalidateCache('course-content');
+  };
+
+  const handleGlobalWebinarSubmit = async (data: any) => {
+    if (selectedBatchIds.length === 0) {
+      showToast('Please select at least one batch', 'error');
+      return;
+    }
+    
+    let successCount = 0;
+    for (const batchId of selectedBatchIds) {
+      try {
+        await apiRequest(`${API_BASE_URL}/live-videos`, {
+          method: 'POST',
+          headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...data,
+            type: 'webinar',
+            status: 'active',
+            courseId: batchId
+          })
+        });
+        successCount++;
+      } catch (err) {
+        console.error(`Failed for batch ${batchId}`, err);
+      }
+    }
+    showToast(`Connected webinar to ${successCount} batches`, 'success');
+    setShowWebinarDrawer(false);
+    setGlobalCreateMode(false);
+    setSelectedBatchIds([]);
+    invalidateCache('course-content');
   };
 
   const handleSendBatchNotification = async (batchId: string) => {
@@ -604,65 +858,62 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                 </button>
 
                 {isBulkDropdownOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-[240px] bg-white border border-gray-100 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.12)] z-[200] p-5 animate-in fade-in zoom-in duration-200 origin-top-right max-h-[400px] overflow-y-auto custom-scrollbar">
-                    <div className="mb-6">
-                      <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.1em] mb-4 ml-1">Table View</h4>
-                      <div className="flex gap-2">
+                  <div className="absolute right-0 top-full mt-2 w-[280px] bg-white border border-gray-100 rounded-2xl shadow-xl z-[200] p-2 animate-in fade-in zoom-in duration-200 origin-top-right max-h-[520px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-100 scrollbar-track-transparent">
+                    <div className="mb-4 pt-1">
+                      <h4 className="text-[11px] font-bold tracking-[0.16em] text-gray-400 uppercase px-3 mb-2">Table View</h4>
+                      <div className="flex gap-2 px-2">
                         <button
                           onClick={() => { setViewMode('list'); setIsBulkDropdownOpen(false); }}
-                          className={`flex-1 h-[48px] flex items-center justify-center rounded-[14px] transition-all ${viewMode === 'list' ? 'bg-[#1a237e] text-white shadow-lg' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
+                          className={`flex-1 h-11 flex items-center justify-center rounded-xl transition-all ${viewMode === 'list' ? 'bg-[#263091] text-white shadow-sm' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
                         >
-                          <span className="material-symbols-outlined text-[22px]">list</span>
+                          <span className="material-symbols-outlined text-[20px]">list</span>
                         </button>
                         <button
                           onClick={() => { setViewMode('grid'); setIsBulkDropdownOpen(false); }}
-                          className={`flex-1 h-[48px] flex items-center justify-center rounded-[14px] transition-all ${viewMode === 'grid' ? 'bg-[#1a237e] text-white shadow-lg' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
+                          className={`flex-1 h-11 flex items-center justify-center rounded-xl transition-all ${viewMode === 'grid' ? 'bg-[#263091] text-white shadow-sm' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
                         >
-                          <span className="material-symbols-outlined text-[22px]">grid_view</span>
+                          <span className="material-symbols-outlined text-[20px]">grid_view</span>
                         </button>
                       </div>
                     </div>
 
                     <div>
-                      <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.1em] mb-4 ml-1">Bulk Actions</h4>
+                      <h4 className="text-[11px] font-bold tracking-[0.16em] text-gray-400 uppercase px-3 mb-2 mt-4">Bulk Actions</h4>
                       <div className="flex flex-col gap-0.5">
                         {[
                           { id: 'folder', icon: 'create_new_folder', label: 'Add Folder' },
                           { id: 'video', icon: 'videocam', label: 'Add Video' },
                           { id: 'pdf', icon: 'picture_as_pdf', label: 'Add PDF' },
                           { id: 'test', icon: 'quiz', label: 'Add Test' },
-                          { id: 'youtube_zoom', icon: 'video_camera_front', label: 'Add YouTube/Zoom Video' },
+                          { id: 'live_stream', icon: 'sensors', label: 'Add Live Stream' },
                           { id: 'document', icon: 'description', label: 'Add Document' }
                         ].map((item) => (
                           <button
                             key={item.id}
                             onClick={() => {
                               setIsBulkDropdownOpen(false);
+                              setGlobalCreateMode(true);
+                              setSelectedBatchIds([]);
                               switch (item.id) {
                                 case 'folder': setShowFolderDrawer(true); break;
-                                case 'link': setShowLinkDrawer(true); break;
-                                case 'video':
-                                  setUploadType({ title: 'Add Video File(s)', subtitle: 'Upload Video', accept: 'video/*' });
-                                  setShowUploadDrawer(true);
-                                  break;
+                                case 'video': setShowVideoDrawer(true); break;
                                 case 'pdf':
                                   setUploadType({ title: 'Add PDF File(s)', subtitle: 'Upload PDF', accept: '.pdf,application/pdf' });
                                   setShowUploadDrawer(true);
                                   break;
                                 case 'test': setShowTestDrawer(true); break;
-                                case 'quiz': setShowQuizDrawer(true); break;
                                 case 'live_stream': setShowLiveStreamDrawer(true); break;
-                                case 'youtube_zoom': setShowVideoDrawer(true); break;
-                                case 'webinar_gg': setShowWebinarDrawer(true); break;
                                 case 'document':
                                   setUploadType({ title: 'Add Documents', subtitle: 'Upload Doc/PDF', accept: '.pdf,.doc,.docx,.xls,.xlsx,.txt' });
                                   setShowUploadDrawer(true);
                                   break;
                               }
                             }}
-                            className="flex items-center gap-4 w-full px-4 py-3.5 rounded-2xl text-[14px] font-bold text-[#37474f] hover:bg-[#f0f4ff] hover:text-[#1a237e] transition-all group"
+                            className="flex items-center gap-3 w-full h-11 px-3 rounded-xl text-[14px] font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-all group"
                           >
-                            <span className="material-symbols-outlined text-[20px] text-[#4285f4] opacity-70 group-hover:opacity-100">{item.icon}</span>
+                            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors">
+                              <span className="material-symbols-outlined text-[20px] text-blue-500">{item.icon}</span>
+                            </div>
                             <span className="text-left leading-tight">{item.label}</span>
                           </button>
                         ))}
@@ -757,9 +1008,9 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                         </td>
                         <td className="px-6 py-6 overflow-hidden">
                           <div className="flex flex-col max-w-xs">
-                            <span className="text-[11px] font-medium text-gray-500 line-clamp-2 leading-relaxed">
-                              {pkg.description?.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ') || 'No additional details provided for this batch product.'}
-                            </span>
+                            <div className="text-sm text-gray-600 line-clamp-2 leading-relaxed">
+                              {pkg.description ? parse(pkg.description) : '-'}
+                            </div>
                           </div>
                         </td>
                         <td className="px-6 py-6 font-mono">
@@ -908,7 +1159,9 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                         </div>
                       </div>
                       <h4 className="text-[16px] font-bold text-gray-900 mb-2 uppercase tracking-tight">{pkg.name}</h4>
-                      <p className="text-[13px] text-gray-500 line-clamp-2 mb-4">{pkg.description || 'No description provided'}</p>
+                      <div className="text-sm text-gray-600 line-clamp-2 mb-4 leading-relaxed">
+                        {pkg.description ? parse(pkg.description) : '-'}
+                      </div>
                       <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-50">
                         <span className="text-[15px] font-black text-gray-900">₹{pkg.price}</span>
                         <div className="relative row-action-menu-container">
@@ -1244,12 +1497,24 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
 
       <AddFolderDrawer
         isOpen={showFolderDrawer}
-        onClose={() => setShowFolderDrawer(false)}
-        onUploadImage={async (file: File) => URL.createObjectURL(file)}
-        onSubmit={(data: any) => {
-          showToast('Folder created successfully', 'success');
-          setShowFolderDrawer(false);
+        onClose={() => { setShowFolderDrawer(false); setGlobalCreateMode(false); }}
+        onUploadImage={async (file: File) => {
+          const res = await uploadAPI.uploadImage(file);
+          return res.url || res.data?.url;
         }}
+        onSubmit={(data: any) => {
+          if (globalCreateMode) {
+            handleGlobalFolderSubmit(data);
+          } else {
+            showToast('Folder created successfully', 'success');
+            setShowFolderDrawer(false);
+          }
+        }}
+        globalCreateMode={globalCreateMode}
+        selectedBatchIds={selectedBatchIds}
+        setSelectedBatchIds={setSelectedBatchIds}
+        availableCourses={availableCourses}
+        showToast={showToast}
       />
 
       <LinkDrawer
@@ -1263,42 +1528,69 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
 
       <UploadDrawer
         isOpen={showUploadDrawer}
-        onClose={() => setShowUploadDrawer(false)}
+        onClose={() => { setShowUploadDrawer(false); setGlobalCreateMode(false); }}
         title={uploadType.title}
         subtitle={uploadType.subtitle}
         accept={uploadType.accept}
-        onSubmit={() => {
-          showToast('File uploaded successfully', 'success');
-          setShowUploadDrawer(false);
+        onSubmit={(files) => {
+          if (globalCreateMode) {
+            handleGlobalUploadSubmit(files);
+          } else {
+            showToast('File uploaded successfully', 'success');
+            setShowUploadDrawer(false);
+          }
         }}
+        globalCreateMode={globalCreateMode}
+        selectedBatchIds={selectedBatchIds}
+        setSelectedBatchIds={setSelectedBatchIds}
+        availableCourses={availableCourses}
+        showToast={showToast}
       />
 
       <OMRTestDrawer
         isOpen={showOMRDrawer}
-        onClose={() => setShowOMRDrawer(false)}
+        onClose={() => { setShowOMRDrawer(false); setGlobalCreateMode(false); }}
         testSeriesList={testSeriesList}
         isSeriesLoading={isSeriesLoading}
         onSeriesChange={(id: string) => fetchTestsBySeries(id, 'omr')}
         availableTests={omrTests}
         isTestsLoading={isTestsLoading}
-        onSubmit={() => {
-          showToast('OMR Tests added successfully', 'success');
-          setShowOMRDrawer(false);
+        onSubmit={(tests) => {
+          if (globalCreateMode) {
+            handleGlobalTestSubmit(tests);
+          } else {
+            showToast('OMR Tests added successfully', 'success');
+            setShowOMRDrawer(false);
+          }
         }}
+        globalCreateMode={globalCreateMode}
+        selectedBatchIds={selectedBatchIds}
+        setSelectedBatchIds={setSelectedBatchIds}
+        availableCourses={availableCourses}
+        showToast={showToast}
       />
 
       <TestDrawer
         isOpen={showTestDrawer}
-        onClose={() => setShowTestDrawer(false)}
+        onClose={() => { setShowTestDrawer(false); setGlobalCreateMode(false); }}
         testSeriesList={testSeriesList}
         isSeriesLoading={isSeriesLoading}
         onSeriesChange={(id: string) => fetchTestsBySeries(id, 'standard')}
         availableTests={standardTests}
         isTestsLoading={isTestsLoading}
-        onSubmit={() => {
-          showToast('Tests added successfully', 'success');
-          setShowTestDrawer(false);
+        onSubmit={(tests) => {
+          if (globalCreateMode) {
+            handleGlobalTestSubmit(tests);
+          } else {
+            showToast('Tests added successfully', 'success');
+            setShowTestDrawer(false);
+          }
         }}
+        globalCreateMode={globalCreateMode}
+        selectedBatchIds={selectedBatchIds}
+        setSelectedBatchIds={setSelectedBatchIds}
+        availableCourses={availableCourses}
+        showToast={showToast}
       />
 
       <QuizDrawer
@@ -1312,28 +1604,57 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
 
       <VideoDrawer
         isOpen={showVideoDrawer}
-        onClose={() => setShowVideoDrawer(false)}
-        onSubmit={() => {
-          showToast('Video added successfully', 'success');
-          setShowVideoDrawer(false);
+        onClose={() => { setShowVideoDrawer(false); setGlobalCreateMode(false); }}
+        onSubmit={(data: any) => {
+          if (globalCreateMode) {
+            handleGlobalVideoSubmit(data);
+          } else {
+            showToast('Video added successfully', 'success');
+            setShowVideoDrawer(false);
+          }
         }}
+        globalCreateMode={globalCreateMode}
+        selectedBatchIds={selectedBatchIds}
+        setSelectedBatchIds={setSelectedBatchIds}
+        availableCourses={availableCourses}
+        showToast={showToast}
       />
 
       <LiveStreamDrawer
         isOpen={showLiveStreamDrawer}
-        onClose={() => setShowLiveStreamDrawer(false)}
-        onSubmit={handleAddLiveStream}
+        onClose={() => { setShowLiveStreamDrawer(false); setGlobalCreateMode(false); }}
+        onSubmit={(data) => {
+          if (globalCreateMode) {
+            handleGlobalLiveStreamSubmit(data);
+          } else {
+            handleAddLiveStream(data);
+          }
+        }}
         courses={availableCourses}
         subjects={subjects}
+        globalCreateMode={globalCreateMode}
+        selectedBatchIds={selectedBatchIds}
+        setSelectedBatchIds={setSelectedBatchIds}
+        availableCourses={availableCourses}
+        showToast={showToast}
       />
 
       <WebinarDrawer
         isOpen={showWebinarDrawer}
-        onClose={() => setShowWebinarDrawer(false)}
-        onSubmit={() => {
-          showToast('Webinar connected successfully', 'success');
-          setShowWebinarDrawer(false);
+        onClose={() => { setShowWebinarDrawer(false); setGlobalCreateMode(false); }}
+        onSubmit={(data) => {
+          if (globalCreateMode) {
+            handleGlobalWebinarSubmit(data);
+          } else {
+            showToast('Webinar connected successfully', 'success');
+            setShowWebinarDrawer(false);
+          }
         }}
+        globalCreateMode={globalCreateMode}
+        selectedBatchIds={selectedBatchIds}
+        setSelectedBatchIds={setSelectedBatchIds}
+        availableCourses={availableCourses}
+        showToast={showToast}
       />
 
       <RightSideDrawer isOpen={showConfirmDrawer} onClose={() => setShowConfirmDrawer(false)}>

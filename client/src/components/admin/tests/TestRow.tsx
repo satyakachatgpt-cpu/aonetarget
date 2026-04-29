@@ -1,0 +1,146 @@
+import React from 'react';
+
+interface TestRowProps {
+  test: any;
+  index: number;
+  totalTests: number;
+  activeMenu: string | null;
+  setActiveMenu: (id: string | null) => void;
+  onView: (test: any) => void;
+  onEdit: (test: any) => void;
+  onDuplicate: (test: any) => void;
+  onPublish: (id: string) => void;
+  onToggleStatus: (test: any) => void;
+  onDelete: (id: string) => void;
+}
+
+const TestRow: React.FC<TestRowProps> = ({
+  test,
+  index,
+  totalTests,
+  activeMenu,
+  setActiveMenu,
+  onView,
+  onEdit,
+  onDuplicate,
+  onPublish,
+  onToggleStatus,
+  onDelete,
+}) => {
+  return (
+    <tr className="hover:bg-gray-50/30 transition-colors group">
+      <td className="px-6 py-5 text-[13px] text-gray-700 font-medium">
+        {test.id
+          ? String(test.id).length > 8
+            ? index + 1
+            : String(test.id).replace("test_", "")
+          : index + 1}
+      </td>
+      <td className="px-6 py-5">
+        <div className="w-[84px] h-[48px] bg-white rounded-md overflow-hidden border border-gray-100 flex items-center justify-center p-0.5 group-hover:border-gray-200 transition-all">
+          {test.logo || test.image ? (
+            <img
+              src={test.logo || test.image}
+              alt="Logo"
+              className="w-full h-full object-cover rounded-[3px]"
+            />
+          ) : (
+            <div className="bg-gray-50 w-full h-full flex items-center justify-center rounded-[3px]">
+              <span className="material-symbols-outlined text-gray-200 text-[20px]">
+                image
+              </span>
+            </div>
+          )}
+        </div>
+      </td>
+      <td className="px-6 py-5 text-[14px] font-medium text-[#1a202c]">
+        <button
+          onClick={() => onView(test)}
+          className="hover:text-blue-600 transition-all text-left leading-snug"
+        >
+          {test.name || test.title}
+        </button>
+      </td>
+      <td className="px-6 py-5 font-medium text-gray-700 text-[14px]">
+        ₹{test.price || "0"}
+      </td>
+      <td className="px-6 py-5">
+        <div className="bg-[#eff1f3] rounded-3xl h-6 px-4 inline-flex items-center justify-center min-w-[80px]">
+          <span className="text-[12px] font-medium text-gray-600">
+            {Number(test.sortBy || 0).toFixed(2)}
+          </span>
+        </div>
+      </td>
+      <td className="px-6 py-5 text-center">
+        <div className="relative inline-block action-menu-container">
+          <button
+            onClick={() => setActiveMenu(activeMenu === test.id ? null : test.id)}
+            className={`flex items-center justify-between gap-2 px-4 h-9 border rounded-lg text-[13px] font-bold transition-all shadow-sm w-[110px] ${activeMenu === test.id ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-gray-200 text-gray-700 hover:bg-gray-50"}`}
+          >
+            Actions
+            <span className={`material-symbols-outlined text-[18px] transition-all duration-200 ${activeMenu === test.id ? "rotate-180 text-blue-500" : "text-gray-400 group-hover:text-gray-600"}`}>
+              expand_more
+            </span>
+          </button>
+
+          {activeMenu === test.id && (
+            <div className={`absolute right-0 ${totalTests > 3 ? (index >= totalTests - 2 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right") : index >= totalTests - 1 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right"} w-[180px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[9999] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right`}>
+              {[
+                { id: "view", label: "View Tests", icon: "folder_open", onClick: () => { onView(test); setActiveMenu(null); } },
+                { id: "edit", label: "Edit", icon: "edit", onClick: () => { onEdit(test); setActiveMenu(null); } },
+                { id: "duplicate", label: "Duplicate", icon: "content_copy", onClick: () => { onDuplicate(test); setActiveMenu(null); } },
+                { id: "publish", label: "Publish Changes", icon: "sync", onClick: () => { onPublish(test.id || (test as any)._id); setActiveMenu(null); } },
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => item.onClick()}
+                  className="w-full px-5 py-2 flex items-center gap-3 hover:bg-gray-50 transition-colors group text-left"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-gray-400 group-hover:text-black">
+                    {item.icon}
+                  </span>
+                  <span className="text-[13px] font-bold text-gray-600 group-hover:text-black">
+                    {item.label}
+                  </span>
+                </button>
+              ))}
+
+              <div className="w-full flex items-center justify-between px-5 py-2 hover:bg-gray-50 transition-all group">
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-[20px] text-gray-400 group-hover:text-black">
+                    check_circle
+                  </span>
+                  <span className="text-[13px] font-bold text-gray-600 group-hover:text-black">
+                    Enabled
+                  </span>
+                </div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); onToggleStatus(test); }}
+                  className={`w-8 h-4.5 rounded-full relative transition-all duration-300 ${test.status === "active" ? "bg-black" : "bg-gray-200"}`}
+                >
+                  <div className={`absolute top-0.5 w-3.5 h-3.5 bg-white rounded-full transition-all duration-300 ${test.status === "active" ? "left-4" : "left-0.5"}`} />
+                </button>
+              </div>
+
+              <div className="h-[1px] bg-gray-50 my-1 mx-2"></div>
+
+              <button
+                onClick={() => { onDelete(test.id || (test as any)._id); setActiveMenu(null); }}
+                className="w-full px-5 py-2 flex items-center gap-3 hover:bg-red-50 transition-colors group text-left"
+              >
+                <span className="material-symbols-outlined text-[20px] text-red-500">
+                  delete
+                </span>
+                <span className="text-[13px] font-bold text-red-600">
+                  Delete
+                </span>
+              </button>
+            </div>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+};
+
+export default React.memo(TestRow);

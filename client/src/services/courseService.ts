@@ -18,6 +18,7 @@ export const coursesAPI = {
       body: JSON.stringify(courseData),
     });
     invalidateCache('courses');
+    invalidateCache('course-detail');
     return data;
   },
   update: async (id: string, data: any) => {
@@ -34,6 +35,7 @@ export const coursesAPI = {
       throw new Error(errorData.error || errorData.details || 'Failed to update course');
     }
     invalidateCache('courses');
+    invalidateCache('course-detail');
     return response.json();
   },
   delete: async (id: string) => {
@@ -43,6 +45,7 @@ export const coursesAPI = {
     });
     if (!response.ok) throw new Error('Failed to delete course');
     invalidateCache('courses');
+    invalidateCache('course-detail');
     return response.json();
   }
 };
@@ -144,6 +147,8 @@ export const storeAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create product');
+    invalidateCache('home');
+    invalidateCache('categories');
     return response.json();
   },
   update: async (id: string, data: any) => {
@@ -156,6 +161,8 @@ export const storeAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update product');
+    invalidateCache('home');
+    invalidateCache('categories');
     return response.json();
   },
   delete: async (id: string) => {
@@ -164,6 +171,8 @@ export const storeAPI = {
       headers: { ...getAdminHeaders() }
     });
     if (!response.ok) throw new Error('Failed to delete product');
+    invalidateCache('home');
+    invalidateCache('categories');
     return response.json();
   }
 };
@@ -184,6 +193,9 @@ export const videosAPI = {
     });
     if (!response.ok) throw new Error('Failed to create video');
     invalidateCache('videos');
+    invalidateCache('course-content');
+    invalidateCache('study-dashboard');
+    invalidateCache('course-detail');
     return response.json();
   },
   update: async (id: string, data: any) => {
@@ -197,6 +209,9 @@ export const videosAPI = {
     });
     if (!response.ok) throw new Error('Failed to update video');
     invalidateCache('videos');
+    invalidateCache('course-content');
+    invalidateCache('study-dashboard');
+    invalidateCache('course-detail');
     return response.json();
   },
   delete: async (id: string) => {
@@ -206,6 +221,9 @@ export const videosAPI = {
     });
     if (!response.ok) throw new Error('Failed to delete video');
     invalidateCache('videos');
+    invalidateCache('course-content');
+    invalidateCache('study-dashboard');
+    invalidateCache('course-detail');
     return response.json();
   }
 };
@@ -278,6 +296,9 @@ export const pdfsAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create PDF');
+    invalidateCache('course-content');
+    invalidateCache('study-dashboard');
+    invalidateCache('course-detail');
     return response.json();
   },
   update: async (id: string, data: any) => {
@@ -290,6 +311,9 @@ export const pdfsAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update PDF');
+    invalidateCache('course-content');
+    invalidateCache('study-dashboard');
+    invalidateCache('course-detail');
     return response.json();
   },
   delete: async (id: string) => {
@@ -298,6 +322,9 @@ export const pdfsAPI = {
       headers: { ...getAdminHeaders() }
     });
     if (!response.ok) throw new Error('Failed to delete PDF');
+    invalidateCache('course-content');
+    invalidateCache('study-dashboard');
+    invalidateCache('course-detail');
     return response.json();
   }
 };
@@ -365,6 +392,7 @@ export const bannersAPI = {
     });
     if (!response.ok) throw new Error('Failed to create banner');
     invalidateCache('banners');
+    invalidateCache('home');
     return response.json();
   },
   update: async (id: string, data: any) => {
@@ -378,6 +406,7 @@ export const bannersAPI = {
     });
     if (!response.ok) throw new Error('Failed to update banner');
     invalidateCache('banners');
+    invalidateCache('home');
     return response.json();
   },
   delete: async (id: string) => {
@@ -387,47 +416,7 @@ export const bannersAPI = {
     });
     if (!response.ok) throw new Error('Failed to delete banner');
     invalidateCache('banners');
-    return response.json();
-  }
-};
-
-// Exam Documents API
-export const examDocumentsAPI = {
-  getAll: async () => {
-    const response = await fetch(`${API_BASE_URL}/exam-documents`);
-    if (!response.ok) throw new Error('Failed to fetch exam documents');
-    return response.json();
-  },
-  create: async (data: any) => {
-    const response = await fetch(`${API_BASE_URL}/exam-documents`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        ...getAdminHeaders()
-      },
-      body: JSON.stringify(data),
-    });
-    if (!response.ok) throw new Error('Failed to create exam document');
-    return response.json();
-  },
-  update: async (id: string, data: any) => {
-    const response = await fetch(`${API_BASE_URL}/exam-documents/${id}`, {
-      method: 'PUT',
-      headers: { 
-        'Content-Type': 'application/json',
-        ...getAdminHeaders()
-      },
-      body: JSON.stringify(data),
-    });
-    if (!response.ok) throw new Error('Failed to update exam document');
-    return response.json();
-  },
-  delete: async (id: string) => {
-    const response = await fetch(`${API_BASE_URL}/exam-documents/${id}`, { 
-      method: 'DELETE',
-      headers: { ...getAdminHeaders() }
-    });
-    if (!response.ok) throw new Error('Failed to delete exam document');
+    invalidateCache('home');
     return response.json();
   }
 };
@@ -462,6 +451,7 @@ export const quickLinksAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create quick link');
+    invalidateCache('home');
     return response.json();
   },
   update: async (id: string, data: any) => {
@@ -471,11 +461,13 @@ export const quickLinksAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update quick link');
+    invalidateCache('home');
     return response.json();
   },
   delete: async (id: string) => {
     const response = await fetch(`${API_BASE_URL}/quick-links/${id}`, { method: 'DELETE', headers: getAdminHeaders() });
     if (!response.ok) throw new Error('Failed to delete quick link');
+    invalidateCache('home');
     return response.json();
   }
 };

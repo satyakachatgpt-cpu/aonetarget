@@ -836,6 +836,7 @@ export const getChatMessages = async (req, res) => {
 // --- Video System (Phase 19H) ---
 
 export const getCourseVideos = async (req, res) => {
+  const adminId = req.admin?.id || req.admin?._id || req.user?.adminId || req.user?.id || req.user?._id || null;
   try {
     const course = await findCourse(req.params.id);
     if (!course) return res.json([]);
@@ -844,11 +845,12 @@ export const getCourseVideos = async (req, res) => {
     const primaryId = req.params.id;
 
     // --- CHECK ENROLLMENT ---
-    const studentId = req.query.studentId || req.headers['student-id'];
-    const adminId = req.headers['x-admin-id'];
+    const isAdmin = req.admin || req.user?.isAdmin || req.user?.role === 'admin';
+    const studentId = req.user?.studentId;
+
     let isEnrolled = false;
 
-    if (adminId) {
+    if (isAdmin) {
       isEnrolled = true;
     } else if (studentId) {
       const student = await db.collection('students').findOne({

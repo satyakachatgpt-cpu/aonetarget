@@ -301,7 +301,7 @@ const CourseDetails: React.FC = () => {
     } catch (e) { 
       console.warn('[Progress] Fetch failed, keeping local state');
     }
-  }, [studentId, id]);
+  }, [student?.id, id]);
 
   const fetchCourseData = async () => {
     try {
@@ -451,7 +451,7 @@ const CourseDetails: React.FC = () => {
     fetchCourseProgress(); // Force initial sync
     window.addEventListener('focus', fetchCourseProgress);
     return () => window.removeEventListener('focus', fetchCourseProgress);
-  }, [id, location.pathname]);
+  }, [id, location.pathname, student?.id]);
 
   useEffect(() => {
     if (course) {

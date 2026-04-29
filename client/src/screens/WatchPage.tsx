@@ -36,6 +36,7 @@ const WatchPage: React.FC = () => {
   const [newLiveMessage, setNewLiveMessage] = useState('');
   const pollRef = useRef<any>(null);
   const [student, setStudent] = useState<any>(null);
+  const [isChatVisible, setIsChatVisible] = useState(false);
 
   useEffect(() => {
     const data = localStorage.getItem('studentData');
@@ -60,14 +61,22 @@ const WatchPage: React.FC = () => {
   useEffect(() => {
     if (currentVideo && currentVideo.contentType === 'live_stream') {
       const vid = currentVideo.id || currentVideo._id;
+      // Fetch once immediately when video loads or chat opens
       fetchLiveMessages(vid);
-      pollRef.current = setInterval(() => fetchLiveMessages(vid), 5000);
+      
+      // Clear any existing interval
+      if (pollRef.current) clearInterval(pollRef.current);
+      
+      // Start polling only if chat is visible
+      if (isChatVisible) {
+        pollRef.current = setInterval(() => fetchLiveMessages(vid), 5000);
+      }
     } else {
       if (pollRef.current) clearInterval(pollRef.current);
       setLiveMessages([]);
     }
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [currentVideo]);
+  }, [currentVideo, isChatVisible]);
 
   const handleSendLiveMessage = async (msg: string) => {
     if (!msg.trim() || !currentVideo || !student) return;
@@ -238,6 +247,7 @@ const WatchPage: React.FC = () => {
       isLive={isLive}
       chatMessages={liveMessages}
       onSendMessage={handleSendLiveMessage}
+      onChatVisibilityChange={setIsChatVisible}
       onClose={() => {
         if (returnTo) {
           navigate(returnTo);

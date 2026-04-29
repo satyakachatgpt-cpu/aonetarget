@@ -54,8 +54,7 @@ const BlockedUsers: React.FC<Props> = ({ showToast }) => {
 
   const handleUnblock = async (user: BlockedUser) => {
     try {
-      const updatedUser = { ...user, status: 'active' as const };
-      await studentsAPI.update(user.id, updatedUser);
+      await studentsAPI.unbanUser(user.id);
       setUsers(users.filter(u => u.id !== user.id));
       showToast(`${user.name} has been unblocked`, 'success');
     } catch (error) {
@@ -80,8 +79,7 @@ const BlockedUsers: React.FC<Props> = ({ showToast }) => {
 
     try {
       setBlocking(true);
-      const updatedUser = { ...selectedUserToBlock, status: 'inactive' as const };
-      await studentsAPI.update(selectedUserToBlock.id, updatedUser);
+      await studentsAPI.banUser(selectedUserToBlock.id, 'Terms of service violation');
       
       // Update local blocked list
       const blockedRecords = await studentsAPI.getAll();

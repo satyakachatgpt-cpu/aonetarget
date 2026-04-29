@@ -189,13 +189,12 @@ export const getCourses = async (req, res) => {
         { $limit: nLimit }
       ]).toArray();
 
-      res.json({
-        courses: coursesWithCounts,
-        total: totalCourses,
-        totalCourses,
-        currentPage: nPage,
-        totalPages: Math.ceil(totalCourses / nLimit)
-      });
+      res.setHeader('X-Total-Count', totalCourses);
+      res.setHeader('X-Page', nPage);
+      res.setHeader('X-Limit', nLimit);
+      res.setHeader('Access-Control-Expose-Headers', 'X-Total-Count, X-Page, X-Limit');
+
+      res.json(coursesWithCounts);
     } else {
       const coursesWithCounts = await db.collection('courses').aggregate(aggregation).toArray();
       res.json(coursesWithCounts);

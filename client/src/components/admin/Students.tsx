@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
+import { useDebounce } from '../../hooks/useDebounce';
 import { createPortal } from 'react-dom';
 import axios from 'axios';
 import { toast } from 'sonner';
@@ -904,9 +905,9 @@ interface StudentFormData {
 const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode = 'all' }) => {
   const location = useLocation();
   const [students, setStudents] = useState<Student[]>([]);
-  const [filteredStudents, setFilteredStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [statusFilter, setStatusFilter] = useState(initialStatus);
   const [registrationFilter, setRegistrationFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
@@ -970,9 +971,6 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
   const [uploadingField, setUploadingField] = useState<string | null>(null);
   const [courses, setCourses] = useState<{ value: string, label: string }[]>([]);
 
-  const [blockSearchQuery, setBlockSearchQuery] = useState('');
-  const [selectedUserToBlock, setSelectedUserToBlock] = useState<Student | null>(null);
-
   const [sortConfig, setSortConfig] = useState<{ key: keyof Student; direction: 'asc' | 'desc' } | null>(null);
 
   const handleSort = (key: keyof Student) => {
@@ -981,13 +979,6 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       direction = 'desc';
     }
     setSortConfig({ key, direction });
-
-    const sorted = [...filteredStudents].sort((a, b) => {
-      if (a[key] < b[key]) return direction === 'asc' ? -1 : 1;
-      if (a[key] > b[key]) return direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-    setFilteredStudents(sorted);
   };
 
   // Load data on mount
@@ -1013,6 +1004,17 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     }
   }, [location.state, students]);
 
+  // Route/Prop Sync: Ensure filters reset and data refreshes when switching between list views
+  useEffect(() => {
+    setStatusFilter(initialStatus);
+    setSearchQuery('');
+    setRegistrationFilter('all');
+    setPaymentFilter('all');
+    setDeviceFilter('all');
+    setCurrentPage(1);
+    loadStudents();
+  }, [initialStatus, viewMode]);
+
   const loadCourses = async () => {
     try {
       const { coursesAPI } = await import('../../services/apiClient');
@@ -1029,16 +1031,16 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
   };
 
   // Filter students based on search and status
-  useEffect(() => {
+  const filteredStudents = useMemo(() => {
     let filtered = students;
 
-    if (searchQuery) {
-      const lowerQuery = searchQuery.toLowerCase();
+    if (debouncedSearchQuery) {
+      const lowerQuery = debouncedSearchQuery.toLowerCase();
       filtered = filtered.filter(s =>
         (s.name ?? '').toLowerCase().includes(lowerQuery) ||
         (s.id ?? '').toLowerCase().includes(lowerQuery) ||
         (s.email ?? '').toLowerCase().includes(lowerQuery) ||
-        (s.phone ?? '').includes(searchQuery)
+        (s.phone ?? '').includes(debouncedSearchQuery)
       );
     }
 
@@ -1060,9 +1062,13 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       filtered = filtered.filter(s => s.deviceId && !s.pendingDeviceId);
     }
 
-    setFilteredStudents(filtered);
-    setCurrentPage(1); // Reset to page 1 when filters change
-  }, [students, searchQuery, statusFilter, registrationFilter, paymentFilter, deviceFilter]);
+    return filtered;
+  }, [students, debouncedSearchQuery, statusFilter, registrationFilter, paymentFilter, deviceFilter]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchQuery, statusFilter, registrationFilter, paymentFilter, deviceFilter]);
 
   // Calculate pagination
   const totalItems = filteredStudents.length;
@@ -1467,12 +1473,14 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
               className="w-64 h-11 pl-10 pr-4 bg-white border border-gray-200 rounded-xl text-[13px] font-medium outline-none focus:border-gray-400 transition-all placeholder:text-gray-400 shadow-sm"
             />
           </div>
-          <button
-            onClick={() => { resetForm(); setShowAddModal(true); }}
-            className="w-11 h-11 flex items-center justify-center bg-[#111] text-white rounded-full shadow-lg hover:bg-black transition-all active:scale-95"
-          >
-            <span className="material-symbols-outlined text-[24px]">add</span>
-          </button>
+          {viewMode !== 'blocked' && (
+            <button
+              onClick={() => { resetForm(); setShowAddModal(true); }}
+              className="w-11 h-11 flex items-center justify-center bg-[#111] text-white rounded-full shadow-lg hover:bg-black transition-all active:scale-95"
+            >
+              <span className="material-symbols-outlined text-[24px]">add</span>
+            </button>
+          )}
           <button
             onClick={() => setIsFilterOpen(!isFilterOpen)}
             className="flex items-center gap-2 h-11 px-5 border border-gray-200 rounded-xl text-[13px] font-bold text-gray-600 hover:bg-gray-50 transition-all bg-white shadow-sm"
@@ -2069,36 +2077,6 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
             </div>
           </div>
         </DrawerBody>
-        {viewMode === 'blocked' && !showEditModal && (
-          <div className="shrink-0 bg-[#111] z-[100] mt-auto">
-            <button
-              onClick={async () => {
-                if (!selectedUserToBlock) return;
-                try {
-                  setLoading(true);
-                  await studentsAPI.update(selectedUserToBlock.id, { 
-                    ...selectedUserToBlock, 
-                    status: 'inactive',
-                    blockedAt: new Date().toISOString()
-                  });
-                  showToast(`${selectedUserToBlock.name} has been blocked successfully`, 'success');
-                  setBlockSearchQuery('');
-                  setSelectedUserToBlock(null);
-                  setShowAddModal(false);
-                  loadStudents();
-                } catch (err) {
-                  showToast('Failed to block user', 'error');
-                } finally {
-                  setLoading(false);
-                }
-              }}
-              className={`w-full h-[80px] bg-[#111] text-white font-black text-[13px] hover:bg-black transition-all active:scale-[0.98] flex items-center justify-center uppercase tracking-[0.2em] disabled:opacity-50 disabled:cursor-not-allowed`}
-              disabled={!selectedUserToBlock}
-            >
-              SAVE CHANGES
-            </button>
-          </div>
-        )}
       </RightSideDrawer>
 
 

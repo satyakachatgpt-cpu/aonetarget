@@ -26,6 +26,11 @@ interface OMRTestDrawerProps {
     onSeriesChange: (seriesId: string) => void;
     availableTests: any[];
     isTestsLoading: boolean;
+    showToast?: (msg: string, type?: 'success' | 'error') => void;
+    globalCreateMode?: boolean;
+    selectedBatchIds?: string[];
+    setSelectedBatchIds?: (ids: string[]) => void;
+    availableCourses?: any[];
 }
 
 export const OMRTestDrawer: React.FC<OMRTestDrawerProps> = ({
@@ -36,7 +41,12 @@ export const OMRTestDrawer: React.FC<OMRTestDrawerProps> = ({
     isSeriesLoading,
     onSeriesChange,
     availableTests,
-    isTestsLoading
+    isTestsLoading,
+    showToast,
+    globalCreateMode = false,
+    selectedBatchIds = [],
+    setSelectedBatchIds,
+    availableCourses = []
 }) => {
     const [selectedSeries, setSelectedSeries] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -73,6 +83,15 @@ export const OMRTestDrawer: React.FC<OMRTestDrawerProps> = ({
             <DrawerHeader title="Add OMR Test(s)" onClose={onClose} />
             <DrawerBody>
                 <div className="space-y-6">
+                    {/* Batch Multi-Select for Global Mode */}
+                    {globalCreateMode && (
+                        <BatchMultiSelect 
+                            courses={availableCourses}
+                            selectedIds={selectedBatchIds}
+                            onChange={(ids) => setSelectedBatchIds?.(ids)}
+                        />
+                    )}
+
                     <div>
                         <FormLabel label="Select Test Series" />
                         <FormSelect
@@ -185,7 +204,13 @@ export const OMRTestDrawer: React.FC<OMRTestDrawerProps> = ({
                         </button>
                         <button
                             type="button"
-                            onClick={() => onSubmit(selectedTests)}
+                            onClick={() => {
+                                if (globalCreateMode && selectedBatchIds.length === 0) {
+                                    showToast?.('Please select at least one batch', 'error');
+                                    return;
+                                }
+                                onSubmit(selectedTests);
+                            }}
                             disabled={addedTestIds.length === 0}
                             className={`flex-[2] h-[60px] rounded-2xl font-bold text-[15px] transition-all active:scale-[0.98] shadow-lg ${addedTestIds.length === 0 ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#1a1c1e] text-white hover:bg-black'}`}
                         >
@@ -209,7 +234,12 @@ export const TestDrawer: React.FC<OMRTestDrawerProps> = ({
     isSeriesLoading,
     onSeriesChange,
     availableTests,
-    isTestsLoading
+    isTestsLoading,
+    showToast,
+    globalCreateMode = false,
+    selectedBatchIds = [],
+    setSelectedBatchIds,
+    availableCourses = []
 }) => {
     const [selectedSeries, setSelectedSeries] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
@@ -246,6 +276,15 @@ export const TestDrawer: React.FC<OMRTestDrawerProps> = ({
             <DrawerHeader title="Add Test(s)" onClose={onClose} />
             <DrawerBody>
                 <div className="space-y-6">
+                    {/* Batch Multi-Select for Global Mode */}
+                    {globalCreateMode && (
+                        <BatchMultiSelect 
+                            courses={availableCourses}
+                            selectedIds={selectedBatchIds}
+                            onChange={(ids) => setSelectedBatchIds?.(ids)}
+                        />
+                    )}
+
                     <div>
                         <FormLabel label="Select Test Series" />
                         <FormSelect
@@ -352,7 +391,13 @@ export const TestDrawer: React.FC<OMRTestDrawerProps> = ({
             </DrawerBody>
             <DrawerFooter>
                 <PrimaryButton
-                    onClick={() => onSubmit(selectedTests)}
+                    onClick={() => {
+                        if (globalCreateMode && selectedBatchIds.length === 0) {
+                            showToast?.('Please select at least one batch', 'error');
+                            return;
+                        }
+                        onSubmit(selectedTests);
+                    }}
                     disabled={addedTestIds.length === 0}
                 >
                     SUBMIT
@@ -476,7 +521,22 @@ export const QuizDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSubm
  */
 import { FilePreviewItem } from './DrawerSystem';
 
-export const UploadDrawer: React.FC<{ isOpen: boolean; onClose: () => void; title: string; subtitle: string; onSubmit: (files: File[]) => void; accept?: string }> = ({ isOpen, onClose, title, subtitle, onSubmit, accept }) => {
+export const UploadDrawer: React.FC<{ 
+    isOpen: boolean; 
+    onClose: () => void; 
+    title: string; 
+    subtitle: string; 
+    onSubmit: (files: File[]) => void; 
+    accept?: string;
+    showToast?: (msg: string, type?: 'success' | 'error') => void;
+    globalCreateMode?: boolean;
+    selectedBatchIds?: string[];
+    setSelectedBatchIds?: (ids: string[]) => void;
+    availableCourses?: any[];
+}> = ({ 
+    isOpen, onClose, title, subtitle, onSubmit, accept, showToast,
+    globalCreateMode = false, selectedBatchIds = [], setSelectedBatchIds, availableCourses = []
+}) => {
     const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
     const [isUploading, setIsUploading] = useState(false);
 
@@ -499,6 +559,15 @@ export const UploadDrawer: React.FC<{ isOpen: boolean; onClose: () => void; titl
             <DrawerBody className="hide-scrollbar">
                 <div className="flex flex-col min-h-full">
                     <div className="flex-1 space-y-6">
+                        {/* Batch Multi-Select for Global Mode */}
+                        {globalCreateMode && (
+                            <BatchMultiSelect 
+                                courses={availableCourses}
+                                selectedIds={selectedBatchIds}
+                                onChange={(ids) => setSelectedBatchIds?.(ids)}
+                            />
+                        )}
+
                         <UploadArea
                             title={subtitle}
                             subtitle="You can select multiple files at once."
@@ -536,7 +605,13 @@ export const UploadDrawer: React.FC<{ isOpen: boolean; onClose: () => void; titl
                         <button
                             type="button"
                             disabled={selectedFiles.length === 0 || isUploading}
-                            onClick={handleSubmit}
+                            onClick={() => {
+                                if (globalCreateMode && selectedBatchIds.length === 0) {
+                                    showToast?.('Please select at least one batch', 'error');
+                                    return;
+                                }
+                                handleSubmit();
+                            }}
                             className={`flex-[2] h-[60px] rounded-2xl font-bold text-[15px] transition-all active:scale-[0.98] shadow-lg ${(selectedFiles.length === 0 || isUploading) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#1a1c1e] text-white hover:bg-black'}`}
                         >
                             {isUploading ? (
@@ -555,20 +630,37 @@ export const UploadDrawer: React.FC<{ isOpen: boolean; onClose: () => void; titl
     );
 };
 
+import BatchMultiSelect from './course-content/BatchMultiSelect';
+
 /**
  * NEW: VIDEO DRAWER
  */
-export const VideoDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSubmit: (data: any) => void; contentMode?: 'free' | 'demo' | 'all' }> = ({ isOpen, onClose, onSubmit, contentMode = 'all' }) => {
+export const VideoDrawer: React.FC<{ 
+    isOpen: boolean; 
+    onClose: () => void; 
+    onSubmit: (data: any) => void; 
+    contentMode?: 'free' | 'demo' | 'all';
+    globalCreateMode?: boolean;
+    selectedBatchIds?: string[];
+    setSelectedBatchIds?: (ids: string[]) => void;
+    availableCourses?: any[];
+    showToast?: (msg: string, type?: 'success' | 'error') => void;
+}> = ({ 
+    isOpen, 
+    onClose, 
+    onSubmit, 
+    contentMode = 'all',
+    globalCreateMode = false,
+    selectedBatchIds = [],
+    setSelectedBatchIds,
+    availableCourses = [],
+    showToast
+}) => {
     const [mode, setMode] = useState<'link' | 'upload'>('link');
-    const [courses, setCourses] = useState<any[]>([]);
-    const [subjects, setSubjects] = useState<any[]>([]);
     const [formData, setFormData] = useState({
         title: '',
         link: '',
-        status: 'Paid',
-        isDemo: false,
-        courseId: '',
-        subjectId: ''
+        status: 'Paid'
     });
     const [selectedVideos, setSelectedVideos] = useState<File[]>([]);
     const [isUploading, setIsUploading] = useState(false);
@@ -601,24 +693,17 @@ export const VideoDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSub
             // Set defaults based on contentMode
             setFormData(prev => ({
                 ...prev,
-                status: contentMode === 'demo' || contentMode === 'free' ? 'Free' : 'Paid',
-                isDemo: contentMode === 'demo'
+                status: contentMode === 'demo' || contentMode === 'free' ? 'Free' : 'Paid'
             }));
-
-            coursesAPI.getAll().then(res => {
-                const list = Array.isArray(res) ? res : (res?.data || []);
-                setCourses(list);
-            }).catch(e => console.error("VideoDrawer: courses fetch error:", e));
-
-            subjectsAPI.getAll().then(res => {
-                const list = Array.isArray(res) ? res : (res?.data || []);
-                setSubjects(list);
-            }).catch(e => console.error("VideoDrawer: subjects fetch error:", e));
         };
         loadData();
     }, [isOpen, contentMode]);
 
     const handleSubmit = async () => {
+        if (globalCreateMode && selectedBatchIds.length === 0) {
+            showToast?.('Please select at least one batch', 'error');
+            return;
+        }
         if (mode === 'link' && !formData.link) return;
         if (mode === 'upload' && selectedVideos.length === 0) return;
 
@@ -647,20 +732,14 @@ export const VideoDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSub
 
             onSubmit({
                 youtubeLinks: validLinks,
-                courseId: formData.courseId,
-                subjectId: formData.subjectId,
-                status: formData.status,
-                isDemo: formData.isDemo
+                status: formData.status
             });
         }
 
         setFormData({
             title: '',
             link: '',
-            status: contentMode === 'demo' || contentMode === 'free' ? 'Free' : 'Paid',
-            isDemo: contentMode === 'demo',
-            courseId: '',
-            subjectId: ''
+            status: contentMode === 'demo' || contentMode === 'free' ? 'Free' : 'Paid'
         });
         setSelectedVideos([]);
         setYoutubeLinks([{ id: 1, url: '', title: '' }]);
@@ -672,6 +751,15 @@ export const VideoDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSub
             <DrawerBody className="hide-scrollbar">
                 <div className="flex flex-col min-h-full">
                     <div className="flex-1 space-y-7 py-2">
+                        {/* Batch Multi-Select for Global Mode */}
+                        {globalCreateMode && (
+                            <BatchMultiSelect 
+                                courses={availableCourses}
+                                selectedIds={selectedBatchIds}
+                                onChange={(ids) => setSelectedBatchIds?.(ids)}
+                            />
+                        )}
+
                         {/* Mode Switch */}
                         <div className="flex bg-[#f8fafc] p-1.5 rounded-2xl border border-gray-100/50">
                             <button
@@ -707,36 +795,12 @@ export const VideoDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSub
                                     />
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="space-y-2">
-                                        <FormLabel label="Select Product" required />
-                                        <FormSelect
-                                            value={formData.courseId}
-                                            onChange={(val) => setFormData({ ...formData, courseId: val })}
-                                            options={[
-                                                { value: '', label: 'Select Course' },
-                                                ...courses.map(c => ({ value: c.id || c._id, label: c.name || c.title }))
-                                            ]}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <FormLabel label="Select Subject" required />
-                                        <FormSelect
-                                            value={formData.subjectId}
-                                            onChange={(val) => setFormData({ ...formData, subjectId: val })}
-                                            options={[
-                                                { value: '', label: 'Select Subject' },
-                                                ...subjects.map(s => ({ value: s.id || s._id, label: s.name || s.title }))
-                                            ]}
-                                        />
-                                    </div>
-                                </div>
 
                                 <div className="space-y-4 pt-4 border-t border-gray-50">
                                     <div className="flex items-center justify-between px-1">
                                         <label className="text-[13px] font-bold text-gray-700">Display Settings</label>
                                     </div>
-                                    <div className={(contentMode === 'demo' || contentMode === 'free') ? "space-y-4" : "grid grid-cols-2 gap-4"}>
+                                    <div className="space-y-4">
                                         {/* Access Type / Level */}
                                         {contentMode === 'free' ? (
                                             <div className="space-y-2">
@@ -750,7 +814,7 @@ export const VideoDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSub
                                                     <span className="text-[13px] font-bold uppercase tracking-tight">Free Content</span>
                                                 </button>
                                             </div>
-                                        ) : contentMode === 'demo' ? null : (
+                                        ) : (
                                             <div className="space-y-2">
                                                 <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Access Level</label>
                                                 <div className="flex bg-[#f8fafc] p-1 rounded-2xl border border-gray-100 h-[54px]">
@@ -769,21 +833,6 @@ export const VideoDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSub
                                                         Paid
                                                     </button>
                                                 </div>
-                                            </div>
-                                        )}
-
-                                        {/* Demo Toggle */}
-                                        {(contentMode === 'demo' || contentMode === 'all') && (
-                                            <div className="space-y-2">
-                                                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Show in Demos</label>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setFormData({ ...formData, isDemo: !formData.isDemo })}
-                                                    className={`w-full h-[54px] rounded-2xl border-2 transition-all flex items-center justify-center gap-2 ${formData.isDemo ? 'bg-blue-50 border-blue-500 text-blue-700 shadow-sm' : 'bg-white border-gray-100 text-gray-400'}`}
-                                                >
-                                                    <span className="material-symbols-outlined text-[20px]">{formData.isDemo ? 'check_circle' : 'circle'}</span>
-                                                    <span className="text-[13px] font-bold uppercase tracking-tight">Demo Lesson</span>
-                                                </button>
                                             </div>
                                         )}
                                     </div>
@@ -909,8 +958,8 @@ export const LinkDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSubm
     return (
         <RightSideDrawer isOpen={isOpen} onClose={onClose}>
             <DrawerHeader title="Add Link" onClose={onClose} />
-            <DrawerBody className="px-8 py-8">
-                <div className="space-y-7">
+            <DrawerBody className="bg-[#fcfcfc]">
+                <div className="space-y-7 pb-10">
                     {/* Name */}
                     <div className="space-y-2">
                         <FormLabel label="Name" required />
@@ -1060,184 +1109,7 @@ export const LinkDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSubm
 /**
  * 8. IMPORT CONTENT DRAWER
  */
-export const ImportContentDrawer: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    courses: any[];
-    onSourceChange: (sourceId: string) => void;
-    importItems: any[];
-    isLoading: boolean;
-    selectedItems: string[];
-    onSelectItem: (id: string) => void;
-    onSelectAll: (checked: boolean) => void;
-    onSubmit: (action: 'move' | 'copy') => void;
-}> = ({
-    isOpen,
-    onClose,
-    courses,
-    onSourceChange,
-    importItems,
-    isLoading,
-    selectedItems,
-    onSelectItem,
-    onSelectAll,
-    onSubmit
-}) => {
-        const [importSearch, setImportSearch] = useState('');
-        const [localSource, setLocalSource] = useState('');
 
-        const filteredItems = importItems.filter(item =>
-            (item.title || item.name || '').toLowerCase().includes(importSearch.toLowerCase())
-        );
-
-        const getIcon = (type: string, title: string) => {
-            const lowTitle = title.toLowerCase();
-            if (type === 'folder') return 'folder';
-            if (lowTitle.includes('test') || type === 'test') return 'assignment';
-            if (lowTitle.includes('video') || type === 'video') return 'videocam';
-            return 'description';
-        };
-
-        return (
-            <RightSideDrawer isOpen={isOpen} onClose={onClose} width="480px">
-                <DrawerHeader title="Import Content" onClose={onClose} />
-                <DrawerBody className="p-0">
-                    <div className="px-8 py-8 space-y-8">
-                        {/* Source Course Selection */}
-                        <div className="space-y-2">
-                            <FormLabel label="Source" required />
-                            <FormSelect
-                                value={localSource}
-                                onChange={(val) => {
-                                    setLocalSource(val);
-                                    onSourceChange(val);
-                                }}
-                                options={[
-                                    { value: '', label: 'Select Course' },
-                                    ...(courses || []).map(c => ({
-                                        value: c._id || c.id,
-                                        label: c.name || c.title
-                                    }))
-                                ]}
-                            />
-                        </div>
-
-                        {/* Content List Section */}
-                        {localSource && (
-                            <div className="space-y-6">
-                                <div className="flex items-center justify-between">
-                                    <h4 className="text-[14px] font-bold text-gray-700 tracking-tight">Course Content</h4>
-                                    <div className="relative w-[180px]">
-                                        <input
-                                            type="text"
-                                            className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-100 rounded-lg text-[13px] font-medium outline-none focus:border-blue-400 transition-all"
-                                            placeholder="Search"
-                                            value={importSearch}
-                                            onChange={(e) => setImportSearch(e.target.value)}
-                                        />
-                                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">search</span>
-                                    </div>
-                                </div>
-
-                                {isLoading ? (
-                                    <div className="py-20 flex flex-col items-center justify-center gap-3">
-                                        <div className="w-8 h-8 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
-                                        <span className="text-[12px] font-bold text-gray-400 uppercase tracking-widest">Fetching...</span>
-                                    </div>
-                                ) : (
-                                    <div className="space-y-4">
-                                        {/* Select All */}
-                                        <div className="flex items-center justify-between pb-2 border-b border-gray-50">
-                                            <span className="text-[13px] font-bold text-gray-400">Select all</span>
-                                            <input
-                                                type="checkbox"
-                                                className="w-4 h-4 rounded border-gray-300 text-blue-600 accent-blue-600 cursor-pointer"
-                                                checked={importItems.length > 0 && selectedItems.length === importItems.length}
-                                                onChange={(e) => onSelectAll(e.target.checked)}
-                                            />
-                                        </div>
-
-                                        {/* Items List */}
-                                        <div className="space-y-0.5 max-h-[480px] overflow-y-auto pr-2 custom-scrollbar">
-                                            {filteredItems.map((item) => (
-                                                <div
-                                                    key={item.id}
-                                                    className="flex items-center justify-between py-3.5 px-2 cursor-pointer group hover:bg-gray-50 rounded-xl transition-all"
-                                                    onClick={() => onSelectItem(item.id)}
-                                                >
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-10 h-10 bg-[#f8fafc] rounded-xl flex items-center justify-center shrink-0 border border-gray-100/50">
-                                                            <span className="material-symbols-outlined text-[20px] text-gray-400">
-                                                                {getIcon(item.type, item.title || item.name)}
-                                                            </span>
-                                                        </div>
-                                                        <span className="text-[14px] font-bold text-gray-700 tracking-tight">{item.title || item.name}</span>
-                                                    </div>
-                                                    <input
-                                                        type="checkbox"
-                                                        className="w-4 h-4 accent-blue-600 cursor-pointer"
-                                                        checked={selectedItems.includes(item.id)}
-                                                        readOnly
-                                                    />
-                                                </div>
-                                            ))}
-                                            {filteredItems.length === 0 && (
-                                                <div className="py-20 text-center opacity-30">
-                                                    <span className="material-symbols-outlined text-[48px]">search_off</span>
-                                                    <p className="text-[14px] font-bold mt-2">No matching items</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                        {!localSource && (
-                            <div className="py-32 flex flex-col items-center justify-center text-center opacity-20">
-                                <span className="material-symbols-outlined text-[64px] mb-4">move_to_inbox</span>
-                                <p className="text-[15px] font-bold tracking-tight">Select a course to see content</p>
-                            </div>
-                        )}
-                    </div>
-                    {/* Action Buttons */}
-                    <div className="flex gap-3 pt-10 pb-6 px-4">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="flex-1 h-[60px] bg-gray-100 text-gray-700 rounded-2xl font-bold text-[14px] hover:bg-gray-200 transition-all active:scale-[0.98]"
-                        >
-                            CANCEL
-                        </button>
-                        <button
-                            disabled={selectedItems.length === 0}
-                            onClick={() => onSubmit('move')}
-                            className={`flex-[1.5] h-[60px] rounded-2xl text-[14px] font-bold transition-all border flex items-center justify-center gap-2 ${selectedItems.length > 0
-                                ? 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50 shadow-sm active:scale-[0.98]'
-                                : 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed'
-                                }`}
-                        >
-                            <span className="material-symbols-outlined text-[18px]">folder_managed</span>
-                            MOVE
-                        </button>
-                        <button
-                            disabled={selectedItems.length === 0}
-                            onClick={() => onSubmit('copy')}
-                            className={`flex-[1.5] h-[60px] rounded-2xl text-[14px] font-bold transition-all shadow-lg flex items-center justify-center gap-2 ${selectedItems.length > 0
-                                ? 'bg-[#1a1c1e] text-white hover:bg-black active:scale-[0.98]'
-                                : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                                }`}
-                        >
-                            <span className="material-symbols-outlined text-[18px]">content_copy</span>
-                            COPY
-                        </button>
-                    </div>
-                </DrawerBody>
-            </RightSideDrawer>
-        );
-    };
-/**
- * 9. LIVE STREAM DRAWER
- */
 export const LiveStreamDrawer: React.FC<{
     isOpen: boolean;
     onClose: () => void;
@@ -1245,7 +1117,16 @@ export const LiveStreamDrawer: React.FC<{
     courses?: any[];
     subjects?: any[];
     fixedCourseId?: string;
-}> = ({ isOpen, onClose, onSubmit, courses = [], subjects = [], fixedCourseId }) => {
+    showToast?: (m: string, type?: 'success' | 'error') => void;
+    globalCreateMode?: boolean;
+    selectedBatchIds?: string[];
+    setSelectedBatchIds?: (ids: string[]) => void;
+    availableCourses?: any[];
+}> = ({ 
+    isOpen, onClose, onSubmit, courses = [], subjects = [], 
+    fixedCourseId, showToast, globalCreateMode = false, 
+    selectedBatchIds = [], setSelectedBatchIds, availableCourses = [] 
+}) => {
     const [formData, setFormData] = useState({
         title: '',
         streamSource: 'YouTube',
@@ -1286,6 +1167,15 @@ export const LiveStreamDrawer: React.FC<{
             <DrawerBody className="hide-scrollbar">
                 <div className="flex flex-col min-h-full">
                     <div className="flex-1 space-y-7 py-2">
+                        {/* Batch Multi-Select for Global Mode */}
+                        {globalCreateMode && (
+                            <BatchMultiSelect 
+                                courses={availableCourses}
+                                selectedIds={selectedBatchIds}
+                                onChange={(ids) => setSelectedBatchIds?.(ids)}
+                            />
+                        )}
+
                         <div className="space-y-2">
                             <FormLabel label="Stream Title" required />
                             <FormInput
@@ -1331,7 +1221,7 @@ export const LiveStreamDrawer: React.FC<{
                             )}
                         </div>
 
-                        {!fixedCourseId && (
+                        {!fixedCourseId && !globalCreateMode && (
                             <div className="space-y-2">
                                 <FormLabel label="Select Batch" required />
                                 <FormSelect
@@ -1466,8 +1356,8 @@ export const LiveStreamDrawer: React.FC<{
                             <button
                                 type="button"
                                 onClick={() => onSubmit(formData)}
-                                disabled={!formData.title || !formData.streamId || !formData.courseId}
-                                className={`flex-[1.8] h-[56px] rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all active:scale-[0.98] shadow-lg shadow-gray-200 ${(!formData.title || !formData.streamId || !formData.courseId) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#1a1c1e] text-white hover:bg-black'}`}
+                                disabled={!formData.title || !formData.streamId || (!formData.courseId && !fixedCourseId && !globalCreateMode) || (globalCreateMode && selectedBatchIds.length === 0)}
+                                className={`flex-[1.8] h-[56px] rounded-2xl font-black uppercase tracking-widest text-[11px] transition-all active:scale-[0.98] shadow-lg shadow-gray-200 ${(!formData.title || !formData.streamId || (!formData.courseId && !fixedCourseId && !globalCreateMode) || (globalCreateMode && selectedBatchIds.length === 0)) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#1a1c1e] text-white hover:bg-black'}`}
                             >
                                 SCHEDULE STREAM
                             </button>
@@ -1479,7 +1369,16 @@ export const LiveStreamDrawer: React.FC<{
     );
 };
 // 10. WEBINAR DRAWER
-export const WebinarDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onSubmit: (data: any) => void }> = ({ isOpen, onClose, onSubmit }) => {
+export const WebinarDrawer: React.FC<{ 
+    isOpen: boolean; 
+    onClose: () => void; 
+    onSubmit: (data: any) => void;
+    showToast?: (msg: string, type?: 'success' | 'error') => void;
+    globalCreateMode?: boolean;
+    selectedBatchIds?: string[];
+    setSelectedBatchIds?: (ids: string[]) => void;
+    availableCourses?: any[];
+}> = ({ isOpen, onClose, onSubmit, showToast, globalCreateMode = false, selectedBatchIds = [], setSelectedBatchIds, availableCourses = [] }) => {
     const [formData, setFormData] = useState({
         title: '',
         webinarId: '',
@@ -1491,8 +1390,17 @@ export const WebinarDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onS
     return (
         <RightSideDrawer isOpen={isOpen} onClose={onClose}>
             <DrawerHeader title="Add Webinar.gg Live" onClose={onClose} />
-            <DrawerBody className="px-8 py-8">
-                <div className="space-y-7">
+            <DrawerBody className="bg-[#fcfcfc]">
+                <div className="space-y-6 pb-10">
+                    {/* Batch Multi-Select for Global Mode */}
+                    {globalCreateMode && (
+                        <BatchMultiSelect 
+                            courses={availableCourses}
+                            selectedIds={selectedBatchIds}
+                            onChange={(ids) => setSelectedBatchIds?.(ids)}
+                        />
+                    )}
+
                     <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100/50 text-center flex flex-col items-center">
                         <span className="material-symbols-outlined text-[48px] text-blue-500 mb-2">podcasts</span>
                         <h4 className="text-[14px] font-black text-blue-900 uppercase tracking-tight">Webinar.gg Integration</h4>
@@ -1550,7 +1458,13 @@ export const WebinarDrawer: React.FC<{ isOpen: boolean; onClose: () => void; onS
                     </button>
                     <button
                         type="button"
-                        onClick={() => onSubmit(formData)}
+                        onClick={() => {
+                            if (globalCreateMode && selectedBatchIds.length === 0) {
+                                showToast?.('Please select at least one batch', 'error');
+                                return;
+                            }
+                            onSubmit(formData);
+                        }}
                         className="flex-[2] h-[60px] bg-[#1a1c1e] text-white rounded-2xl font-bold text-[15px] hover:bg-black transition-all shadow-lg active:scale-[0.98]"
                     >
                         CONNECT WEBINAR
