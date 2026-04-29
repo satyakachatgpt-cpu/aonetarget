@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import { indiaStateDistrictMap } from '../utils/indiaStates';
 import { useForm } from 'react-hook-form';
@@ -209,6 +209,7 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({ value, options, onChange, l
 
 const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [step, setStep] = useState<'login' | 'otp' | 'signup' | 'profile' | 'category' | 'subcategory' | 'forgot-password' | 'reset-otp' | 'new-password' | 'signup-otp'>('login');
 
   const {
@@ -464,7 +465,8 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
       setAuth(data.student, data.accessToken, data.deviceId, data.refreshToken);
       toast.success('Login successful!');
-      navigate('/');
+      const redirect = location.state?.from || '/';
+      navigate(redirect);
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -543,7 +545,8 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
         toast.success('Login successful!');
         setAuth(data.student, data.accessToken, data.deviceId, data.refreshToken);
         if (onSuccess) onSuccess();
-        navigate('/student-dashboard');
+        const redirect = location.state?.from || '/student-dashboard';
+        navigate(redirect);
       } else {
         if (data.code === 'DEVICE_APPROVAL_REQUIRED') {
           toast.error(data.message || 'New device approval pending. Please contact admin.', { duration: 6000 });

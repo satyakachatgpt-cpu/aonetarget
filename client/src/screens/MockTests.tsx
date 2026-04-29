@@ -32,7 +32,7 @@ const MockTests: React.FC = () => {
       setStudent(studentData);
       fetchData();
     } else {
-      navigate('/student-login');
+      navigate('/student-login', { state: { from: location.pathname + location.search } });
     }
   }, []);
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getImageUrl } from '../lib/utils';
 import { getAuthHeaders } from '../services/apiClient';
 
@@ -144,6 +144,7 @@ const calcBreakdown = (course: Course, coupon: any = null): PriceBreakdown & { i
 const Checkout: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
@@ -300,7 +301,7 @@ const Checkout: React.FC = () => {
     const student = getStudentData();
     if (!student) {
       alert('Please login first');
-      navigate('/student-login');
+      navigate('/student-login', { state: { from: location.pathname + location.search } });
       return;
     }
     if (!agreed) {
@@ -386,7 +387,7 @@ const Checkout: React.FC = () => {
 
   const handleFreePurchase = async () => {
     const student = getStudentData();
-    if (!student) { navigate('/student-login'); return; }
+    if (!student) { navigate('/student-login', { state: { from: location.pathname + location.search } }); return; }
     if (!agreed) {
       alert('Please agree to the Terms of Service and Privacy Policy to continue.');
       return;

@@ -196,7 +196,7 @@ const CourseDetails: React.FC = () => {
     }
 
     const isFirstVideoInRoot = navigationHistory.length === 0 && filteredVideos[0] === video;
-    console.log('Video clicked:', video.title, 'Playable:', isEnrolled || video.isFree || video.isDemo || isFirstVideoInRoot, 'URL:', video.youtubeUrl || video.videoUrl);
+
     const canPlay = isEnrolled || video.isFree || video.isDemo || isFirstVideoInRoot;
 
     // Resolve raw URL first
@@ -346,7 +346,7 @@ const CourseDetails: React.FC = () => {
   const handleEnroll = async () => {
     if (!studentId) {
       alert('Please login first to enroll in this course');
-      navigate('/student-login');
+      navigate('/student-login', { state: { from: location.pathname } });
       return;
     }
 
@@ -378,7 +378,7 @@ const CourseDetails: React.FC = () => {
   const handleBuyNow = () => {
     if (!studentId) {
       alert('Please login first');
-      navigate('/student-login');
+      navigate('/student-login', { state: { from: location.pathname } });
       return;
     }
     navigate(`/checkout/${id}`);
