@@ -48,7 +48,7 @@ import {
   importCourseContent
 } from '../controllers/content.controller.js';
 import { authMiddleware, adminMiddleware, optionalAuth } from '../middleware/auth.js';
-import { publicLimiter } from '../middleware/security.js';
+import { catalogLimiter } from '../middleware/security.js';
 
 const router = express.Router();
 
@@ -95,7 +95,7 @@ router.put('/courses/:id/notes/:noteId', adminMiddleware, updateCourseNote);
 router.delete('/courses/:id/notes/:noteId', adminMiddleware, deleteCourseNote);
 
 // PDFs (Standalone)
-router.get('/pdfs', publicLimiter, getGenericPdfs);
+router.get('/pdfs', catalogLimiter, getGenericPdfs);
 router.post('/pdfs', adminMiddleware, createStandalonePdf);
 router.put('/pdfs/:id', adminMiddleware, updateGenericPdf);
 router.delete('/pdfs/:id', adminMiddleware, deleteGenericPdf);

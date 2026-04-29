@@ -8,6 +8,18 @@ export const publicLimiter = rateLimit({
   message: { error: 'Too many requests from this IP, please try again after 15 minutes' }
 });
 
+export const catalogLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 300,
+  message: { error: 'Too many catalog requests from this IP, please try again after 15 minutes' }
+});
+
+export const paymentLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 15,
+  message: { error: 'Too many payment requests from this IP, please try again after 15 minutes' }
+});
+
 
 // Auth Rate Limiter
 export const authLimiter = rateLimit({

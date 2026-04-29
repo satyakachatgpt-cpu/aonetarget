@@ -9,13 +9,13 @@ import {
   getSubcourses, createSubcourse, updateSubcourse, deleteSubcourse,
   getInstructors, bulkCreateCourses
 } from '../controllers/academic.controller.js';
-import { publicLimiter } from '../middleware/security.js';
+import { catalogLimiter } from '../middleware/security.js';
 import { adminMiddleware, optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // Categories
-router.get('/categories', publicLimiter, getCategories);
+router.get('/categories', catalogLimiter, getCategories);
 router.post('/categories', adminMiddleware, createCategory);
 router.put('/categories/:id', adminMiddleware, updateCategory);
 router.delete('/categories/:id', adminMiddleware, deleteCategory);
