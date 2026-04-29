@@ -1,6 +1,7 @@
 import express from 'express';
 import { uploadImage, uploadPDF, uploadVideo } from '../middleware/upload.middleware.js';
 import { authMiddleware } from '../middleware/auth.js';
+import { uploadLimiter, videoUploadLimiter } from '../middleware/security.js';
 import { uploadToCloudinary, deleteFromCloudinary, uploadBase64ToCloudinary } from '../services/cloudinary.service.js';
 import fs from 'fs';
 
@@ -9,7 +10,7 @@ const router = express.Router();
 // ─────────────────────────────────
 // POST /api/v2/upload/image
 // ─────────────────────────────────
-router.post('/v2/upload/image', authMiddleware, uploadImage.single('file'), async (req, res) => {
+router.post('/v2/upload/image', authMiddleware, uploadLimiter, uploadImage.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, error: "No image provided" });
   }
@@ -37,7 +38,7 @@ router.post('/v2/upload/image', authMiddleware, uploadImage.single('file'), asyn
 // ─────────────────────────────────
 // POST /api/v2/upload/image/base64
 // ─────────────────────────────────
-router.post('/v2/upload/image/base64', authMiddleware, async (req, res) => {
+router.post('/v2/upload/image/base64', authMiddleware, uploadLimiter, async (req, res) => {
   const { image } = req.body;
   if (!image) {
     return res.status(400).json({ success: false, error: "No image data provided" });
@@ -63,7 +64,7 @@ router.post('/v2/upload/image/base64', authMiddleware, async (req, res) => {
 });
 
 // POST /api/v2/upload/pdf (Handles all documents: PDF, Word, Excel, etc.)
-router.post('/v2/upload/pdf', authMiddleware, uploadPDF.single('file'), async (req, res) => {
+router.post('/v2/upload/pdf', authMiddleware, uploadLimiter, uploadPDF.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, error: "No document provided" });
   }
@@ -106,7 +107,7 @@ router.post('/v2/upload/pdf', authMiddleware, uploadPDF.single('file'), async (r
   update VIDEO_MAX_SIZE_MB in .env
 */
 // ─────────────────────────────────
-router.post('/v2/upload/video', authMiddleware, uploadVideo.single('file'), async (req, res) => {
+router.post('/v2/upload/video', authMiddleware, videoUploadLimiter, uploadVideo.single('file'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ success: false, error: "No video provided" });
   }
@@ -155,7 +156,7 @@ router.post('/v2/upload/video', authMiddleware, uploadVideo.single('file'), asyn
 // ─────────────────────────────────
 // DELETE /api/v2/upload
 // ─────────────────────────────────
-router.delete('/v2/upload', authMiddleware, async (req, res) => {
+router.delete('/v2/upload', authMiddleware, uploadLimiter, async (req, res) => {
   const { public_id, type } = req.query;
 
   if (!public_id || !type) {
