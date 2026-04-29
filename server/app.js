@@ -16,6 +16,7 @@ import { db } from './config/db.js';
 // Middleware
 import { optionalAuth } from './middleware/auth.js';
 import { securityHeaders, sanitizeInput } from './middleware/security.js';
+import { requestIdMiddleware } from './middleware/requestId.middleware.js';
 
 // Routes
 import uploadV2Routes from './routes/upload.routes.js';
@@ -52,6 +53,8 @@ const __dirname = path.dirname(__filename);
 const { ObjectId } = mongoose.Types;
 
 const app = express();
+
+app.use(requestIdMiddleware);
 
 // --- Configuration ---
 app.use(compression());
