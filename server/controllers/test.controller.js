@@ -254,7 +254,7 @@ export const getTestById = async (req, res) => {
       questionFilter.$or.push({ testId: new ObjectId(test._id.toString()) });
     }
 
-    console.log(`[getTestById] Searching questions for test ${id} (testIdStr: ${testIdStr}) with filter:`, JSON.stringify(questionFilter));
+
 
     const separateQuestions = await db.collection('questions').find(questionFilter).sort({ orderIndex: 1, id: 1 }).toArray();
     const embeddedQuestions = Array.isArray(test.questions) ? test.questions : [];

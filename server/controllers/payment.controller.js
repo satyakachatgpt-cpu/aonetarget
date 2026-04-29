@@ -119,7 +119,7 @@ export const createRazorpayOrder = async (req, res) => {
 
     const order = await response.json();
     if (!response.ok) {
-      console.error('Razorpay order creation failed:', order);
+      console.error('Razorpay order creation failed. (Payload omitted for security)');
       return res.status(500).json({ error: order.error?.description || 'Failed to create Razorpay order' });
     }
 
@@ -186,7 +186,7 @@ export const verifyRazorpayPayment = async (req, res) => {
     const paymentData = await paymentRes.json();
 
     if (!paymentRes.ok || paymentData.status !== 'captured') {
-      console.error('Payment not captured:', paymentData);
+      console.error('Payment not captured. (Payload omitted for security)');
       // Send Failure Email
       if (studentId && courseId) {
         try {
