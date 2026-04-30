@@ -89,6 +89,26 @@ const PDFViewerScreen: React.FC = () => {
   }, [fullPdfUrl, isDocx]);
 
 
+  // SECURITY: Block dev-tools shortcuts scoped to PDF viewer only
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement as HTMLElement;
+      const activeTag = activeEl?.tagName || '';
+      const isTyping = activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeEl?.isContentEditable;
+      if (isTyping) return;
+      const k = e.key.toLowerCase();
+      if (
+        e.key === 'F12' ||
+        ((e.ctrlKey || e.metaKey) && !e.shiftKey && ['s', 'u', 'p'].includes(k)) ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c'].includes(k))
+      ) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   if (!pdfUrl && !location.state) {
     navigate(-1);
     return null;

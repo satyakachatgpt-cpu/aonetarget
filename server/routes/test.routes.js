@@ -17,7 +17,7 @@ router.put('/:id', adminMiddleware, testController.updateTest);
 router.delete('/:id', adminMiddleware, testController.deleteTest);
 router.patch('/:id/publish', adminMiddleware, testController.publishTest);
 router.post('/:id/duplicate', adminMiddleware, testController.duplicateTest);
-router.get('/:id/export', testController.exportTestToFile);
+router.get('/:id/export', adminMiddleware, testController.exportTestToFile);
 
 // Bulk operations with middleware
 router.post('/:testId/bulk-excel', adminMiddleware, excelUpload.single('file'), testController.bulkExcelImport);

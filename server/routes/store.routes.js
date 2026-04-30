@@ -2,7 +2,7 @@ import express from 'express';
 import * as storeController from '../controllers/store.controller.js';
 import { getPurchasesByStudent, getAdminPurchases } from '../controllers/store.controller.js';
 import { authMiddleware, adminMiddleware } from '../middleware/auth.js';
-import { publicLimiter } from '../middleware/security.js';
+import { catalogLimiter } from '../middleware/security.js';
 
 const router = express.Router();
 
@@ -39,7 +39,7 @@ router.put('/ebooks/:id', adminMiddleware, storeController.updateEbook);
 router.delete('/ebooks/:id', adminMiddleware, storeController.deleteEbook);
 
 // Store Products
-router.get('/store', publicLimiter, storeController.getStoreProducts);
+router.get('/store', catalogLimiter, storeController.getStoreProducts);
 router.post('/store', adminMiddleware, storeController.createStoreProduct);
 router.post('/store/bulk', adminMiddleware, storeController.bulkCreateStoreProducts);
 router.put('/store/update-all', adminMiddleware, storeController.updateAllStoreProducts);

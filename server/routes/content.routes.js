@@ -47,8 +47,8 @@ import {
   signVideoUrl,
   importCourseContent
 } from '../controllers/content.controller.js';
-import { authMiddleware, adminMiddleware } from '../middleware/auth.js';
-import { publicLimiter } from '../middleware/security.js';
+import { authMiddleware, adminMiddleware, optionalAuth } from '../middleware/auth.js';
+import { catalogLimiter } from '../middleware/security.js';
 
 const router = express.Router();
 
@@ -89,13 +89,13 @@ router.put('/exam-documents/:id', adminMiddleware, updateExamDocument);
 router.delete('/exam-documents/:id', adminMiddleware, deleteExamDocument);
 
 // Notes (Course-specific)
-router.get('/courses/:id/notes', getCourseNotes);
+router.get('/courses/:id/notes', optionalAuth, getCourseNotes);
 router.post('/courses/:id/notes', adminMiddleware, createCourseNote);
 router.put('/courses/:id/notes/:noteId', adminMiddleware, updateCourseNote);
 router.delete('/courses/:id/notes/:noteId', adminMiddleware, deleteCourseNote);
 
 // PDFs (Standalone)
-router.get('/pdfs', publicLimiter, getGenericPdfs);
+router.get('/pdfs', catalogLimiter, getGenericPdfs);
 router.post('/pdfs', adminMiddleware, createStandalonePdf);
 router.put('/pdfs/:id', adminMiddleware, updateGenericPdf);
 router.delete('/pdfs/:id', adminMiddleware, deleteGenericPdf);
@@ -112,7 +112,7 @@ router.post('/courses/:id/posts', adminMiddleware, createCoursePost);
 router.delete('/courses/:id/posts/:postId', adminMiddleware, deleteCoursePost);
 
 // Videos (Phase 19H & Stabilization)
-router.get('/courses/:id/videos', getCourseVideos);
+router.get('/courses/:id/videos', optionalAuth, getCourseVideos);
 router.post('/courses/:id/videos', adminMiddleware, createCourseVideo);
 router.put('/courses/:id/videos/:videoId', adminMiddleware, updateCourseVideo);
 router.delete('/courses/:id/videos/:videoId', adminMiddleware, deleteCourseVideo);

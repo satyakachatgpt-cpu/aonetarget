@@ -1081,7 +1081,6 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       setLoading(true);
       console.log('Loading students...');
       const data = await studentsAPI.getAll();
-      console.log('Students loaded successfully:', data);
       
       setStudents(Array.isArray(data) ? data : []);
     } catch (error) {

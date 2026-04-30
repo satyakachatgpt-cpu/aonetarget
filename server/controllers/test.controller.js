@@ -11,7 +11,7 @@ import { isPurchaseExpired } from '../utils/helpers.js';
  */
 
 // GET /api/tests
-export const getAllTests = async (req, res) => {
+export const getAllTests = async (req, res, next) => {
   try {
     const startTimeMetric = Date.now();
     const { courseId, seriesId, testType } = req.query;
@@ -120,8 +120,7 @@ export const getAllTests = async (req, res) => {
     console.log(`[PERF] Admin /api/tests loaded with counts in ${Date.now() - startTimeMetric}ms`);
     res.json(testsWithCounts);
   } catch (error) {
-    console.error('Error fetching tests:', error);
-    res.status(500).json({ error: 'Failed to fetch tests' });
+    return next(error);
   }
 };
 
@@ -254,7 +253,7 @@ export const getTestById = async (req, res) => {
       questionFilter.$or.push({ testId: new ObjectId(test._id.toString()) });
     }
 
-    console.log(`[getTestById] Searching questions for test ${id} (testIdStr: ${testIdStr}) with filter:`, JSON.stringify(questionFilter));
+
 
     const separateQuestions = await db.collection('questions').find(questionFilter).sort({ orderIndex: 1, id: 1 }).toArray();
     const embeddedQuestions = Array.isArray(test.questions) ? test.questions : [];
@@ -270,15 +269,14 @@ export const getTestById = async (req, res) => {
 };
 
 // POST /api/tests
-export const createTest = async (req, res) => {
+export const createTest = async (req, res, next) => {
   try {
     console.log('POST /api/tests - Received test data:', req.body);
     const result = await db.collection('tests').insertOne(req.body);
     console.log('Test created successfully with ID:', result.insertedId);
     res.status(201).json({ _id: result.insertedId, ...req.body });
   } catch (error) {
-    console.error('Error creating test:', error);
-    res.status(500).json({ error: 'Failed to create test', details: error.message });
+    return next(error);
   }
 };
 

@@ -2,17 +2,31 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
-// Using memoryStorage for streaming directly to Cloudinary
-const storage = multer.memoryStorage();
+// 1. Storage Configurations
+const memoryStorage = multer.memoryStorage();
+
+const tempStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const dir = 'uploads/temp/';
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    cb(null, dir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
 
 // Read limits from .env
 const IMAGE_LIMIT = (parseInt(process.env.IMAGE_MAX_SIZE_MB) || 5) * 1024 * 1024;
 const PDF_LIMIT   = (parseInt(process.env.PDF_MAX_SIZE_MB)   || 50) * 1024 * 1024;
 const VIDEO_LIMIT = (parseInt(process.env.VIDEO_MAX_SIZE_MB) || 95) * 1024 * 1024;
 
-// 1. uploadImage
+// 1. uploadImage (Keep memory for small images)
 export const uploadImage = multer({
-  storage: storage,
+  storage: memoryStorage,
   fileFilter: (req, file, cb) => {
     const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     if (allowed.includes(file.mimetype)) {
@@ -24,9 +38,9 @@ export const uploadImage = multer({
   limits: { fileSize: IMAGE_LIMIT }
 });
 
-// 2. uploadDocument (formerly uploadPDF)
+// 2. uploadDocument (Use disk for larger docs)
 export const uploadPDF = multer({
-  storage: storage,
+  storage: tempStorage,
   fileFilter: (req, file, cb) => {
     const allowed = [
       'application/pdf',
@@ -47,9 +61,9 @@ export const uploadPDF = multer({
   limits: { fileSize: PDF_LIMIT }
 });
 
-// 3. uploadVideo
+// 3. uploadVideo (Use disk for large videos)
 export const uploadVideo = multer({
-  storage: storage,
+  storage: tempStorage,
   fileFilter: (req, file, cb) => {
     const allowed = ['video/mp4', 'video/quicktime', 'video/webm', 'video/x-msvideo'];
     if (allowed.includes(file.mimetype)) {

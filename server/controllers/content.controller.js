@@ -453,7 +453,42 @@ export const getCourseNotes = async (req, res) => {
       }
     });
 
-    res.json(uniqueNotes);
+    // --- ENROLLMENT CHECK ---
+    const studentId = req.user?.studentId;
+    const adminId = req.user?.adminId;
+    let hasFullAccess = !!adminId;
+
+    if (!hasFullAccess && studentId) {
+      const student = await db.collection('students').findOne({
+        $or: [
+          { id: studentId },
+          { _id: ObjectId.isValid(studentId) ? new ObjectId(studentId) : null }
+        ].filter(f => f.id || f._id)
+      });
+      if (student) {
+        const enrolledCourses = student.enrolledCourses || [];
+        hasFullAccess = idVariants.some(id => enrolledCourses.includes(id)) ||
+          (course.price === 0 || course.isFree === true);
+      }
+    } else if (!hasFullAccess) {
+      // Guest or unauthenticated
+      hasFullAccess = (course.price === 0 || course.isFree === true);
+    }
+
+    // Map notes to hide URLs if not authorized
+    const processedNotes = uniqueNotes.map(n => {
+      if (hasFullAccess || n.isFree) {
+        return n;
+      }
+      // Return same object structure but nullify sensitive fields
+      return {
+        ...n,
+        url: null,
+        fileUrl: null
+      };
+    });
+
+    res.json(processedNotes);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch notes' });
   }
@@ -844,13 +879,11 @@ export const getCourseVideos = async (req, res) => {
     const primaryId = req.params.id;
 
     // --- CHECK ENROLLMENT ---
-    const studentId = req.query.studentId || req.headers['student-id'];
-    const adminId = req.headers['x-admin-id'];
-    let isEnrolled = false;
+    const studentId = req.user?.studentId;
+    const adminId = req.user?.adminId;
+    let isEnrolled = !!adminId;
 
-    if (adminId) {
-      isEnrolled = true;
-    } else if (studentId) {
+    if (!isEnrolled && studentId) {
       const student = await db.collection('students').findOne({
         $or: [
           { id: studentId },
@@ -862,6 +895,9 @@ export const getCourseVideos = async (req, res) => {
         isEnrolled = idVariants.some(id => enrolledCourses.includes(id)) ||
           (course.price === 0 || course.isFree === true); // Free courses are always "enrolled"
       }
+    } else if (!isEnrolled) {
+      // Guest or unauthenticated
+      isEnrolled = (course.price === 0 || course.isFree === true);
     }
 
     // If not enrolled and not a free course, only return demo video

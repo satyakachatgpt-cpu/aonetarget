@@ -91,6 +91,13 @@ const MainLayout: React.FC<{ isLoggedIn: boolean; children: React.ReactNode }> =
   );
 };
 
+const ProtectedRedirect = () => {
+  const location = useLocation();
+  const path = location.pathname + location.search;
+  sessionStorage.setItem('postLoginRedirect', path);
+  return <Navigate to="/student-login" state={{ from: path }} />;
+};
+
 const App: React.FC = () => {
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => {
     const isAuth = localStorage.getItem('isAdminAuthenticated') === 'true';
@@ -164,7 +171,7 @@ const App: React.FC = () => {
               element={isAdminLoggedIn ? <AdminDashboard setAuth={setIsAdminLoggedIn} /> : <Navigate to="/admin-login" />}
             />
 
-            <Route path="/student-login" element={isStudentLoggedIn ? <Navigate to="/" replace /> : <div className="font-outfit"><StudentLogin setAuth={setIsStudentLoggedIn} /></div>} />
+            <Route path="/student-login" element={<div className="font-outfit"><StudentLogin setAuth={setIsStudentLoggedIn} /></div>} />
 
             <Route path="/news" element={<AllNews />} />
             <Route path="/news/:id" element={<NewsArticle />} />
@@ -195,48 +202,48 @@ const App: React.FC = () => {
                     <Route path="/purchase-success" element={<PurchaseSuccess />} />
 
                     <Route path="/student-dashboard" element={
-                      isStudentLoggedIn ? <StudentDashboard /> : <Navigate to="/student-login" />
+                      isStudentLoggedIn ? <StudentDashboard /> : <ProtectedRedirect />
                     } />
                     <Route path="/my-courses" element={
-                      isStudentLoggedIn ? <MyCourses /> : <Navigate to="/student-login" />
+                      isStudentLoggedIn ? <MyCourses /> : <ProtectedRedirect />
                     } />
                     <Route path="/live-classes" element={
-                      isStudentLoggedIn ? <LiveClasses /> : <Navigate to="/student-login" />
+                      isStudentLoggedIn ? <LiveClasses /> : <ProtectedRedirect />
                     } />
                     <Route path="/mock-tests" element={
-                      isStudentLoggedIn ? <MockTests /> : <Navigate to="/student-login" />
+                      isStudentLoggedIn ? <MockTests /> : <ProtectedRedirect />
                     } />
                     <Route path="/my-tests" element={
-                      isStudentLoggedIn ? <MyTests /> : <Navigate to="/student-login" />
+                      isStudentLoggedIn ? <MyTests /> : <ProtectedRedirect />
                     } />
                     <Route path="/test/:testId" element={
-                      isStudentLoggedIn ? <TestTaking /> : <Navigate to="/student-login" />
+                      isStudentLoggedIn ? <TestTaking /> : <ProtectedRedirect />
                     } />
                     <Route path="/ebook-notes" element={
-                      isStudentLoggedIn ? <EbookNotes /> : <Navigate to="/student-login" />
+                      isStudentLoggedIn ? <EbookNotes /> : <ProtectedRedirect />
                     } />
 
                     <Route path="/notifications" element={
-                      isStudentLoggedIn ? <Notifications /> : <Navigate to="/student-login" />
+                      isStudentLoggedIn ? <Notifications /> : <ProtectedRedirect />
                     } />
                     <Route path="/watch-history" element={
-                      isStudentLoggedIn ? <WatchHistory /> : <Navigate to="/student-login" />
+                      isStudentLoggedIn ? <WatchHistory /> : <ProtectedRedirect />
                     } />
                     <Route path="/help-support" element={
-                      isStudentLoggedIn ? <HelpSupport /> : <Navigate to="/student-login" />
+                      isStudentLoggedIn ? <HelpSupport /> : <ProtectedRedirect />
                     } />
                     <Route path="/settings" element={
-                      isStudentLoggedIn ? <Settings setAuth={setIsStudentLoggedIn} /> : <Navigate to="/student-login" />
+                      isStudentLoggedIn ? <Settings setAuth={setIsStudentLoggedIn} /> : <ProtectedRedirect />
                     } />
                     <Route path="/refer-earn" element={
-                      isStudentLoggedIn ? <ReferEarn /> : <Navigate to="/student-login" />
+                      isStudentLoggedIn ? <ReferEarn /> : <ProtectedRedirect />
                     } />
 
                     <Route path="/chats" element={
-                      isStudentLoggedIn ? <ChatsScreen /> : <Navigate to="/student-login" />
+                      isStudentLoggedIn ? <ChatsScreen /> : <ProtectedRedirect />
                     } />
                     <Route path="/profile" element={
-                      isStudentLoggedIn ? <StudentProfile setAuth={setIsStudentLoggedIn} /> : <Navigate to="/student-login" />
+                      isStudentLoggedIn ? <StudentProfile setAuth={setIsStudentLoggedIn} /> : <ProtectedRedirect />
                     } />
                     <Route path="*" element={<Navigate to="/" />} />
                   </Routes>

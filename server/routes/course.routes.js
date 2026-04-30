@@ -9,8 +9,8 @@ import {
   deleteCourse,
   getStudentCourseTests
 } from '../controllers/course.controller.js';
-import { adminMiddleware } from '../middleware/auth.js';
-import { publicLimiter } from '../middleware/security.js';
+import { adminMiddleware, optionalAuth } from '../middleware/auth.js';
+import { catalogLimiter } from '../middleware/security.js';
 
 const router = express.Router();
 
@@ -18,7 +18,7 @@ const router = express.Router();
  * @route GET /api/courses
  * @desc Get all courses with filters/pagination
  */
-router.get('/courses', publicLimiter, getCourses);
+router.get('/courses', catalogLimiter, getCourses);
 
 /**
  * @route POST /api/courses
@@ -46,7 +46,7 @@ router.delete('/courses', adminMiddleware, deleteAllCourses);
  * Must be registered BEFORE GET /courses/:id to avoid route shadowing.
  * NOT interchangeable with /api/courses/:courseId/tests (admin panel).
  */
-router.get('/courses/:id/tests', getStudentCourseTests);
+router.get('/courses/:id/tests', optionalAuth, getStudentCourseTests);
 
 /**
  * @route GET /api/courses/:id

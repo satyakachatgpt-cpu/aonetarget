@@ -11,9 +11,12 @@ import compression from 'compression';
 import mongoose from 'mongoose';
 // Config & DB
 import cloudinary from './config/cloudinary.config.js';
+import { db } from './config/db.js';
 
 // Middleware
+import { optionalAuth } from './middleware/auth.js';
 import { securityHeaders, sanitizeInput } from './middleware/security.js';
+import { requestIdMiddleware } from './middleware/requestId.middleware.js';
 
 // Routes
 import uploadV2Routes from './routes/upload.routes.js';
@@ -51,6 +54,8 @@ const { ObjectId } = mongoose.Types;
 
 const app = express();
 
+app.use(requestIdMiddleware);
+
 // --- Configuration ---
 app.use(compression());
 app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
@@ -75,11 +80,14 @@ app.use(cors({
 }));
 
 // --- Body Parser Configuration ---
-// Increase limit specifically for bulk question uploads (Parsed test papers can be large)
-app.post('/api/questions/bulk', express.json({ limit: '50mb' }));
 
 // Global limits for all other routes
-app.use(express.json({ limit: '2mb' }));
+app.use((req, res, next) => {
+  if (req.path === '/api/questions/bulk') {
+    return next();
+  }
+  express.json({ limit: '2mb' })(req, res, next);
+});
 app.use(express.urlencoded({ limit: '2mb', extended: true }));
 app.use(sanitizeInput);
 app.use(cookieParser());
@@ -146,7 +154,28 @@ const isValidProxyUrl = (urlStr) => {
   } catch (e) { return false; }
 };
 
-app.get('/api/proxy-resource', async (req, res) => {
+// --- PROXY ACCESS CACHE (STABILITY) ---
+const PROXY_ACCESS_CACHE = new Map();
+const PROXY_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const MAX_PROXY_CACHE_SIZE = 2000;
+
+const getCachedAccess = (identity, url) => {
+  const key = `${identity}:${url}`;
+  const cached = PROXY_ACCESS_CACHE.get(key);
+  if (cached && (Date.now() - cached.ts < PROXY_CACHE_TTL)) return cached.val;
+  if (cached) PROXY_ACCESS_CACHE.delete(key); // Cleanup expired
+  return null;
+};
+
+const setCachedAccess = (identity, url, hasAccess) => {
+  if (PROXY_ACCESS_CACHE.size >= MAX_PROXY_CACHE_SIZE) {
+    const firstKey = PROXY_ACCESS_CACHE.keys().next().value;
+    PROXY_ACCESS_CACHE.delete(firstKey);
+  }
+  PROXY_ACCESS_CACHE.set(`${identity}:${url}`, { val: hasAccess, ts: Date.now() });
+};
+
+app.get('/api/proxy-resource', optionalAuth, async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).send('URL is required');
 
@@ -157,6 +186,78 @@ app.get('/api/proxy-resource', async (req, res) => {
       console.warn(`[SECURITY] Blocked SSRF attempt to: ${targetUrl}`);
       return res.status(403).send('Forbidden: Invalid resource domain');
     }
+
+    // --- ENROLLMENT & ACCESS CHECK ---
+    const studentId = req.user?.studentId;
+    const adminId = req.user?.adminId;
+    const identity = adminId ? `admin:${adminId}` : (studentId ? `student:${studentId}` : 'guest');
+    
+    // 0. Cache Check
+    const cached = getCachedAccess(identity, targetUrl);
+    let hasAccess = cached !== null ? cached : !!adminId;
+
+    if (cached === null && !hasAccess) {
+      // 1. Check if it's a public asset (Images, Icons, Banners)
+      // Standard image extensions are typically public in this app
+      const isPublicAsset = /\.(jpg|jpeg|png|webp|gif|svg|ico)$/i.test(targetUrl.split('?')[0]);
+      
+      if (isPublicAsset) {
+        hasAccess = true;
+      } else {
+        // 2. Sensitive Asset (PDF, Video, etc.) -> Check Catalog & Enrollment
+        // Search across notes, pdfs, and videos collections for this URL
+        const query = { $or: [{ url: targetUrl }, { fileUrl: targetUrl }, { videoUrl: targetUrl }, { streamUrl: targetUrl }] };
+        const [note, pdf, video] = await Promise.all([
+          db.collection('notes').findOne(query),
+          db.collection('pdfs').findOne(query),
+          db.collection('videos').findOne(query)
+        ]);
+
+        const item = note || pdf || video;
+        
+        if (!item) {
+          // If not in catalog, allow if it doesn't match sensitive patterns
+          hasAccess = !/\.(pdf|mp4|m3u8|mov|avi)$/i.test(targetUrl.split('?')[0]);
+        } else {
+          // Found in catalog! Check if item is free or user is enrolled
+          if (item.isFree === true) {
+            hasAccess = true;
+          } else if (studentId) {
+            const student = await db.collection('students').findOne({
+              $or: [
+                { id: studentId },
+                { _id: ObjectId.isValid(studentId) ? new ObjectId(studentId) : null }
+              ].filter(f => f.id || f._id)
+            });
+            
+            if (student) {
+              const enrolledCourses = (student.enrolledCourses || []).map(id => String(id));
+              const itemCourseId = String(item.courseId);
+              
+              hasAccess = enrolledCourses.includes(itemCourseId);
+              
+              if (!hasAccess && itemCourseId) {
+                const course = await db.collection('courses').findOne({
+                  $or: [{ id: itemCourseId }, { _id: ObjectId.isValid(itemCourseId) ? new ObjectId(itemCourseId) : null }]
+                });
+                if (course && course.relatedBatches) {
+                  const related = (course.relatedBatches || []).map(rb => String(rb.id || rb));
+                  hasAccess = enrolledCourses.some(ec => related.includes(ec));
+                }
+              }
+            }
+          }
+        }
+      }
+      // Save result to cache
+      setCachedAccess(identity, targetUrl, hasAccess);
+    }
+
+    if (!hasAccess) {
+      console.warn(`[SECURITY] Blocked unauthorized proxy access to: ${targetUrl} by user: ${studentId || 'Guest'}`);
+      return res.status(403).send('Forbidden: Access to this paid content requires enrollment');
+    }
+    // --- END ACCESS CHECK ---
 
     let fetchUrl = targetUrl;
 
@@ -234,8 +335,16 @@ app.get('/api/proxy-resource', async (req, res) => {
 
     // Stream the body directly to the response
     if (response.body) {
-      // Readable.fromWeb handles the conversion from WHATWG stream to Node stream
-      Readable.fromWeb(response.body).pipe(res);
+      const stream = Readable.fromWeb(response.body);
+      stream.pipe(res);
+      
+      // Cleanup on client disconnect to prevent memory leaks/dangling sockets
+      res.on('close', () => {
+        try {
+          if (stream.destroy) stream.destroy();
+          if (response.body.cancel) response.body.cancel().catch(() => {});
+        } catch (e) { /* ignore cleanup errors */ }
+      });
     } else {
       res.status(500).send('Response body is empty');
     }

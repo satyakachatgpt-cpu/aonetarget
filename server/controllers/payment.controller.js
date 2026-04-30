@@ -119,7 +119,7 @@ export const createRazorpayOrder = async (req, res) => {
 
     const order = await response.json();
     if (!response.ok) {
-      console.error('Razorpay order creation failed:', order);
+      console.error('Razorpay order creation failed. (Payload omitted for security)');
       return res.status(500).json({ error: order.error?.description || 'Failed to create Razorpay order' });
     }
 
@@ -186,7 +186,7 @@ export const verifyRazorpayPayment = async (req, res) => {
     const paymentData = await paymentRes.json();
 
     if (!paymentRes.ok || paymentData.status !== 'captured') {
-      console.error('Payment not captured:', paymentData);
+      console.error('Payment not captured. (Payload omitted for security)');
       // Send Failure Email
       if (studentId && courseId) {
         try {
@@ -363,40 +363,94 @@ export const createPurchase = async (req, res) => {
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
-    const enrolledCourses = student.enrolledCourses || [];
 
+    // 1. Fetch Course from DB (Strict)
     let course = await findCourse(courseId);
     if (!course) {
+      // Fallback for extremely rare legacy cases, but still use DB data if possible
       try {
         if (ObjectId.isValid(courseId)) {
           course = await db.collection('courses').findOne({ _id: new ObjectId(courseId) });
         }
       } catch (e) { }
     }
-    const actualCourseId = course ? (course.id || courseId) : courseId;
 
+    if (!course) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+
+    const safeNumber = (val, fallback = 0) => {
+      const n = Number(val);
+      return Number.isFinite(n) ? n : fallback;
+    };
+
+    const actualCourseId = course.id || course._id.toString();
+    
+    // 2. Comprehensive Idempotency Check (All ID variants)
+    const idVariants = [...new Set([
+      actualCourseId,
+      String(courseId),
+      course.id ? String(course.id) : null,
+      course._id ? course._id.toString() : null,
+      ...(await getRelatedCourseIds(course, actualCourseId))
+    ])].filter(Boolean).map(String);
+
+    const enrolledCourses = (student.enrolledCourses || []).map(id => String(id));
+    if (idVariants.some(id => enrolledCourses.includes(String(id)))) {
+       return res.status(200).json({ success: true, message: 'Already enrolled' });
+    }
+
+    // 3. Price Verification
     let coupon = null;
     if (couponCode) {
       coupon = await db.collection('coupons').findOne({ code: couponCode });
     }
 
-    const breakdown = calculatePriceBreakdown(course || { price: amount }, coupon);
+    const breakdown = calculatePriceBreakdown(course, coupon);
     if (breakdown.isInvalid && couponCode) {
       return res.status(400).json({ error: breakdown.invalidReason });
+    }
+
+    // Server-Controlled Coin Logic (NaN-Safe)
+    const requestedCoins = Math.max(0, Math.floor(safeNumber(req.body.coinsUsed, 0)));
+    const availableCoins = Math.max(0, Math.floor(safeNumber(student.availableCoins, 0)));
+    
+    const rawTotalAmount = breakdown?.totalAmount;
+    const totalAmountInvalid = !Number.isFinite(Number(rawTotalAmount));
+    const verifiedTotalAmount = totalAmountInvalid ? 999999 : Math.max(0, Number(rawTotalAmount));
+    
+    const maxCoinsAllowed = Math.floor(verifiedTotalAmount * 10); // 1 INR = 10 coins
+    
+    const coinsToDeduct = Math.min(requestedCoins, availableCoins, maxCoinsAllowed);
+    const coinDiscount = coinsToDeduct / 10;
+    
+    const finalPayable = Math.max(0, verifiedTotalAmount - coinDiscount);
+    const isAdmin = !!(req.admin || req.user?.isAdmin || req.user?.role === 'admin');
+
+    // 4. Security Enforcement: Reject direct creation for paid content unless admin
+    // NaN-Safe Enforcement: If finalPayable is NaN (shouldn't happen now), the Math.max(0, ...) ensures it is at least 0.
+    // If verifiedTotalAmount was invalid, we do not silently allow.
+    if (finalPayable > 0 && !isAdmin) {
+      console.warn(`[SECURITY] Blocked direct purchase attempt for student ${studentId} on course ${actualCourseId}`);
+      return res.status(402).json({ 
+        error: 'Paid purchase requires verified payment.',
+        requiresPayment: true,
+        finalPayable: finalPayable
+      });
     }
 
     const purchase = {
       id: `purchase_${Date.now()}`,
       studentId,
       courseId: actualCourseId,
-      courseName: course ? (course.name || course.title) : courseId,
-      amount: breakdown.totalAmount || (typeof amount === 'number' ? amount : (course ? course.price : 0)),
+      courseName: course.name || course.title || courseId,
+      amount: breakdown.totalAmount, // Store server-verified amount
       basePrice: breakdown.basePrice,
       gstAmount: breakdown.gstAmount,
       gstPercentage: breakdown.gstPercentage,
       discountAmount: breakdown.discountAmount,
       couponCode: coupon?.code || '',
-      paymentMethod: paymentMethod || 'online',
+      paymentMethod: paymentMethod || 'free',
       referralCode: referralCode || null,
       status: 'completed',
       createdAt: new Date()
@@ -412,59 +466,52 @@ export const createPurchase = async (req, res) => {
       );
     }
 
-    if (enrolledCourses.includes(actualCourseId)) {
-       // Already enrolled
-    } else {
-       // Get linked test series IDs (Bidirectional & Multi-ID matching)
-      const directLinkedSeriesIds = (course.content?.testSeries || []).filter(id => id && typeof id === 'string');
-      
-      const batchVariants = await getRelatedCourseIds(course, actualCourseId);
+    // Fulfillment logic (Full sync with verifyRazorpayPayment)
+    const directLinkedSeriesIds = (course.content?.testSeries || []).filter(id => id && typeof id === 'string');
+    
+    const batchVariants = await getRelatedCourseIds(course, actualCourseId);
 
-      const [reverseSeriesColl, reverseSeriesTests] = await Promise.all([
-        db.collection('testSeries').find({
-          $or: [
-            { courseId: { $in: batchVariants } },
-            { courseIds: { $in: batchVariants } }
-          ]
-        }).toArray(),
-        db.collection('tests').find({
-          isSeries: true,
-          $or: [
-            { courseId: { $in: batchVariants } },
-            { courseIds: { $in: batchVariants } }
-          ]
-        }).toArray()
-      ]);
+    const [reverseSeriesColl, reverseSeriesTests] = await Promise.all([
+      db.collection('testSeries').find({
+        $or: [
+          { courseId: { $in: batchVariants } },
+          { courseIds: { $in: batchVariants } }
+        ]
+      }).toArray(),
+      db.collection('tests').find({
+        isSeries: true,
+        $or: [
+          { courseId: { $in: batchVariants } },
+          { courseIds: { $in: batchVariants } }
+        ]
+      }).toArray()
+    ]);
 
-      const reverseLinkedSeriesIds = [
-        ...reverseSeriesColl.map(ts => ts.id || ts._id.toString()),
-        ...reverseSeriesTests.map(ts => ts.id || ts._id.toString())
-      ];
-      const allLinkedSeriesIds = [...new Set([...directLinkedSeriesIds, ...reverseLinkedSeriesIds])];
+    const reverseLinkedSeriesIds = [
+      ...reverseSeriesColl.map(ts => ts.id || ts._id.toString()),
+      ...reverseSeriesTests.map(ts => ts.id || ts._id.toString())
+    ];
+    const allLinkedSeriesIds = [...new Set([...directLinkedSeriesIds, ...reverseLinkedSeriesIds])];
 
-      await db.collection('students').updateOne(
-        getStudentFilter(studentId),
-        { $addToSet: { enrolledCourses: { $each: [actualCourseId, ...batchVariants, ...allLinkedSeriesIds] } } }
-      );
+    await db.collection('students').updateOne(
+      getStudentFilter(studentId),
+      { $addToSet: { enrolledCourses: { $each: [actualCourseId, ...batchVariants, ...allLinkedSeriesIds] } } }
+    );
 
-      // Coin Deduction
-      const coursePrice = course ? course.price : 0;
-      const maxCoinsAllowed = Math.floor(coursePrice * 10);
-      const coinsToDeduct = Math.min(req.body.coinsUsed || 0, maxCoinsAllowed);
-      if (coinsToDeduct > 0) {
-        await useCoinsForPurchase(studentId, coinsToDeduct);
-      }
+    // Coin Deduction (Only if truly covering the cost and approved by server)
+    if (coinsToDeduct > 0 && finalPayable === 0) {
+      await useCoinsForPurchase(studentId, coinsToDeduct);
+    }
 
-      // Referral Unlock (FIRST PURCHASE ONLY)
-      const previousPurchases = await db.collection('purchases').countDocuments({ 
-        studentId, 
-        status: 'completed',
-        id: { $ne: purchase.id } 
-      });
+    // Referral Unlock (FIRST PURCHASE ONLY)
+    const previousPurchases = await db.collection('purchases').countDocuments({ 
+      studentId, 
+      status: 'completed',
+      id: { $ne: purchase.id } 
+    });
 
-      if (previousPurchases === 0) {
-        await unlockReferralCoins(studentId, purchase.id);
-      }
+    if (previousPurchases === 0) {
+      await unlockReferralCoins(studentId, purchase.id);
     }
 
     res.status(201).json({ success: true, purchase });

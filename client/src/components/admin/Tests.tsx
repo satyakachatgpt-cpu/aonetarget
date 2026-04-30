@@ -1714,7 +1714,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const downloadFile = async (url: string, filename: string) => {
     try {
       showToast("Downloading file...");
-      const res = await fetch(url);
+      const res = await fetch(url, { headers: getAdminHeaders() });
       if (!res.ok) throw new Error("Failed to download file");
       const blob = await res.blob();
       const link = document.createElement("a");

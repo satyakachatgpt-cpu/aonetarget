@@ -23,7 +23,7 @@ router.put('/update-all', adminMiddleware, bulkUpdateQuestions);
 router.delete('/', adminMiddleware, deleteAllQuestions);
 
 // Bulk Operations
-router.post('/bulk', adminMiddleware, bulkCreateQuestions);
+router.post('/bulk', adminMiddleware, express.json({ limit: '50mb' }), bulkCreateQuestions);
 router.post('/bulk-delete', adminMiddleware, bulkDeleteQuestions);
 router.post('/bulk-excel', adminMiddleware, excelUpload.single('file'), bulkExcelUpload);
 

@@ -36,13 +36,10 @@ const sendSMS = async (phone, message, templateId) => {
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
-      console.log(`[SMS] Attempt ${attempt}/${MAX_RETRIES} → phone: ${phone}`);
-      console.log('[SMS] Message being sent:', message);
-      console.log('[SMS] Template ID being used:', templateId);
+      console.log(`[SMS] Attempting to send OTP via ${templateId}`);
       
       const response = await smsClient.get(url);
       const data = response.data;
-      console.log('[SMS] PrimeClick response:', data);
 
       if (data?.ErrorCode === '000') {
         console.log(`[SMS] ✅ Sent to ${phone}`);
