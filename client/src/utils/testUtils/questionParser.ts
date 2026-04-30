@@ -59,18 +59,72 @@ export async function parseFile(file: File): Promise<{ questions: any[], extract
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
+          const viewport = page.getViewport({ scale: 1.0 });
+          const pageWidth = viewport.width;
 
-          let lastY = -1;
+          const items = (textContent.items as any[]).map(item => ({
+            str: item.str,
+            x: item.transform[4],
+            y: item.transform[5],
+            width: item.width || 0,
+            height: item.height || 12,
+          })).filter(item => item.str.trim().length > 0);
+
           let pageText = "";
+          if (items.length > 0) {
+            const lines: any[][] = [];
+            items.sort((a, b) => b.y - a.y);
+            items.forEach(item => {
+              let placed = false;
+              for (const line of lines) {
+                if (Math.abs(line[0].y - item.y) < 5) {
+                  line.push(item);
+                  placed = true;
+                  break;
+                }
+              }
+              if (!placed) lines.push([item]);
+            });
 
-          for (const item of textContent.items as any[]) {
-            const currentY = item.transform[5];
-            if (lastY !== -1 && Math.abs(currentY - lastY) > 5) {
-              pageText += "\n";
+            lines.forEach(line => line.sort((a, b) => a.x - b.x));
+            lines.sort((a, b) => b[0].y - a[0].y);
+
+            const mid = pageWidth / 2;
+            let leftCount = 0;
+            let rightCount = 0;
+            items.forEach(it => {
+              if (it.x + it.width < mid - 20) leftCount++;
+              else if (it.x > mid + 20) rightCount++;
+            });
+
+            const isTwoColumn = leftCount > items.length * 0.3 && rightCount > items.length * 0.3;
+
+            if (isTwoColumn) {
+              const leftItems = items.filter(it => it.x < mid).sort((a, b) => b.y - a.y || a.x - b.x);
+              const rightItems = items.filter(it => it.x >= mid).sort((a, b) => b.y - a.y || a.x - b.x);
+              const colToText = (cItems: any[]) => {
+                let txt = "";
+                let ly = -1;
+                cItems.forEach(it => {
+                  if (ly !== -1 && Math.abs(it.y - ly) > 5) txt += "\n";
+                  txt += it.str + " ";
+                  ly = it.y;
+                });
+                return txt;
+              };
+              pageText = colToText(leftItems) + "\n" + colToText(rightItems);
+            } else {
+              lines.forEach(line => {
+                line.forEach(it => { pageText += it.str + " "; });
+                pageText += "\n";
+              });
             }
-            pageText += item.str + " ";
-            lastY = currentY;
           }
+
+          pageText = pageText.split('\n')
+            .filter(l => !/^\s*\d+\s*$/.test(l))
+            .filter(l => !/IMPORTANT INSTRUCTIONS|Name of Candidate|Answer Sheet Code|Roll No/i.test(l))
+            .join('\n');
 
           const embeddedImages: { dataUrl: string; y: number }[] = [];
           try {
@@ -179,172 +233,337 @@ export async function parseFile(file: File): Promise<{ questions: any[], extract
     return { questions: [], extractedImages: [] };
 }
 
-export function extractQuestionsFromText(text: string, pageMap: any[] = []): any[] {
+export function extractQuestionsFromText(text: string, pageMap: any[] = [], originalFullText: string = ""): any[] {
     const questions: any[] = [];
     const normalizedText = text.replace(/\r\n/g, "\n").replace(/[ \t]+/g, " ");
+    const answerKeySource = originalFullText || normalizedText;
 
-    const qSplitRegex = /^\s*(\d+)[\.|\)]\s+/gm;
-    let match;
-    const blockInfos: { start: number; text: string }[] = [];
-
-    while ((match = qSplitRegex.exec(normalizedText)) !== null) {
-      const start = match.index;
-      if (blockInfos.length > 0) {
-        blockInfos[blockInfos.length - 1].text = normalizedText.substring(blockInfos[blockInfos.length - 1].start, start);
-      }
-      blockInfos.push({ start, text: "" });
-    }
-
-    if (blockInfos.length > 0) {
-      blockInfos[blockInfos.length - 1].text = normalizedText.substring(blockInfos[blockInfos.length - 1].start);
-    }
-
-    const validBlockInfos = blockInfos.filter(b => b.text.trim().length > 0);
-    const blocks = validBlockInfos.map(b => b.text);
-    const blockStarts = validBlockInfos.map(b => b.start);
-
-    for (let bIdx = 0; bIdx < blocks.length; bIdx++) {
-      const block = blocks[bIdx];
-
-      const firstLine = block.split('\n')[0];
-      if (/Unit-|Assignment-|ELECTRONIC DEVICES|CHAPTER/i.test(firstLine)) continue;
+    const parseAnswerKeyFromText = (fullText: string) => {
+      const keyMap: { [key: number]: string } = {};
+      const lines = fullText.split('\n');
+      const searchBlocks = [lines.slice(-500).join('\n'), fullText]; 
       
-      const hasOptions = /\([a-dA-D]\)|[A-D][\.|\)]\s/i.test(block);
-      if (!hasOptions) continue;
+      const tablePatterns = [
+        /(\d+)\s+([A-D1-4])(?:\s+|$)/g,
+        /Q\.\s*(\d+)\s*Ans\.\s*([A-D1-4])/gi,
+        /\b(\d+)\s*[\.\)]?\s*([A-D])\b/gi
+      ];
 
-      const optionMarkerRegex =
-        /(?:\n|[ \t])(?:\(?([A-Da-d])[\s\).\]:]|Option\s*([A-Da-d])[\s.:])(?!\w)/gi;
-
-      let matchOpt;
-      const optionMatches = [];
-      const tempGlobalRegex = new RegExp(optionMarkerRegex);
-      while ((matchOpt = tempGlobalRegex.exec(block)) !== null) {
-        optionMatches.push({
-          index: matchOpt.index,
-          marker: matchOpt[0],
-          label: (matchOpt[1] || matchOpt[2]).toUpperCase(),
-        });
-      }
-
-      let questionPart = "";
-      let optionsArray: string[] = [];
-      let answer = "A";
-      let solution = "";
-
-      if (optionMatches.length > 0) {
-        questionPart = block.substring(0, optionMatches[0].index).trim();
-        for (let i = 0; i < optionMatches.length; i++) {
-          const start = optionMatches[i].index + optionMatches[i].marker.length;
-          const end = i + 1 < optionMatches.length ? optionMatches[i + 1].index : block.length;
-          let optText = block.substring(start, end).trim();
-
-          const ansMatch = optText.match(/(?:Ans(?:wer)?|Correct|उत्तर)[:.\s]*([A-D])/i);
-          if (ansMatch) {
-            answer = ansMatch[1].toUpperCase();
-            optText = optText.substring(0, ansMatch.index).trim();
-          }
-
-          const solMatch = optText.match(/(?:Sol(?:ution)?|Expl(?:anation)?|हल)[:.\s]*([\s\S]*)/i);
-          if (solMatch) {
-            solution = solMatch[1].trim();
-            optText = optText.substring(0, solMatch.index).trim();
-          }
-          if (optText) optionsArray.push(optText);
-        }
-      } else {
-        questionPart = block.trim();
-      }
-
-      let questionEn = questionPart.replace(/^\s*\d+[\.|\)]\s*/i, "").trim();
-      let questionHi = "";
-
-      const hindiRegex = /[\u0900-\u097F]/;
-      if (hindiRegex.test(questionEn)) {
-        const lines = questionEn.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
-        if (lines.length >= 2) {
-          const hasHindi0 = hindiRegex.test(lines[0]);
-          const hasHindi1 = hindiRegex.test(lines[1]);
-          if (hasHindi0 && !hasHindi1) {
-            questionHi = lines[0];
-            questionEn = lines.slice(1).join(" ");
-          } else if (!hasHindi0 && hasHindi1) {
-            questionEn = lines[0];
-            questionHi = lines.slice(1).join(" ");
-          } else if (hasHindi0 && hasHindi1) {
-            questionHi = questionEn;
-            questionEn = "";
-          }
-        } else if (hindiRegex.test(questionEn)) {
-          questionHi = questionEn;
-          questionEn = "";
-        }
-      }
-
-      if (answer === "A") {
-        const globalAns = block.match(/(?:Ans(?:wer)?|Correct|उत्तर)[:.\s]*([A-D])\b/i);
-        if (globalAns) answer = globalAns[1].toUpperCase();
-      }
-
-      const globalSol = block.match(/(?:Sol(?:ution)?|Expl(?:anation)?|हल)[:.\s]*([\s\S]{5,})/i);
-      if (globalSol) solution = globalSol[1].trim();
-
-      const realTextOptions = optionsArray.filter(o => o.trim().replace(/^[a-d][\s\)\.:]/i, '').trim().length > 5);
-      const hasDiagramOptions = realTextOptions.length < 2;
-
-      let qPageNum = 1;
-      let questionImage = "";
-      let hasDiagramOptionsFlag = false;
-
-      if (pageMap && pageMap.length > 0) {
-        const startIdx = blockStarts[bIdx];
-        let matchedPage: any = null;
-        for (const p of pageMap) {
-          if (startIdx >= p.startIndex) {
-            qPageNum = p.pageNumber;
-            matchedPage = p;
-          } else {
-            break;
-          }
-        }
-
-        if (matchedPage) {
-          const questionText = (questionEn + questionHi + block).toLowerCase();
-          const hasFigureRef = /fig(ure)?[\s.]*\d|diagram|circuit|graph|wave|shown below|given below|following figure|refer to|arrangement/i.test(questionText);
-
-          if (hasDiagramOptions) {
-            questionImage = matchedPage.pageDataUrl || "";
-            hasDiagramOptionsFlag = true;
-          } else if (matchedPage.embeddedImages && matchedPage.embeddedImages.length > 0) {
-            if (hasFigureRef) {
-              questionImage = matchedPage.embeddedImages[0].dataUrl;
-            } else if (matchedPage.embeddedImages.length === 1) {
-              questionImage = matchedPage.embeddedImages[0].dataUrl;
+      searchBlocks.forEach((block, idx) => {
+        tablePatterns.forEach(regex => {
+          let match;
+          regex.lastIndex = 0;
+          while ((match = regex.exec(block)) !== null) {
+            const qNum = parseInt(match[1]);
+            let ans = match[2].toUpperCase();
+            if (ans === '1') ans = 'A';
+            else if (ans === '2') ans = 'B';
+            else if (ans === '3') ans = 'C';
+            else if (ans === '4') ans = 'D';
+            
+            if (qNum > 0 && qNum < 500) {
+                if (idx === 0 || !keyMap[qNum]) {
+                    keyMap[qNum] = ans;
+                }
             }
           }
+        });
+      });
+      return keyMap;
+    };
+
+    const answerKeyMap = parseAnswerKeyFromText(answerKeySource);
+
+    const splitQuestionBlocks = (fullText: string) => {
+      const blocks: { number: number; text: string; startIndex: number }[] = [];
+      // Task 2: Decimal protection
+      const qStartRegex = /^\s*(\d{1,3})\s*(?:[\.\)](?=\s|[A-Za-z\u0900-\u097F]|$)|[ \t]+(?=[A-Za-z\u0900-\u097F]|$))/gm;
+      
+      // Stop splitting at Answer Key section (Task 6)
+      const answerKeyMarkers = ["Answer Key", "ANSWER KEY", "Answer Sheet", "उत्तर कुंजी", "Correct Answer Table"];
+      let cutoffIndex = fullText.length;
+      for (const marker of answerKeyMarkers) {
+        const idx = fullText.lastIndexOf(marker);
+        if (idx !== -1 && idx > fullText.length * 0.7) {
+          cutoffIndex = Math.min(cutoffIndex, idx);
+        }
+      }
+      // TASK 2: Boundary Normalization
+      const textToSplit = fullText.substring(0, cutoffIndex)
+        .replace(/([^\n])\s+(\d{1,3})\.\s/g, (match, p1, p2) => {
+            const n = parseInt(p2);
+            if (n > 0 && n <= 500) return p1 + "\n" + p2 + ". ";
+            return match;
+        });
+
+      let match;
+      let lastMatch = null;
+      let lastAcceptedNumber = 0;
+
+      while ((match = qStartRegex.exec(textToSplit)) !== null) {
+        const qNum = parseInt(match[1]);
+        const matchedLine = textToSplit.substring(match.index, match.index + 50);
+        const rawStart = matchedLine.slice(0, 12);
+
+        // TASK 2: Hard decimal guard
+        const isDecimal = /^\s*\d{1,3}\.\d/.test(rawStart);
+        if (isDecimal) {
+          if (qNum >= 84 && qNum <= 88) console.log(`[Parser-Trace] Q${qNum} DECIMAL CHECK: ${isDecimal}`);
+          continue;
+        }
+
+        // TASK 3: Sequence filtering
+        if (qNum <= lastAcceptedNumber) {
+          if (qNum >= 84 && qNum <= 88) console.log(`[Parser-Trace] Q${qNum} SEQUENCE REJECT (Last: ${lastAcceptedNumber})`);
+          continue;
+        }
+
+        if (qNum >= 84 && qNum <= 88) console.log(`[Parser-Trace] Detected candidate ${qNum}`);
+
+        if (lastMatch) {
+          const lastNum = parseInt(lastMatch[1]);
+          const blockText = textToSplit.substring(lastMatch.index, match.index);
+          blocks.push({ 
+            number: lastNum, 
+            text: blockText, 
+            startIndex: lastMatch.index 
+          });
+          if (lastNum >= 84 && lastNum <= 88) console.log(`[Parser-Trace] Created block for Q${lastNum}`);
+        }
+        lastMatch = match;
+        lastAcceptedNumber = qNum;
+      }
+      if (lastMatch) {
+        const lastNum = parseInt(lastMatch[1]);
+        const blockText = textToSplit.substring(lastMatch.index);
+        blocks.push({ 
+          number: lastNum, 
+          text: blockText, 
+          startIndex: lastMatch.index 
+        });
+        if (lastNum >= 84 && lastNum <= 88) console.log(`[Parser-Trace] Created final block for Q${lastNum}`);
+      }
+      const filtered = blocks.filter(b => {
+        const t = b.text.trim();
+        if (t.length < 10) return false;
+        // Detect answer key table rows: "10 A 20 A 30 B" or "A 20 A 30 B"
+        const answerKeyPattern = /\b\d{1,3}\s+[A-D1-4]\b/g;
+        const matches = t.match(answerKeyPattern);
+        
+        // REFINED: Only drop if it's very dense with answers and relatively short
+        if (matches && matches.length >= 5 && t.length < 150 && !t.includes('?') && !t.includes('।')) {
+           return false;
+        }
+        
+        if (b.number >= 84 && b.number <= 88) console.log(`[Parser-Trace] Q${b.number} passed block filter`);
+        
+        if (t.includes("Q. A. Q. A.") && t.length < 100) return false;
+        
+        return true;
+      });
+      return filtered;
+    };
+
+    const parseOptions = (blockText: string) => {
+      let options: string[] = [];
+      let mode: 'numeric' | 'upper' | 'lower' | 'none' = 'none';
+      let stem = blockText;
+
+      const numericMatches = [...blockText.matchAll(/\((1|2|3|4)\)/g)];
+      const upperMatches = [...blockText.matchAll(/(?:\n|[ \t])([A-D])[\.\)]\s/g)];
+      const lowerMatches = [...blockText.matchAll(/\(([a-d])\)/g)];
+      const lowerDotMatches = [...blockText.matchAll(/(?:\n|[ \t])([a-d])[\.\)]\s/g)];
+
+      if (numericMatches.length >= 4) {
+        mode = 'numeric';
+        const firstOptIndex = numericMatches[0].index!;
+        stem = blockText.substring(0, firstOptIndex).trim();
+        const parts = blockText.substring(firstOptIndex).split(/\((1|2|3|4)\)/);
+        for (let i = 2; i < parts.length; i += 2) {
+           options.push(parts[i].trim());
+        }
+      } else if (upperMatches.length >= 4) {
+        mode = 'upper';
+        const firstOptIndex = upperMatches[0].index!;
+        stem = blockText.substring(0, firstOptIndex).trim();
+        const parts = blockText.substring(firstOptIndex).split(/(?:\n|[ \t])[A-D][\.\)]\s/);
+        options = parts.filter(p => p.trim().length > 0).map(p => p.trim());
+      } else if (lowerMatches.length >= 4) {
+        mode = 'lower';
+        const firstOptIndex = lowerMatches[0].index!;
+        stem = blockText.substring(0, firstOptIndex).trim();
+        const parts = blockText.substring(firstOptIndex).split(/\(([a-d])\)/);
+        for (let i = 2; i < parts.length; i += 2) {
+          options.push(parts[i].trim());
+        }
+      } else if (lowerDotMatches.length >= 4) {
+        mode = 'lower';
+        const firstOptIndex = lowerDotMatches[0].index!;
+        stem = blockText.substring(0, firstOptIndex).trim();
+        const parts = blockText.substring(firstOptIndex).split(/(?:\n|[ \t])[a-d][\.\)]\s/);
+        options = parts.filter(p => p.trim().length > 0).map(p => p.trim());
+      }
+
+      // Task 3: Option Guard
+      options = options.map(opt => {
+        const nextQ = opt.match(/(?:\b|\s|^)(\d{1,3})\.\s/);
+        if (nextQ) {
+          const n = parseInt(nextQ[1]);
+          if (n > 0 && n <= 500) return opt.substring(0, nextQ.index).trim();
+        }
+        return opt;
+      });
+
+      return { options: options.slice(0, 4), stem, mode };
+    };
+
+    const normalizeLanguages = (stem: string) => {
+      const hindiRegex = /[\u0900-\u097F]/;
+      const lines = stem.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      let enLines: string[] = [];
+      let hiLines: string[] = [];
+
+      lines.forEach(l => {
+        if (hindiRegex.test(l)) hiLines.push(l);
+        else enLines.push(l);
+      });
+
+      // Detect complex formula questions to preserve line breaks
+      const mathSymbols = stem.match(/[\+\-\=\×\÷\>\<\%\$]/g) || [];
+      const decimals = stem.match(/\d+\.\d+/g) || [];
+      const isComplexFormula = (mathSymbols.length + decimals.length) >= 3;
+
+      let qEn = enLines.join(isComplexFormula ? '\n' : ' ').trim();
+      let qHi = hiLines.join(isComplexFormula ? '\n' : ' ').trim();
+      if (!qEn && qHi) qEn = qHi;
+
+      return { qEn, qHi, isComplexFormula };
+    };
+
+    const rawBlocks = splitQuestionBlocks(normalizedText);
+    const parsedNumbers = new Set<number>();
+
+    const legacyHindiRegex = /fuEufyf|gfj;k.kk|dks|iz|vk|;g/i;
+
+    rawBlocks.forEach((blockObj) => {
+      const { number, text: blockText, startIndex } = blockObj;
+      const { options, stem, mode } = parseOptions(blockText);
+      const { qEn, qHi, isComplexFormula } = normalizeLanguages(stem);
+
+      let answer = answerKeyMap[number] || "";
+      if (!answer) {
+        const inlineAns = blockText.match(/(?:Ans(?:wer)?|Correct|उत्तर)[:.\s]*([A-D1-4])/i);
+        if (inlineAns) {
+          answer = inlineAns[1].toUpperCase();
+          if (answer === '1') answer = 'A';
+          else if (answer === '2') answer = 'B';
+          else if (answer === '3') answer = 'C';
+          else if (answer === '4') answer = 'D';
         }
       }
 
-      const finalOptions = hasDiagramOptionsFlag
-        ? ["A", "B", "C", "D"]
-        : (optionsArray.length >= 2 ? optionsArray.slice(0, 4) : ["Option A", "Option B", "Option C", "Option D"]);
+      const solMatch = blockText.match(/(?:Sol(?:ution)?|Expl(?:anation)?|हल)[:.\s]+([\s\S]*)/i);
+      const solution = ""; // Task 6
 
-      if (questionEn || questionHi) {
+      let qPageNum = 1;
+      let matchedPage = null;
+      if (pageMap && pageMap.length > 0) {
+        for (const p of pageMap) {
+          if (startIndex >= p.startIndex) {
+            qPageNum = p.pageNumber;
+            matchedPage = p;
+          } else break;
+        }
+      }
+
+      let questionImage = "";
+      if (matchedPage && matchedPage.embeddedImages?.length > 0) {
+        questionImage = matchedPage.embeddedImages[0].dataUrl;
+      }
+
+      const cleanQEn = qEn.replace(/^\s*\d+[\.\)]?\s*/, "").trim();
+      const cleanQHi = qHi.replace(/^\s*\d+[\.\)]?\s*/, "").trim();
+      
+      const isLegacyHindi = legacyHindiRegex.test(cleanQEn) || legacyHindiRegex.test(cleanQHi) || legacyHindiRegex.test(options.join(" "));
+
+      if (cleanQEn || cleanQHi) {
+        if (number >= 84 && number <= 88) console.log(`[Parser-Trace] Q${number} normalized. enLen: ${cleanQEn.length}`);
+        parsedNumbers.add(number);
         questions.push({
           id: questions.length + 1,
-          questionEn: questionEn || questionHi,
-          questionHi: questionEn ? questionHi : "",
+          questionNumber: number,
+          originalQuestionNumber: number,
+          orderIndex: number,
+          questionEn: cleanQEn,
+          questionHi: cleanQHi,
           type: "Multiple Choice",
-          options: finalOptions,
+          options: options.length >= 4 ? options.slice(0, 4) : ["", "", "", ""],
           correctAnswer: answer,
-          positiveMarks: 4,
-          negativeMarks: -1,
-          solution: solution || "Extracted from document",
+          positiveMarks: undefined,
+          negativeMarks: undefined,
+          solution: "",
+          explanation: "",
+          detailedExplanation: "",
+          answerExplanation: "",
           pageNumber: qPageNum,
-          hasDiagramOptions: hasDiagramOptionsFlag,
+          hasDiagramOptions: options.length < 2 && mode === 'none',
           questionImage,
+          needsReview: !answer || options.length < 4 || isLegacyHindi || isComplexFormula,
+          warningReason: isLegacyHindi ? "Legacy encoded Hindi text detected; PDF text layer is not Unicode." : undefined,
+          reviewReason: isLegacyHindi ? "Legacy Hindi text detected" : 
+                        isComplexFormula ? "Complex formula layout detected; verify against PDF." : 
+                        !answer ? "Missing answer" : "Incomplete options"
         });
       }
+    });
+
+    // Task B: Handle duplicates and sort (Task 2)
+    const grouped = new Map<number, any[]>();
+    questions.forEach(q => {
+      const num = q.originalQuestionNumber;
+      if (!grouped.has(num)) grouped.set(num, []);
+      grouped.get(num)!.push(q);
+    });
+
+    const uniqueQuestions: any[] = [];
+    grouped.forEach((list, num) => {
+      if (list.length === 1) {
+        uniqueQuestions.push(list[0]);
+      } else {
+        // Pick the best one: usually the one with longest English text
+        const best = list.reduce((prev, curr) => {
+           const prevLen = (prev.questionEn || "").length;
+           const currLen = (curr.questionEn || "").length;
+           return currLen > prevLen ? curr : prev;
+        });
+        uniqueQuestions.push(best);
+      }
+    });
+
+    uniqueQuestions.sort((a, b) => (a.originalQuestionNumber || 0) - (b.originalQuestionNumber || 0));
+
+    // Task 5: Sequence Validation
+    const finalNumbersArr = uniqueQuestions.map(q => q.originalQuestionNumber).sort((a,b) => a-b);
+    const finalNumbers = new Set(finalNumbersArr);
+    const missing = [];
+    const duplicates = [];
+    const targetCount = 100;
+    
+    for (let i = 1; i <= targetCount; i++) {
+      if (!finalNumbers.has(i)) missing.push(i);
+    }
+    
+    const seen = new Set();
+    uniqueQuestions.forEach(q => {
+      if (seen.has(q.originalQuestionNumber)) duplicates.push(q.originalQuestionNumber);
+      seen.add(q.originalQuestionNumber);
+    });
+
+    if (missing.length > 0 || duplicates.length > 0 || uniqueQuestions.length !== targetCount) {
+      console.warn(`[Parser] Validation Failed: Missing ${missing.join(",")}, Duplicates ${duplicates.join(",")}`);
+      (uniqueQuestions as any).isInvalidSequence = true;
+      (uniqueQuestions as any).errorDetail = `Missing ${missing.length}, Duplicates ${duplicates.length}`;
     }
 
-    return questions;
+    return uniqueQuestions;
 }
