@@ -999,7 +999,25 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
     const rawBlocks = splitQuestionBlocks(normalizedText);
     const parsedNumbers = new Set<number>();
-    const legacyHindiRegex = /fuEufyf|gfj;k.kk|dks|iz|vk|;g/i;
+
+    // --- Hindi Detection Regexes ---
+    // Unicode Devanagari: these questions must be preserved exactly.
+    const unicodeHindiRegex = /[\u0900-\u097F]/;
+
+    // Legacy encoded Hindi (Krutidev / Shusha / Chanakya non-Unicode fonts).
+    // These roman-looking tokens appear when a PDF encodes Hindi using a legacy
+    // font mapping that pdfjs cannot reverse-map to Unicode codepoints.
+    // They are NOT meaningful English — they are font mojibake.
+    // Full token set from SUPER-50 PDFs + common Krutidev glyph sequences:
+    const legacyHindiRegex = /fuEufyf|fuEu\b|gfj;k\.kk|gfj;k\b|nksuks\b|dks\b|iz'u|iz\b|vk\b|;g\b|esa\b|ls\b|dk\b|dh\b|ds\b|ugha\b|fdl\b|fdlh\b|dkSu|dqN\b|D;k\b|tks\b|Hkh\b|vkSj\b|gS\b|gSa\b|gksxk\b|gksaxs\b|D;ksafd\b|blfy,\b|bldk\b|blls\b|buesa\b|rFkk\b|vFkok\b|vius\b|d`i;k\b|tkrk\b|tkrh\b|tkrs\b|djrk\b|djrh\b|djrs\b|pkfg,\b|ldrk\b|ldrh\b|ldrs\b/i;
+
+    // NOTE — Task 5 (Future Work):
+    // For PDFs where the text layer uses legacy/scanned/formula fonts, text-layer
+    // parsing is fundamentally insufficient. The correct long-term fix is:
+    //   1. Render each question region to an image (page crop by bounding box).
+    //   2. Run OCR (e.g. Tesseract with Hindi + English model) on the crop.
+    // This is NOT implemented here. Admin must manually verify questions where
+    // needsReview=true and reviewReason contains "Legacy encoded Hindi".
 
     rawBlocks.forEach((blockObj) => {
       const { number, text: blockText, startIndex } = blockObj;
@@ -1041,10 +1059,36 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       const cleanQHi = qHi.replace(/^\s*\d+[\.\)]?\s*/, "").trim();
       
       const isLegacyHindi = legacyHindiRegex.test(cleanQEn) || legacyHindiRegex.test(cleanQHi) || legacyHindiRegex.test(options.join(" "));
+      const hasUnicodeHindi = unicodeHindiRegex.test(cleanQEn) || unicodeHindiRegex.test(cleanQHi) || unicodeHindiRegex.test(options.join(" "));
 
-      if (cleanQEn || cleanQHi) {
+      // Log Hindi type per question for admin diagnostics
+      if (isLegacyHindi) {
+        console.log(`[Parser-Hindi] Q${number}: LEGACY encoded Hindi (non-Unicode font). Preview: "${cleanQEn.substring(0, 60)}"`);
+      } else if (hasUnicodeHindi) {
+        console.log(`[Parser-Hindi] Q${number}: Unicode Devanagari preserved. qHi="${cleanQHi.substring(0, 40)}", qEn="${cleanQEn.substring(0, 40)}"`);
+      }
+
+      // For Unicode Hindi-only questions: copy Hindi text into questionEn so
+      // the admin preview UI renders something meaningful.
+      // questionHi retains the same value for bilingual display.
+      const displayEn = cleanQEn || (hasUnicodeHindi && !isLegacyHindi ? cleanQHi : "");
+      const displayHi = cleanQHi;
+
+      // Build a specific, actionable reviewReason
+      let reviewReason = "";
+      if (isLegacyHindi) {
+        reviewReason = "Legacy encoded Hindi detected (non-Unicode font e.g. Krutidev). Text may appear garbled. Verify against original PDF or re-export as Unicode PDF.";
+      } else if (isComplexFormula) {
+        reviewReason = "Complex formula/math layout detected; verify rendering against original PDF.";
+      } else if (!answer) {
+        reviewReason = "Missing answer key for this question.";
+      } else if (options.length < 4) {
+        reviewReason = `Incomplete options parsed (${options.length} of 4 found).`;
+      }
+
+      if (displayEn || displayHi) {
         if (number >= 84 && number <= 88) {
-          console.log(`[Parser-Trace] Q${number} parsed successfully. cleanQEn length: ${cleanQEn.length}, options count: ${options.length}`);
+          console.log(`[Parser-Trace] Q${number} parsed successfully. displayEn length: ${displayEn.length}, options count: ${options.length}`);
         }
         parsedNumbers.add(number);
         questions.push({
@@ -1052,8 +1096,10 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           questionNumber: number,
           originalQuestionNumber: number,
           orderIndex: number,
-          questionEn: cleanQEn,
-          questionHi: cleanQHi,
+          // questionEn: English text, or Unicode Hindi when no English is present
+          questionEn: displayEn,
+          // questionHi: Unicode Hindi text (empty for legacy-encoded Hindi questions)
+          questionHi: displayHi,
           type: "Multiple Choice",
           options: options.length >= 4 ? options.slice(0, 4) : ["", "", "", ""],
           correctAnswer: answer,
@@ -1066,11 +1112,14 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           pageNumber: qPageNum,
           hasDiagramOptions: options.length < 2 && mode === 'none',
           questionImage,
+          // needsReview flags both legacy Hindi AND other quality issues — never drops questions
           needsReview: !answer || options.length < 4 || isLegacyHindi || isComplexFormula,
-          warningReason: isLegacyHindi ? "Legacy encoded Hindi text detected; PDF text layer is not Unicode." : undefined,
-          reviewReason: isLegacyHindi ? "Legacy Hindi text detected" : 
-                        isComplexFormula ? "Complex formula layout detected; verify against PDF." : 
-                        !answer ? "Missing answer" : "Incomplete options"
+          isLegacyHindi,
+          hasUnicodeHindi,
+          warningReason: isLegacyHindi
+            ? "Legacy encoded Hindi detected (non-Unicode font). Text may appear garbled. Admin: verify against original PDF."
+            : undefined,
+          reviewReason: reviewReason || undefined,
         });
       }
     });
