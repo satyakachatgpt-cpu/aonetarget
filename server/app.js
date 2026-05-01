@@ -9,6 +9,8 @@ import fs from 'fs';
 import cookieParser from 'cookie-parser';
 import compression from 'compression';
 import mongoose from 'mongoose';
+import helmet from 'helmet';
+import mongoSanitize from 'express-mongo-sanitize';
 // Config & DB
 import cloudinary from './config/cloudinary.config.js';
 import { db } from './config/db.js';
@@ -60,6 +62,11 @@ app.use(requestIdMiddleware);
 app.use(compression());
 app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
 app.use(securityHeaders);
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false
+}));
+app.use(mongoSanitize());
 
 app.use(cors({
   origin: (origin, callback) => {

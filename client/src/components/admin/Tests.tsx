@@ -238,6 +238,15 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
 
 
+
+
+
+  const [viewingFormatModal, setViewingFormatModal] = useState<string | null>(
+    null,
+  );
+  const [viewingPaperQuestions, setViewingPaperQuestions] = useState<
+    any[] | null
+  >(null);
   const [viewingQuestionDetail, setViewingQuestionDetail] = useState<
     any | null
   >(null);
