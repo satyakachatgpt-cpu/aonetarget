@@ -6,6 +6,17 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { API_BASE_URL } from '../services/baseService';
+import { SelectionModal } from '../components/auth/SelectionModal';
+import { ScrollPicker } from '../components/auth/ScrollPicker';
+import { OtpInputGrid } from '../components/auth/OtpInputGrid';
+import { AuthSubmitButton } from '../components/auth/AuthSubmitButton';
+import { AuthHeader } from '../components/auth/AuthHeader';
+import { OtpHelperText } from '../components/auth/OtpHelperText';
+import { AuthBackButton } from '../components/auth/AuthBackButton';
+import { AuthLayout } from '../components/auth/AuthLayout';
+import { LoginStep } from '../components/auth/LoginStep';
+import { ForgotStep } from '../components/auth/ForgotStep';
+import { NewPasswordStep } from '../components/auth/NewPasswordStep';
 
 const phoneSchema = z.object({
   phone: z.string().length(10, 'Enter a valid 10-digit phone number').regex(/^\d+$/, 'Digits only'),
@@ -62,150 +73,6 @@ const getDeviceId = () => {
   return deviceId;
 };
 
-interface SelectionModalProps {
-  isOpen: boolean;
-  type: 'state' | 'district' | 'class' | 'higherEducation' | null;
-  onClose: () => void;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
-  options: string[];
-  selectedValue: string;
-  onSelect: (value: string) => void;
-}
-
-const SelectionModal: React.FC<SelectionModalProps> = ({
-  isOpen,
-  type,
-  onClose,
-  searchQuery,
-  onSearchChange,
-  options,
-  selectedValue,
-  onSelect
-}) => {
-  if (!isOpen) return null;
-
-  const filteredOptions = options.filter(opt =>
-    opt.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose}></div>
-      <div className="relative w-full max-w-lg bg-white rounded-t-[32px] sm:rounded-[32px] h-[80vh] sm:h-auto sm:max-h-[70vh] flex flex-col overflow-hidden animate-slide-in-bottom sm:animate-fade-in">
-        <div className="p-6 border-b border-gray-100 shrink-0">
-          <div className="w-12 h-1 bg-gray-200 rounded-full mx-auto mb-4 sm:hidden"></div>
-          <h3 className="text-xl font-black text-gray-800 capitalize">Select {type}</h3>
-          <div className="mt-4 relative">
-            <span className="material-symbols-rounded absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">search</span>
-            <input
-              type="text"
-              placeholder={`Search ${type}...`}
-              className="w-full pl-12 pr-4 py-4 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-[#1A237E] text-sm"
-              value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              autoFocus
-            />
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto p-4 space-y-1 hide-scrollbar">
-          {filteredOptions.length > 0 ? (
-            filteredOptions.map((opt) => (
-              <button
-                key={opt}
-                onClick={() => onSelect(opt)}
-                className={`w-full px-6 py-4 rounded-2xl text-left text-sm font-bold transition-all ${selectedValue === opt
-                  ? 'bg-[#1A237E]/10 text-[#1A237E] border-2 border-[#1A237E]/20'
-                  : 'text-gray-600 hover:bg-gray-50 hover:pl-8'
-                  }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span>{opt}</span>
-                  {selectedValue === opt && (
-                    <span className="material-symbols-rounded text-lg">check_circle</span>
-                  )}
-                </div>
-              </button>
-            ))
-          ) : (
-            <div className="p-10 text-center">
-              <span className="material-symbols-rounded text-5xl text-gray-200">search_off</span>
-              <p className="text-gray-400 mt-2 font-bold">No results found</p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-interface ScrollPickerProps {
-  value: string;
-  options: { value: string; label: string }[];
-  onChange: (val: string) => void;
-  label: string;
-}
-
-const ScrollPicker: React.FC<ScrollPickerProps> = ({ value, options, onChange, label }) => {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const lastValueRef = useRef(value);
-
-  useEffect(() => {
-    // Only scroll programmatically if the value changed from outside (prop update)
-    if (value !== lastValueRef.current && scrollRef.current) {
-      const index = options.findIndex(opt => opt.value === value);
-      if (index !== -1) {
-        scrollRef.current.scrollTo({
-          top: index * 44,
-          behavior: 'smooth'
-        });
-        lastValueRef.current = value;
-      }
-    }
-  }, [value, options]);
-
-  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    const scrollTop = e.currentTarget.scrollTop;
-    const index = Math.round(scrollTop / 44);
-    const newValue = options[index]?.value;
-    
-    if (newValue && newValue !== value) {
-      lastValueRef.current = newValue;
-      onChange(newValue);
-    }
-  };
-
-  return (
-    <div className="relative group flex-1">
-      <label className="text-[10px] uppercase tracking-[0.15em] text-[#1A237E] font-black mb-2 block text-center opacity-70">{label}</label>
-      <div className="relative h-36 overflow-hidden bg-white rounded-3xl border border-gray-100 shadow-[inset_0_2px_10px_rgba(0,0,0,0.02)]">
-        {/* Selection Indicator */}
-        <div className="absolute top-1/2 left-0 right-0 h-11 -translate-y-1/2 bg-[#1A237E]/5 border-y border-[#1A237E]/10 pointer-events-none z-10 mx-2 rounded-xl"></div>
-
-        <div
-          ref={scrollRef}
-          onScroll={handleScroll}
-          className="h-full overflow-y-auto snap-y snap-mandatory hide-scrollbar flex flex-col items-center py-[50px]"
-        >
-          {options.map((opt, idx) => (
-            <div
-              key={idx}
-              className={`h-11 shrink-0 flex items-center justify-center snap-center px-4 w-full transition-all duration-300 cursor-pointer z-20 ${value === opt.value
-                ? 'text-[#1A237E] font-black text-lg scale-110'
-                : 'text-gray-400 text-sm font-bold opacity-60'
-                }`}
-            >
-              {opt.label}
-            </div>
-          ))}
-        </div>
-
-        <div className="absolute inset-x-0 top-0 h-14 bg-gradient-to-b from-white via-white/80 to-transparent pointer-events-none z-10"></div>
-        <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-white via-white/80 to-transparent pointer-events-none z-10"></div>
-      </div>
-    </div>
-  );
-};
 
 const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   const navigate = useNavigate();
@@ -427,6 +294,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   };
 
   const sendLoginOtp = async (data: PhoneFormData) => {
+    if (loading) return;
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/otp/send`, {
@@ -447,23 +315,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       setStep('otp');
       setResendTimer(30);
       setOtp(['', '', '', '', '', '']);
-      if (resData.otp) {
-        toast.success(
-          <div className="flex flex-col gap-2 p-1">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-rounded text-blue-600">key</span>
-              <span className="font-bold text-gray-800">Security Code Sent</span>
-            </div>
-            <div className="flex items-center justify-between bg-blue-50 px-4 py-2.5 rounded-xl border border-blue-100">
-              <span className="text-[10px] font-black text-blue-700 uppercase tracking-wider">Login OTP</span>
-              <span className="text-xl font-black text-blue-900 tracking-[0.3em] font-mono">{resData.otp}</span>
-            </div>
-          </div>,
-          { duration: 15000 }
-        );
-      } else {
-        toast.success('OTP sent successfully');
-      }
+      toast.success('OTP sent successfully');
     } catch (err: any) {
       toast.error(err.message);
     } finally {
@@ -472,6 +324,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   };
 
   const verifyOtpAndLogin = async () => {
+    if (loading) return;
     const otpValue = otp.join('');
     if (otpValue.length !== 6) {
       toast.error('Please enter the complete 6-digit OTP');
@@ -519,7 +372,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   };
 
   const resendSignupOtp = async () => {
-    if (resendTimer > 0) return;
+    if (resendTimer > 0 || loading) return;
     const phone = profileWatch('phone');
     if (phone && phone.length === 10) {
       setLoading(true);
@@ -556,6 +409,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
   const handlePasswordLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     if (!passwordFormData.loginId || !passwordFormData.password) {
       toast.error('Please enter both Login ID and Password');
       return;
@@ -599,6 +453,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
   const handleForgotStep1 = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     if (!resetPhone || resetPhone.length !== 10) {
       toast.error('Please enter a valid 10-digit phone number');
       return;
@@ -613,37 +468,22 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       });
       const data = await response.json();
       if (response.ok) {
-        if (data.otp) {
-          toast.success(
-            <div className="flex flex-col gap-2 p-1">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-rounded text-orange-600">lock_reset</span>
-                <span className="font-bold text-gray-800">Reset Link Ready</span>
-              </div>
-              <div className="flex items-center justify-between bg-orange-50 px-4 py-2.5 rounded-xl border border-orange-100">
-                <span className="text-[10px] font-black text-orange-700 uppercase tracking-wider">Reset OTP</span>
-                <span className="text-xl font-black text-orange-900 tracking-[0.3em] font-mono">{data.otp}</span>
-              </div>
-            </div>,
-            { duration: 15000 }
-          );
-        } else {
-          toast.success('Reset OTP sent!');
-        }
+        toast.success('Reset OTP sent!');
         setStep('reset-otp');
         setOtp(['', '', '', '', '', '']);
         setResendTimer(30);
       } else {
         toast.error(data.error || 'Failed to send OTP');
       }
-    } catch (err) {
-      toast.error('Failed to send OTP');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to send OTP');
     } finally {
       setLoading(false);
     }
   };
 
   const verifyResetOtp = async () => {
+    if (loading) return;
     try {
       setLoading(true);
       const otpStr = otp.join('');
@@ -723,163 +563,65 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   };
 
   const renderLoginStep = () => (
-    <div className="flex flex-col items-center justify-start w-full">
-      <div className="w-full p-6 sm:p-8 pb-10 sm:pb-8">
-        <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-[#1A237E]/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-rounded text-[#1A237E] text-2xl">lock_open</span>
-          </div>
-          <h2 className="text-xl font-bold text-gray-800">Welcome Back!</h2>
-          <p className="text-sm text-gray-500 mt-1">Login with Password</p>
-        </div>
-
-        <form onSubmit={handlePasswordLogin} className="space-y-5">
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1.5">User ID / Email / Mobile Number</label>
-            <input
-              type="text"
-              value={passwordFormData.loginId}
-              onChange={(e) => {
-                let val = e.target.value;
-                // If all digits (phone number), cap at 10
-                if (/^\d*$/.test(val) && val.length > 10) val = val.slice(0, 10);
-                setPasswordFormData({ ...passwordFormData, loginId: val });
-              }}
-              placeholder="Enter User ID, Email or Mobile"
-              className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#303F9F] focus:bg-white transition-all text-sm font-medium"
-            />
-          </div>
-          <div>
-            <div className="flex justify-between mb-1.5">
-              <label className="text-xs font-semibold text-gray-600">Password</label>
-              <button
-                type="button"
-                onClick={() => setStep('forgot-password')}
-                className="text-xs font-bold text-[#1A237E] hover:underline"
-              >
-                Forgot?
-              </button>
-            </div>
-            <div className="relative group/pass">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={passwordFormData.password}
-                onChange={(e) => setPasswordFormData({ ...passwordFormData, password: e.target.value })}
-                placeholder="••••••••"
-                className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#303F9F] focus:bg-white transition-all text-sm font-medium pr-12"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1A237E] transition-colors"
-                title={showPassword ? "Hide Password" : "Show Password"}
-              >
-                <span className="material-symbols-rounded text-xl">
-                  {showPassword ? 'visibility_off' : 'visibility'}
-                </span>
-              </button>
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full h-14 bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white rounded-xl font-black text-sm shadow-xl shadow-blue-900/20 disabled:opacity-50 hover:shadow-2xl transition-all active:scale-[0.98] flex items-center justify-center"
-          >
-            {loading ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : 'Login Now'}
-          </button>
-        </form>
-
-        <p className="text-center text-sm text-gray-500 mt-6 font-medium">
-          Don't have an account?{' '}
-          <button
-            type="button"
-            onClick={() => setStep('signup')}
-            className="text-[#1A237E] font-black hover:underline"
-          >
-            Sign Up
-          </button>
-        </p>
-      </div>
-    </div>
+    <LoginStep
+      loading={loading}
+      passwordFormData={passwordFormData}
+      setPasswordFormData={setPasswordFormData}
+      showPassword={showPassword}
+      setShowPassword={setShowPassword}
+      handlePasswordLogin={handlePasswordLogin}
+      onSignupClick={() => setStep('signup')}
+      onForgotPasswordClick={() => setStep('forgot-password')}
+    />
   );
 
   const renderForgotStep = () => (
-    <div className="flex flex-col items-center justify-center w-full min-h-[400px]">
-      <div className="w-full p-6 sm:p-8">
-        <button onClick={() => setStep('login')} className="flex items-center gap-1 text-[#1A237E] font-bold text-sm mb-6 group">
-          <span className="material-symbols-rounded text-lg transition-transform group-hover:-translate-x-1">arrow_back</span> Back to Login
-        </button>
-        <div className="text-center mb-8">
-          <div className="w-14 h-14 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-rounded text-orange-600 text-2xl">lock_reset</span>
-          </div>
-          <h2 className="text-xl font-bold text-gray-800">Forgot Password</h2>
-          <p className="text-sm text-gray-500 mt-1">Receive an OTP to reset your password</p>
-        </div>
-        <form onSubmit={handleForgotStep1} className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-xs font-black text-gray-400 uppercase tracking-widest pl-1">Mobile Number</label>
-            <div className="flex">
-              <div className="flex items-center px-4 bg-gray-100 border border-r-0 border-gray-200 rounded-l-2xl text-sm text-gray-700 font-bold">+91</div>
-              <input
-                type="tel"
-                value={resetPhone}
-                onChange={(e) => setResetPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                placeholder="10-digit number"
-                className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-r-2xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold"
-              />
-            </div>
-          </div>
-          <button type="submit" disabled={loading} className="w-full h-14 bg-[#111] text-white rounded-2xl font-black text-sm shadow-xl shadow-black/10 transition-all hover:bg-black active:scale-[0.98]">
-            {loading ? 'Sending...' : 'Send OTP'}
-          </button>
-        </form>
-      </div>
-    </div>
+    <ForgotStep
+      loading={loading}
+      resetPhone={resetPhone}
+      setResetPhone={setResetPhone}
+      handleForgotStep1={handleForgotStep1}
+      onBackToLogin={() => setStep('login')}
+    />
   );
 
   const renderResetOtpStep = () => (
     <div className="p-8">
-      <button onClick={() => setStep('forgot-password')} className="flex items-center gap-2 text-gray-400 font-bold text-[12px] mb-8 uppercase tracking-widest group">
-        <span className="material-symbols-rounded text-[18px] group-hover:-translate-x-1 transition-transform">arrow_back</span> Go Back
-      </button>
+      <AuthBackButton 
+        onClick={() => setStep('forgot-password')} 
+        label="Go Back" 
+        variant="gray" 
+        className="mb-8" 
+      />
       <div className="text-center mb-8">
         <h2 className="text-2xl font-black text-navy leading-none">Security Check</h2>
         <p className="text-[12px] text-gray-400 font-bold uppercase tracking-widest mt-2">Enter OTP sent to +91 {resetPhone}</p>
       </div>
       <div className="space-y-8">
-        <div className="flex justify-center gap-1.5 sm:gap-3">
-          {otp.map((digit, index) => (
-            <input
-              key={index}
-              ref={(el) => { otpRefs.current[index] = el; }}
-              type="text"
-              inputMode="numeric"
-              maxLength={1}
-              value={digit}
-              onChange={(e) => handleOtpChange(index, e.target.value)}
-              onKeyDown={(e) => handleOtpKeyDown(index, e)}
-              className={`w-10 sm:w-12 h-14 sm:h-16 text-center text-xl sm:text-2xl font-black border-2 rounded-xl sm:rounded-2xl focus:outline-none transition-all ${
-                digit 
-                  ? 'border-brandBlue bg-brandBlue/5 text-brandBlue shadow-[0_4px_12px_rgba(58,119,255,0.1)]' 
-                  : 'border-gray-200 bg-gray-50 focus:border-brandBlue focus:bg-white focus:shadow-[0_0_20px_rgba(58,119,255,0.15)] text-gray-400'
-              }`}
-            />
-          ))}
-        </div>
-        <button
+        <OtpInputGrid
+          otp={otp}
+          otpRefs={otpRefs}
+          onChange={handleOtpChange}
+          onKeyDown={handleOtpKeyDown}
+          variant="brandBlue"
+        />
+        <OtpHelperText />
+
+        <AuthSubmitButton
           onClick={verifyResetOtp}
-          disabled={loading || otp.join('').length !== 6}
-          className="w-full h-14 bg-brandBlue text-white rounded-2xl font-black text-[13px] uppercase tracking-widest shadow-xl shadow-brandBlue/20 active:scale-[0.98] transition-all disabled:opacity-50"
+          loading={loading}
+          disabled={otp.join('').length !== 6}
+          loadingText="Verifying..."
+          type="button"
+          className="w-full h-14 bg-brandBlue text-white rounded-2xl font-black text-[13px] uppercase tracking-widest shadow-xl shadow-brandBlue/20"
         >
-          {loading ? 'Verifying...' : 'Verify OTP'}
-        </button>
+          Verify OTP
+        </AuthSubmitButton>
 
         <div className="text-center">
           {resendTimer > 0 ? (
             <p className="text-[12px] font-bold text-gray-400 uppercase tracking-widest">
-              Resend OTP in <span className="text-brandBlue">{resendTimer}s</span>
+              Didn't receive OTP? Resend in <span className="text-brandBlue">{resendTimer}s</span>
             </p>
           ) : (
             <button
@@ -888,7 +630,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
               disabled={loading}
               className="text-[12px] font-black text-brandBlue uppercase tracking-widest hover:underline disabled:opacity-50"
             >
-              Resend OTP
+              Resend OTP Now
             </button>
           )}
         </div>
@@ -897,106 +639,54 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   );
 
   const renderNewPasswordStep = () => (
-    <div className="p-8">
-      <div className="text-center mb-8">
-        <h2 className="text-2xl font-black text-navy leading-none">New Password</h2>
-        <p className="text-[12px] text-gray-400 font-bold uppercase tracking-widest mt-2">Create a strong password</p>
-      </div>
-      <form onSubmit={resetPasswordSubmit} className="space-y-6">
-        <div className="space-y-2">
-          <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest pl-1">New Password</label>
-          <div className="relative">
-            <input
-              type={showPassword ? 'text' : 'password'}
-              value={newPasswordData.password}
-              onChange={(e) => setNewPasswordData({ ...newPasswordData, password: e.target.value })}
-              placeholder="••••••••"
-              className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold pr-12"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1A237E] transition-colors"
-            >
-              <span className="material-symbols-rounded text-xl">
-                {showPassword ? 'visibility_off' : 'visibility'}
-              </span>
-            </button>
-          </div>
-        </div>
-        <div className="space-y-2">
-          <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest pl-1">Confirm Password</label>
-          <div className="relative">
-            <input
-              type={showConfirmPassword ? 'text' : 'password'}
-              value={newPasswordData.confirm}
-              onChange={(e) => setNewPasswordData({ ...newPasswordData, confirm: e.target.value })}
-              placeholder="••••••••"
-              className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold pr-12"
-            />
-            <button
-              type="button"
-              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1A237E] transition-colors"
-            >
-              <span className="material-symbols-rounded text-xl">
-                {showConfirmPassword ? 'visibility_off' : 'visibility'}
-              </span>
-            </button>
-          </div>
-        </div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full h-14 bg-brandBlue text-white rounded-2xl font-black text-[13px] uppercase tracking-widest shadow-xl shadow-brandBlue/20 active:scale-[0.98] transition-all"
-        >
-          {loading ? 'Saving...' : 'Reset Password'}
-        </button>
-      </form>
-    </div>
+    <NewPasswordStep
+      loading={loading}
+      newPasswordData={newPasswordData}
+      setNewPasswordData={setNewPasswordData}
+      resetPasswordSubmit={resetPasswordSubmit}
+      showPassword={showPassword}
+      setShowPassword={setShowPassword}
+      showConfirmPassword={showConfirmPassword}
+      setShowConfirmPassword={setShowConfirmPassword}
+    />
   );
 
   const renderSignupOtpStep = () => (
     <div className="p-8">
-      <button onClick={() => setStep('signup')} className="flex items-center gap-2 text-gray-400 font-bold text-[12px] mb-8 uppercase tracking-widest group">
-        <span className="material-symbols-rounded text-[18px] group-hover:-translate-x-1 transition-transform">arrow_back</span> Go Back
-      </button>
+      <AuthBackButton 
+        onClick={() => setStep('signup')} 
+        label="Go Back" 
+        variant="gray" 
+        className="mb-8" 
+      />
       <div className="text-center mb-8">
         <h2 className="text-2xl font-black text-navy leading-none">OTP Verification</h2>
         <p className="text-[12px] text-gray-400 font-bold uppercase tracking-widest mt-2">Sent to +91 {currentPhone}</p>
       </div>
       <div className="space-y-8">
-        <div className="flex justify-center gap-1.5 sm:gap-3">
-          {otp.map((digit, index) => (
-            <input
-              key={index}
-              ref={(el) => { otpRefs.current[index] = el; }}
-              type="text"
-              inputMode="numeric"
-              maxLength={1}
-              value={digit}
-              onChange={(e) => handleOtpChange(index, e.target.value)}
-              onKeyDown={(e) => handleOtpKeyDown(index, e)}
-              className={`w-10 sm:w-12 h-14 sm:h-16 text-center text-xl sm:text-2xl font-black border-2 rounded-xl sm:rounded-2xl focus:outline-none transition-all ${
-                digit 
-                  ? 'border-[#1A237E] bg-[#1A237E]/5 text-[#1A237E] shadow-[0_4px_12px_rgba(26,35,126,0.1)]' 
-                  : 'border-gray-200 bg-gray-50 focus:border-[#1A237E] focus:bg-white focus:shadow-[0_0_20px_rgba(26,35,126,0.15)] text-gray-400'
-              }`}
-            />
-          ))}
-        </div>
-        <button
+        <OtpInputGrid
+          otp={otp}
+          otpRefs={otpRefs}
+          onChange={handleOtpChange}
+          onKeyDown={handleOtpKeyDown}
+        />
+        <OtpHelperText />
+
+        <AuthSubmitButton
           onClick={verifySignupOtp}
-          disabled={loading || otp.join('').length !== 6}
-          className="w-full h-14 bg-[#1A237E] text-white rounded-2xl font-black text-[13px] uppercase tracking-widest shadow-xl active:scale-[0.98] transition-all disabled:opacity-50"
+          loading={loading}
+          disabled={otp.join('').length !== 6}
+          loadingText="Verifying..."
+          type="button"
+          className="w-full h-14 bg-[#1A237E] text-white rounded-2xl font-black text-[13px] uppercase tracking-widest shadow-xl"
         >
-          {loading ? 'Verifying...' : 'Verify OTP'}
-        </button>
+          Verify OTP
+        </AuthSubmitButton>
 
         <div className="text-center">
           {resendTimer > 0 ? (
             <p className="text-[12px] font-bold text-gray-400 uppercase tracking-widest">
-              Resend OTP in <span className="text-[#1A237E]">{resendTimer}s</span>
+              Didn't receive OTP? Resend in <span className="text-[#1A237E]">{resendTimer}s</span>
             </p>
           ) : (
             <button
@@ -1005,7 +695,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
               disabled={loading}
               className="text-[12px] font-black text-[#1A237E] uppercase tracking-widest hover:underline disabled:opacity-50"
             >
-              Resend OTP
+              Resend OTP Now
             </button>
           )}
         </div>
@@ -1016,13 +706,11 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   const renderOtpStep = () => (
     <div className="flex flex-col items-center justify-start w-full">
       <div className="w-full p-6 sm:p-8 pb-10 sm:pb-8">
-        <button
-          type="button"
-          onClick={() => setStep('login')}
-          className="flex items-center gap-1 text-[#1A237E] font-semibold text-sm mb-4 group hover:text-[#303F9F]"
-        >
-          <span className="material-symbols-rounded text-lg">arrow_back</span> <span>Back</span>
-        </button>
+        <AuthBackButton 
+          onClick={() => setStep('login')} 
+          label="Back" 
+          className="mb-4 font-semibold hover:text-[#303F9F]" 
+        />
 
         <div className="text-center mb-8">
           <div className="w-14 h-14 bg-[#1A237E]/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1036,39 +724,29 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
         </div>
 
         <div className="space-y-8">
-          <div className="flex justify-center gap-1.5 sm:gap-2.5">
-            {otp.map((digit, index) => (
-              <input
-                key={index}
-                ref={(el) => { otpRefs.current[index] = el; }}
-                type="text"
-                inputMode="numeric"
-                maxLength={1}
-                value={digit}
-                onChange={(e) => handleOtpChange(index, e.target.value)}
-                onKeyDown={(e) => handleOtpKeyDown(index, e)}
-                className={`w-10 sm:w-12 h-14 sm:h-16 text-center text-xl sm:text-2xl font-black border-2 rounded-xl sm:rounded-2xl focus:outline-none transition-all ${
-                  digit 
-                    ? 'border-[#1A237E] bg-[#1A237E]/5 text-[#1A237E] shadow-[0_4px_12px_rgba(26,35,126,0.1)]' 
-                    : 'border-gray-200 bg-gray-50 focus:border-[#1A237E] focus:bg-white focus:shadow-[0_0_20px_rgba(26,35,126,0.15)] text-gray-400'
-                }`}
-              />
-            ))}
-          </div>
+          <OtpInputGrid
+            otp={otp}
+            otpRefs={otpRefs}
+            onChange={handleOtpChange}
+            onKeyDown={handleOtpKeyDown}
+          />
+          <OtpHelperText />
 
-          <button
+          <AuthSubmitButton
             type="button"
             onClick={verifyOtpAndLogin}
-            disabled={loading || otp.join('').length !== 6}
-            className="w-full bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white py-3.5 rounded-xl font-bold text-sm shadow-lg disabled:opacity-50 hover:shadow-xl transition-all"
+            loading={loading}
+            disabled={otp.join('').length !== 6}
+            loadingText="Verifying OTP..."
+            className="w-full bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white py-3.5 rounded-xl font-bold text-sm shadow-lg hover:shadow-xl"
           >
-            {loading ? 'Verifying OTP...' : 'Verify & Login'}
-          </button>
+            Verify & Login
+          </AuthSubmitButton>
 
           <div className="text-center">
             {resendTimer > 0 ? (
               <p className="text-[12px] font-bold text-gray-400 uppercase tracking-widest">
-                Resend OTP in <span className="text-[#1A237E] font-black">{resendTimer}s</span>
+                Didn't receive OTP? Resend in <span className="text-[#1A237E] font-black">{resendTimer}s</span>
               </p>
             ) : (
               <button
@@ -1077,7 +755,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
                 disabled={loading}
                 className="text-[12px] font-black text-[#1A237E] uppercase tracking-widest hover:underline disabled:opacity-50"
               >
-                Resend OTP
+                Resend OTP Now
               </button>
             )}
           </div>
@@ -1089,13 +767,11 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   const renderSignupStep = () => (
     <div className="flex flex-col items-center justify-start w-full">
       <div className="w-full p-6 sm:p-8 pb-10 sm:pb-8">
-        <button
-          type="button"
-          onClick={() => setStep('login')}
-          className="flex items-center gap-1 text-[#1A237E] font-semibold text-sm mb-4 group hover:text-[#303F9F]"
-        >
-          <span className="material-symbols-rounded text-lg">arrow_back</span> <span>Back</span>
-        </button>
+        <AuthBackButton 
+          onClick={() => setStep('login')} 
+          label="Back" 
+          className="mb-4 font-semibold hover:text-[#303F9F]" 
+        />
 
         <div className="text-center mb-6">
           <div className="w-14 h-14 bg-[#1A237E]/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1106,6 +782,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
         </div>
 
         <form onSubmit={handleLoginSubmit(async (data) => {
+          if (loading) return;
           setLoading(true);
           try {
             // Directly send registration OTP (backend already checks if user exists)
@@ -1117,23 +794,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
             const otpData = await otpRes.json();
             if (otpRes.ok) {
-              if (otpData.otp) {
-                toast.success(
-                  <div className="flex flex-col gap-2 p-1">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-rounded text-[#1A237E]">how_to_reg</span>
-                      <span className="font-bold text-gray-800">Registration OTP Sent!</span>
-                    </div>
-                    <div className="flex items-center justify-between bg-[#1A237E]/5 px-4 py-2.5 rounded-xl border border-[#1A237E]/10">
-                      <span className="text-[10px] font-black text-[#1A237E] uppercase tracking-wider">Your OTP</span>
-                      <span className="text-2xl font-black text-[#1A237E] tracking-[0.2em] font-mono">{otpData.otp}</span>
-                    </div>
-                  </div>,
-                  { duration: 15000 }
-                );
-              } else {
-                toast.success('Registration OTP sent!');
-              }
+              toast.success('Registration OTP sent!');
               setProfileValue('phone', data.phone);
               setStep('signup-otp');
               setResendTimer(60);
@@ -1174,13 +835,13 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
             )}
           </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white py-3.5 rounded-xl font-bold text-sm shadow-lg disabled:opacity-50 hover:shadow-xl transition-all"
+          <AuthSubmitButton
+            loading={loading}
+            loadingText="Sending OTP..."
+            className="w-full bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white py-3.5 rounded-xl font-bold text-sm shadow-lg hover:shadow-xl h-14"
           >
             Continue
-          </button>
+          </AuthSubmitButton>
 
           <p className="text-center text-sm text-gray-500 mt-3">
             Already have an account?{' '}
@@ -1201,13 +862,10 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
     <div className="flex flex-col h-full w-full overflow-hidden">
       <div className="px-6 pt-5 flex-shrink-0 bg-white relative z-20">
         <div className="flex items-center gap-4">
-          <button
-            type="button"
-            onClick={() => setStep('signup')}
-            className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-50 text-[#1A237E] hover:bg-gray-100 transition-colors"
-          >
-            <span className="material-symbols-rounded text-xl">arrow_back</span>
-          </button>
+          <AuthBackButton 
+            onClick={() => setStep('signup')} 
+            variant="circle" 
+          />
           <div>
             <h3 className="text-base font-black text-navy leading-none">Complete Profile</h3>
             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Final Step</p>
@@ -1457,50 +1115,29 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
         </div>
 
         <div className="px-6 py-4 sm:px-8 border-t border-gray-50">
-          <button
-            type="submit"
-            className="w-full bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white py-4 rounded-xl font-black text-sm shadow-lg hover:shadow-xl transition-all active:scale-[0.98]"
+          <AuthSubmitButton
+            loading={loading}
+            className="w-full bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white py-4 rounded-xl font-black text-sm shadow-lg hover:shadow-xl"
           >
             Save & Continue
-          </button>
+          </AuthSubmitButton>
         </div>
       </form>
     </div>
   );
 
   return (
-    <div className="max-w-md mx-auto h-screen bg-surface-100 flex flex-col relative overflow-hidden shadow-2xl">
-      {/* Background elements */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#1A237E]/5 to-[#303F9F]/10 pointer-events-none"></div>
-      <div
-        className="absolute top-0 w-full h-[32vh] min-h-[260px] bg-gradient-to-b from-[#1A237E] to-[#283593] shadow-lg z-0"
-        style={{ borderBottomLeftRadius: '30% 10%', borderBottomRightRadius: '30% 10%' }}
-      ></div>
-
-      {/* Fixed Header Section */}
-      <div className="relative z-20 pt-6 sm:pt-10 px-5 flex flex-col items-center flex-shrink-0">
-        <div className="mb-4 sm:mb-6 flex flex-col items-center">
-          <img src="/attach-assist/alonelogo_1770810181717.jpg" alt="Aone Target" className="w-[48px] h-[48px] sm:w-[64px] sm:h-[64px] object-contain rounded-2xl shadow-lg border-4 border-white/20 bg-white mb-2" />
-          <h1 className="text-[20px] font-black text-white drop-shadow-md tracking-tight leading-none text-center">Aone Target</h1>
-          <p className="text-white/80 text-[9px] font-bold tracking-widest mt-1 uppercase">Academic Excellence</p>
-        </div>
-      </div>
-
-      {/* Main Form Container */}
-      <div className="relative z-10 flex-1 px-5 pb-4 sm:pb-8 overflow-hidden">
-        <div className="w-full h-full bg-white shadow-2xl rounded-[32px] border border-gray-100 overflow-hidden flex flex-col">
-          <div className="flex-1 overflow-y-auto relative flex flex-col hide-scrollbar">
-            {step === 'login' && renderLoginStep()}
-            {step === 'otp' && renderOtpStep()}
-            {step === 'signup' && renderSignupStep()}
-            {step === 'profile' && renderProfileStep()}
-            {step === 'forgot-password' && renderForgotStep()}
-            {step === 'reset-otp' && renderResetOtpStep()}
-            {step === 'new-password' && renderNewPasswordStep()}
-            {step === 'signup-otp' && renderSignupOtpStep()}
-          </div>
-        </div>
-      </div>
+    <>
+      <AuthLayout>
+        {step === 'login' && renderLoginStep()}
+        {step === 'otp' && renderOtpStep()}
+        {step === 'signup' && renderSignupStep()}
+        {step === 'profile' && renderProfileStep()}
+        {step === 'forgot-password' && renderForgotStep()}
+        {step === 'reset-otp' && renderResetOtpStep()}
+        {step === 'new-password' && renderNewPasswordStep()}
+        {step === 'signup-otp' && renderSignupOtpStep()}
+      </AuthLayout>
       <SelectionModal
         isOpen={selectionModal.isOpen}
         type={selectionModal.type}
@@ -1518,7 +1155,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
         selectedValue={selectionModal.type === 'state' ? selectedState : selectionModal.type === 'district' ? profileWatch('district') : selectionModal.type === 'higherEducation' ? profileWatch('higherEducation') : profileWatch('class')}
         onSelect={handleSelection}
       />
-    </div>
+    </>
   );
 };
 

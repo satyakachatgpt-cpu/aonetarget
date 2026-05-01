@@ -1,4 +1,4 @@
-import { db } from '../config/db.js';
+import { db, getDb } from '../config/db.js';
 import mongoose from 'mongoose';
 import Folder from '../models/Folder.js';
 import { findCourse, getRelatedCourseIds, syncDemoVideoWithFreeContent } from '../services/course.service.js';
@@ -352,22 +352,26 @@ export const deleteFolder = async (req, res) => {
     // Local helper to normalize an ID to a plain string
     const toStr = (id) => (id ? id.toString() : null);
 
-    // Recursive function to find all nested folder IDs (as strings)
-    const getAllNestedFolderIds = async (id) => {
-      let ids = [toStr(id)].filter(Boolean);
+    // Recursive function to find all nested folder IDs (as strings) with cycle protection
+    const getAllNestedFolderIds = async (id, visited = new Set()) => {
+      const idStr = id ? id.toString() : null;
+      if (!idStr || visited.has(idStr)) return [];
+      visited.add(idStr);
+
+      let ids = [idStr];
       const subFolders = await Folder.find({
         $or: [
           { parentId: id },
-          { parentId: toStr(id) },
+          { parentId: idStr },
           ...(ObjectId.isValid(id) ? [{ parentId: new ObjectId(id) }] : [])
         ],
         courseId: courseId
       }).lean();
 
       for (const sub of subFolders) {
-        const subId = toStr(sub.id || sub._id);
-        if (subId) {
-          const nestedIds = await getAllNestedFolderIds(subId);
+        const subId = sub.id || sub._id?.toString();
+        if (subId && !visited.has(subId)) {
+          const nestedIds = await getAllNestedFolderIds(subId, visited);
           ids = [...ids, ...nestedIds];
         }
       }
@@ -381,6 +385,7 @@ export const deleteFolder = async (req, res) => {
 
     // Filter for all folders to delete (match by custom string id OR ObjectId _id)
     const folderFilter = {
+      courseId: courseId,
       $or: [
         { id: { $in: allFolderStringIds } },
         { _id: { $in: allFolderObjectIds } }
@@ -389,6 +394,7 @@ export const deleteFolder = async (req, res) => {
 
     // Filter for all content within those folders
     const contentFilter = {
+      courseId: courseId,
       $or: [
         { folderId: { $in: allFolderStringIds } },
         { folderId: { $in: allFolderObjectIds } }
@@ -501,6 +507,50 @@ export const deletePackage = async (req, res) => {
     res.status(500).json({ error: 'Failed to delete package' });
   }
 };
+
+export const reorderPackages = async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds)) {
+      return res.status(400).json({ error: 'orderedIds must be an array' });
+    }
+
+    // Phase 2 Cleanup: Remove null/empty IDs
+    const cleanIds = orderedIds.filter(id => id && typeof id === 'string');
+    if (cleanIds.length === 0) {
+      return res.status(400).json({ error: 'No valid IDs provided for reordering' });
+    }
+
+    const database = getDb();
+    const bulkPackages = [];
+    const bulkCourses = [];
+
+    for (let i = 0; i < cleanIds.length; i++) {
+      const id = cleanIds[i];
+      const sortingOrder = i + 1;
+      
+      const or = [{ id: id }];
+      if (ObjectId.isValid(id)) {
+        or.push({ _id: new ObjectId(id) });
+      }
+      
+      const filter = { $or: or };
+      const update = { $set: { 'settings.sortingOrder': sortingOrder } };
+
+      bulkPackages.push({ updateOne: { filter, update } });
+      bulkCourses.push({ updateOne: { filter, update } });
+    }
+
+    if (bulkPackages.length > 0) await database.collection('packages').bulkWrite(bulkPackages);
+    if (bulkCourses.length > 0) await database.collection('courses').bulkWrite(bulkCourses);
+
+    res.json({ success: true, message: 'Order updated successfully' });
+  } catch (error) {
+    console.error('Reorder error:', error);
+    res.status(500).json({ error: 'Failed to reorder' });
+  }
+};
+
 
 // --- Subcourses ---
 

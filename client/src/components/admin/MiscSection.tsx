@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { 
   coursesAPI, subjectsAPI, topicsAPI, subcoursesAPI, 
-  instructionsAPI, examDocumentsAPI, newsAPI, notificationsAPI, getAdminHeaders
+  instructionsAPI, newsAPI, notificationsAPI, getAdminHeaders
 } from '../../services/apiClient';
 
 interface Props {
   showToast: (m: string, type?: 'success' | 'error') => void;
 }
 
-type ModalType = 'courses' | 'subcourses' | 'subjects' | 'topics' | 'instructions' | 'examdocs' | 'news' | 'notifications' | null;
+type ModalType = 'courses' | 'subcourses' | 'subjects' | 'topics' | 'instructions' | 'news' | 'notifications' | null;
 
 interface Student {
   id: string;
@@ -28,14 +28,14 @@ const MiscSection: React.FC<Props> = ({ showToast }) => {
   const [loading, setLoading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
-  const [counts, setCounts] = useState({ courses: 0, subcourses: 0, subjects: 0, topics: 0, instructions: 0, examdocs: 0, news: 0, notifications: 0 });
+  const [counts, setCounts] = useState({ courses: 0, subcourses: 0, subjects: 0, topics: 0, instructions: 0, news: 0, notifications: 0 });
   
   const [students, setStudents] = useState<Student[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<string[]>([]);
 
   const [instructionForm, setInstructionForm] = useState({ title: '', content: '', order: 1, isActive: true, category: 'general' });
-  const [examDocForm, setExamDocForm] = useState({ title: '', description: '', fileUrl: '', category: 'syllabus', fileType: 'pdf' });
+
   const [newsForm, setNewsForm] = useState({ title: '', message: '', imageUrl: '', showAsModal: true, priority: 'normal', expiryDate: '' });
   const [notificationForm, setNotificationForm] = useState({ 
     title: '', message: '', targetType: 'all' as 'all' | 'selected' | 'course', 
@@ -63,13 +63,12 @@ const MiscSection: React.FC<Props> = ({ showToast }) => {
 
   const loadCounts = async () => {
     try {
-      const [courses, subjects, topics, subcourses, instructions, examdocs, news, notifications] = await Promise.all([
+      const [courses, subjects, topics, subcourses, instructions, news, notifications] = await Promise.all([
         coursesAPI.getAll().catch(() => []),
         subjectsAPI.getAll().catch(() => []),
         topicsAPI.getAll().catch(() => []),
         subcoursesAPI.getAll().catch(() => []),
         instructionsAPI.getAll().catch(() => []),
-        examDocumentsAPI.getAll().catch(() => []),
         newsAPI.getAll().catch(() => []),
         notificationsAPI.getAll().catch(() => [])
       ]);
@@ -79,7 +78,6 @@ const MiscSection: React.FC<Props> = ({ showToast }) => {
         subjects: subjects.length,
         topics: topics.length,
         instructions: instructions.length,
-        examdocs: examdocs.length,
         news: news.length,
         notifications: notifications.length
       });
@@ -94,7 +92,7 @@ const MiscSection: React.FC<Props> = ({ showToast }) => {
     { name: 'Subjects', key: 'subjects', icon: 'science', color: 'bg-purple-600', count: counts.subjects, desc: 'Subject management' },
     { name: 'Topics', key: 'topics', icon: 'list_alt', color: 'bg-violet-600', count: counts.topics, desc: 'Topic organization' },
     { name: 'Instructions', key: 'instructions', icon: 'help_outline', color: 'bg-pink-600', count: counts.instructions, desc: 'Test/exam instructions' },
-    { name: 'Exam Documents', key: 'examdocs', icon: 'folder_shared', color: 'bg-orange-600', count: counts.examdocs, desc: 'Syllabus, papers, etc.' },
+
     { name: 'Global News', key: 'news', icon: 'campaign', color: 'bg-teal-600', count: counts.news, desc: 'App announcements' },
     { name: 'Push Notify', key: 'notifications', icon: 'notifications_active', color: 'bg-amber-600', count: counts.notifications, desc: 'Send notifications' },
   ];
@@ -106,7 +104,7 @@ const MiscSection: React.FC<Props> = ({ showToast }) => {
       case 'subjects': return subjectsAPI;
       case 'topics': return topicsAPI;
       case 'instructions': return instructionsAPI;
-      case 'examdocs': return examDocumentsAPI;
+
       case 'news': return newsAPI;
       case 'notifications': return notificationsAPI;
       default: return null;
@@ -134,7 +132,7 @@ const MiscSection: React.FC<Props> = ({ showToast }) => {
 
   const resetForms = () => {
     setInstructionForm({ title: '', content: '', order: 1, isActive: true, category: 'general' });
-    setExamDocForm({ title: '', description: '', fileUrl: '', category: 'syllabus', fileType: 'pdf' });
+
     setNewsForm({ title: '', message: '', imageUrl: '', showAsModal: true, priority: 'normal', expiryDate: '' });
     setNotificationForm({ title: '', message: '', targetType: 'all', selectedStudentIds: [], courseId: '' });
     setGenericForm({ name: '', description: '' });
@@ -160,25 +158,7 @@ const MiscSection: React.FC<Props> = ({ showToast }) => {
     }
   };
 
-  const handleCreateExamDoc = async () => {
-    if (!examDocForm.title || !examDocForm.fileUrl) {
-      showToast('Please fill title and file URL', 'error');
-      return;
-    }
-    try {
-      await examDocumentsAPI.create({
-        id: `examdoc_${Date.now()}`,
-        ...examDocForm,
-        downloads: 0,
-        createdAt: new Date().toISOString()
-      });
-      showToast('Document uploaded!');
-      openModal('examdocs');
-      loadCounts();
-    } catch (error) {
-      showToast('Failed to upload document', 'error');
-    }
-  };
+
 
   const handleCreateNews = async () => {
     if (!newsForm.title || !newsForm.message) {
@@ -357,73 +337,7 @@ const MiscSection: React.FC<Props> = ({ showToast }) => {
     </div>
   );
 
-  const renderExamDocsForm = () => (
-    <div className="space-y-4 mb-6 p-5 bg-gradient-to-r from-orange-50 to-amber-50 rounded-2xl border border-orange-100">
-      <p className="text-xs font-black text-orange-600 uppercase tracking-wider flex items-center gap-2">
-        <span className="material-icons-outlined text-sm">upload_file</span>
-        Upload Document
-      </p>
-      <input
-        type="text"
-        placeholder="Document Title *"
-        value={examDocForm.title}
-        onChange={(e) => setExamDocForm({ ...examDocForm, title: e.target.value })}
-        className="w-full bg-white border border-gray-200 p-3 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-orange-300"
-      />
-      <textarea
-        placeholder="Description"
-        value={examDocForm.description}
-        onChange={(e) => setExamDocForm({ ...examDocForm, description: e.target.value })}
-        rows={2}
-        className="w-full bg-white border border-gray-200 p-3 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-orange-300"
-      />
-      <div className="flex items-center justify-between">
-        <label className="text-[11px] font-bold text-gray-500">File URL (Google Drive, Dropbox link) *</label>
-        <span className="text-[10px] font-bold text-orange-500 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-100 uppercase tracking-widest">PDF Preferred</span>
-      </div>
-      <input
-        type="url"
-        placeholder="https://drive.google.com/..."
-        value={examDocForm.fileUrl}
-        onChange={(e) => setExamDocForm({ ...examDocForm, fileUrl: e.target.value })}
-        className="w-full bg-white border border-gray-200 p-3 rounded-xl text-sm font-semibold outline-none focus:ring-2 focus:ring-orange-300"
-      />
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-xs font-bold text-gray-500 mb-1">Category</label>
-          <select
-            value={examDocForm.category}
-            onChange={(e) => setExamDocForm({ ...examDocForm, category: e.target.value })}
-            className="w-full bg-white border border-gray-200 p-3 rounded-xl text-sm font-semibold outline-none"
-          >
-            <option value="syllabus">Syllabus</option>
-            <option value="previous_paper">Previous Year Paper</option>
-            <option value="sample_paper">Sample Paper</option>
-            <option value="notes">Study Notes</option>
-            <option value="formula">Formula Sheet</option>
-            <option value="other">Other</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-bold text-gray-500 mb-1">File Type</label>
-          <select
-            value={examDocForm.fileType}
-            onChange={(e) => setExamDocForm({ ...examDocForm, fileType: e.target.value })}
-            className="w-full bg-white border border-gray-200 p-3 rounded-xl text-sm font-semibold outline-none"
-          >
-            <option value="pdf">PDF</option>
-            <option value="doc">Word Document</option>
-            <option value="image">Image</option>
-            <option value="zip">ZIP Archive</option>
-          </select>
-        </div>
-      </div>
-      <button onClick={handleCreateExamDoc} className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white py-3 rounded-xl font-bold text-sm hover:opacity-90 transition-opacity flex items-center justify-center gap-2">
-        <span className="material-icons-outlined text-sm">cloud_upload</span>
-        Upload Document
-      </button>
-    </div>
-  );
+
 
   const renderNewsForm = () => (
     <div className="space-y-4 mb-6 p-5 bg-gradient-to-r from-teal-50 to-cyan-50 rounded-2xl border border-teal-100">
@@ -813,7 +727,6 @@ const MiscSection: React.FC<Props> = ({ showToast }) => {
 
             <div className="flex-1 overflow-y-auto p-6">
               {activeModal === 'instructions' && renderInstructionsForm()}
-              {activeModal === 'examdocs' && renderExamDocsForm()}
               {activeModal === 'news' && renderNewsForm()}
               {activeModal === 'notifications' && renderNotificationsForm()}
               {['courses', 'subcourses', 'subjects', 'topics'].includes(activeModal) && renderGenericForm()}

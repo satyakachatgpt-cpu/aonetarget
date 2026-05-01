@@ -14,18 +14,22 @@ const QuestionEditorList: React.FC<QuestionEditorListProps> = ({
   onEditQuestion,
   onDeleteQuestion,
 }) => {
+  const renderedQuestions = React.useMemo(() => {
+    return (questions || []).map((q, idx) => (
+      <QuestionEditorCard
+        key={q._id || q.id || idx}
+        index={idx}
+        question={q}
+        renderQuestionText={renderQuestionText}
+        onEdit={onEditQuestion}
+        onDelete={onDeleteQuestion}
+      />
+    ));
+  }, [questions, renderQuestionText, onEditQuestion, onDeleteQuestion]);
+
   return (
     <div className="space-y-6">
-      {(questions || []).map((q, idx) => (
-        <QuestionEditorCard
-          key={idx}
-          index={idx}
-          question={q}
-          renderQuestionText={renderQuestionText}
-          onEdit={onEditQuestion}
-          onDelete={onDeleteQuestion}
-        />
-      ))}
+      {renderedQuestions}
       {questions.length === 0 && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-20 text-center animate-in fade-in zoom-in-95 duration-500">
           <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
@@ -45,4 +49,4 @@ const QuestionEditorList: React.FC<QuestionEditorListProps> = ({
   );
 };
 
-export default QuestionEditorList;
+export default React.memo(QuestionEditorList);

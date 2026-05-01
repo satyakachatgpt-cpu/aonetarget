@@ -2,14 +2,15 @@ import React, { useState, useRef, useEffect, useContext } from 'react';
 import { couponsAPI, coursesAPI, categoriesAPI, testSeriesAPI, pdfsAPI, packagesAPI, uploadAPI, subcategoriesAPI, subjectsAPI } from '../../services/apiClient';
 import RichTextEditor from '../shared/RichTextEditor';
 import { AdminUIContext } from '../../context/AdminUIContext';
-import { getImageUrl, getVideoUrl, extractYouTubeId, toYouTubeEmbed } from '../../lib/utils';
+import { getImageUrl, getVideoUrl, extractYouTubeId, toYouTubeEmbed, validateImage } from '../../lib/utils';
 
 interface Props {
     onClose: () => void;
     courseData?: any;
+    showToast?: (msg: string, type?: 'success' | 'error') => void;
 }
 
-const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
+const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast }) => {
     const isEditMode = !!courseData && !courseData.isDuplicate;
     const [activeStep, setActiveStep] = useState(1);
     const { setSidebarHidden } = useContext(AdminUIContext);
@@ -227,9 +228,26 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
+            const result = await validateImage(file, {
+                minWidth: 680,
+                minHeight: 400,
+                aspectRatio: 1.7,
+                tolerance: 0.12,
+                label: 'Course Cover'
+            });
+
+            if (!result.valid) {
+                if (showToast) {
+                    showToast(result.message || 'Invalid image', 'error');
+                } else {
+                    alert(result.message);
+                }
+                if (imageInputRef.current) imageInputRef.current.value = '';
+                return;
+            }
+
             // Show a local object URL immediately as preview
-            const localUrl = URL.createObjectURL(file);
-            setCoverImage(localUrl);
+            setCoverImage(URL.createObjectURL(file));
             setIsUploadingImage(true);
             setUploadProgress(0);
             try {
@@ -237,7 +255,12 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                 setCoverImage(data.url); // Replace local URL with server URL
             } catch (error: any) {
                 console.error('Image upload failed:', error);
-                alert(`Image upload failed: ${error.message || 'Check that the server is running.'}`);
+                const errorMsg = `Image upload failed: ${error.message || 'Check connection.'}`;
+                if (showToast) {
+                    showToast(errorMsg, 'error');
+                } else {
+                    alert(errorMsg);
+                }
                 setCoverImage(null); // Reset on failure
             } finally {
                 setIsUploadingImage(false);
@@ -596,6 +619,9 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData }) => {
                                                     <span className="material-symbols-outlined text-gray-300 text-[32px] mb-2">image</span>
                                                     <p className="text-[13px] font-medium text-gray-500">Upload Image</p>
                                                     <p className="text-[11px] text-gray-400 text-center">Click or Drag & Drop your<br/>file here.</p>
+                                                    <div className="mt-2 px-2 py-0.5 bg-blue-50 border border-blue-100 rounded-full">
+                                                        <p className="text-[9px] font-bold text-blue-600 uppercase tracking-tight">Recommended: 680x400 (17:10 ratio)</p>
+                                                    </div>
                                                 </>
                                             )}
                                         </div>

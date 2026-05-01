@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { packagesAPI, coursesAPI, testSeriesAPI, liveVideosAPI, subjectsAPI } from '../../services/apiClient';
+import parse from 'html-react-parser';
+import { packagesAPI, coursesAPI, testSeriesAPI, liveVideosAPI, subjectsAPI, uploadAPI } from '../../services/apiClient';
 import AddCourse from './AddCourse';
 import LiveSessions from './LiveSessions';
 import ForumManager from './ForumManager';
@@ -16,13 +17,32 @@ import {
   QuizDrawer,
   UploadDrawer,
   LinkDrawer,
-  ImportContentDrawer,
   VideoDrawer,
   LiveStreamDrawer,
   WebinarDrawer
 } from './FeatureDrawers';
 import AddFolderDrawer from './AddFolderDrawer';
 import RichTextEditor from '../shared/RichTextEditor';
+import BatchMultiSelect from './course-content/BatchMultiSelect';
+import { toYouTubeEmbed } from '../../lib/utils';
+import { getAdminHeaders, API_BASE_URL, apiRequest, invalidateCache } from '../../services/apiClient';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface Package {
   id: string;
@@ -95,6 +115,201 @@ const BulkActionItem: React.FC<{ icon: string; label: string; onClick: () => voi
   );
 };
 
+const SortablePackageRow = ({ 
+  pkg, 
+  idx, 
+  startIndex, 
+  selectedIds, 
+  toggleSelectOne, 
+  onCourseSelect, 
+  openActionMenuId, 
+  setOpenActionMenuId, 
+  handleToggleStatus, 
+  openEditDrawer, 
+  handleDuplicate, 
+  loadData,
+  handleDelete,
+  paginatedItems,
+  disabled
+}: any) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ 
+    id: pkg.id,
+    disabled: disabled
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 100 : 'auto',
+    opacity: isDragging ? 0.8 : 1,
+    position: 'relative' as any,
+    backgroundColor: isDragging ? '#f8fafc' : undefined,
+    boxShadow: isDragging ? '0 10px 15px -3px rgba(0, 0, 0, 0.1)' : undefined,
+  };
+
+  return (
+    <tr 
+      ref={setNodeRef}
+      style={style}
+      onClick={() => onCourseSelect(pkg)} 
+      className={`hover:bg-gray-50/50 transition-colors group cursor-pointer ${selectedIds.includes(pkg.id) ? 'bg-blue-50/40' : ''} ${isDragging ? 'z-[1000]' : ''}`}
+    >
+      <td className="pl-8 py-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-4">
+          {!disabled && (
+            <div 
+              {...attributes} 
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-600 transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span className="material-symbols-outlined text-[20px]">drag_indicator</span>
+            </div>
+          )}
+          <div
+            onClick={(e) => toggleSelectOne(e, pkg.id)}
+            className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all cursor-pointer ${selectedIds.includes(pkg.id)
+              ? 'bg-[#1a237e] border-[#1a237e] text-white shadow-sm'
+              : 'border-gray-200 bg-white hover:border-gray-400'
+              }`}
+          >
+            {selectedIds.includes(pkg.id) && (
+              <span className="material-symbols-outlined text-[14px] font-bold">check</span>
+            )}
+          </div>
+        </div>
+      </td>
+      <td className="px-4 py-6 text-[13px] font-black text-gray-300">{startIndex + idx + 1}</td>
+      <td className="px-6 py-6">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-gray-50 rounded-xl flex-shrink-0 flex items-center justify-center border border-gray-100 group-hover:bg-white transition-colors">
+            {pkg.imageUrl || pkg.thumbnail ? (
+              <img src={pkg.imageUrl || pkg.thumbnail} alt="" className="w-full h-full object-cover rounded-xl" />
+            ) : (
+              <span className="material-symbols-outlined text-gray-200">inventory_2</span>
+            )}
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-[14px] font-bold text-gray-900 group-hover:text-black transition-colors truncate">{pkg.name}</span>
+            <span className="text-[11px] font-medium text-gray-400 mt-0.5 truncate uppercase tracking-tight">{pkg.categoryId || 'General'}</span>
+          </div>
+        </div>
+      </td>
+      <td className="px-6 py-6 overflow-hidden">
+        <div className="flex flex-col max-w-xs">
+          <div className="text-sm text-gray-600 line-clamp-2 leading-relaxed">
+            {pkg.description ? parse(pkg.description) : '-'}
+          </div>
+        </div>
+      </td>
+      <td className="px-6 py-6 font-mono">
+        <span className={`text-[14px] font-bold ${!pkg.price ? 'text-gray-300' : 'text-gray-900'}`}>
+          {!pkg.price ? 'Free' : `₹${pkg.price}`}
+        </span>
+      </td>
+      <td className="px-6 py-6">
+        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight ${pkg.status === 'active' ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${pkg.status === 'active' ? 'bg-green-600' : 'bg-amber-600'}`}></span>
+          {pkg.status === 'active' ? 'Active' : 'Draft'}
+        </span>
+      </td>
+      <td className="px-6 py-6 text-right" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-center gap-3">
+          <div className="relative row-action-menu-container">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenActionMenuId(openActionMenuId === pkg.id ? null : pkg.id);
+              }}
+              className={`px-4 py-1.5 rounded-lg text-[12px] font-bold transition-all border flex items-center gap-2 shadow-sm ${openActionMenuId === pkg.id ? 'bg-gray-100 border-gray-300 text-gray-900' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
+            >
+              Actions
+              <span className={`material-symbols-outlined text-[18px] transition-transform duration-300 ${openActionMenuId === pkg.id ? 'rotate-180 text-gray-900' : 'text-gray-400'}`}>expand_more</span>
+            </button>
+
+            {openActionMenuId === pkg.id && (
+              <div
+                className={`absolute right-0 ${idx >= paginatedItems.length - 2 && paginatedItems.length > 3 ? 'bottom-full mb-2' : 'top-full mt-2'} w-64 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.08)] border border-gray-100 py-2.5 z-[250] animate-in fade-in zoom-in-95 duration-200 origin-top-right`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  onClick={() => { onCourseSelect(pkg, 'Overview'); setOpenActionMenuId(null); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors text-left group"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-blue-400">explore</span>
+                  <span className="text-[14px] font-medium">Batch Overview</span>
+                </button>
+
+                <button
+                  onClick={() => { onCourseSelect(pkg, 'Content'); setOpenActionMenuId(null); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors text-left group"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-blue-500/70">add_circle</span>
+                  <span className="text-[14px] font-medium">Add/View Content</span>
+                </button>
+
+                <div className="px-4 py-2.5 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <span className="material-symbols-outlined text-[20px] text-blue-400/80">info</span>
+                    <span className="text-[14px] font-medium">Enabled</span>
+                  </div>
+                  <button
+                    onClick={() => handleToggleStatus(pkg)}
+                    className={`w-[42px] h-[22px] rounded-full relative transition-all duration-300 ${pkg.status === 'active' ? 'bg-[#1a1c1e]' : 'bg-gray-200'}`}
+                  >
+                    <div className={`absolute top-[3px] w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300 ${pkg.status === 'active' ? 'right-[3px]' : 'left-[3px]'}`}></div>
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => { openEditDrawer(pkg); setOpenActionMenuId(null); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors text-left group"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-blue-400/70">edit</span>
+                  <span className="text-[14px] font-medium">Edit</span>
+                </button>
+
+                <button
+                  onClick={() => { handleDuplicate(pkg); setOpenActionMenuId(null); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors text-left group"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-blue-500/60">content_copy</span>
+                  <span className="text-[14px] font-medium">Duplicate</span>
+                </button>
+
+                <button
+                  onClick={() => { loadData(); setOpenActionMenuId(null); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-all text-left group"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-blue-400 group-hover:rotate-180 transition-transform duration-500">sync</span>
+                  <span className="text-[14px] font-medium">Refresh</span>
+                </button>
+
+                <div className="h-px bg-gray-50 my-1.5 mx-2"></div>
+
+                <button
+                  onClick={() => { handleDelete(pkg.id); setOpenActionMenuId(null); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 text-red-500 transition-colors text-left group"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-red-400 group-hover:text-red-500">delete</span>
+                  <span className="text-[14px] font-medium">Delete</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+};
+
 const BigActionTile: React.FC<{ icon: string; label: string; desc: string; onClick: () => void; color?: string }> = ({ icon, label, desc, onClick, color = 'bg-blue-50 text-blue-500' }) => (
   <button
     onClick={onClick}
@@ -158,6 +373,20 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [globalCreateMode, setGlobalCreateMode] = useState(false);
+  const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([]);
+  const [isReordering, setIsReordering] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     loadData();
@@ -303,6 +532,35 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
     setCurrentPage(1);
   }, [searchQuery, statusFilter]);
 
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = packages.findIndex((pkg) => pkg.id === active.id);
+    const newIndex = packages.findIndex((pkg) => pkg.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const previousOrder = [...packages];
+    const newOrder = arrayMove(packages, oldIndex, newIndex);
+    
+    // Optimistic update
+    setPackages(newOrder);
+    setIsReordering(true);
+
+    try {
+      const orderedIds = newOrder.map(pkg => pkg.id);
+      await packagesAPI.reorder(orderedIds);
+      showToast('Order updated successfully', 'success');
+    } catch (error) {
+      console.error('Failed to reorder:', error);
+      showToast('Failed to save order. Rolling back...', 'error');
+      setPackages(previousOrder);
+    } finally {
+      setIsReordering(false);
+    }
+  };
+
   const handleSubmit = async () => {
     try {
       const packageData = {
@@ -347,6 +605,255 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
       console.error(error);
       showToast('Failed to schedule live stream', 'error');
     }
+  };
+
+  const handleGlobalFolderSubmit = async (data: any) => {
+    if (selectedBatchIds.length === 0) {
+      showToast('Please select at least one batch', 'error');
+      return;
+    }
+    
+    let successCount = 0;
+    for (const batchId of selectedBatchIds) {
+      try {
+        const folderData = {
+          title: data.name,
+          description: data.description || '',
+          thumbnail: data.thumbnail || '',
+          isFree: data.status === 'Free',
+          status: 'active',
+          sortingOrder: data.sortingOrder || '0.00',
+          parentId: null,
+          courseId: batchId
+        };
+        await apiRequest(`${API_BASE_URL}/courses/${batchId}/folders`, {
+          method: 'POST',
+          headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify(folderData)
+        });
+        successCount++;
+      } catch (err) {
+        console.error(`Failed for batch ${batchId}`, err);
+      }
+    }
+    showToast(`Added folder to ${successCount} batches`, 'success');
+    setShowFolderDrawer(false);
+    setGlobalCreateMode(false);
+    setSelectedBatchIds([]);
+  };
+
+  const handleGlobalVideoSubmit = async (data: any) => {
+    if (selectedBatchIds.length === 0) {
+      showToast('Please select at least one batch', 'error');
+      return;
+    }
+
+    let successCount = 0;
+    for (const batchId of selectedBatchIds) {
+      try {
+        if (data.youtubeLinks) {
+          // Multiple links
+          for (const link of data.youtubeLinks) {
+            const videoData = {
+              title: link.title || data.title || 'Video',
+              description: data.description || '',
+              youtubeUrl: toYouTubeEmbed(link.url),
+              videoUrl: toYouTubeEmbed(link.url),
+              url: toYouTubeEmbed(link.url),
+              platform: 'YouTube',
+              status: 'active',
+              isFree: data.status === 'Free' || data.isFree === true,
+              order: 1,
+              courseId: batchId,
+              folderId: null
+            };
+            await apiRequest(`${API_BASE_URL}/courses/${batchId}/videos`, {
+              method: 'POST',
+              headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+              body: JSON.stringify(videoData)
+            });
+          }
+        } else {
+          // Single link
+          const videoData = {
+            title: data.title,
+            description: data.description || '',
+            youtubeUrl: toYouTubeEmbed(data.link || data.youtubeUrl || ''),
+            videoUrl: toYouTubeEmbed(data.link || data.youtubeUrl || ''),
+            url: toYouTubeEmbed(data.link || data.youtubeUrl || ''),
+            platform: 'YouTube',
+            status: 'active',
+            isFree: data.status === 'Free' || data.isFree === true,
+            order: 1,
+            courseId: batchId,
+            folderId: null
+          };
+          await apiRequest(`${API_BASE_URL}/courses/${batchId}/videos`, {
+            method: 'POST',
+            headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify(videoData)
+          });
+        }
+        successCount++;
+      } catch (err) {
+        console.error(`Failed for batch ${batchId}`, err);
+      }
+    }
+    showToast(`Added video to ${successCount} batches`, 'success');
+    setShowVideoDrawer(false);
+    setGlobalCreateMode(false);
+    setSelectedBatchIds([]);
+    invalidateCache('course-content');
+  };
+
+  const handleGlobalUploadSubmit = async (files: File[]) => {
+    if (selectedBatchIds.length === 0) {
+      showToast('Please select at least one batch', 'error');
+      return;
+    }
+
+    try {
+      let successBatchCount = 0;
+      for (const file of files) {
+        const res = await uploadAPI.uploadDocument(file);
+        const fileUrl = res.url || res.data?.url;
+
+        if (!fileUrl) continue;
+
+        for (const batchId of selectedBatchIds) {
+          try {
+            const noteData = {
+              title: file.name,
+              description: '',
+              fileUrl: fileUrl,
+              fileSize: (file.size / 1024).toFixed(2) + ' KB',
+              isFree: false,
+              status: 'active',
+              order: 1,
+              courseId: batchId,
+              folderId: null,
+              type: 'note'
+            };
+            await apiRequest(`${API_BASE_URL}/courses/${batchId}/notes`, {
+              method: 'POST',
+              headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+              body: JSON.stringify(noteData)
+            });
+          } catch (err) {
+            console.error(`Failed for batch ${batchId}`, err);
+          }
+        }
+        successBatchCount++;
+      }
+      showToast(`Added ${files.length} file(s) to ${selectedBatchIds.length} batches`, 'success');
+      setShowUploadDrawer(false);
+      setGlobalCreateMode(false);
+      setSelectedBatchIds([]);
+      invalidateCache('course-content');
+    } catch (error) {
+      console.error(error);
+      showToast('Failed to upload files', 'error');
+    }
+  };
+
+  const handleGlobalTestSubmit = async (tests: any[]) => {
+    if (selectedBatchIds.length === 0) {
+      showToast('Please select at least one batch', 'error');
+      return;
+    }
+
+    let successCount = 0;
+    for (const test of tests) {
+      for (const batchId of selectedBatchIds) {
+        try {
+          const testData = {
+            ...test,
+            id: `test_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+            courseId: batchId,
+            folderId: null,
+            questions: test.questions || []
+          };
+          delete testData._id;
+          
+          await apiRequest(`${API_BASE_URL}/courses/${batchId}/tests`, {
+            method: 'POST',
+            headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify(testData)
+          });
+          successCount++;
+        } catch (err) {
+          console.error(`Failed for batch ${batchId}`, err);
+        }
+      }
+    }
+    showToast(`Added ${tests.length} test(s) to ${selectedBatchIds.length} batches`, 'success');
+    setShowOMRDrawer(false);
+    setShowTestDrawer(false);
+    setGlobalCreateMode(false);
+    setSelectedBatchIds([]);
+    invalidateCache('course-content');
+  };
+
+  const handleGlobalLiveStreamSubmit = async (data: any) => {
+    if (selectedBatchIds.length === 0) {
+      showToast('Please select at least one batch', 'error');
+      return;
+    }
+
+    let successCount = 0;
+    for (const batchId of selectedBatchIds) {
+      try {
+        await apiRequest(`${API_BASE_URL}/live-videos`, {
+          method: 'POST',
+          headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...data,
+            status: 'upcoming',
+            courseId: batchId,
+            subjectId: data.subjectId || ''
+          })
+        });
+        successCount++;
+      } catch (err) {
+        console.error(`Failed for batch ${batchId}`, err);
+      }
+    }
+    showToast(`Scheduled live stream for ${successCount} batches`, 'success');
+    setShowLiveStreamDrawer(false);
+    setGlobalCreateMode(false);
+    setSelectedBatchIds([]);
+    invalidateCache('course-content');
+  };
+
+  const handleGlobalWebinarSubmit = async (data: any) => {
+    if (selectedBatchIds.length === 0) {
+      showToast('Please select at least one batch', 'error');
+      return;
+    }
+    
+    let successCount = 0;
+    for (const batchId of selectedBatchIds) {
+      try {
+        await apiRequest(`${API_BASE_URL}/live-videos`, {
+          method: 'POST',
+          headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...data,
+            type: 'webinar',
+            status: 'active',
+            courseId: batchId
+          })
+        });
+        successCount++;
+      } catch (err) {
+        console.error(`Failed for batch ${batchId}`, err);
+      }
+    }
+    showToast(`Connected webinar to ${successCount} batches`, 'success');
+    setShowWebinarDrawer(false);
+    setGlobalCreateMode(false);
+    setSelectedBatchIds([]);
+    invalidateCache('course-content');
   };
 
   const handleSendBatchNotification = async (batchId: string) => {
@@ -518,7 +1025,20 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
         <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-visible">
           {/* Header Section */}
           <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-50 bg-white rounded-t-[2rem]">
-            <h3 className="text-[20px] font-bold text-gray-900 tracking-tight">Featured Batches</h3>
+            <div className="flex flex-col gap-1">
+              <h3 className="text-[20px] font-bold text-gray-900 tracking-tight">Featured Batches</h3>
+              {(searchQuery || statusFilter !== 'all') ? (
+                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest flex items-center gap-1.5 animate-in fade-in slide-in-from-left-2">
+                  <span className="material-symbols-outlined text-[14px]">info</span>
+                  Clear search and filters to reorder batches
+                </p>
+              ) : (
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[14px]">drag_indicator</span>
+                  Drag rows to reorder featured batches
+                </p>
+              )}
+            </div>
             <div className="flex items-center gap-3">
               <div className="relative group flex-1 md:flex-none">
                 <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-[20px] group-focus-within:text-navy transition-colors">search</span>
@@ -604,65 +1124,62 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                 </button>
 
                 {isBulkDropdownOpen && (
-                  <div className="absolute right-0 top-full mt-2 w-[240px] bg-white border border-gray-100 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.12)] z-[200] p-5 animate-in fade-in zoom-in duration-200 origin-top-right max-h-[400px] overflow-y-auto custom-scrollbar">
-                    <div className="mb-6">
-                      <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.1em] mb-4 ml-1">Table View</h4>
-                      <div className="flex gap-2">
+                  <div className="absolute right-0 top-full mt-2 w-[280px] bg-white border border-gray-100 rounded-2xl shadow-xl z-[200] p-2 animate-in fade-in zoom-in duration-200 origin-top-right max-h-[520px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-100 scrollbar-track-transparent">
+                    <div className="mb-4 pt-1">
+                      <h4 className="text-[11px] font-bold tracking-[0.16em] text-gray-400 uppercase px-3 mb-2">Table View</h4>
+                      <div className="flex gap-2 px-2">
                         <button
                           onClick={() => { setViewMode('list'); setIsBulkDropdownOpen(false); }}
-                          className={`flex-1 h-[48px] flex items-center justify-center rounded-[14px] transition-all ${viewMode === 'list' ? 'bg-[#1a237e] text-white shadow-lg' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
+                          className={`flex-1 h-11 flex items-center justify-center rounded-xl transition-all ${viewMode === 'list' ? 'bg-[#263091] text-white shadow-sm' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
                         >
-                          <span className="material-symbols-outlined text-[22px]">list</span>
+                          <span className="material-symbols-outlined text-[20px]">list</span>
                         </button>
                         <button
                           onClick={() => { setViewMode('grid'); setIsBulkDropdownOpen(false); }}
-                          className={`flex-1 h-[48px] flex items-center justify-center rounded-[14px] transition-all ${viewMode === 'grid' ? 'bg-[#1a237e] text-white shadow-lg' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
+                          className={`flex-1 h-11 flex items-center justify-center rounded-xl transition-all ${viewMode === 'grid' ? 'bg-[#263091] text-white shadow-sm' : 'bg-gray-50 text-gray-400 hover:bg-gray-100'}`}
                         >
-                          <span className="material-symbols-outlined text-[22px]">grid_view</span>
+                          <span className="material-symbols-outlined text-[20px]">grid_view</span>
                         </button>
                       </div>
                     </div>
 
                     <div>
-                      <h4 className="text-[11px] font-black text-gray-400 uppercase tracking-[0.1em] mb-4 ml-1">Bulk Actions</h4>
+                      <h4 className="text-[11px] font-bold tracking-[0.16em] text-gray-400 uppercase px-3 mb-2 mt-4">Bulk Actions</h4>
                       <div className="flex flex-col gap-0.5">
                         {[
                           { id: 'folder', icon: 'create_new_folder', label: 'Add Folder' },
                           { id: 'video', icon: 'videocam', label: 'Add Video' },
                           { id: 'pdf', icon: 'picture_as_pdf', label: 'Add PDF' },
                           { id: 'test', icon: 'quiz', label: 'Add Test' },
-                          { id: 'youtube_zoom', icon: 'video_camera_front', label: 'Add YouTube/Zoom Video' },
+                          { id: 'live_stream', icon: 'sensors', label: 'Add Live Stream' },
                           { id: 'document', icon: 'description', label: 'Add Document' }
                         ].map((item) => (
                           <button
                             key={item.id}
                             onClick={() => {
                               setIsBulkDropdownOpen(false);
+                              setGlobalCreateMode(true);
+                              setSelectedBatchIds([]);
                               switch (item.id) {
                                 case 'folder': setShowFolderDrawer(true); break;
-                                case 'link': setShowLinkDrawer(true); break;
-                                case 'video':
-                                  setUploadType({ title: 'Add Video File(s)', subtitle: 'Upload Video', accept: 'video/*' });
-                                  setShowUploadDrawer(true);
-                                  break;
+                                case 'video': setShowVideoDrawer(true); break;
                                 case 'pdf':
                                   setUploadType({ title: 'Add PDF File(s)', subtitle: 'Upload PDF', accept: '.pdf,application/pdf' });
                                   setShowUploadDrawer(true);
                                   break;
                                 case 'test': setShowTestDrawer(true); break;
-                                case 'quiz': setShowQuizDrawer(true); break;
                                 case 'live_stream': setShowLiveStreamDrawer(true); break;
-                                case 'youtube_zoom': setShowVideoDrawer(true); break;
-                                case 'webinar_gg': setShowWebinarDrawer(true); break;
                                 case 'document':
                                   setUploadType({ title: 'Add Documents', subtitle: 'Upload Doc/PDF', accept: '.pdf,.doc,.docx,.xls,.xlsx,.txt' });
                                   setShowUploadDrawer(true);
                                   break;
                               }
                             }}
-                            className="flex items-center gap-4 w-full px-4 py-3.5 rounded-2xl text-[14px] font-bold text-[#37474f] hover:bg-[#f0f4ff] hover:text-[#1a237e] transition-all group"
+                            className="flex items-center gap-3 w-full h-11 px-3 rounded-xl text-[14px] font-semibold text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-all group"
                           >
-                            <span className="material-symbols-outlined text-[20px] text-[#4285f4] opacity-70 group-hover:opacity-100">{item.icon}</span>
+                            <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center shrink-0 group-hover:bg-blue-100 transition-colors">
+                              <span className="material-symbols-outlined text-[20px] text-blue-500">{item.icon}</span>
+                            </div>
                             <span className="text-left leading-tight">{item.label}</span>
                           </button>
                         ))}
@@ -724,145 +1241,37 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                       </td>
                     </tr>
                     ) : (
-                      paginatedItems.map((pkg, idx) => (
-                        <tr key={pkg.id} onClick={() => onCourseSelect(pkg)} className={`hover:bg-gray-50/50 transition-colors group cursor-pointer ${selectedIds.includes(pkg.id) ? 'bg-blue-50/40' : ''}`}>
-                          <td className="pl-8 py-6" onClick={(e) => e.stopPropagation()}>
-                            <div
-                              onClick={(e) => toggleSelectOne(e, pkg.id)}
-                              className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all cursor-pointer ${selectedIds.includes(pkg.id)
-                                ? 'bg-[#1a237e] border-[#1a237e] text-white shadow-sm'
-                                : 'border-gray-200 bg-white hover:border-gray-400'
-                                }`}
-                            >
-                              {selectedIds.includes(pkg.id) && (
-                                <span className="material-symbols-outlined text-[14px] font-bold">check</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-6 text-[13px] font-black text-gray-300">{startIndex + idx + 1}</td>
-                        <td className="px-6 py-6">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-gray-50 rounded-xl flex-shrink-0 flex items-center justify-center border border-gray-100 group-hover:bg-white transition-colors">
-                              {pkg.imageUrl || pkg.thumbnail ? (
-                                <img src={pkg.imageUrl || pkg.thumbnail} alt="" className="w-full h-full object-cover rounded-xl" />
-                              ) : (
-                                <span className="material-symbols-outlined text-gray-200">inventory_2</span>
-                              )}
-                            </div>
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-[14px] font-bold text-gray-900 group-hover:text-black transition-colors truncate">{pkg.name}</span>
-                              <span className="text-[11px] font-medium text-gray-400 mt-0.5 truncate uppercase tracking-tight">{pkg.categoryId || 'General'}</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-6 overflow-hidden">
-                          <div className="flex flex-col max-w-xs">
-                            <span className="text-[11px] font-medium text-gray-500 line-clamp-2 leading-relaxed">
-                              {pkg.description?.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ') || 'No additional details provided for this batch product.'}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-6 font-mono">
-                          <span className={`text-[14px] font-bold ${!pkg.price ? 'text-gray-300' : 'text-gray-900'}`}>
-                            {!pkg.price ? 'Free' : `₹${pkg.price}`}
-                          </span>
-                        </td>
-                        <td className="px-6 py-6">
-                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight ${pkg.status === 'active' ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${pkg.status === 'active' ? 'bg-green-600' : 'bg-amber-600'}`}></span>
-                            {pkg.status === 'active' ? 'Active' : 'Draft'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-6 text-right">
-                          <div className="flex items-center justify-center gap-3">
-                            <div className="relative row-action-menu-container">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenActionMenuId(openActionMenuId === pkg.id ? null : pkg.id);
-                                }}
-                                className={`px-4 py-1.5 rounded-lg text-[12px] font-bold transition-all border flex items-center gap-2 shadow-sm ${openActionMenuId === pkg.id ? 'bg-gray-100 border-gray-300 text-gray-900' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
-                              >
-                                Actions
-                                <span className={`material-symbols-outlined text-[18px] transition-transform duration-300 ${openActionMenuId === pkg.id ? 'rotate-180 text-gray-900' : 'text-gray-400'}`}>expand_more</span>
-                              </button>
-
-                              {openActionMenuId === pkg.id && (
-                                <div
-                                  className={`absolute right-0 ${idx >= paginatedItems.length - 2 && paginatedItems.length > 3 ? 'bottom-full mb-2' : 'top-full mt-2'} w-64 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.08)] border border-gray-100 py-2.5 z-[250] animate-in fade-in zoom-in-95 duration-200 origin-top-right`}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <button
-                                    onClick={() => { onCourseSelect(pkg, 'Overview'); setOpenActionMenuId(null); }}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors text-left group"
-                                  >
-                                    <span className="material-symbols-outlined text-[20px] text-blue-400">explore</span>
-                                    <span className="text-[14px] font-medium">Batch Overview</span>
-                                  </button>
-
-
-                                  <button
-                                    onClick={() => { onCourseSelect(pkg, 'Content'); setOpenActionMenuId(null); }}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors text-left group"
-                                  >
-                                    <span className="material-symbols-outlined text-[20px] text-blue-500/70">add_circle</span>
-                                    <span className="text-[14px] font-medium">Add/View Content</span>
-                                  </button>
-
-                                  <div className="px-4 py-2.5 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
-                                    <div className="flex items-center gap-3 text-gray-600">
-                                      <span className="material-symbols-outlined text-[20px] text-blue-400/80">info</span>
-                                      <span className="text-[14px] font-medium">Enabled</span>
-                                    </div>
-                                    <button
-                                      onClick={() => handleToggleStatus(pkg)}
-                                      className={`w-[42px] h-[22px] rounded-full relative transition-all duration-300 ${pkg.status === 'active' ? 'bg-[#1a1c1e]' : 'bg-gray-200'}`}
-                                    >
-                                      <div className={`absolute top-[3px] w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300 ${pkg.status === 'active' ? 'right-[3px]' : 'left-[3px]'}`}></div>
-                                    </button>
-                                  </div>
-
-                                  <button
-                                    onClick={() => { openEditDrawer(pkg); setOpenActionMenuId(null); }}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors text-left group"
-                                  >
-                                    <span className="material-symbols-outlined text-[20px] text-blue-400/70">edit</span>
-                                    <span className="text-[14px] font-medium">Edit</span>
-                                  </button>
-
-                                  <button
-                                    onClick={() => { handleDuplicate(pkg); setOpenActionMenuId(null); }}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors text-left group"
-                                  >
-                                    <span className="material-symbols-outlined text-[20px] text-blue-500/60">content_copy</span>
-                                    <span className="text-[14px] font-medium">Duplicate</span>
-                                  </button>
-
-
-                                  <button
-                                    onClick={() => { loadData(); setOpenActionMenuId(null); }}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-all text-left group"
-                                  >
-                                    <span className="material-symbols-outlined text-[20px] text-blue-400 group-hover:rotate-180 transition-transform duration-500">sync</span>
-                                    <span className="text-[14px] font-medium">Refresh</span>
-                                  </button>
-
-                                  <div className="h-px bg-gray-50 my-1.5 mx-2"></div>
-
-                                  <button
-                                    onClick={() => { handleDelete(pkg.id); setOpenActionMenuId(null); }}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 text-red-500 transition-colors text-left group"
-                                  >
-                                    <span className="material-symbols-outlined text-[20px] text-red-400 group-hover:text-red-500">delete</span>
-                                    <span className="text-[14px] font-medium">Delete</span>
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                    <DndContext 
+                      sensors={sensors} 
+                      collisionDetection={closestCenter} 
+                      onDragEnd={handleDragEnd}
+                    >
+                      <SortableContext 
+                        items={paginatedItems.map(p => p.id)} 
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {paginatedItems.map((pkg, idx) => (
+                          <SortablePackageRow
+                            key={pkg.id}
+                            pkg={pkg}
+                            idx={idx}
+                            startIndex={startIndex}
+                            selectedIds={selectedIds}
+                            toggleSelectOne={toggleSelectOne}
+                            onCourseSelect={onCourseSelect}
+                            openActionMenuId={openActionMenuId}
+                            setOpenActionMenuId={setOpenActionMenuId}
+                            handleToggleStatus={handleToggleStatus}
+                            openEditDrawer={openEditDrawer}
+                            handleDuplicate={handleDuplicate}
+                            handleDelete={handleDelete}
+                            loadData={loadData}
+                            paginatedItems={paginatedItems}
+                            disabled={searchQuery !== '' || statusFilter !== 'all' || isReordering}
+                          />
+                        ))}
+                      </SortableContext>
+                    </DndContext>
                   )}
                 </tbody>
               </table>
@@ -908,7 +1317,9 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                         </div>
                       </div>
                       <h4 className="text-[16px] font-bold text-gray-900 mb-2 uppercase tracking-tight">{pkg.name}</h4>
-                      <p className="text-[13px] text-gray-500 line-clamp-2 mb-4">{pkg.description || 'No description provided'}</p>
+                      <div className="text-sm text-gray-600 line-clamp-2 mb-4 leading-relaxed">
+                        {pkg.description ? parse(pkg.description) : '-'}
+                      </div>
                       <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-50">
                         <span className="text-[15px] font-black text-gray-900">₹{pkg.price}</span>
                         <div className="relative row-action-menu-container">
@@ -1244,12 +1655,24 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
 
       <AddFolderDrawer
         isOpen={showFolderDrawer}
-        onClose={() => setShowFolderDrawer(false)}
-        onUploadImage={async (file: File) => URL.createObjectURL(file)}
-        onSubmit={(data: any) => {
-          showToast('Folder created successfully', 'success');
-          setShowFolderDrawer(false);
+        onClose={() => { setShowFolderDrawer(false); setGlobalCreateMode(false); }}
+        onUploadImage={async (file: File) => {
+          const res = await uploadAPI.uploadImage(file);
+          return res.url || res.data?.url;
         }}
+        onSubmit={(data: any) => {
+          if (globalCreateMode) {
+            handleGlobalFolderSubmit(data);
+          } else {
+            showToast('Folder created successfully', 'success');
+            setShowFolderDrawer(false);
+          }
+        }}
+        globalCreateMode={globalCreateMode}
+        selectedBatchIds={selectedBatchIds}
+        setSelectedBatchIds={setSelectedBatchIds}
+        availableCourses={availableCourses}
+        showToast={showToast}
       />
 
       <LinkDrawer
@@ -1263,42 +1686,69 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
 
       <UploadDrawer
         isOpen={showUploadDrawer}
-        onClose={() => setShowUploadDrawer(false)}
+        onClose={() => { setShowUploadDrawer(false); setGlobalCreateMode(false); }}
         title={uploadType.title}
         subtitle={uploadType.subtitle}
         accept={uploadType.accept}
-        onSubmit={() => {
-          showToast('File uploaded successfully', 'success');
-          setShowUploadDrawer(false);
+        onSubmit={(files) => {
+          if (globalCreateMode) {
+            handleGlobalUploadSubmit(files);
+          } else {
+            showToast('File uploaded successfully', 'success');
+            setShowUploadDrawer(false);
+          }
         }}
+        globalCreateMode={globalCreateMode}
+        selectedBatchIds={selectedBatchIds}
+        setSelectedBatchIds={setSelectedBatchIds}
+        availableCourses={availableCourses}
+        showToast={showToast}
       />
 
       <OMRTestDrawer
         isOpen={showOMRDrawer}
-        onClose={() => setShowOMRDrawer(false)}
+        onClose={() => { setShowOMRDrawer(false); setGlobalCreateMode(false); }}
         testSeriesList={testSeriesList}
         isSeriesLoading={isSeriesLoading}
         onSeriesChange={(id: string) => fetchTestsBySeries(id, 'omr')}
         availableTests={omrTests}
         isTestsLoading={isTestsLoading}
-        onSubmit={() => {
-          showToast('OMR Tests added successfully', 'success');
-          setShowOMRDrawer(false);
+        onSubmit={(tests) => {
+          if (globalCreateMode) {
+            handleGlobalTestSubmit(tests);
+          } else {
+            showToast('OMR Tests added successfully', 'success');
+            setShowOMRDrawer(false);
+          }
         }}
+        globalCreateMode={globalCreateMode}
+        selectedBatchIds={selectedBatchIds}
+        setSelectedBatchIds={setSelectedBatchIds}
+        availableCourses={availableCourses}
+        showToast={showToast}
       />
 
       <TestDrawer
         isOpen={showTestDrawer}
-        onClose={() => setShowTestDrawer(false)}
+        onClose={() => { setShowTestDrawer(false); setGlobalCreateMode(false); }}
         testSeriesList={testSeriesList}
         isSeriesLoading={isSeriesLoading}
         onSeriesChange={(id: string) => fetchTestsBySeries(id, 'standard')}
         availableTests={standardTests}
         isTestsLoading={isTestsLoading}
-        onSubmit={() => {
-          showToast('Tests added successfully', 'success');
-          setShowTestDrawer(false);
+        onSubmit={(tests) => {
+          if (globalCreateMode) {
+            handleGlobalTestSubmit(tests);
+          } else {
+            showToast('Tests added successfully', 'success');
+            setShowTestDrawer(false);
+          }
         }}
+        globalCreateMode={globalCreateMode}
+        selectedBatchIds={selectedBatchIds}
+        setSelectedBatchIds={setSelectedBatchIds}
+        availableCourses={availableCourses}
+        showToast={showToast}
       />
 
       <QuizDrawer
@@ -1312,28 +1762,57 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
 
       <VideoDrawer
         isOpen={showVideoDrawer}
-        onClose={() => setShowVideoDrawer(false)}
-        onSubmit={() => {
-          showToast('Video added successfully', 'success');
-          setShowVideoDrawer(false);
+        onClose={() => { setShowVideoDrawer(false); setGlobalCreateMode(false); }}
+        onSubmit={(data: any) => {
+          if (globalCreateMode) {
+            handleGlobalVideoSubmit(data);
+          } else {
+            showToast('Video added successfully', 'success');
+            setShowVideoDrawer(false);
+          }
         }}
+        globalCreateMode={globalCreateMode}
+        selectedBatchIds={selectedBatchIds}
+        setSelectedBatchIds={setSelectedBatchIds}
+        availableCourses={availableCourses}
+        showToast={showToast}
       />
 
       <LiveStreamDrawer
         isOpen={showLiveStreamDrawer}
-        onClose={() => setShowLiveStreamDrawer(false)}
-        onSubmit={handleAddLiveStream}
+        onClose={() => { setShowLiveStreamDrawer(false); setGlobalCreateMode(false); }}
+        onSubmit={(data) => {
+          if (globalCreateMode) {
+            handleGlobalLiveStreamSubmit(data);
+          } else {
+            handleAddLiveStream(data);
+          }
+        }}
         courses={availableCourses}
         subjects={subjects}
+        globalCreateMode={globalCreateMode}
+        selectedBatchIds={selectedBatchIds}
+        setSelectedBatchIds={setSelectedBatchIds}
+        availableCourses={availableCourses}
+        showToast={showToast}
       />
 
       <WebinarDrawer
         isOpen={showWebinarDrawer}
-        onClose={() => setShowWebinarDrawer(false)}
-        onSubmit={() => {
-          showToast('Webinar connected successfully', 'success');
-          setShowWebinarDrawer(false);
+        onClose={() => { setShowWebinarDrawer(false); setGlobalCreateMode(false); }}
+        onSubmit={(data) => {
+          if (globalCreateMode) {
+            handleGlobalWebinarSubmit(data);
+          } else {
+            showToast('Webinar connected successfully', 'success');
+            setShowWebinarDrawer(false);
+          }
         }}
+        globalCreateMode={globalCreateMode}
+        selectedBatchIds={selectedBatchIds}
+        setSelectedBatchIds={setSelectedBatchIds}
+        availableCourses={availableCourses}
+        showToast={showToast}
       />
 
       <RightSideDrawer isOpen={showConfirmDrawer} onClose={() => setShowConfirmDrawer(false)}>

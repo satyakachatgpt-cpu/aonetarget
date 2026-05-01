@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import mongoose from 'mongoose';
+import { performance } from 'perf_hooks';
 const { ObjectId } = mongoose.Types;
 
 import { generateTokens, generateAdminToken, generateDeviceId, verifyRefreshToken } from '../middleware/auth.js';
@@ -16,8 +17,11 @@ const OTP_EXPIRY_MS = 10 * 60 * 1000;
 const REFRESH_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 
 function shouldExposeOtp() {
-  return process.env.NODE_ENV !== 'production' && process.env.RETURN_OTP_IN_RESPONSE !== 'false';
+  // CRITICAL: Never expose OTP in API responses
+  return false;
 }
+
+const isProduction = process.env.NODE_ENV === 'production';
 
 function sanitizeStudent(student) {
   const raw = typeof student.toObject === 'function' ? student.toObject() : { ...student };
@@ -539,7 +543,9 @@ export const sendOtp = async (req, res) => {
     if (cleanPhone.length < 10) return res.status(400).json({ error: 'Invalid phone number' });
 
     const purpose = otpPurposeFromRequest(req);
+    const startTime = performance.now();
     const student = await db.collection('students').findOne({ $or: [{ phone: cleanPhone }, { phone }] });
+    const lookupDuration = (performance.now() - startTime).toFixed(2);
     
     if (purpose === 'signup' && student) {
       return res.status(400).json({ error: 'Account already exists. Please login.' });
@@ -554,18 +560,39 @@ export const sendOtp = async (req, res) => {
     }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    // No console log of OTP value in production
-
+    const saveStart = performance.now();
     await authService.saveOtp(cleanPhone, purpose, otp);
+    const saveDuration = (performance.now() - saveStart).toFixed(2);
 
     const otpMessage = 'Your AoneTarget login OTP is ' + otp + '. Valid for 10 minutes. Do not share.';
-    const smsResult = await sendSMS(cleanPhone, otpMessage, process.env.DLT_OTP_TEMPLATE_ID);
+    
+    // SAFETY TIMEOUT: Promise.race to prevent hanging requests
+    const smsStart = performance.now();
+    const smsResult = await Promise.race([
+      sendSMS(cleanPhone, otpMessage, process.env.DLT_OTP_TEMPLATE_ID),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('SMS_TIMEOUT')), 25000))
+    ]).catch(err => ({ success: false, error: err.message }));
 
-    if (!smsResult.success) {
-      return res.status(500).json({ success: false, message: 'SMS sending failed. Please try again.' });
+    const smsDuration = (performance.now() - smsStart).toFixed(2);
+    const totalDuration = (performance.now() - startTime).toFixed(2);
+
+    if (!isProduction) {
+      console.log(`[AUTH] OTP flow for ${cleanPhone.slice(0, 2)}***: Lookup=${lookupDuration}ms, Save=${saveDuration}ms, SMS=${smsDuration}ms, Total=${totalDuration}ms`);
     }
 
-    res.json({ success: true, message: 'OTP sent to your mobile number' });
+    if (!smsResult.success) {
+      console.error(`[AUTH] OTP dispatch failed for ${cleanPhone.slice(0, 2)}***: ${smsResult.error}`);
+      return res.status(500).json({ 
+        success: false, 
+        message: smsResult.error === 'SMS_TIMEOUT' ? 'OTP delivery taking longer than usual. Please try again.' : 'SMS sending failed. Please try again.' 
+      });
+    }
+
+    const jobId = smsResult.providerResponse?.JobId || smsResult.providerResponse?.MessageId || 'N/A';
+    console.log(`[AUTH] OTP dispatch successful for ${cleanPhone.slice(0, 2)}*** | Provider=PrimeClick | JobId=${jobId} | Accepted for delivery.`);
+
+    const responseObj = { success: true, message: 'OTP sent to your mobile number' };
+    res.json(responseObj);
   } catch (error) {
     console.error('Send OTP error:', error);
     res.status(500).json({ error: 'Failed to send OTP' });
@@ -704,23 +731,46 @@ export const forgotPasswordSendOtp = async (req, res) => {
     if (!phone) return res.status(400).json({ error: 'Phone number is required' });
 
     const cleanPhone = phone.replace(/\D/g, '');
+    const startTime = performance.now();
     const student = await Student.findOne({ $or: [{ phone: cleanPhone }, { phone }] });
+    const lookupDuration = (performance.now() - startTime).toFixed(2);
     
     if (!student) return res.status(404).json({ error: 'No account found with this phone number' });
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    // Safety: No OTP in logs
-
+    const saveStart = performance.now();
     await authService.saveOtp(cleanPhone, 'reset', otp);
+    const saveDuration = (performance.now() - saveStart).toFixed(2);
 
     const resetOtpMessage = 'Your AoneTarget password reset OTP is ' + otp + '. Valid for 10 minutes. Do not share.';
-    const smsResult = await sendSMS(cleanPhone, resetOtpMessage, process.env.DLT_FORGOT_TEMPLATE_ID);
+    
+    // SAFETY TIMEOUT
+    const smsStart = performance.now();
+    const smsResult = await Promise.race([
+      sendSMS(cleanPhone, resetOtpMessage, process.env.DLT_FORGOT_TEMPLATE_ID),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('SMS_TIMEOUT')), 25000))
+    ]).catch(err => ({ success: false, error: err.message }));
 
-    if (!smsResult.success) {
-      return res.status(500).json({ success: false, message: 'Failed to send reset OTP.' });
+    const smsDuration = (performance.now() - smsStart).toFixed(2);
+    const totalDuration = (performance.now() - startTime).toFixed(2);
+
+    if (!isProduction) {
+      console.log(`[FORGOT_AUTH] OTP flow for ${cleanPhone.slice(0, 2)}***: Lookup=${lookupDuration}ms, Save=${saveDuration}ms, SMS=${smsDuration}ms, Total=${totalDuration}ms`);
     }
 
-    res.json({ success: true, message: 'OTP sent to your mobile number' });
+    if (!smsResult.success) {
+      console.error(`[FORGOT_AUTH] Reset OTP dispatch failed for ${cleanPhone.slice(0, 2)}***: ${smsResult.error}`);
+      return res.status(500).json({ 
+        success: false, 
+        message: smsResult.error === 'SMS_TIMEOUT' ? 'Reset OTP delivery taking longer than usual.' : 'Failed to send reset OTP.' 
+      });
+    }
+
+    const jobId = smsResult.providerResponse?.JobId || smsResult.providerResponse?.MessageId || 'N/A';
+    console.log(`[FORGOT_AUTH] Reset OTP dispatch successful for ${cleanPhone.slice(0, 2)}*** | Provider=PrimeClick | JobId=${jobId} | Accepted for delivery.`);
+
+    const responseObj = { success: true, message: 'OTP sent to your mobile number' };
+    res.json(responseObj);
   } catch (error) {
     res.status(500).json({ error: 'Failed to send reset OTP' });
   }

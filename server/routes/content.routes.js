@@ -24,31 +24,35 @@ import {
   createExamDocument,
   updateExamDocument,
   deleteExamDocument,
-  getCourseNotes,
-  createCourseNote,
-  updateCourseNote,
-  deleteCourseNote,
   createStandalonePdf,
   deleteAllPdfs,
   bulkCreatePdfs,
   updateAllPdfs,
-  getCoursePosts,
-  createCoursePost,
-  deleteCoursePost,
   updateStandaloneNote,
   deleteStandaloneNote,
   getGenericPdfs,
   updateGenericPdf,
-  deleteGenericPdf,
+  deleteGenericPdf
+} from '../controllers/appContent.controller.js';
+import {
+  getCourseNotes,
+  createCourseNote,
+  updateCourseNote,
+  deleteCourseNote,
   getCourseVideos,
   createCourseVideo,
   updateCourseVideo,
-  deleteCourseVideo,
-  signVideoUrl,
-  importCourseContent
-} from '../controllers/content.controller.js';
+  deleteCourseVideo
+} from '../controllers/courseMedia.controller.js';
+import {
+  getCoursePosts,
+  createCoursePost,
+  deleteCoursePost
+} from '../controllers/courseSocial.controller.js';
+import { importCourseContent } from '../controllers/content.controller.js';
+import { signVideoUrl } from '../controllers/mediaUrl.controller.js';
 import { authMiddleware, adminMiddleware, optionalAuth } from '../middleware/auth.js';
-import { catalogLimiter } from '../middleware/security.js';
+import { publicLimiter } from '../middleware/security.js';
 
 const router = express.Router();
 
@@ -82,12 +86,6 @@ router.post('/blog', adminMiddleware, createBlogPost);
 router.put('/blog/:id', adminMiddleware, updateBlogPost);
 router.delete('/blog/:id', adminMiddleware, deleteBlogPost);
 
-// Exam Documents
-router.get('/exam-documents', getExamDocuments);
-router.post('/exam-documents', adminMiddleware, createExamDocument);
-router.put('/exam-documents/:id', adminMiddleware, updateExamDocument);
-router.delete('/exam-documents/:id', adminMiddleware, deleteExamDocument);
-
 // Notes (Course-specific)
 router.get('/courses/:id/notes', optionalAuth, getCourseNotes);
 router.post('/courses/:id/notes', adminMiddleware, createCourseNote);
@@ -107,7 +105,7 @@ router.put('/pdfs/update-all', adminMiddleware, updateAllPdfs);
 router.put('/notes/:id', adminMiddleware, updateStandaloneNote);
 router.delete('/notes/:id', adminMiddleware, deleteStandaloneNote);
 
-router.get('/courses/:id/posts', getCoursePosts);
+router.get('/courses/:id/posts', optionalAuth, getCoursePosts);
 router.post('/courses/:id/posts', adminMiddleware, createCoursePost);
 router.delete('/courses/:id/posts/:postId', adminMiddleware, deleteCoursePost);
 
@@ -121,5 +119,11 @@ router.post('/video/sign-url', authMiddleware, signVideoUrl);
 // Course Import
 // Course Import (Changed to avoid route shadowing with /courses/:id)
 router.post('/content/import', adminMiddleware, importCourseContent);
+
+// Exam Documents
+router.get('/exam-documents', getExamDocuments);
+router.post('/exam-documents', adminMiddleware, createExamDocument);
+router.put('/exam-documents/:id', adminMiddleware, updateExamDocument);
+router.delete('/exam-documents/:id', adminMiddleware, deleteExamDocument);
 
 export default router;

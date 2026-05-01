@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getImageUrl } from '../lib/utils';
-import { getAuthHeaders } from '../services/apiClient';
+import { coursesAPI, subjectsAPI, getAuthHeaders } from '../services/apiClient';
+import { subcategoriesAPI } from '../services/academicService';
+import { isCategoryMatch, getCourseLevel1Key, getCourseLevel2Key, normalizeSubcategoryId } from './CategoryPage';
 
 interface Course {
   _id?: string;
@@ -45,32 +47,10 @@ interface Subject {
   level2Branch?: string;
 }
 
-function normalizeSubcategoryId(val: string = "") {
-  if (!val) return "";
-  const id = String(val).toLowerCase();
-  
-  // Explicit mappings for known buckets (matching AddCourse.tsx)
-  if (id.includes('recorded_batch') || id.includes('recorded-batch')) return 'recorded_batch';
-  if (id.includes('live_classroom') || id.includes('live_class')) return 'live_classroom';
-  if (id.includes('crash_course') || id.includes('crash-course')) return 'crash_course';
-  if (id.includes('mock_test') || id.includes('mock-test')) return 'mock_test';
+// Helper removed: using imported normalizeSubcategoryId if needed, 
+// but this file uses contentTypeConfig keys.
 
-  return id
-    .replace(/neet_|iit_jee_|iit-jee_|nursing_cet_|foundation_/g, "")
-    .replace(/batches/g, "batch")
-    .replace(/-/g, "_")
-    .trim();
-}
-
-function isCategoryMatch(courseCatId: string, targetCatId: string) {
-  const cId = String(courseCatId || "").toLowerCase();
-  const tId = String(targetCatId || "").toLowerCase();
-  if (cId === tId) return true;
-  // Handle aliases
-  if (tId === 'neet-iitjee') return cId === 'neet' || cId === 'iit-jee' || cId === 'iit_jee';
-  if (tId === 'nursing-cet') return cId === 'nursing';
-  return false;
-}
+// Helper removed: using imported isCategoryMatch
 
 const contentTypeConfig: Record<string, { label: string; icon: string; gradient: string }> = {
   recorded_batch: { label: 'Recorded Batch', icon: 'play_circle', gradient: 'from-[#303F9F] to-[#1A237E]' },
@@ -265,16 +245,16 @@ const ContentTypeDetail: React.FC = () => {
 
     return courses.filter(c => {
       // 1. Strict-but-Compatible Hierarchy (STOPS LEAKAGE)
-      const matchesCat = isCategoryMatch(c.categoryId || "", targetCatId || "");
+      const matchesCat = isCategoryMatch(c, { id: targetCatId });
       if (!matchesCat) return false;
 
-      const cL1 = String(c.level1Branch || c.examType || c.boardType || "").toLowerCase().trim();
+      const cL1 = getCourseLevel1Key(c);
       const pL1 = String(branchParam || "").toLowerCase().trim();
-      if (pL1 && cL1 !== pL1) return false;
+      if (pL1 && cL1 && cL1 !== pL1) return false;
 
-      const cL2 = String(c.level2Branch || "").toLowerCase().trim();
+      const cL2 = getCourseLevel2Key(c);
       const pL2 = String(classParam || "").toLowerCase().trim();
-      if (pL2 && cL2 !== pL2) return false;
+      if (pL2 && cL2 && cL2 !== pL2) return false;
 
       // 2. Primary Subcategory Match (with legacy fallback and normalization)
       const requestedId = normalizeSubcategoryId(contentType || '');

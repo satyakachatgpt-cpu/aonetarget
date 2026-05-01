@@ -156,9 +156,8 @@ const VideoPlayer: React.FC = () => {
             </div>
           )}
 
-          <div className="grid grid-cols-4 gap-4 mb-10">
+          <div className="grid grid-cols-3 gap-4 mb-10">
             {[
-              { icon: 'download_for_offline', label: 'Offline', color: 'blue' },
               { icon: 'speed', label: 'Speed', color: 'purple' },
               { icon: 'high_quality', label: '1080p', color: 'orange' },
               { icon: 'contact_support', label: 'Support', color: 'green' }

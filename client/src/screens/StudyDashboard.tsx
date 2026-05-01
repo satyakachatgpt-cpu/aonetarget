@@ -113,7 +113,7 @@ const StudyDashboard: React.FC = () => {
       fetchCourseData();
       fetchSubjects();
     }
-  }, [id]);
+  }, [id, student?.id]);
 
   const isFreeContent = course?.price === 0 || course?.isFree === true ||
     course?.categoryId === 'free-content' ||

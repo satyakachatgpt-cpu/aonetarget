@@ -119,6 +119,7 @@ export const subjectsAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create subject');
+    invalidateCache('subjects');
     return response.json();
   },
   update: async (id: string, data: any) => {
@@ -131,6 +132,7 @@ export const subjectsAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update subject');
+    invalidateCache('subjects');
     return response.json();
   },
   delete: async (id: string) => {
@@ -139,6 +141,7 @@ export const subjectsAPI = {
       headers: { ...getAdminHeaders() }
     });
     if (!response.ok) throw new Error('Failed to delete subject');
+    invalidateCache('subjects');
     return response.json();
   }
 };

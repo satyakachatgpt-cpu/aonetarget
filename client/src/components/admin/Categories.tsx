@@ -726,6 +726,7 @@ const Categories: React.FC<Props> = ({ showToast }) => {
         onSubmit={handleSaveCategory}
         editingCategory={editingCat}
         nextOrder={categories.length + 1}
+        showToast={showToast}
       />
 
       <AddSubcategoryDrawer

@@ -68,12 +68,42 @@ const Videos: React.FC<Props> = ({ showToast }) => {
 
 
   const handleThumbnailFile = (file: File) => {
-    if (file.type.startsWith('image/')) {
+    if (!file.type.startsWith('image/')) {
+      showToast('Please select a valid image file', 'error');
+      return;
+    }
+
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const width = img.width;
+      const height = img.height;
+      const ratio = width / height;
+
+      // Minimum 1280x720
+      if (width < 1280 || height < 720) {
+        showToast("Minimum thumbnail size is 1280x720 for HD quality", "error");
+        return;
+      }
+
+      // 16:9 ratio (allow 0.1 tolerance)
+      if (Math.abs(ratio - (16/9)) > 0.1) {
+        showToast("Thumbnail should be in 16:9 aspect ratio (e.g., 1280x720)", "error");
+        return;
+      }
+
       setFormData(prev => ({ ...prev, thumbnailFile: file, thumbnail: file.name }));
       showToast(`Thumbnail selected: ${file.name}`);
-    } else {
-      showToast('Please select a valid image file', 'error');
-    }
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      showToast("Invalid image file", "error");
+    };
+
+    img.src = objectUrl;
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -908,6 +938,9 @@ const Videos: React.FC<Props> = ({ showToast }) => {
                       {formData.thumbnailFile ? 'Thumbnail selected' : 'Drag & drop thumbnail'}
                     </p>
                     <p className="text-[10px] text-gray-500">or click to select image</p>
+                    <div className="mt-2.5 px-3 py-1 bg-blue-50 border border-blue-100 rounded-full inline-block">
+                      <p className="text-[9px] font-black text-blue-600 uppercase tracking-tight">Recommended: 1280x720 (16:9 ratio)</p>
+                    </div>
                     {formData.thumbnailFile && (
                       <p className="text-xs font-bold text-green-600 mt-1">🖼️ {formData.thumbnailFile.name}</p>
                     )}
