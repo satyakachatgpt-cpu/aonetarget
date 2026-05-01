@@ -302,7 +302,37 @@ export const getTestById = async (req, res) => {
     console.log(`[getTestById] Found ${separateQuestions.length} separate questions and ${embeddedQuestions.length} embedded questions`);
     
     const questions = separateQuestions.length > 0 ? separateQuestions : embeddedQuestions;
-    res.json({ ...test, questions });
+    
+    // Strip sensitive fields for students to prevent cheating via DevTools
+    const isAdmin = req.admin || req.user?.isAdmin || req.user?.role === 'admin';
+    const safeQuestions = isAdmin ? questions : questions.map(q => {
+      // Strip top-level sensitive fields
+      const { 
+        correctAnswer, correct_answer, explanation, answer, solution, 
+        fullSolution, questionSolution, detailed_solution, ...safeQ 
+      } = q;
+      
+      // Strip isCorrect/correct from displayOptions array
+      if (Array.isArray(safeQ.displayOptions)) {
+        safeQ.displayOptions = safeQ.displayOptions.map(opt => {
+          const { isCorrect, correct, is_correct, ...safeOpt } = opt;
+          return safeOpt;
+        });
+      }
+      
+      // Strip isCorrect/correct from options array
+      if (Array.isArray(safeQ.options)) {
+        safeQ.options = safeQ.options.map(opt => {
+          const { isCorrect, correct, is_correct, ...safeOpt } = opt;
+          return safeOpt;
+        });
+      }
+
+      return safeQ;
+    });
+
+
+    res.json({ ...test, questions: safeQuestions });
   } catch (error) {
     console.error('Error fetching test:', error);
     res.status(500).json({ error: 'Failed to fetch test' });
