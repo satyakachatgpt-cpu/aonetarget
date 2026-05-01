@@ -79,10 +79,12 @@ async function startServer() {
 // Global Process Handlers
 process.on('uncaughtException', (err) => {
   console.error('[FATAL] Uncaught Exception:', err);
+  process.exit(1);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('[FATAL] Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
 });
 
 // Start the bootstrap process

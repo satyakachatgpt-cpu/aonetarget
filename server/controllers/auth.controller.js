@@ -133,12 +133,14 @@ async function issueStudentSession(req, res, db, student, deviceId) {
       { returnDocument: 'after' }
     );
 
-    console.log('[DEVICE-IP-DEBUG] issueStudentSession', {
-      studentId: student.id || student._id,
-      ipBefore: student.activeDeviceIP,
-      ipAfter: updated?.activeDeviceIP,
-      incomingIP: ip
-    });
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[DEVICE-IP-DEBUG] issueStudentSession', {
+        studentId: student.id || student._id,
+        ipBefore: student.activeDeviceIP,
+        ipAfter: updated?.activeDeviceIP,
+        incomingIP: ip
+      });
+    }
   }
 
   setAccessCookie(res, accessToken);
@@ -299,19 +301,21 @@ export const loginWithPassword = async (req, res) => {
     const incomingDeviceType = req.body.deviceType || 'Browser Device';
     const incomingIP = getRealIP(req);
 
-    console.log('[DEVICE-IP-DEBUG] loginWithPassword', {
-      headers: {
-        host: req.headers.host,
-        origin: req.headers.origin,
-        xForwardedFor: req.headers['x-forwarded-for'],
-        xRealIp: req.headers['x-real-ip'],
-      },
-      reqIp: req.ip,
-      socketRemoteAddress: req.socket?.remoteAddress,
-      extractedIP: incomingIP,
-      studentId: student.id || student._id,
-      currentActiveIP: student.activeDeviceIP
-    });
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[DEVICE-IP-DEBUG] loginWithPassword', {
+        headers: {
+          host: req.headers.host,
+          origin: req.headers.origin,
+          xForwardedFor: req.headers['x-forwarded-for'],
+          xRealIp: req.headers['x-real-ip'],
+        },
+        reqIp: req.ip,
+        socketRemoteAddress: req.socket?.remoteAddress,
+        extractedIP: incomingIP,
+        studentId: student.id || student._id,
+        currentActiveIP: student.activeDeviceIP
+      });
+    }
 
     // DEVICE BINDING LOGIC
     const activeDeviceId = student.activeDeviceId || student.deviceId;
@@ -633,19 +637,21 @@ export const verifyOtp = async (req, res) => {
     const incomingDeviceType = req.body.deviceType || 'Browser Device';
     const incomingIP = getRealIP(req);
 
-    console.log('[DEVICE-IP-DEBUG] verifyOtp', {
-      headers: {
-        host: req.headers.host,
-        origin: req.headers.origin,
-        xForwardedFor: req.headers['x-forwarded-for'],
-        xRealIp: req.headers['x-real-ip'],
-      },
-      reqIp: req.ip,
-      socketRemoteAddress: req.socket?.remoteAddress,
-      extractedIP: incomingIP,
-      studentId: student.id || student._id,
-      currentActiveIP: student.activeDeviceIP
-    });
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('[DEVICE-IP-DEBUG] verifyOtp', {
+        headers: {
+          host: req.headers.host,
+          origin: req.headers.origin,
+          xForwardedFor: req.headers['x-forwarded-for'],
+          xRealIp: req.headers['x-real-ip'],
+        },
+        reqIp: req.ip,
+        socketRemoteAddress: req.socket?.remoteAddress,
+        extractedIP: incomingIP,
+        studentId: student.id || student._id,
+        currentActiveIP: student.activeDeviceIP
+      });
+    }
 
     // DEVICE BINDING LOGIC
     const activeDeviceId = student.activeDeviceId || student.deviceId; // Check both new and legacy fields

@@ -495,8 +495,25 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   // KEYBOARD CONTROLS
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement as HTMLElement;
+      const activeTag = activeEl?.tagName || '';
+      const isTyping = activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeEl?.isContentEditable;
+
+      // SECURITY: Block dev-tools / save / print shortcuts on media pages
+      if (!isTyping) {
+        const k = e.key.toLowerCase();
+        if (
+          e.key === 'F12' ||
+          ((e.ctrlKey || e.metaKey) && !e.shiftKey && ['s', 'u', 'p'].includes(k)) ||
+          ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c'].includes(k))
+        ) {
+          e.preventDefault();
+          return;
+        }
+      }
+
       // Don't trigger if user is typing in chat
-      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      if (activeTag === 'INPUT' || activeTag === 'TEXTAREA') return;
 
       switch (e.code) {
         case 'Space':
@@ -547,6 +564,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
       className="fixed inset-0 z-[1000000] bg-black font-outfit select-none overflow-hidden p-0"
       onMouseMove={handleUserActivity}
       onTouchStart={handleUserActivity}
+      onContextMenu={(e) => e.preventDefault()}
     >
       <div 
         className={`absolute bg-black transition-all duration-700 ease-in-out shadow-2xl ${
@@ -613,6 +631,21 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
               />
             )}
            </div>
+        </div>
+
+        {/* Watermark Overlay - DRM Protection */}
+        <div
+          className="absolute bottom-20 right-3 z-30 pointer-events-none select-none"
+          aria-hidden="true"
+        >
+          <span
+            className="text-white font-bold tracking-widest whitespace-nowrap"
+            style={{ opacity: 0.12, userSelect: 'none', fontSize: '11px', fontFamily: 'monospace' }}
+          >
+            {student?.phone
+              ? `AONE-${String(student.phone).slice(-4)}`
+              : (student?.email?.split('@')[0] || student?.name || 'AONE TARGET')}
+          </span>
         </div>
 
         {/* Top Control Bar - Strengthened Contrast */}

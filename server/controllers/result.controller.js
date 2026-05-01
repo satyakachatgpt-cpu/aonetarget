@@ -5,6 +5,38 @@ import { findCourse } from '../services/course.service.js';
 import { evaluateTest } from '../services/grading.service.js';
 import { logReevaluation, logError, logSubmission } from '../utils/logger.js';
 
+/**
+ * Internal helper to fetch a sorted leaderboard (best attempt per student) for a test.
+ * Returns an array of { score, time } objects.
+ */
+const getLeaderboard = async (db, testId) => {
+  return await db.collection('testResults').aggregate([
+    { $match: { testId: String(testId) } },
+    {
+      $group: {
+        _id: "$studentId",
+        score: { $max: "$obtainedMarks" },
+        attempts: { $push: { m: "$obtainedMarks", t: "$timeTaken" } }
+      }
+    },
+    {
+      $addFields: {
+        time: {
+          $min: {
+            $map: {
+              input: { $filter: { input: "$attempts", as: "att", cond: { $eq: ["$$att.m", "$score"] } } },
+              as: "top",
+              in: "$$top.t"
+            }
+          }
+        }
+      }
+    },
+    { $project: { _id: 1, score: 1, time: 1 } },
+    { $sort: { score: -1, time: 1 } }
+  ]).toArray();
+};
+
 const REEVALUATE_BATCH_SIZE = 50;
 
 /**
@@ -36,6 +68,72 @@ export const enrichResult = async (r, db) => {
     } catch (e) { }
   }
   return r;
+};
+
+// GET /api/test-results/:id
+export const getResultById = async (req, res) => {
+  try {
+    const db = getDb();
+    const resultId = String(req.params.id || '').trim();
+    console.log('DEBUG: getResultById looking for:', resultId);
+    
+    // Support custom id (string/number) and MongoDB _id (ObjectId or string)
+    const orFilters = [
+      { id: resultId },
+      { id: !isNaN(Number(resultId)) ? Number(resultId) : null },
+      { _id: resultId }
+    ].filter(v => (v.id !== null && v.id !== undefined) || (v._id !== null && v._id !== undefined));
+    
+    if (ObjectId.isValid(resultId)) {
+      orFilters.push({ _id: new ObjectId(resultId) });
+    }
+
+    const filter = { $or: orFilters };
+    console.log('DEBUG: Final Filter:', JSON.stringify(filter));
+
+    const result = await db.collection('testResults').findOne(filter);
+    if (!result) {
+        console.log('DEBUG: Result NOT found in DB for ID:', resultId);
+        return res.status(404).json({ error: 'Result record not found' });
+    }
+    console.log('DEBUG: Result found! studentId:', result.studentId);
+    
+    // Check ownership
+    const isAdmin = req.user?.isAdmin || req.user?.role === 'admin';
+    const sessionStudentId = req.user?.studentId || req.user?.id;
+    console.log('DEBUG: Ownership check - result.studentId:', result.studentId, 'sessionStudentId:', sessionStudentId, 'isAdmin:', isAdmin);
+    
+    if (!isAdmin && String(result.studentId) !== String(sessionStudentId)) {
+      console.log('DEBUG: Ownership check FAILED');
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    const enriched = await enrichResult(result, db);
+
+    // --- Optimized Live Ranking Logic ---
+    try {
+      const tid = enriched.testId;
+      const lb = await getLeaderboard(db, tid);
+      
+      const currentScore = Number(enriched.obtainedMarks) || 0;
+      const currentTime = Number(enriched.timeTaken) || 999999;
+      
+      // Calculate rank: count students better than current result
+      enriched.rank = lb.filter(s => 
+        (Number(s.score) > currentScore) || 
+        (Number(s.score) === currentScore && Number(s.time) < currentTime)
+      ).length + 1;
+      
+      enriched.totalStudents = lb.length;
+    } catch (rankErr) {
+      console.error('Live ranking failed in single fetch:', rankErr);
+    }
+
+    res.json(enriched);
+  } catch (error) {
+    logError({ action: 'GET_RESULT_BY_ID', error, context: { id: req.params.id } });
+    res.status(500).json({ error: 'Internal server error' });
+  }
 };
 
 // GET /api/students/:id/test-results
@@ -217,6 +315,36 @@ export const getStudentTestResults = async (req, res) => {
       .aggregate(pipeline, { allowDiskUse: true })
       .toArray();
 
+    // --- Optimized Live Ranking Calculation for History ---
+    try {
+      const uniqueTestIds = [...new Set(results.map(r => r.testId))];
+      const testLeaderboards = {};
+
+      // Build leaderboards for each test mentioned in the results
+      await Promise.all(uniqueTestIds.map(async (tid) => {
+        testLeaderboards[tid] = await getLeaderboard(db, tid);
+      }));
+
+      // Map fresh ranks to results
+      results.forEach(r => {
+        const lb = testLeaderboards[r.testId];
+        if (lb) {
+          const currentScore = Number(r.obtainedMarks) || 0;
+          const currentTime = Number(r.timeTaken) || 999999;
+          
+          r.rank = lb.filter(s => 
+            (Number(s.score) > currentScore) || 
+            (Number(s.score) === currentScore && Number(s.time) < currentTime)
+          ).length + 1;
+          
+          r.totalStudents = lb.length;
+        }
+      });
+    } catch (rankErr) {
+      console.error('Live ranking calculation failed:', rankErr);
+    }
+    // --- End Live Ranking Calculation ---
+
     res.json(results);
   } catch (error) {
     logError({ action: 'GET_STUDENT_RESULTS', error, context: { studentId: req.params.id } });
@@ -331,6 +459,35 @@ export const getAdminTestResults = async (req, res) => {
     const results = await db.collection('testResults')
       .aggregate(pipeline, { allowDiskUse: true })
       .toArray();
+
+    // --- Optimized Live Ranking Calculation for Admin ---
+    try {
+      const uniqueTestIds = [...new Set(results.map(r => r.testId))];
+      const testLeaderboards = {};
+
+      for (const tid of uniqueTestIds) {
+        testLeaderboards[tid] = await getLeaderboard(db, tid);
+      }
+
+      results.forEach(r => {
+        const lb = testLeaderboards[r.testId];
+        if (lb) {
+          const currentScore = Number(r.obtainedMarks) || 0;
+          const currentTime = Number(r.timeTaken) || 999999;
+          
+          r.rank = lb.filter(s => 
+            (Number(s.score) > currentScore) || 
+            (Number(s.score) === currentScore && Number(s.time) < currentTime)
+          ).length + 1;
+          
+          r.totalStudents = lb.length;
+        }
+      });
+    } catch (rankErr) {
+      console.error('Admin live ranking calculation failed:', rankErr);
+    }
+    // --- End Live Ranking Calculation ---
+
     res.json(results);
   } catch (error) {
     logError({ action: 'GET_ADMIN_RESULTS', error });
@@ -572,6 +729,36 @@ export const submitTest = async (req, res) => {
       timeTaken,
       submittedAt: new Date()
     };
+
+    // --- Optimized Ranking Calculation ---
+    let rank = 0;
+    let totalStudents = 0;
+    try {
+      const tid = req.params.testId;
+      const lb = await getLeaderboard(db, tid);
+      
+      const studentScore = Number(evaluation.obtainedMarks) || 0;
+      const studentTime = Number(timeTaken) || 999999;
+      
+      // Calculate rank among others' best attempts
+      // lb already contains best attempts per student (including current student's past attempts if any)
+      // To strictly rank among OTHERS, we could filter lb by studentId, but the leaderboard concept 
+      // usually includes the current best too. The existing code filtered out current student.
+      const otherStudentsBest = lb.filter(s => String(s._id) !== String(effectiveStudentId));
+      
+      totalStudents = otherStudentsBest.length + 1;
+      rank = otherStudentsBest.filter(s => 
+        (Number(s.score) > studentScore) || 
+        (Number(s.score) === studentScore && Number(s.time) < studentTime)
+      ).length + 1;
+      
+    } catch (rankErr) {
+      console.error('Ranking calculation failed:', rankErr);
+    }
+    // --- End Ranking Calculation ---
+
+    resultData.rank = rank;
+    resultData.totalStudents = totalStudents;
 
     await db.collection('testResults').insertOne(resultData);
 

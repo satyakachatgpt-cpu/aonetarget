@@ -32,7 +32,8 @@ const MockTests: React.FC = () => {
       setStudent(studentData);
       fetchData();
     } else {
-      navigate('/student-login');
+      sessionStorage.setItem('postLoginRedirect', location.pathname + location.search);
+      navigate('/student-login', { state: { from: location.pathname + location.search } });
     }
   }, []);
 
@@ -279,8 +280,10 @@ const MockTests: React.FC = () => {
                 </div>
                 <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between">
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{series.category || 'General'}</span>
-                  {enrolledSeriesIds.has(String(series.id || series._id)) ? (
-                    <span className="text-[11px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-lg">✓ Included</span>
+                  {series.isDirect ? (
+                    <span className="text-[11px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-lg">✓ Open</span>
+                  ) : series.isIncluded ? (
+                    <span className="text-[11px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg">✓ Included</span>
                   ) : series.price > 0 ? (
                     <span className="text-[11px] font-black text-primary bg-primary-50 px-2 py-0.5 rounded-lg">₹{series.price}</span>
                   ) : (

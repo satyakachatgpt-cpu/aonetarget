@@ -8,12 +8,12 @@ import {
   bulkCreateSubjectiveTests,
   bulkUpdateSubjectiveTests
 } from '../controllers/subjective.controller.js';
-import { adminMiddleware } from '../middleware/auth.js';
+import { adminMiddleware, optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // Subjective Test Management Routes
-router.get('/', getAllSubjectiveTests);
+router.get('/', optionalAuth, getAllSubjectiveTests);
 router.post('/', adminMiddleware, createSubjectiveTest);
 router.delete('/', adminMiddleware, deleteAllSubjectiveTests);
 

@@ -1,6 +1,11 @@
 import cloudinary from '../config/cloudinary.config.js';
 
-export const uploadToCloudinary = (buffer, options = {}) => {
+/**
+ * Uploads a file to Cloudinary. 
+ * @param {Buffer|String} source - Buffer or file path string
+ * @param {Object} options - Upload options
+ */
+export const uploadToCloudinary = (source, options = {}) => {
   return new Promise((resolve, reject) => {
     const uploadOptions = {
       folder: options.folder,
@@ -8,37 +13,37 @@ export const uploadToCloudinary = (buffer, options = {}) => {
       allowed_formats: options.allowed_formats
     };
 
-    // Add chunked upload for videos to prevent 413 errors
-    if (options.resource_type === 'video') {
+    // Add chunked upload / high timeout for larger files
+    if (options.resource_type === 'video' || options.resource_type === 'raw' || options.resource_type === 'auto') {
       uploadOptions.chunk_size = 6000000; // 6MB per chunk
       uploadOptions.timeout = 180000; // 3 min timeout
     }
 
-    // Add chunked upload / high timeout for large documents
-    if (options.resource_type === 'raw' || options.resource_type === 'auto') {
-      uploadOptions.timeout = 180000; // 3 min timeout for larger docs
-    }
-
-    const uploadStream = cloudinary.uploader.upload_stream(
-      uploadOptions,
-      (error, result) => {
-        if (error) {
-          console.error('Cloudinary stream error:', error);
-          return reject(error);
-        }
-        resolve({
-          url: result.secure_url,
-          public_id: result.public_id,
-          resource_type: result.resource_type,
-          format: result.format,
-          bytes: result.bytes,
-          duration: result.duration
-        });
+    const handleResult = (error, result) => {
+      if (error) {
+        console.error('Cloudinary upload error:', error);
+        return reject(error);
       }
-    );
+      resolve({
+        url: result.secure_url,
+        public_id: result.public_id,
+        resource_type: result.resource_type,
+        format: result.format,
+        bytes: result.bytes,
+        duration: result.duration
+      });
+    };
 
-    // Direct buffer streaming
-    uploadStream.end(buffer);
+    if (Buffer.isBuffer(source)) {
+      // Direct buffer streaming
+      const uploadStream = cloudinary.uploader.upload_stream(uploadOptions, handleResult);
+      uploadStream.end(source);
+    } else if (typeof source === 'string') {
+      // Upload from file path
+      cloudinary.uploader.upload(source, uploadOptions, handleResult);
+    } else {
+      reject(new Error('Invalid source type: must be Buffer or file path string'));
+    }
   });
 };
 

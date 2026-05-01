@@ -1,10 +1,10 @@
 import express from 'express';
 import * as testSeriesController from '../controllers/testseries.controller.js';
-import { adminMiddleware } from '../middleware/auth.js';
+import { adminMiddleware, optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.get('/', testSeriesController.getAllTestSeries);
+router.get('/', optionalAuth, testSeriesController.getAllTestSeries);
 router.post('/', adminMiddleware, testSeriesController.createTestSeries);
 router.delete('/', adminMiddleware, testSeriesController.deleteAllTestSeries);
 router.post('/bulk', adminMiddleware, testSeriesController.bulkCreateTestSeries);

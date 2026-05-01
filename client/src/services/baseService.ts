@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { toast } from 'sonner';
 
 
 
@@ -9,6 +10,28 @@ console.log('[API_BASE_URL]', API_BASE_URL, window.location.href);
 export const apiCache: Record<string, { data: any; timestamp: number }> = {};
 export const pendingRequests: Record<string, Promise<any>> = {};
 export const CACHE_TTL = 30000;
+
+// Axios Global Interceptor for 401, 429, and requestId
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error.response?.status;
+    const data = error.response?.data;
+    
+    if (status === 401) {
+      handleUnauthorized({ status, data }, error.config?.url || '').catch(() => {});
+    } else if (status === 429) {
+      toast.error('Too many requests, please wait');
+    }
+    
+    const requestId = data?.requestId;
+    if (requestId && status !== 401 && status !== 429) {
+      toast.error(`Error occurred (Ref: ${requestId})`);
+    }
+
+    return Promise.reject(error);
+  }
+);
 
 export function getAdminHeaders(): Record<string, string> {
   const adminToken = localStorage.getItem('adminToken');
@@ -82,8 +105,15 @@ export async function apiRequest(url: string, options: RequestInit = {}) {
   const response = await fetch(url, options);
   await handleUnauthorized(response, url);
   
+  if (response.status === 429) {
+    toast.error('Too many requests, please wait');
+  }
+
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
+    if (errorData.requestId && response.status !== 401 && response.status !== 429) {
+      toast.error(`Error occurred (Ref: ${errorData.requestId})`);
+    }
     throw new Error(errorData.error || errorData.details || `API error (${response.status})`);
   }
   
@@ -109,8 +139,19 @@ export async function cachedFetch(url: string, ttl = CACHE_TTL): Promise<any> {
   const promise = fetch(url, { headers }).then(async (response) => {
     await handleUnauthorized(response, url);
 
-    if (!response.ok) throw new Error(`Failed to fetch ${url}`);
-    const data = await response.json();
+    if (response.status === 429) {
+      toast.error('Too many requests, please wait');
+    }
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      if (errorData.requestId && response.status !== 401 && response.status !== 429) {
+        toast.error(`Error occurred (Ref: ${errorData.requestId})`);
+      }
+      throw new Error(errorData.error || errorData.details || `Failed to fetch ${url}`);
+    }
+    
+    const data = await response.json().catch(() => ({}));
     apiCache[url] = { data, timestamp: Date.now() };
     delete pendingRequests[url];
     return data;

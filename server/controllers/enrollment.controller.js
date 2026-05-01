@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { findCourse, getRelatedCourseIds, getCourseIdVariants } from '../services/course.service.js';
-import { isPurchaseExpired } from '../utils/helpers.js';
+import { isPurchaseExpired, calculatePriceBreakdown } from '../utils/helpers.js';
 import { sendEmail, templates } from '../utils/email.js';
 import Student from '../models/Student.js';
 
@@ -117,19 +117,38 @@ export const getStudentCourses = async (req, res) => {
       studentId: { $in: studentIdVariants }
     }).toArray();
 
+    // 4. Batch pre-calculate metrics (Optimization: Remove N+1 queries)
+    const contentIdMap = new Map();
+    const allEnrolledVariantsSet = new Set();
+    
+    // First pass: Resolve all variants for enrolled content
+    for (const c of uniqueContent) {
+      const contentIdStr = String(c.id || c._id);
+      const variants = await getCourseIdVariants(contentIdStr);
+      contentIdMap.set(contentIdStr, variants);
+      variants.forEach(v => allEnrolledVariantsSet.add(v));
+    }
+
+    // Single bulk aggregation for all video counts
+    const videoCounts = await db.collection('videos').aggregate([
+      { $match: { courseId: { $in: Array.from(allEnrolledVariantsSet) } } },
+      { $group: { _id: "$courseId", count: { $sum: 1 } } }
+    ]).toArray();
+    
+    const videoCountMap = new Map();
+    videoCounts.forEach(vc => videoCountMap.set(String(vc._id), vc.count));
+
     const mappedContent = await Promise.all(uniqueContent.map(async (c) => {
       const contentIdStr = String(c.id || c._id);
-      const idVariants = await getCourseIdVariants(contentIdStr);
+      const idVariants = contentIdMap.get(contentIdStr) || [contentIdStr];
 
       // Resolve specific progress for THIS course
       const progRecord = allProgress.find(p => 
         idVariants.includes(String(p.courseId))
       );
 
-      // Calculate Metrics
-      const totalVideos = await db.collection('videos').countDocuments({
-        courseId: { $in: idVariants }
-      });
+      // Calculate Metrics from Pre-fetched Map
+      const totalVideos = idVariants.reduce((acc, vid) => acc + (videoCountMap.get(vid) || 0), 0);
       
       const completedVideos = (progRecord?.completedVideos || []).map(v => String(v));
       const completedCount = Math.min(completedVideos.length, totalVideos);
@@ -197,12 +216,40 @@ export const enrollStudent = async (req, res) => {
       return res.status(404).json({ error: 'Course not found' });
     }
 
-    // Use the canonical ID
-    const canonicalId = course.id || course._id.toString();
+    const safeNumber = (val, fallback = 0) => {
+      const n = Number(val);
+      return Number.isFinite(n) ? n : fallback;
+    };
 
-    const enrolledCourses = student.enrolledCourses || [];
-    if (enrolledCourses.includes(canonicalId) || enrolledCourses.includes(course._id.toString())) {
-      return res.status(400).json({ error: 'Already enrolled in this course' });
+    // Use the canonical ID and variants for idempotency
+    const canonicalId = course.id || course._id.toString();
+    const idVariants = [...new Set([
+      canonicalId,
+      String(courseId),
+      course.id ? String(course.id) : null,
+      course._id ? course._id.toString() : null,
+      ...(await getRelatedCourseIds(course, canonicalId))
+    ])].filter(Boolean).map(String);
+
+    const enrolledCourses = (student.enrolledCourses || []).map(id => String(id));
+
+    // 1. Comprehensive Idempotency Check
+    if (idVariants.some(id => enrolledCourses.includes(String(id)))) {
+      return res.status(200).json({ success: true, message: 'Already enrolled' });
+    }
+
+    // 2. Security Check: Only allow free courses (Price = 0) via this endpoint
+    const isAdmin = !!(req.admin || req.user?.isAdmin || req.user?.role === 'admin');
+    
+    // Robust Price Verification (Server-side ground truth)
+    const breakdown = calculatePriceBreakdown(course, null);
+    const basePrice = safeNumber(course.price || course.amount, 0);
+    // Safe fallback to a high price if totalAmount is missing or NaN
+    const finalPayable = safeNumber(breakdown.totalAmount ?? basePrice, 999999);
+
+    if (finalPayable > 0 && !isAdmin) {
+       console.warn(`[SECURITY] Blocked direct enrollment attempt for student ${req.params.id} on course ${canonicalId}`);
+       return res.status(402).json({ error: 'This is a paid course. Please purchase it via the checkout flow.' });
     }
 
     // SECURITY GATE: Only allow free courses to be enrolled via this direct endpoint for students.

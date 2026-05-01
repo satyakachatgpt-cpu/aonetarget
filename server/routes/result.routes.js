@@ -12,6 +12,7 @@ import {
   reevaluateTest,
   rawInsertTestResult,
   submitTest,
+  getResultById
 } from '../controllers/result.controller.js';
 
 const router = express.Router();
@@ -21,6 +22,9 @@ const studentOwnerOrAdmin = (req, res, next) => {
   if (req.user?.studentId && String(req.user.studentId) === String(req.params.id)) return next();
   return res.status(403).json({ error: 'Forbidden' });
 };
+
+// Result detail route
+router.get('/test-results/:id', authMiddleware, getResultById);
 
 // Student result routes
 router.get('/students/:id/test-results', authMiddleware, studentOwnerOrAdmin, getStudentTestResults);

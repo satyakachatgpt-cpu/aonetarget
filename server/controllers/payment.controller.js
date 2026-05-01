@@ -119,7 +119,7 @@ export const createRazorpayOrder = async (req, res) => {
 
     const order = await response.json();
     if (!response.ok) {
-      console.error('Razorpay order creation failed:', order);
+      console.error('Razorpay order creation failed. (Payload omitted for security)');
       return res.status(500).json({ error: order.error?.description || 'Failed to create Razorpay order' });
     }
 
@@ -186,7 +186,7 @@ export const verifyRazorpayPayment = async (req, res) => {
     const paymentData = await paymentRes.json();
 
     if (!paymentRes.ok || paymentData.status !== 'captured') {
-      console.error('Payment not captured:', paymentData);
+      console.error('Payment not captured. (Payload omitted for security)');
       // Send Failure Email
       if (studentId && courseId) {
         try {
@@ -371,8 +371,10 @@ export const createPurchase = async (req, res) => {
     }
     const enrolledCourses = Array.isArray(student.enrolledCourses) ? student.enrolledCourses : [];
 
+    // 1. Fetch Course from DB (Strict)
     let course = await findCourse(courseId);
     if (!course) {
+      // Fallback for extremely rare legacy cases, but still use DB data if possible
       try {
         if (ObjectId.isValid(courseId)) {
           course = await db.collection('courses').findOne({ _id: new ObjectId(courseId) });
@@ -433,7 +435,7 @@ export const createPurchase = async (req, res) => {
       coinDiscount: coinDiscount,
       coinsUsed: coinsUsed,
       couponCode: coupon?.code || '',
-      paymentMethod: paymentMethod || 'online',
+      paymentMethod: paymentMethod || 'free',
       referralCode: referralCode || null,
       status: 'completed',
       createdAt: new Date()
@@ -449,59 +451,52 @@ export const createPurchase = async (req, res) => {
       );
     }
 
-    if (enrolledCourses.includes(actualCourseId)) {
-       // Already enrolled
-    } else {
-       // Get linked test series IDs (Bidirectional & Multi-ID matching)
-      const directLinkedSeriesIds = (course.content?.testSeries || []).filter(id => id && typeof id === 'string');
-      
-      const batchVariants = await getRelatedCourseIds(course, actualCourseId);
+    // Fulfillment logic (Full sync with verifyRazorpayPayment)
+    const directLinkedSeriesIds = (course.content?.testSeries || []).filter(id => id && typeof id === 'string');
+    
+    const batchVariants = await getRelatedCourseIds(course, actualCourseId);
 
-      const [reverseSeriesColl, reverseSeriesTests] = await Promise.all([
-        db.collection('testSeries').find({
-          $or: [
-            { courseId: { $in: batchVariants } },
-            { courseIds: { $in: batchVariants } }
-          ]
-        }).toArray(),
-        db.collection('tests').find({
-          isSeries: true,
-          $or: [
-            { courseId: { $in: batchVariants } },
-            { courseIds: { $in: batchVariants } }
-          ]
-        }).toArray()
-      ]);
+    const [reverseSeriesColl, reverseSeriesTests] = await Promise.all([
+      db.collection('testSeries').find({
+        $or: [
+          { courseId: { $in: batchVariants } },
+          { courseIds: { $in: batchVariants } }
+        ]
+      }).toArray(),
+      db.collection('tests').find({
+        isSeries: true,
+        $or: [
+          { courseId: { $in: batchVariants } },
+          { courseIds: { $in: batchVariants } }
+        ]
+      }).toArray()
+    ]);
 
-      const reverseLinkedSeriesIds = [
-        ...reverseSeriesColl.map(ts => ts.id || ts._id.toString()),
-        ...reverseSeriesTests.map(ts => ts.id || ts._id.toString())
-      ];
-      const allLinkedSeriesIds = [...new Set([...directLinkedSeriesIds, ...reverseLinkedSeriesIds])];
+    const reverseLinkedSeriesIds = [
+      ...reverseSeriesColl.map(ts => ts.id || ts._id.toString()),
+      ...reverseSeriesTests.map(ts => ts.id || ts._id.toString())
+    ];
+    const allLinkedSeriesIds = [...new Set([...directLinkedSeriesIds, ...reverseLinkedSeriesIds])];
 
-      await db.collection('students').updateOne(
-        getStudentFilter(studentId),
-        { $addToSet: { enrolledCourses: { $each: [actualCourseId, ...batchVariants, ...allLinkedSeriesIds] } } }
-      );
+    await db.collection('students').updateOne(
+      getStudentFilter(studentId),
+      { $addToSet: { enrolledCourses: { $each: [actualCourseId, ...batchVariants, ...allLinkedSeriesIds] } } }
+    );
 
-      // Coin Deduction
-      const coursePrice = course ? course.price : 0;
-      const maxCoinsAllowed = Math.floor(coursePrice * 10);
-      const coinsToDeduct = Math.min(req.body.coinsUsed || 0, maxCoinsAllowed);
-      if (coinsToDeduct > 0) {
-        await useCoinsForPurchase(studentId, coinsToDeduct);
-      }
+    // Coin Deduction (Only if truly covering the cost and approved by server)
+    if (coinsToDeduct > 0 && finalPayable === 0) {
+      await useCoinsForPurchase(studentId, coinsToDeduct);
+    }
 
-      // Referral Unlock (FIRST PURCHASE ONLY)
-      const previousPurchases = await db.collection('purchases').countDocuments({ 
-        studentId, 
-        status: 'completed',
-        id: { $ne: purchase.id } 
-      });
+    // Referral Unlock (FIRST PURCHASE ONLY)
+    const previousPurchases = await db.collection('purchases').countDocuments({ 
+      studentId, 
+      status: 'completed',
+      id: { $ne: purchase.id } 
+    });
 
-      if (previousPurchases === 0) {
-        await unlockReferralCoins(studentId, purchase.id);
-      }
+    if (previousPurchases === 0) {
+      await unlockReferralCoins(studentId, purchase.id);
     }
 
     res.status(201).json({ success: true, purchase });

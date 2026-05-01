@@ -93,7 +93,7 @@ router.put('/courses/:id/notes/:noteId', adminMiddleware, updateCourseNote);
 router.delete('/courses/:id/notes/:noteId', adminMiddleware, deleteCourseNote);
 
 // PDFs (Standalone)
-router.get('/pdfs', publicLimiter, getGenericPdfs);
+router.get('/pdfs', catalogLimiter, getGenericPdfs);
 router.post('/pdfs', adminMiddleware, createStandalonePdf);
 router.put('/pdfs/:id', adminMiddleware, updateGenericPdf);
 router.delete('/pdfs/:id', adminMiddleware, deleteGenericPdf);
