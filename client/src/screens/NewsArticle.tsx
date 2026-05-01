@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { blogAPI } from '../services/apiClient';
 import { getImageUrl } from '../lib/utils';
+import DOMPurify from 'dompurify';
 
 const NewsArticle: React.FC = () => {
   const { id } = useParams();
@@ -91,7 +92,7 @@ const NewsArticle: React.FC = () => {
         <div className="space-y-10">
           <div 
             className="text-[17px] leading-[1.8] text-gray-700 tracking-normal font-normal rich-text-content"
-            dangerouslySetInnerHTML={{ __html: news.content || '' }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(news.content || '') }}
           />
         </div>
       </main>

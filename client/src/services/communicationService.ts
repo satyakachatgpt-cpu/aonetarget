@@ -44,9 +44,7 @@ export const messagesAPI = {
 // Blog API
 export const blogAPI = {
   getAll: async () => {
-    const response = await fetch(`${API_BASE_URL}/blog`);
-    if (!response.ok) throw new Error('Failed to fetch blog posts');
-    return response.json();
+    return cachedFetch(`${API_BASE_URL}/blog`, 60000);
   },
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/blog`, {
@@ -58,6 +56,7 @@ export const blogAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create blog post');
+    invalidateCache('blog');
     return response.json();
   },
   update: async (id: string, data: any) => {
@@ -70,6 +69,7 @@ export const blogAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update blog post');
+    invalidateCache('blog');
     return response.json();
   },
   delete: async (id: string) => {
@@ -78,6 +78,7 @@ export const blogAPI = {
       headers: { ...getAdminHeaders() }
     });
     if (!response.ok) throw new Error('Failed to delete blog post');
+    invalidateCache('blog');
     return response.json();
   }
 };
