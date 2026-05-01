@@ -1,5 +1,6 @@
 import React from 'react';
 import ContentItemCard from './ContentItemCard';
+import FolderItemCard from './FolderItemCard';
 
 interface ContentListWrapperProps {
   items: any[];
@@ -53,6 +54,26 @@ const ContentListWrapper: React.FC<ContentListWrapperProps> = ({
       const isExpanded = itemId ? expandedFolders.includes(String(itemId).trim()) : false;
       const isFolder = item.type === 'folder' || item.contentType === 'folder';
 
+      if (isFolder) {
+        return (
+          <FolderItemCard
+            key={itemId ? `folder_${itemId}_${level}` : `folder_${Math.random()}_${level}`}
+            item={item}
+            level={level}
+            isActiveUploadFolder={isActiveUploadFolderId === itemId}
+            isExpanded={isExpanded}
+            draggedItemId={draggedItemId}
+            dragOverItemId={dragOverItemId}
+            isSearching={isSearching}
+            folderCounts={folderCounts}
+            openContentActionMenuId={openContentActionMenuId}
+            handlers={handlers}
+          >
+            {isExpanded && renderChildTree ? renderChildTree(itemId, level + 1) : null}
+          </FolderItemCard>
+        );
+      }
+
       return (
         <ContentItemCard
           key={itemId ? `${itemId}_${level}` : `item_${Math.random()}_${level}`}
@@ -60,16 +81,12 @@ const ContentListWrapper: React.FC<ContentListWrapperProps> = ({
           type={type || item.type}
           level={level}
           isActiveUploadFolder={isActiveUploadFolderId === itemId}
-          isExpanded={isExpanded}
           draggedItemId={draggedItemId}
           dragOverItemId={dragOverItemId}
           isSearching={isSearching}
-          folderCounts={folderCounts}
           openContentActionMenuId={openContentActionMenuId}
           handlers={handlers}
-        >
-          {isFolder && isExpanded && renderChildTree ? renderChildTree(itemId, level + 1) : null}
-        </ContentItemCard>
+        />
       );
     });
   }, [

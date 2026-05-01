@@ -1,7 +1,8 @@
 import React from 'react';
 import BreadcrumbHeader from './BreadcrumbHeader';
 import CourseContentToolbar from './CourseContentToolbar';
-import EmptyState from './EmptyState';
+import ContentEmptyState from './ContentEmptyState';
+import ContentListShell from './ContentListShell';
 
 interface CourseContentTreeViewProps {
   folderStack: any[];
@@ -15,6 +16,7 @@ interface CourseContentTreeViewProps {
   setContentTypeFilter: (type: string) => void;
   itemsCount: number;
   renderItems: React.ReactNode;
+  onBulkActionClick?: () => void;
 }
 
 const CourseContentTreeView: React.FC<CourseContentTreeViewProps> = ({
@@ -28,7 +30,8 @@ const CourseContentTreeView: React.FC<CourseContentTreeViewProps> = ({
   contentTypeFilter,
   setContentTypeFilter,
   itemsCount,
-  renderItems
+  renderItems,
+  onBulkActionClick
 }) => {
   return (
     <div className="flex-1 space-y-6">
@@ -45,23 +48,20 @@ const CourseContentTreeView: React.FC<CourseContentTreeViewProps> = ({
           setIsFilterOpen={setIsFilterOpen}
           contentTypeFilter={contentTypeFilter}
           setContentTypeFilter={setContentTypeFilter}
+          onBulkActionClick={onBulkActionClick}
         />
       </div>
 
-      <div className="bg-white rounded-[24px] border border-gray-100 shadow-sm overflow-visible">
-        <div className="p-4 space-y-3 overflow-visible">
-          {itemsCount === 0 ? (
-            <EmptyState />
-          ) : (
-            renderItems
-          )}
-          {itemsCount > 0 && (
-            <div className="flex flex-col items-center justify-center py-10">
-              <p className="text-[13px] font-medium text-gray-400">You've seen all the items in the list.</p>
-            </div>
-          )}
-        </div>
-      </div>
+      <ContentListShell>
+        {itemsCount === 0 ? (
+          <ContentEmptyState type="empty" />
+        ) : (
+          renderItems
+        )}
+        {itemsCount > 0 && (
+          <ContentEmptyState type="end-of-list" />
+        )}
+      </ContentListShell>
     </div>
   );
 };

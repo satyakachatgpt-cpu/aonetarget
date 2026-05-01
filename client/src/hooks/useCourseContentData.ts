@@ -18,6 +18,7 @@ interface Video {
   datetime?: string;
   platform?: string;
   contentType?: string;
+  type?: string;
 }
 
 interface Note {
@@ -55,6 +56,7 @@ interface Test {
   order?: number;
   folderId?: string;
   title?: string;
+  type?: string;
 }
 
 interface UseCourseContentDataProps {

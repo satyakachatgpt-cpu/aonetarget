@@ -14,61 +14,91 @@ interface Props {
   showToast: (m: string, type?: 'success' | 'error') => void;
 }
 
-const dailyData = [
-  { name: '18th Feb', sales: 10, signups: 5, vol: 2 },
-  { name: '19th Feb', sales: 15, signups: 8, vol: 3 },
-  { name: '20th Feb', sales: 250, signups: 120, vol: 45 },
-  { name: '21st Feb', sales: 40, signups: 30, vol: 12 },
-  { name: '22nd Feb', sales: 60, signups: 45, vol: 18 },
-  { name: '23rd Feb', sales: 85, signups: 60, vol: 25 },
-  { name: '24th Feb', sales: 40, signups: 35, vol: 8 },
-  { name: '25th Feb', sales: 160, signups: 90, vol: 30 },
-  { name: '26th Feb', sales: 90, signups: 70, vol: 20 },
-  { name: '27th Feb', sales: 30, signups: 25, vol: 5 },
-  { name: '28th Feb', sales: 280, signups: 150, vol: 50 },
-  { name: '1st Mar', sales: 40, signups: 35, vol: 10 },
-  { name: '2nd Mar', sales: 15, signups: 10, vol: 2 },
-];
+const getTodayISO = () => new Date().toISOString().split('T')[0];
 
-const weeklyData = [
-  { name: 'Week 05', sales: 400, signups: 200, vol: 80 },
-  { name: 'Week 06', sales: 650, signups: 350, vol: 120 },
-  { name: 'Week 07', sales: 300, signups: 150, vol: 60 },
-  { name: 'Week 08', sales: 900, signups: 500, vol: 180 },
-  { name: 'Week 09', sales: 550, signups: 300, vol: 100 },
-  { name: 'Week 10', sales: 120, signups: 80, vol: 20 },
-];
+const Sparkline: React.FC<{ data: number[], color: string, id: string }> = ({ data, color, id }) => {
+  const width = 160;
+  const height = 65;
+  const padding = 6;
+  
+  const isDataValid = data && data.length >= 2;
+  const allZero = isDataValid && data.every(v => v === 0);
 
-const monthlyData = [
-  { name: 'Oct 25', sales: 2400, signups: 1200, vol: 400 },
-  { name: 'Nov 25', sales: 3200, signups: 1600, vol: 600 },
-  { name: 'Dec 25', sales: 2100, signups: 1000, vol: 350 },
-  { name: 'Jan 26', sales: 4500, signups: 2200, vol: 800 },
-  { name: 'Feb 26', sales: 3800, signups: 1800, vol: 700 },
-  { name: 'Mar 26', sales: 200, signups: 100, vol: 30 },
-];
+  if (!isDataValid || allZero) {
+    return (
+      <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+        <line 
+          x1="0" 
+          y1={height - padding} 
+          x2={width} 
+          y2={height - padding} 
+          stroke={color} 
+          strokeWidth="3.5" 
+          opacity="0.25" 
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  }
 
-const customData = [
-  { name: '30/12', sales: 120, signups: 60, vol: 20 },
-  { name: '05/01', sales: 450, signups: 220, vol: 80 },
-  { name: '12/01', sales: 300, signups: 150, vol: 50 },
-  { name: '19/01', sales: 800, signups: 400, vol: 150 },
-  { name: '26/01', sales: 400, signups: 200, vol: 70 },
-  { name: '02/02', sales: 1200, signups: 600, vol: 240 },
-  { name: '09/02', sales: 600, signups: 300, vol: 110 },
-  { name: '16/02', sales: 1500, signups: 750, vol: 300 },
-  { name: '23/02', sales: 800, signups: 400, vol: 140 },
-  { name: '02/03', sales: 100, signups: 50, vol: 10 },
-];
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data);
+  const range = max - min || (max > 0 ? max : 1);
+  
+  const points = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * width;
+    let y;
+    if (max === min) {
+      y = height / 2; // Center for flat non-zero data
+    } else {
+      y = height - padding - ((v - min) / range) * (height - padding * 2);
+    }
+    return `${x},${y}`;
+  });
+
+  const pathData = `M ${points.join(' L ')}`;
+  const areaData = `${pathData} L ${width},${height} L 0,${height} Z`;
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} className="overflow-visible">
+      <defs>
+        <linearGradient id={`grad-${id}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.05" />
+        </linearGradient>
+      </defs>
+      <path
+        d={areaData}
+        fill={`url(#grad-${id})`}
+      />
+      <path
+        d={pathData}
+        fill="none"
+        stroke={color}
+        strokeWidth="3.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ filter: 'drop-shadow(0px 2px 4px rgba(0,0,0,0.15))' }}
+      />
+    </svg>
+  );
+};
+
+
+
 
 const Dashboard: React.FC<Props> = ({ showToast }) => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [filterType, setFilterType] = useState('Daily');
   const [selectedMetric, setSelectedMetric] = useState('Sales');
-  const [selectedDate, setSelectedDate] = useState('2026-03-02');
-  const [fromDate, setFromDate] = useState('2025-12-30');
-  const [toDate, setToDate] = useState('2026-03-02');
+  const [selectedDate, setSelectedDate] = useState(getTodayISO());
+  const [fromDate, setFromDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString().split('T')[0];
+  });
+  const [toDate, setToDate] = useState(getTodayISO());
 
   const [dbStats, setDbStats] = useState<any>(null);
   const [loading, setLoading] = useState(false);
@@ -136,81 +166,51 @@ const Dashboard: React.FC<Props> = ({ showToast }) => {
     return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   };
 
-  // Calculate current stats
   const stats = useMemo(() => {
-    // If we have real DB data, use it!
-    if (dbStats) {
-      const calculateChange = (curr: number, prev: number) => {
-        if (prev === 0) return curr > 0 ? 100 : 0;
-        return Math.round(((curr - prev) / prev) * 100);
-      };
+    const defaultStats = {
+      sales: 0, prevSales: 0,
+      vol: 0, prevVol: 0,
+      revenue: 0, prevRevenue: 0,
+      salesChange: 0, volChange: 0, revenueChange: 0,
+      rank: 0, prevRank: 0,
+      trends: { sales: [], revenue: [], signups: [] }
+    };
 
-      return {
-        sales: dbStats.salesVolume,
-        prevSales: dbStats.prevSales,
-        vol: dbStats.salesVolume,
-        prevVol: dbStats.prevSales,
-        revenue: dbStats.totalRevenue,
-        prevRevenue: dbStats.prevRevenue,
-        salesChange: calculateChange(dbStats.salesVolume, dbStats.prevSales),
-        volChange: calculateChange(dbStats.salesVolume, dbStats.prevSales),
-        revenueChange: calculateChange(dbStats.totalRevenue, dbStats.prevRevenue),
-        rank: dbStats.rank,
-        prevRank: 480
-      };
-    }
-
-    // Fallback to Mock data if DB is empty/loading
-    const activeData = filterType === 'Weekly' ? weeklyData :
-      filterType === 'Monthly' ? monthlyData :
-        filterType === 'Custom' ? customData : dailyData;
-
-    const currentSales = activeData.reduce((acc, curr) => acc + curr.sales, 0);
-    const currentVol = activeData.reduce((acc, curr) => acc + curr.vol, 0);
-    const currentRevenue = currentSales * 499;
-
-    const prevSales = Math.round(currentSales * 1.5);
-    const prevVol = Math.round(currentVol * 1.8);
-    const prevRevenue = Math.round(currentRevenue * 1.6);
+    if (!dbStats) return defaultStats;
 
     const calculateChange = (curr: number, prev: number) => {
-      if (prev === 0) return 0;
+      if (prev <= 0) return curr > 0 ? 100 : 0;
       return Math.round(((curr - prev) / prev) * 100);
     };
 
     return {
-      sales: currentSales,
-      prevSales: prevSales,
-      vol: currentVol,
-      prevVol: prevVol,
-      revenue: currentRevenue,
-      prevRevenue: prevRevenue,
-      salesChange: calculateChange(currentSales, prevSales),
-      volChange: calculateChange(currentVol, prevVol),
-      revenueChange: calculateChange(currentRevenue, prevRevenue),
-      rank: activeData === dailyData ? 1271 : 842,
-      prevRank: activeData === dailyData ? 480 : 210
+      sales: dbStats.salesVolume || 0,
+      prevSales: dbStats.prevSales || 0,
+      vol: dbStats.salesVolume || 0,
+      prevVol: dbStats.prevSales || 0,
+      revenue: dbStats.totalRevenue || 0,
+      prevRevenue: dbStats.prevRevenue || 0,
+      salesChange: calculateChange(dbStats.salesVolume || 0, dbStats.prevSales || 0),
+      volChange: calculateChange(dbStats.salesVolume || 0, dbStats.prevSales || 0),
+      revenueChange: calculateChange(dbStats.totalRevenue || 0, dbStats.prevRevenue || 0),
+      rank: dbStats.rank || 0,
+      prevRank: Math.floor((dbStats.rank || 0) * 1.1), // Safe fallback for prev rank
+      trends: dbStats.recentTrends || defaultStats.trends
     };
-  }, [filterType, dbStats]);
+  }, [dbStats]);
 
   const currentChartData = useMemo(() => {
-    // Priority: Real DB Chart Data
-    if (dbStats && dbStats.chartData && dbStats.chartData.length > 0) {
-      const key = selectedMetric === 'Sales' ? 'sales' :
-        selectedMetric === 'Signups' ? 'signups' : 'vol';
-      return dbStats.chartData.map((d: any) => ({ ...d, value: d[key] }));
-    }
-
-    // Fallback: Mock Data
-    const raw = filterType === 'Weekly' ? weeklyData :
-      filterType === 'Monthly' ? monthlyData :
-        filterType === 'Custom' ? customData : dailyData;
-
-    const key = selectedMetric === 'Sales' ? 'sales' :
-      selectedMetric === 'Signups' ? 'signups' : 'vol';
-
-    return raw.map(d => ({ ...d, value: (d as any)[key] }));
-  }, [filterType, selectedMetric, dbStats]);
+    if (!dbStats || !dbStats.chartData || dbStats.chartData.length === 0) return [];
+    
+    const keyMap: Record<string, string> = {
+      'Sales': 'sales',
+      'Signups': 'signups',
+      'Sales Volume': 'sales',
+      'Revenue': 'revenue'
+    };
+    const key = keyMap[selectedMetric] || 'sales';
+    return dbStats.chartData.map((d: any) => ({ ...d, value: d[key] || 0 }));
+  }, [selectedMetric, dbStats]);
 
   const getHeaderDate = () => {
     if (filterType === 'Daily') return formatDateForDisplay(selectedDate);
@@ -379,16 +379,8 @@ const Dashboard: React.FC<Props> = ({ showToast }) => {
               </span>
               {Math.abs(stats.salesChange)}%
             </div>
-            <div className="mt-auto">
-              <svg width="64" height="40" viewBox="0 0 64 40">
-                <defs>
-                  <linearGradient id="miniFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.6} />
-                    <stop offset="100%" stopColor="#8B5CF6" stopOpacity={0.1} />
-                  </linearGradient>
-                </defs>
-                <path d="M 54 5 L 64 35 L 14 35 Z" fill="url(#miniFill)" stroke="#8B5CF6" strokeWidth="2" strokeLinejoin="round" />
-              </svg>
+            <div className="mt-auto pr-1">
+              <Sparkline data={stats.trends.sales} color="#8B5CF6" id="sales" />
             </div>
           </div>
         </div>
@@ -399,7 +391,7 @@ const Dashboard: React.FC<Props> = ({ showToast }) => {
             <div>
               <p className="text-[#a1a1a1] text-[13px] font-bold mb-6 uppercase tracking-widest opacity-60">REVENUE</p>
               <h2 className="text-[34px] font-bold text-[#111] leading-none mb-1">₹{stats.revenue.toLocaleString()}</h2>
-              <p className="text-[#a1a1a1] text-[14px] font-medium">Previous: {stats.prevRevenue.toLocaleString()}</p>
+              <p className="text-[#a1a1a1] text-[14px] font-medium">Previous: ₹{stats.prevRevenue.toLocaleString()}</p>
             </div>
           </div>
           <div className="flex flex-col items-end h-full justify-between">
@@ -409,16 +401,8 @@ const Dashboard: React.FC<Props> = ({ showToast }) => {
               </span>
               {Math.abs(stats.revenueChange)}%
             </div>
-            <div className="mt-auto">
-              <svg width="64" height="40" viewBox="0 0 64 40">
-                <defs>
-                  <linearGradient id="miniFillRev" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#8B5CF6" stopOpacity={0.6} />
-                    <stop offset="100%" stopColor="#8B5CF6" stopOpacity={0.1} />
-                  </linearGradient>
-                </defs>
-                <path d="M 54 5 L 64 35 L 14 35 Z" fill="url(#miniFillRev)" stroke="#8B5CF6" strokeWidth="2" strokeLinejoin="round" />
-              </svg>
+            <div className="mt-auto pr-1">
+              <Sparkline data={stats.trends.revenue} color="#10B981" id="revenue" />
             </div>
           </div>
         </div>
@@ -441,7 +425,7 @@ const Dashboard: React.FC<Props> = ({ showToast }) => {
             {/* Custom Metric Dropdown */}
             {isDropdownOpen && (
               <div className="absolute right-0 top-[calc(100%+12px)] w-[200px] bg-white border border-gray-100 rounded-[24px] shadow-[0_25px_50px_-12px_rgba(0,0,0,0.2)] z-[120] overflow-hidden animate-in origin-top backdrop-blur-xl bg-white/98">
-                {['Sales', 'Signups', 'Sales Volume'].map((metric) => (
+                {['Sales', 'Signups', 'Sales Volume', 'Revenue'].map((metric) => (
                   <div
                     key={metric}
                     onClick={() => {
@@ -488,7 +472,7 @@ const Dashboard: React.FC<Props> = ({ showToast }) => {
                 dy={20}
                 interval={filterType === 'Daily' || filterType === 'Custom' ? 2 : 0}
               />
-              <YAxis hide />
+              <YAxis hide domain={[0, 'auto']} />
               <Tooltip
                 cursor={{ stroke: '#8B5CF6', strokeWidth: 1, strokeDasharray: '4 4' }}
                 contentStyle={{
@@ -499,6 +483,13 @@ const Dashboard: React.FC<Props> = ({ showToast }) => {
                   fontWeight: '600',
                   padding: '12px 16px'
                 }}
+                formatter={(val: number) => {
+                  if (selectedMetric === 'Revenue') {
+                    return [`₹${val.toLocaleString()}`, 'Revenue'];
+                  }
+                  return [val.toLocaleString(), selectedMetric];
+                }}
+                labelStyle={{ color: '#a1a1a1', marginBottom: '4px', fontSize: '12px' }}
               />
               <Area
                 type="monotone"

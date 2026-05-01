@@ -26,6 +26,23 @@ import RichTextEditor from '../shared/RichTextEditor';
 import BatchMultiSelect from './course-content/BatchMultiSelect';
 import { toYouTubeEmbed } from '../../lib/utils';
 import { getAdminHeaders, API_BASE_URL, apiRequest, invalidateCache } from '../../services/apiClient';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface Package {
   id: string;
@@ -98,6 +115,201 @@ const BulkActionItem: React.FC<{ icon: string; label: string; onClick: () => voi
   );
 };
 
+const SortablePackageRow = ({ 
+  pkg, 
+  idx, 
+  startIndex, 
+  selectedIds, 
+  toggleSelectOne, 
+  onCourseSelect, 
+  openActionMenuId, 
+  setOpenActionMenuId, 
+  handleToggleStatus, 
+  openEditDrawer, 
+  handleDuplicate, 
+  loadData,
+  handleDelete,
+  paginatedItems,
+  disabled
+}: any) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ 
+    id: pkg.id,
+    disabled: disabled
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 100 : 'auto',
+    opacity: isDragging ? 0.8 : 1,
+    position: 'relative' as any,
+    backgroundColor: isDragging ? '#f8fafc' : undefined,
+    boxShadow: isDragging ? '0 10px 15px -3px rgba(0, 0, 0, 0.1)' : undefined,
+  };
+
+  return (
+    <tr 
+      ref={setNodeRef}
+      style={style}
+      onClick={() => onCourseSelect(pkg)} 
+      className={`hover:bg-gray-50/50 transition-colors group cursor-pointer ${selectedIds.includes(pkg.id) ? 'bg-blue-50/40' : ''} ${isDragging ? 'z-[1000]' : ''}`}
+    >
+      <td className="pl-8 py-6" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-4">
+          {!disabled && (
+            <div 
+              {...attributes} 
+              {...listeners}
+              className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-600 transition-colors"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span className="material-symbols-outlined text-[20px]">drag_indicator</span>
+            </div>
+          )}
+          <div
+            onClick={(e) => toggleSelectOne(e, pkg.id)}
+            className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all cursor-pointer ${selectedIds.includes(pkg.id)
+              ? 'bg-[#1a237e] border-[#1a237e] text-white shadow-sm'
+              : 'border-gray-200 bg-white hover:border-gray-400'
+              }`}
+          >
+            {selectedIds.includes(pkg.id) && (
+              <span className="material-symbols-outlined text-[14px] font-bold">check</span>
+            )}
+          </div>
+        </div>
+      </td>
+      <td className="px-4 py-6 text-[13px] font-black text-gray-300">{startIndex + idx + 1}</td>
+      <td className="px-6 py-6">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-gray-50 rounded-xl flex-shrink-0 flex items-center justify-center border border-gray-100 group-hover:bg-white transition-colors">
+            {pkg.imageUrl || pkg.thumbnail ? (
+              <img src={pkg.imageUrl || pkg.thumbnail} alt="" className="w-full h-full object-cover rounded-xl" />
+            ) : (
+              <span className="material-symbols-outlined text-gray-200">inventory_2</span>
+            )}
+          </div>
+          <div className="flex flex-col min-w-0">
+            <span className="text-[14px] font-bold text-gray-900 group-hover:text-black transition-colors truncate">{pkg.name}</span>
+            <span className="text-[11px] font-medium text-gray-400 mt-0.5 truncate uppercase tracking-tight">{pkg.categoryId || 'General'}</span>
+          </div>
+        </div>
+      </td>
+      <td className="px-6 py-6 overflow-hidden">
+        <div className="flex flex-col max-w-xs">
+          <div className="text-sm text-gray-600 line-clamp-2 leading-relaxed">
+            {pkg.description ? parse(pkg.description) : '-'}
+          </div>
+        </div>
+      </td>
+      <td className="px-6 py-6 font-mono">
+        <span className={`text-[14px] font-bold ${!pkg.price ? 'text-gray-300' : 'text-gray-900'}`}>
+          {!pkg.price ? 'Free' : `₹${pkg.price}`}
+        </span>
+      </td>
+      <td className="px-6 py-6">
+        <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight ${pkg.status === 'active' ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
+          <span className={`w-1.5 h-1.5 rounded-full ${pkg.status === 'active' ? 'bg-green-600' : 'bg-amber-600'}`}></span>
+          {pkg.status === 'active' ? 'Active' : 'Draft'}
+        </span>
+      </td>
+      <td className="px-6 py-6 text-right" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-center gap-3">
+          <div className="relative row-action-menu-container">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setOpenActionMenuId(openActionMenuId === pkg.id ? null : pkg.id);
+              }}
+              className={`px-4 py-1.5 rounded-lg text-[12px] font-bold transition-all border flex items-center gap-2 shadow-sm ${openActionMenuId === pkg.id ? 'bg-gray-100 border-gray-300 text-gray-900' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
+            >
+              Actions
+              <span className={`material-symbols-outlined text-[18px] transition-transform duration-300 ${openActionMenuId === pkg.id ? 'rotate-180 text-gray-900' : 'text-gray-400'}`}>expand_more</span>
+            </button>
+
+            {openActionMenuId === pkg.id && (
+              <div
+                className={`absolute right-0 ${idx >= paginatedItems.length - 2 && paginatedItems.length > 3 ? 'bottom-full mb-2' : 'top-full mt-2'} w-64 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.08)] border border-gray-100 py-2.5 z-[250] animate-in fade-in zoom-in-95 duration-200 origin-top-right`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  onClick={() => { onCourseSelect(pkg, 'Overview'); setOpenActionMenuId(null); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors text-left group"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-blue-400">explore</span>
+                  <span className="text-[14px] font-medium">Batch Overview</span>
+                </button>
+
+                <button
+                  onClick={() => { onCourseSelect(pkg, 'Content'); setOpenActionMenuId(null); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors text-left group"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-blue-500/70">add_circle</span>
+                  <span className="text-[14px] font-medium">Add/View Content</span>
+                </button>
+
+                <div className="px-4 py-2.5 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
+                  <div className="flex items-center gap-3 text-gray-600">
+                    <span className="material-symbols-outlined text-[20px] text-blue-400/80">info</span>
+                    <span className="text-[14px] font-medium">Enabled</span>
+                  </div>
+                  <button
+                    onClick={() => handleToggleStatus(pkg)}
+                    className={`w-[42px] h-[22px] rounded-full relative transition-all duration-300 ${pkg.status === 'active' ? 'bg-[#1a1c1e]' : 'bg-gray-200'}`}
+                  >
+                    <div className={`absolute top-[3px] w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300 ${pkg.status === 'active' ? 'right-[3px]' : 'left-[3px]'}`}></div>
+                  </button>
+                </div>
+
+                <button
+                  onClick={() => { openEditDrawer(pkg); setOpenActionMenuId(null); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors text-left group"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-blue-400/70">edit</span>
+                  <span className="text-[14px] font-medium">Edit</span>
+                </button>
+
+                <button
+                  onClick={() => { handleDuplicate(pkg); setOpenActionMenuId(null); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors text-left group"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-blue-500/60">content_copy</span>
+                  <span className="text-[14px] font-medium">Duplicate</span>
+                </button>
+
+                <button
+                  onClick={() => { loadData(); setOpenActionMenuId(null); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-all text-left group"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-blue-400 group-hover:rotate-180 transition-transform duration-500">sync</span>
+                  <span className="text-[14px] font-medium">Refresh</span>
+                </button>
+
+                <div className="h-px bg-gray-50 my-1.5 mx-2"></div>
+
+                <button
+                  onClick={() => { handleDelete(pkg.id); setOpenActionMenuId(null); }}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 text-red-500 transition-colors text-left group"
+                >
+                  <span className="material-symbols-outlined text-[20px] text-red-400 group-hover:text-red-500">delete</span>
+                  <span className="text-[14px] font-medium">Delete</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+};
+
 const BigActionTile: React.FC<{ icon: string; label: string; desc: string; onClick: () => void; color?: string }> = ({ icon, label, desc, onClick, color = 'bg-blue-50 text-blue-500' }) => (
   <button
     onClick={onClick}
@@ -163,6 +375,18 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [globalCreateMode, setGlobalCreateMode] = useState(false);
   const [selectedBatchIds, setSelectedBatchIds] = useState<string[]>([]);
+  const [isReordering, setIsReordering] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     loadData();
@@ -307,6 +531,35 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchQuery, statusFilter]);
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = packages.findIndex((pkg) => pkg.id === active.id);
+    const newIndex = packages.findIndex((pkg) => pkg.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const previousOrder = [...packages];
+    const newOrder = arrayMove(packages, oldIndex, newIndex);
+    
+    // Optimistic update
+    setPackages(newOrder);
+    setIsReordering(true);
+
+    try {
+      const orderedIds = newOrder.map(pkg => pkg.id);
+      await packagesAPI.reorder(orderedIds);
+      showToast('Order updated successfully', 'success');
+    } catch (error) {
+      console.error('Failed to reorder:', error);
+      showToast('Failed to save order. Rolling back...', 'error');
+      setPackages(previousOrder);
+    } finally {
+      setIsReordering(false);
+    }
+  };
 
   const handleSubmit = async () => {
     try {
@@ -772,7 +1025,20 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
         <div className="bg-white rounded-[2rem] shadow-sm border border-gray-100 overflow-visible">
           {/* Header Section */}
           <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-50 bg-white rounded-t-[2rem]">
-            <h3 className="text-[20px] font-bold text-gray-900 tracking-tight">Featured Batches</h3>
+            <div className="flex flex-col gap-1">
+              <h3 className="text-[20px] font-bold text-gray-900 tracking-tight">Featured Batches</h3>
+              {(searchQuery || statusFilter !== 'all') ? (
+                <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest flex items-center gap-1.5 animate-in fade-in slide-in-from-left-2">
+                  <span className="material-symbols-outlined text-[14px]">info</span>
+                  Clear search and filters to reorder batches
+                </p>
+              ) : (
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[14px]">drag_indicator</span>
+                  Drag rows to reorder featured batches
+                </p>
+              )}
+            </div>
             <div className="flex items-center gap-3">
               <div className="relative group flex-1 md:flex-none">
                 <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-[20px] group-focus-within:text-navy transition-colors">search</span>
@@ -975,145 +1241,37 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                       </td>
                     </tr>
                     ) : (
-                      paginatedItems.map((pkg, idx) => (
-                        <tr key={pkg.id} onClick={() => onCourseSelect(pkg)} className={`hover:bg-gray-50/50 transition-colors group cursor-pointer ${selectedIds.includes(pkg.id) ? 'bg-blue-50/40' : ''}`}>
-                          <td className="pl-8 py-6" onClick={(e) => e.stopPropagation()}>
-                            <div
-                              onClick={(e) => toggleSelectOne(e, pkg.id)}
-                              className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all cursor-pointer ${selectedIds.includes(pkg.id)
-                                ? 'bg-[#1a237e] border-[#1a237e] text-white shadow-sm'
-                                : 'border-gray-200 bg-white hover:border-gray-400'
-                                }`}
-                            >
-                              {selectedIds.includes(pkg.id) && (
-                                <span className="material-symbols-outlined text-[14px] font-bold">check</span>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-4 py-6 text-[13px] font-black text-gray-300">{startIndex + idx + 1}</td>
-                        <td className="px-6 py-6">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-gray-50 rounded-xl flex-shrink-0 flex items-center justify-center border border-gray-100 group-hover:bg-white transition-colors">
-                              {pkg.imageUrl || pkg.thumbnail ? (
-                                <img src={pkg.imageUrl || pkg.thumbnail} alt="" className="w-full h-full object-cover rounded-xl" />
-                              ) : (
-                                <span className="material-symbols-outlined text-gray-200">inventory_2</span>
-                              )}
-                            </div>
-                            <div className="flex flex-col min-w-0">
-                              <span className="text-[14px] font-bold text-gray-900 group-hover:text-black transition-colors truncate">{pkg.name}</span>
-                              <span className="text-[11px] font-medium text-gray-400 mt-0.5 truncate uppercase tracking-tight">{pkg.categoryId || 'General'}</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-6 overflow-hidden">
-                          <div className="flex flex-col max-w-xs">
-                            <div className="text-sm text-gray-600 line-clamp-2 leading-relaxed">
-                              {pkg.description ? parse(pkg.description) : '-'}
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-6 font-mono">
-                          <span className={`text-[14px] font-bold ${!pkg.price ? 'text-gray-300' : 'text-gray-900'}`}>
-                            {!pkg.price ? 'Free' : `₹${pkg.price}`}
-                          </span>
-                        </td>
-                        <td className="px-6 py-6">
-                          <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tight ${pkg.status === 'active' ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-amber-50 text-amber-600 border border-amber-100'}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${pkg.status === 'active' ? 'bg-green-600' : 'bg-amber-600'}`}></span>
-                            {pkg.status === 'active' ? 'Active' : 'Draft'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-6 text-right">
-                          <div className="flex items-center justify-center gap-3">
-                            <div className="relative row-action-menu-container">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenActionMenuId(openActionMenuId === pkg.id ? null : pkg.id);
-                                }}
-                                className={`px-4 py-1.5 rounded-lg text-[12px] font-bold transition-all border flex items-center gap-2 shadow-sm ${openActionMenuId === pkg.id ? 'bg-gray-100 border-gray-300 text-gray-900' : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}
-                              >
-                                Actions
-                                <span className={`material-symbols-outlined text-[18px] transition-transform duration-300 ${openActionMenuId === pkg.id ? 'rotate-180 text-gray-900' : 'text-gray-400'}`}>expand_more</span>
-                              </button>
-
-                              {openActionMenuId === pkg.id && (
-                                <div
-                                  className={`absolute right-0 ${idx >= paginatedItems.length - 2 && paginatedItems.length > 3 ? 'bottom-full mb-2' : 'top-full mt-2'} w-64 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.08)] border border-gray-100 py-2.5 z-[250] animate-in fade-in zoom-in-95 duration-200 origin-top-right`}
-                                  onClick={(e) => e.stopPropagation()}
-                                >
-                                  <button
-                                    onClick={() => { onCourseSelect(pkg, 'Overview'); setOpenActionMenuId(null); }}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors text-left group"
-                                  >
-                                    <span className="material-symbols-outlined text-[20px] text-blue-400">explore</span>
-                                    <span className="text-[14px] font-medium">Batch Overview</span>
-                                  </button>
-
-
-                                  <button
-                                    onClick={() => { onCourseSelect(pkg, 'Content'); setOpenActionMenuId(null); }}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors text-left group"
-                                  >
-                                    <span className="material-symbols-outlined text-[20px] text-blue-500/70">add_circle</span>
-                                    <span className="text-[14px] font-medium">Add/View Content</span>
-                                  </button>
-
-                                  <div className="px-4 py-2.5 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
-                                    <div className="flex items-center gap-3 text-gray-600">
-                                      <span className="material-symbols-outlined text-[20px] text-blue-400/80">info</span>
-                                      <span className="text-[14px] font-medium">Enabled</span>
-                                    </div>
-                                    <button
-                                      onClick={() => handleToggleStatus(pkg)}
-                                      className={`w-[42px] h-[22px] rounded-full relative transition-all duration-300 ${pkg.status === 'active' ? 'bg-[#1a1c1e]' : 'bg-gray-200'}`}
-                                    >
-                                      <div className={`absolute top-[3px] w-4 h-4 bg-white rounded-full shadow-sm transition-all duration-300 ${pkg.status === 'active' ? 'right-[3px]' : 'left-[3px]'}`}></div>
-                                    </button>
-                                  </div>
-
-                                  <button
-                                    onClick={() => { openEditDrawer(pkg); setOpenActionMenuId(null); }}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors text-left group"
-                                  >
-                                    <span className="material-symbols-outlined text-[20px] text-blue-400/70">edit</span>
-                                    <span className="text-[14px] font-medium">Edit</span>
-                                  </button>
-
-                                  <button
-                                    onClick={() => { handleDuplicate(pkg); setOpenActionMenuId(null); }}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-colors text-left group"
-                                  >
-                                    <span className="material-symbols-outlined text-[20px] text-blue-500/60">content_copy</span>
-                                    <span className="text-[14px] font-medium">Duplicate</span>
-                                  </button>
-
-
-                                  <button
-                                    onClick={() => { loadData(); setOpenActionMenuId(null); }}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 hover:text-gray-900 transition-all text-left group"
-                                  >
-                                    <span className="material-symbols-outlined text-[20px] text-blue-400 group-hover:rotate-180 transition-transform duration-500">sync</span>
-                                    <span className="text-[14px] font-medium">Refresh</span>
-                                  </button>
-
-                                  <div className="h-px bg-gray-50 my-1.5 mx-2"></div>
-
-                                  <button
-                                    onClick={() => { handleDelete(pkg.id); setOpenActionMenuId(null); }}
-                                    className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-red-50 text-red-500 transition-colors text-left group"
-                                  >
-                                    <span className="material-symbols-outlined text-[20px] text-red-400 group-hover:text-red-500">delete</span>
-                                    <span className="text-[14px] font-medium">Delete</span>
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
+                    <DndContext 
+                      sensors={sensors} 
+                      collisionDetection={closestCenter} 
+                      onDragEnd={handleDragEnd}
+                    >
+                      <SortableContext 
+                        items={paginatedItems.map(p => p.id)} 
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {paginatedItems.map((pkg, idx) => (
+                          <SortablePackageRow
+                            key={pkg.id}
+                            pkg={pkg}
+                            idx={idx}
+                            startIndex={startIndex}
+                            selectedIds={selectedIds}
+                            toggleSelectOne={toggleSelectOne}
+                            onCourseSelect={onCourseSelect}
+                            openActionMenuId={openActionMenuId}
+                            setOpenActionMenuId={setOpenActionMenuId}
+                            handleToggleStatus={handleToggleStatus}
+                            openEditDrawer={openEditDrawer}
+                            handleDuplicate={handleDuplicate}
+                            handleDelete={handleDelete}
+                            loadData={loadData}
+                            paginatedItems={paginatedItems}
+                            disabled={searchQuery !== '' || statusFilter !== 'all' || isReordering}
+                          />
+                        ))}
+                      </SortableContext>
+                    </DndContext>
                   )}
                 </tbody>
               </table>

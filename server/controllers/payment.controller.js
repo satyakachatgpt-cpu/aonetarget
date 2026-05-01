@@ -355,6 +355,12 @@ export const createPurchase = async (req, res) => {
     if (!studentId || !courseId) {
       return res.status(400).json({ error: 'studentId and courseId are required' });
     }
+
+    // ROLE-AWARE SECURITY GUARD:
+    // 1. Admins can always create manual purchases (existing behavior).
+    // 2. Students can only proceed if the server-side verified payable amount is ₹0.
+    const isAdmin = req.admin || req.user?.isAdmin || req.user?.role === 'admin';
+    
     if (!canActForStudent(req, studentId)) {
       return res.status(403).json({ error: 'Forbidden' });
     }
@@ -363,7 +369,7 @@ export const createPurchase = async (req, res) => {
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
-    const enrolledCourses = student.enrolledCourses || [];
+    const enrolledCourses = Array.isArray(student.enrolledCourses) ? student.enrolledCourses : [];
 
     let course = await findCourse(courseId);
     if (!course) {
@@ -373,28 +379,59 @@ export const createPurchase = async (req, res) => {
         }
       } catch (e) { }
     }
-    const actualCourseId = course ? (course.id || courseId) : courseId;
 
+    if (!course) {
+      return res.status(404).json({ error: 'Course not found' });
+    }
+
+    // Resolve Coupon and Price Breakdown
     let coupon = null;
     if (couponCode) {
       coupon = await db.collection('coupons').findOne({ code: couponCode });
     }
 
-    const breakdown = calculatePriceBreakdown(course || { price: amount }, coupon);
+    const breakdown = calculatePriceBreakdown(course, coupon);
     if (breakdown.isInvalid && couponCode) {
       return res.status(400).json({ error: breakdown.invalidReason });
     }
+
+    // Resolve Coins Redemption
+    const coinsUsed = req.body.coinsUsed || 0;
+    let coinDiscount = 0;
+    if (coinsUsed > 0) {
+      const available = student?.availableCoins || 0;
+      const actualCoinsToUse = Math.min(coinsUsed, available);
+      coinDiscount = actualCoinsToUse / 10;
+    }
+
+    const finalPayableAmount = Math.max(0, breakdown.totalAmount - coinDiscount);
+
+    // SERVER-SIDE INDEPENDENT PRICE VERIFICATION (STRICT BYPASS PROTECTION)
+    if (!isAdmin) {
+      // If server says price > 0, the student MUST use Razorpay flow.
+      if (finalPayableAmount > 0) {
+        console.warn(`[SECURITY] Student ${studentId} attempted payment bypass for course ${courseId}. Verified price: ₹${finalPayableAmount}`);
+        return res.status(403).json({ 
+          error: 'Paid checkout must be completed through the secure payment gateway.',
+          code: 'PAYMENT_GATEWAY_REQUIRED'
+        });
+      }
+    }
+
+    const actualCourseId = course.id || course._id.toString();
 
     const purchase = {
       id: `purchase_${Date.now()}`,
       studentId,
       courseId: actualCourseId,
-      courseName: course ? (course.name || course.title) : courseId,
-      amount: breakdown.totalAmount || (typeof amount === 'number' ? amount : (course ? course.price : 0)),
+      courseName: course.name || course.title,
+      amount: isAdmin ? (typeof amount === 'number' ? amount : finalPayableAmount) : finalPayableAmount,
       basePrice: breakdown.basePrice,
       gstAmount: breakdown.gstAmount,
       gstPercentage: breakdown.gstPercentage,
       discountAmount: breakdown.discountAmount,
+      coinDiscount: coinDiscount,
+      coinsUsed: coinsUsed,
       couponCode: coupon?.code || '',
       paymentMethod: paymentMethod || 'online',
       referralCode: referralCode || null,

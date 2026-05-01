@@ -373,8 +373,25 @@ export const packagesAPI = {
     });
     if (!response.ok) throw new Error('Failed to delete package');
     return response.json();
+  },
+  reorder: async (orderedIds: string[]) => {
+    const response = await fetch(`${API_BASE_URL}/packages/reorder`, {
+      method: 'PATCH',
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify({ orderedIds }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to reorder packages');
+    }
+    invalidateCache('packages');
+    return response.json();
   }
 };
+
 
 // Banners API
 export const bannersAPI = {

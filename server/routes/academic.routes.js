@@ -5,7 +5,7 @@ import {
   getSubjects, createSubject, updateSubject, deleteSubject,
   getTopics, createTopic, updateTopic, deleteTopic,
   getFoldersByCourse, createFolder, updateFolder, deleteFolder,
-  getPackages, createPackage, updatePackage, deletePackage,
+  getPackages, createPackage, updatePackage, deletePackage, reorderPackages,
   getSubcourses, createSubcourse, updateSubcourse, deleteSubcourse,
   getInstructors, bulkCreateCourses
 } from '../controllers/academic.controller.js';
@@ -59,6 +59,8 @@ router.get('/packages', getPackages);
 router.post('/packages', adminMiddleware, createPackage);
 router.put('/packages/:id', adminMiddleware, updatePackage);
 router.delete('/packages/:id', adminMiddleware, deletePackage);
+router.patch('/packages/reorder', adminMiddleware, reorderPackages);
+
 
 // Bulk Operations
 router.post('/courses/bulk', adminMiddleware, bulkCreateCourses);

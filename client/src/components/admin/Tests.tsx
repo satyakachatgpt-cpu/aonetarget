@@ -14,9 +14,9 @@ import { useTestsListLogic } from "../../hooks/useTestsListLogic";
 import { useTestsAnalyticsLogic } from "../../hooks/useTestsAnalyticsLogic";
 import { useTestsBulkUploadState } from "../../hooks/useTestsBulkUploadState";
 import { useTestsBulkUploadUploadLogic } from "../../hooks/useTestsBulkUploadUploadLogic";
-import TestsResultsView from "./tests/TestsResultsView";
-import TestsReportedView from "./tests/TestsReportedView";
-import TestsBulkUploaderView from "./tests/TestsBulkUploaderView";
+import TestsResultsWrapper from "./tests/views/TestsResultsWrapper";
+import TestsReportedWrapper from "./tests/views/TestsReportedWrapper";
+import TestsBulkUploaderWrapper from "./tests/views/TestsBulkUploaderWrapper";
 import TestsQuestionEditorView from "./tests/TestsQuestionEditorView";
 import TestsSeriesDetailView from "./tests/TestsSeriesDetailView";
 import { parseFile, extractQuestionsFromText } from "@/utils/testParser";
@@ -26,6 +26,10 @@ import { useTestsEffects } from "@/hooks/useTestsEffects";
 import { generateDOCX } from "./DOCXGenerator";
 import { InlineMath } from "react-katex";
 import "katex/dist/katex.min.css";
+import { renderQuestionText, renderDiagram } from "./tests/TestRenderUtils";
+import { tabs, detailSubTabs } from "./tests/testConstants";
+import TestsErrorBoundary from "./tests/TestsErrorBoundary";
+import { useTestsViewManager } from "./tests/hooks/useTestsViewManager";
 import {
   DndContext,
   KeyboardSensor,
@@ -37,21 +41,14 @@ import {
   arrayMove,
   sortableKeyboardCoordinates,
 } from '@dnd-kit/sortable';
-import TestsQuestionDetailModal from "./tests/TestsQuestionDetailModal";
-import TestsStudentAnalysisModal from "./tests/TestsStudentAnalysisModal";
-import TestsBulkDeleteModal from "./tests/TestsBulkDeleteModal";
-import TestsReevaluateModal from "./tests/TestsReevaluateModal";
-import TestsExportPdfModal from "./tests/TestsExportPdfModal";
 import TestsDrawers from "./tests/TestsDrawers";
+import TestsModalRegistry from "./tests/TestsModalRegistry";
 import TestsTopTabs from "./tests/TestsTopTabs";
 import TestsPaginationFooter from "./tests/TestsPaginationFooter";
 
 // Configure PDF.js worker (moved to testParser.ts)
 
-const tabs = ["Tests", "Results", "Bulk Uploader", "Reported Questions"];
-const detailSubTabs = ["Tests", "Users"] as const;
 
-type DetailSubTab = (typeof detailSubTabs)[number];
 
 interface Test {
   id: string;
@@ -98,9 +95,20 @@ interface Props {
 
 
 const Tests: React.FC<Props> = ({ showToast }) => {
-  const { "*": routeId } = useParams();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const {
+    routeId,
+    activeTab,
+    setActiveTab,
+    viewingTestSeries,
+    setViewingTestSeries,
+    viewingTestSeriesTab,
+    setViewingTestSeriesTab,
+    viewingQuestionEditor,
+    setViewingQuestionEditor,
+    handleSetViewingTestSeries,
+    navigate,
+    location
+  } = useTestsViewManager();
 
   const {
     tests,
@@ -131,8 +139,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     totalPages,
     paginatedTests
   } = useTestsListLogic(showToast);
-
-  const [activeTab, setActiveTab] = useState("Tests");
 
   const {
     results,
@@ -230,6 +236,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
 
 
+
+
   const [viewingQuestionDetail, setViewingQuestionDetail] = useState<
     any | null
   >(null);
@@ -240,49 +248,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const [selectedBulkDeleteQuestions, setSelectedBulkDeleteQuestions] =
     useState<number[]>([]);
   const [isBulkEditQuestionsOn, setIsBulkEditQuestionsOn] = useState(false);
-  const [viewingTestSeries, setViewingTestSeriesState] = useState<any | null>(
-    () => {
-      try {
-        const saved = localStorage.getItem("viewingTestSeries");
-        return saved ? JSON.parse(saved) : null;
-      } catch {
-        return null;
-      }
-    },
-  );
-
-  const setViewingTestSeries = (val: any) => {
-    if (val) localStorage.setItem("viewingTestSeries", JSON.stringify(val));
-    else localStorage.removeItem("viewingTestSeries");
-    setViewingTestSeriesState(val);
-  };
-
-  const [viewingTestSeriesTab, setViewingTestSeriesTabState] =
-    useState<DetailSubTab>(() => {
-      return (localStorage.getItem("viewingTestSeriesTab") as any) || "Tests";
-    });
-
-  const setViewingTestSeriesTab = (val: DetailSubTab) => {
-    localStorage.setItem("viewingTestSeriesTab", val);
-    setViewingTestSeriesTabState(val);
-  };
-  const [viewingQuestionEditor, setViewingQuestionEditorState] = useState<
-    any | null
-  >(() => {
-    try {
-      const saved = localStorage.getItem("viewingQuestionEditor");
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
-
-  const setViewingQuestionEditor = (val: any) => {
-    if (val) localStorage.setItem("viewingQuestionEditor", JSON.stringify(val));
-    else localStorage.removeItem("viewingQuestionEditor");
-    setViewingQuestionEditorState(val);
-  };
-
   const [expandedDropdownItem, setExpandedDropdownItem] = useState<string | null>(null);
   const [viewingReevaluateTest, setViewingReevaluateTest] = useState<any | null>(null);
   const [viewingExportPDFTest, setViewingExportPDFTest] = useState<any | null>(null);
@@ -416,128 +381,11 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
 
 
-  // Sync viewingTestSeries with route
-  const handleSetViewingTestSeries = useCallback((val: any) => {
-    try {
-      if (val) {
-        const id = typeof val === "object" ? val.id || val._id : val;
-        if (id && location.pathname !== `/admin/tests/${id}`) {
-          navigate(`/admin/tests/${id}`);
-        }
-        if (typeof val === "object") {
-          localStorage.setItem("viewingTestSeries", JSON.stringify(val));
-        }
-      } else {
-        if (location.pathname !== "/admin/tests") {
-          navigate("/admin/tests");
-        }
-        localStorage.removeItem("viewingTestSeries");
-      }
-    } catch (error) {
-      console.error("Error in handleSetViewingTestSeries:", error);
-    }
-  }, [location.pathname, navigate]);
 
-  // Helper to render text with math support (shared for preview)
-  const renderQuestionText = (text: any) => {
-    if (typeof text !== "string") return String(text || "");
-    const parts = text.split(/(\$.*?\$)/g);
-    return parts.map((part, i) => {
-      if (part && part.startsWith("$") && part.endsWith("$")) {
-        const math = part.slice(1, -1).trim();
-        if (!math) return null;
-        try {
-          return <InlineMath key={i} math={math} />;
-        } catch (e) {
-          return (
-            <span key={i} className="text-red-500 font-mono text-[10px]">
-              {part}
-            </span>
-          );
-        }
-      }
-      return (
-        <span key={i} dangerouslySetInnerHTML={{ __html: String(part) }} />
-      );
-    });
-  };
 
-  const renderDiagram = (q: any, field: string = "question", isEditable: boolean = false) => {
-    let dataUrl = "";
-    if (field === "question") {
-      dataUrl = q.questionImage || (Array.isArray(q.questionImages) ? q.questionImages[0] : "");
-    } else if (field === "solution") {
-      dataUrl = q.solutionImage || (q.solution?.images && Array.isArray(q.solution.images) ? q.solution.images[0] : "");
-    } else {
-      // Option Image (A, B, C, D)
-      dataUrl = q.optionImages?.[field.charCodeAt(0) - 65] || "";
-    }
-    
-    if (!dataUrl) {
-      if (!isEditable) return null;
-      return (
-        <div className="mt-2 flex items-center gap-2 justify-start">
-          <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border-2 border-dashed border-gray-200 text-gray-400 hover:border-black hover:text-black cursor-pointer transition-all bg-white">
-            <span className="material-symbols-outlined text-[16px]">upload_file</span>
-            <span className="text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Upload Image</span>
-            <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                  setTimeout(() => handleImageSelect(ev.target?.result as string, { questionId: q.id, field }), 0);
-                };
-                reader.readAsDataURL(file);
-              }
-            }} />
-          </label>
-        </div>
-      );
-    }
 
-    const isPageLevel = field === "question" && q.hasDiagramOptions;
 
-    return (
-      <div className={`mt-3 border rounded-xl overflow-hidden relative group ${isPageLevel ? 'border-amber-200 bg-amber-50/40' : 'border-blue-100 bg-blue-50/40'} ${!isEditable ? 'max-w-[400px]' : ''}`}>
-        <div className={`px-3 py-1.5 border-b flex items-center justify-between gap-1.5 ${isPageLevel ? 'bg-amber-50 border-amber-200' : 'bg-blue-50 border-blue-100'}`}>
-          <div className="flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-[14px]">{isPageLevel ? 'schema' : field === 'solution' ? 'psychology' : 'image'}</span>
-            <span className={`text-[10px] font-bold uppercase tracking-wider ${isPageLevel ? 'text-amber-600' : 'text-blue-500'}`}>
-              {isPageLevel ? 'Options as Diagrams' : field === 'question' ? 'Question Diagram' : field === 'solution' ? 'Solution Diagram' : `Option ${field} Image`}
-            </span>
-          </div>
-          {isEditable && (
-            <button 
-              onClick={() => handleRemoveImage(q.id, field)}
-              className="opacity-0 group-hover:opacity-100 transition-opacity text-red-500 hover:text-red-700"
-            >
-              <span className="material-symbols-outlined text-[16px]">delete</span>
-            </button>
-          )}
-        </div>
-        <div className="p-2 flex flex-col items-center">
-          <img src={dataUrl} alt="Diagram" className={`w-full h-auto rounded-lg object-contain ${field === 'question' ? 'max-h-64' : 'max-h-32'}`} loading="lazy" />
-          {isEditable && (
-            <div className="flex items-center gap-4 mt-3">
-              <label className="text-[10px] font-bold text-gray-500 hover:text-black flex items-center gap-1 transition-colors cursor-pointer bg-white px-2 py-1 rounded">
-                <span className="material-symbols-outlined text-[14px]">upload_file</span> Change Image
-                <input type="file" accept="image/*" className="hidden" onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) {
-                    const reader = new FileReader();
-                    reader.onload = (ev) => {
-                      setTimeout(() => handleImageSelect(ev.target?.result as string, { questionId: q.id, field }), 0);
-                    };
-                    reader.readAsDataURL(file);
-                  }
-                }} />
-              </label>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
+
 
 
 
@@ -549,66 +397,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     );
   }
 
-  const renderResultsTab = () => (
-    <TestsResultsView
-      results={results}
-      resultFilters={resultFilters}
-      setResultFilters={setResultFilters}
-      resultsPageSize={resultsPageSize}
-      setResultsPageSize={setResultsPageSize}
-      resultsCurrentPage={resultsCurrentPage}
-      setResultsCurrentPage={setResultsCurrentPage}
-      tests={tests}
-      showToast={showToast}
-      setViewingStudentAnalysis={setViewingStudentAnalysis}
-      loading={loading}
-    />
-  );
 
-  const renderReportedQuestionsTab = () => (
-    <TestsReportedView
-      reportedQuestions={reportedQuestions}
-      reportedSearchQuery={reportedSearchQuery}
-      setReportedSearchQuery={setReportedSearchQuery}
-      reportedFilters={reportedFilters}
-      setReportedFilters={setReportedFilters}
-      reportedPageSize={reportedPageSize}
-      setReportedPageSize={setReportedPageSize}
-      reportedCurrentPage={reportedCurrentPage}
-      setReportedCurrentPage={setReportedCurrentPage}
-      selectedReportedIds={selectedReportedIds}
-      setSelectedReportedIds={setSelectedReportedIds}
-      handleBulkDeleteReports={handleBulkDeleteReports}
-      handleQuickResolve={handleQuickResolve}
-      handleDeleteReport={handleDeleteReport}
-      isReportedFilterOpen={isReportedFilterOpen}
-      setIsReportedFilterOpen={setIsReportedFilterOpen}
-      loading={loading}
-    />
-  );
 
-  const renderBulkUploaderTab = () => (
-    <TestsBulkUploaderView
-      bulkUploadData={bulkUploadData}
-      setBulkUploadData={setBulkUploadData}
-      isParsing={isParsing}
-      setIsParsing={setIsParsing}
-      uploadProgress={uploadProgress}
-      handleFinalBulkUpload={handleFinalBulkUpload}
-      tests={tests}
-      fileInputRef={fileInputRef}
-      parseFile={parseFile}
-      showToast={showToast}
-      activeImageAssignment={activeImageAssignment}
-      setActiveImageAssignment={setActiveImageAssignment}
-      handleImageSelect={handleImageSelect}
-      handleRemoveImage={handleRemoveImage}
-      generateDOCX={generateDOCX}
-      viewingTestSeries={viewingTestSeries}
-      viewingQuestionEditor={viewingQuestionEditor}
-      setActiveTab={setActiveTab}
-    />
-  );
+
 
   const renderTestSeriesDetail = () => {
     if (!viewingTestSeries && !viewingQuestionEditor) return null;
@@ -630,7 +421,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           showToast={showToast}
           testsAPI={testsAPI}
           renderQuestionText={renderQuestionText}
-          renderDiagram={renderDiagram}
+          renderDiagram={(q, f, e) => renderDiagram(q, f, e, handleImageSelect, handleRemoveImage)}
           showFloatingAddMenu={showFloatingAddMenu}
           setShowFloatingAddMenu={setShowFloatingAddMenu}
           showFloatingMoreMenu={showFloatingMoreMenu}
@@ -701,11 +492,60 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       />
 
       {activeTab === "Results" ? (
-        renderResultsTab()
+        <TestsResultsWrapper
+          results={results}
+          resultFilters={resultFilters}
+          setResultFilters={setResultFilters}
+          resultsPageSize={resultsPageSize}
+          setResultsPageSize={setResultsPageSize}
+          resultsCurrentPage={resultsCurrentPage}
+          setResultsCurrentPage={setResultsCurrentPage}
+          tests={tests}
+          showToast={showToast}
+          setViewingStudentAnalysis={setViewingStudentAnalysis}
+          loading={loading}
+        />
       ) : activeTab === "Bulk Uploader" ? (
-        renderBulkUploaderTab()
+        <TestsBulkUploaderWrapper
+          bulkUploadData={bulkUploadData}
+          setBulkUploadData={setBulkUploadData}
+          isParsing={isParsing}
+          setIsParsing={setIsParsing}
+          uploadProgress={uploadProgress}
+          handleFinalBulkUpload={handleFinalBulkUpload}
+          tests={tests}
+          fileInputRef={fileInputRef}
+          parseFile={parseFile}
+          showToast={showToast}
+          activeImageAssignment={activeImageAssignment}
+          setActiveImageAssignment={setActiveImageAssignment}
+          handleImageSelect={handleImageSelect}
+          handleRemoveImage={handleRemoveImage}
+          generateDOCX={generateDOCX}
+          viewingTestSeries={viewingTestSeries}
+          viewingQuestionEditor={viewingQuestionEditor}
+          setActiveTab={setActiveTab}
+        />
       ) : activeTab === "Reported Questions" ? (
-        renderReportedQuestionsTab()
+        <TestsReportedWrapper
+          reportedQuestions={reportedQuestions}
+          reportedSearchQuery={reportedSearchQuery}
+          setReportedSearchQuery={setReportedSearchQuery}
+          reportedFilters={reportedFilters}
+          setReportedFilters={setReportedFilters}
+          reportedPageSize={reportedPageSize}
+          setReportedPageSize={setReportedPageSize}
+          reportedCurrentPage={reportedCurrentPage}
+          setReportedCurrentPage={setReportedCurrentPage}
+          selectedReportedIds={selectedReportedIds}
+          setSelectedReportedIds={setSelectedReportedIds}
+          handleBulkDeleteReports={handleBulkDeleteReports}
+          handleQuickResolve={handleQuickResolve}
+          handleDeleteReport={handleDeleteReport}
+          isReportedFilterOpen={isReportedFilterOpen}
+          setIsReportedFilterOpen={setIsReportedFilterOpen}
+          loading={loading}
+        />
       ) : viewingTestSeries ? (
         renderTestSeriesDetail()
       ) : (
@@ -753,19 +593,13 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       )}
 
 
-      <TestsQuestionDetailModal
+      <TestsModalRegistry
         viewingQuestionDetail={viewingQuestionDetail}
         setViewingQuestionDetail={setViewingQuestionDetail}
         renderQuestionText={renderQuestionText}
-      />
-
-      <TestsStudentAnalysisModal
         viewingStudentAnalysis={viewingStudentAnalysis}
         setViewingStudentAnalysis={setViewingStudentAnalysis}
         results={results}
-      />
-
-      <TestsBulkDeleteModal
         showBulkDeleteModal={showBulkDeleteModal}
         setShowBulkDeleteModal={setShowBulkDeleteModal}
         selectedBulkDeleteQuestions={selectedBulkDeleteQuestions}
@@ -775,18 +609,11 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         viewingQuestionEditor={viewingQuestionEditor}
         showToast={showToast}
         loadData={loadData}
-      />
-
-      <TestsReevaluateModal
         viewingReevaluateTest={viewingReevaluateTest}
         setViewingReevaluateTest={setViewingReevaluateTest}
         handleReevaluate={handleReevaluate}
-      />
-
-      <TestsExportPdfModal
         viewingExportPDFTest={viewingExportPDFTest}
         setViewingExportPDFTest={setViewingExportPDFTest}
-        showToast={showToast}
       />
 
       <TestsDrawers
@@ -822,52 +649,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     </div>
   );
 };
-
-class TestsErrorBoundary extends React.Component<
-  { children: React.ReactNode; showToast?: any },
-  { hasError: boolean; error: any }
-> {
-  constructor(props: any) {
-    super(props);
-    this.state = { hasError: false, error: null };
-  }
-  static getDerivedStateFromError(error: any) {
-    return { hasError: true, error };
-  }
-  componentDidCatch(error: any, info: any) {
-    console.error("Tests component crashed:", error, info);
-  }
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="flex flex-col items-center justify-center h-full p-8">
-          <div className="bg-red-50 border border-red-200 rounded-xl p-6 max-w-md text-center">
-            <span className="material-symbols-outlined text-red-400 text-4xl mb-3">
-              error
-            </span>
-            <h3 className="text-lg font-semibold text-gray-800 mb-2">
-              Something went wrong
-            </h3>
-            <p className="text-sm text-gray-500 mb-4">
-              {this.state.error?.message || "An unexpected error occurred"}
-            </p>
-            <button
-              onClick={() => {
-                localStorage.removeItem("viewingTestSeries");
-                localStorage.removeItem("viewingTestSeriesTab");
-                this.setState({ hasError: false, error: null });
-              }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-            >
-              Reset & Try Again
-            </button>
-          </div>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 const TestsWithErrorBoundary: React.FC<Props> = (props) => (
   <TestsErrorBoundary showToast={props.showToast}>
