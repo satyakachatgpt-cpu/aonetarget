@@ -772,7 +772,16 @@ export const submitTest = async (req, res) => {
       timeTaken
     });
 
-    res.status(201).json(resultData);
+    // Strip correctAnswer and isCorrect from response for students (keep in DB for later review)
+    const responseData = isAdmin ? resultData : {
+      ...resultData,
+      questionResults: resultData.questionResults?.map(qr => {
+        const { correctAnswer, isCorrect, ...safeQr } = qr;
+        return safeQr;
+      })
+    };
+
+    res.status(201).json(responseData);
   } catch (error) {
     logError({ action: 'SUBMIT', error, context: { testId: req.params.testId } });
     res.status(500).json({ error: 'Failed to submit test' });
