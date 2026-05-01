@@ -748,7 +748,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
         const targetTestMatch = tests.find((t) => (t.id || (t as any)._id) === bulkUploadData.testTitle) || 
                                detailTests.find((t) => (t.id || (t as any)._id) === bulkUploadData.testTitle);
-        const limit = Number(targetTestMatch?.questions || 100);
+        const limit = Number(targetTestMatch?.questions || 0);
         const questions = extractQuestionsFromText(questionsOnlyText || fullText, pageMap, fullText, limit);
         console.log("Extracted questions count:", questions.length);
         return { questions, extractedImages: allExtractedImages };
@@ -760,7 +760,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     return { questions: [], extractedImages: [] };
   }
 
-  function extractQuestionsFromText(text: string, pageMap: any[] = [], originalFullText: string = "", limit: number = 100): any[] {
+  function extractQuestionsFromText(text: string, pageMap: any[] = [], originalFullText: string = "", limit: number = 0): any[] {
     const questions: any[] = [];
     const normalizedText = text.replace(/\r\n/g, "\n").replace(/[ \t]+/g, " ");
     const answerKeySource = originalFullText || normalizedText;
@@ -1103,36 +1103,23 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
     console.log(`[Parser] Unique questions: ${uniqueQuestions.length}. Numbers: ${uniqueQuestions.map(q => q.originalQuestionNumber).join(",")}`);
 
-    // Task 5: Strict Sequence Validation (1..100)
+    // Sequence info — warning only, never blocks upload
     const finalNumbersArr = uniqueQuestions.map(q => q.originalQuestionNumber).sort((a,b) => a-b);
-    const finalNumbers = new Set(finalNumbersArr);
-    const targetCount = limit > 0 ? limit : 100;
-    const missing = [];
-    
-    for (let i = 1; i <= targetCount; i++) {
-      if (!finalNumbers.has(i)) missing.push(i);
-    }
-    
-    const duplicates = [];
-    const seen = new Set();
+    const duplicates: number[] = [];
+    const seen = new Set<number>();
     uniqueQuestions.forEach(q => {
       if (seen.has(q.originalQuestionNumber)) duplicates.push(q.originalQuestionNumber);
       seen.add(q.originalQuestionNumber);
     });
 
-    if (missing.length > 0 || duplicates.length > 0 || uniqueQuestions.length !== targetCount) {
-      const errorMsg = [
-        missing.length > 0 ? `Missing: ${missing.join(", ")}` : "",
-        duplicates.length > 0 ? `Duplicates: ${duplicates.join(", ")}` : "",
-        uniqueQuestions.length !== targetCount ? `Count mismatch: Expected ${targetCount}, got ${uniqueQuestions.length}` : ""
-      ].filter(Boolean).join(" | ");
-      
-      console.error(`[Parser] Sequence Incomplete: ${errorMsg}`);
-      showToast(`Invalid Sequence: ${errorMsg}`, "error");
-      
-      (uniqueQuestions as any).isInvalidSequence = true;
-      (uniqueQuestions as any).errorDetail = errorMsg;
+    if (limit > 0 && uniqueQuestions.length !== limit) {
+      console.warn(`[Parser] PDF has ${uniqueQuestions.length} questions but this test is configured for ${limit}. Uploading exactly what was parsed.`);
     }
+    if (duplicates.length > 0) {
+      console.warn(`[Parser] Duplicate question numbers detected: ${duplicates.join(", ")}`);
+    }
+    console.log(`[Parser] Final parsed count: ${uniqueQuestions.length}. Numbers: ${finalNumbersArr.join(",")}`);
+    // isInvalidSequence is intentionally NOT set — count mismatch never blocks upload.
 
     return uniqueQuestions;
   }
@@ -3901,10 +3888,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         return;
       }
 
-      // Task 5: Strict Sequence Validation
-      if ((bulkUploadData.parsedQuestions as any).isInvalidSequence) {
-        const errorMsg = (bulkUploadData.parsedQuestions as any).errorDetail;
-        showToast(`Cannot upload: ${errorMsg}. All 100 questions must be present and unique.`, "error");
+      // Zero-question guard — only block if nothing was parsed
+      if ((bulkUploadData.parsedQuestions || []).length === 0) {
+        showToast("No questions were parsed from the file. Please check the PDF format.", "error");
         return;
       }
 
@@ -3934,15 +3920,13 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           ),
         );
 
-        const limit = targetTestMatch?.noOfQuestions || 0;
+        const configuredLimit = targetTestMatch?.noOfQuestions || 0;
         const currentCount = existingQuestions.length;
+        const parsedCount = (bulkUploadData.parsedQuestions || []).length;
 
-        if (limit > 0 && currentCount >= limit) {
-          showToast(
-            `Test already has ${currentCount} questions. Limit is ${limit}.`,
-            "error",
-          );
-          return;
+        // Show informational warning if PDF count differs from test config — never block
+        if (configuredLimit > 0 && parsedCount !== configuredLimit) {
+          console.warn(`[Upload] PDF has ${parsedCount} questions but this test is configured for ${configuredLimit}. Uploading all ${parsedCount} parsed questions.`);
         }
 
         // 2. Prepare payload - Standardization to displayOptions
@@ -4043,17 +4027,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           return;
         }
 
-        // Enforce the limit
-        if (
-          limit > 0 &&
-          currentCount + questionsToUpload.length > limit
-        ) {
-          const allowed = limit - currentCount;
-          showToast(
-            `PDF has ${questionsToUpload.length} questions but this test is configured for ${limit}. Only ${allowed} new questions will be imported unless test question count is changed.`,
-            "error",
-          );
-          questionsToUpload = questionsToUpload.slice(0, allowed);
+        // Warning only — never drop or slice questions based on configured count
+        if (configuredLimit > 0 && currentCount + questionsToUpload.length > configuredLimit) {
+          console.warn(`[Upload] PDF has ${questionsToUpload.length} questions; combined total (${currentCount + questionsToUpload.length}) exceeds configured count (${configuredLimit}). Uploading all parsed questions.`);
         }
 
         showToast(
