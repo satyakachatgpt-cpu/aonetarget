@@ -335,7 +335,7 @@ const SortableRow = ({ q, idx, setViewingAddQuestionForm, handleDeleteQuestion, 
            <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-400 hover:text-black transition-colors focus:outline-none">
              <span className="material-symbols-outlined text-[20px]">drag_indicator</span>
            </div>
-           <span className="text-[13px] font-bold text-gray-400">{idx + 1}</span>
+           <span className="text-[13px] font-bold text-gray-400">{q.originalQuestionNumber || q.questionNumber || idx + 1}</span>
         </div>
       </td>
       <td className="px-6 py-4">
@@ -420,6 +420,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     parsedQuestions: any[];
     extractedImages: string[];
     uploadMode: 'append' | 'replace';
+    existingCount: number;
   }>({
     testSeries: "",
     testTitle: "",
@@ -428,7 +429,25 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     parsedQuestions: [],
     extractedImages: [],
     uploadMode: 'append',
+    existingCount: 0,
   });
+
+  useEffect(() => {
+    const fetchExistingCount = async () => {
+      const testId = bulkUploadData.testTitle;
+      if (testId) {
+        try {
+          const qs = await testsAPI.getQuestions(testId);
+          setBulkUploadData(prev => ({ ...prev, existingCount: Array.isArray(qs) ? qs.length : 0 }));
+        } catch (err) {
+          setBulkUploadData(prev => ({ ...prev, existingCount: 0 }));
+        }
+      } else {
+        setBulkUploadData(prev => ({ ...prev, existingCount: 0 }));
+      }
+    };
+    fetchExistingCount();
+  }, [bulkUploadData.testTitle]);
 
   // Assignment state for image uploader
   const [activeImageAssignment, setActiveImageAssignment] = useState<{
@@ -523,28 +542,87 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         console.log("Starting PDF parsing for:", file.name);
         const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         let fullText = "";
-        // pageMap: stores start char index per page for question-to-page mapping
-        const pageMap: { startIndex: number; pageNumber: number; embeddedImages: { dataUrl: string; y: number }[]; pageDataUrl: string }[] = [];
+        const pageMap: { startIndex: number; pageNumber: number; embeddedImages: { dataUrl: string; y: number }[]; pageDataUrl: string; isAnswerKeyPage?: boolean }[] = [];
         const allExtractedImages: string[] = [];
 
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
           const textContent = await page.getTextContent();
+          const viewport = page.getViewport({ scale: 1.0 });
+          const pageWidth = viewport.width;
 
-          let lastY = -1;
+          const items = (textContent.items as any[]).map(item => ({
+            str: item.str,
+            x: item.transform[4],
+            y: item.transform[5],
+            width: item.width || 0,
+            height: item.height || 12,
+          })).filter(item => item.str.trim().length > 0);
+
           let pageText = "";
+          if (items.length > 0) {
+            const lines: any[][] = [];
+            items.sort((a, b) => b.y - a.y);
+            items.forEach(item => {
+              let placed = false;
+              for (const line of lines) {
+                if (Math.abs(line[0].y - item.y) < 5) {
+                  line.push(item);
+                  placed = true;
+                  break;
+                }
+              }
+              if (!placed) lines.push([item]);
+            });
 
-          // Use Y coordinate to detect new lines in PDF
-          for (const item of textContent.items as any[]) {
-            const currentY = item.transform[5];
-            if (lastY !== -1 && Math.abs(currentY - lastY) > 5) {
-              pageText += "\n";
+            lines.forEach(line => line.sort((a, b) => a.x - b.x));
+            lines.sort((a, b) => b[0].y - a[0].y);
+
+            const mid = pageWidth / 2;
+            let leftCount = 0;
+            let rightCount = 0;
+            items.forEach(it => {
+              if (it.x + it.width < mid - 20) leftCount++;
+              else if (it.x > mid + 20) rightCount++;
+            });
+
+            const isTwoColumn = leftCount > items.length * 0.3 && rightCount > items.length * 0.3;
+
+            if (isTwoColumn) {
+              const leftItems = items.filter(it => it.x < mid).sort((a, b) => b.y - a.y || a.x - b.x);
+              const rightItems = items.filter(it => it.x >= mid).sort((a, b) => b.y - a.y || a.x - b.x);
+              const colToText = (cItems: any[]) => {
+                let txt = "";
+                let ly = -1;
+                cItems.forEach(it => {
+                  if (ly !== -1 && Math.abs(it.y - ly) > 5) txt += "\n";
+                  txt += it.str + " ";
+                  ly = it.y;
+                });
+                return txt;
+              };
+              pageText = colToText(leftItems) + "\n" + colToText(rightItems);
+            } else {
+              lines.forEach(line => {
+                line.forEach(it => { pageText += it.str + " "; });
+                pageText += "\n";
+              });
             }
-            pageText += item.str + " ";
-            lastY = currentY;
           }
 
-          // Extract embedded images (XObjects) from PDF page using operator list
+          // Task 1: Page-aware answer key detection
+          const normalizedPageText = pageText.replace(/\r\n/g, "\n").replace(/[ \t]+/g, " ");
+          const answerKeyPattern = /\b\d{1,3}\s+[A-D1-4]\b/g;
+          const akMatches = normalizedPageText.match(answerKeyPattern);
+          const hasAKHeader = normalizedPageText.includes("Q. A. Q. A.");
+          // Detection: page has the specific header OR VERY high density of answer pairs
+          // Bypass if the page looks like a question page (contains "?" or "।")
+          const isAKPage = (hasAKHeader || (akMatches && akMatches.length >= 25)) && 
+                           !normalizedPageText.includes('?') && 
+                           !normalizedPageText.includes('।');
+          if (isAKPage) {
+            console.log(`[Parser] Page ${i} detected as Answer Key page.`);
+          }
           const embeddedImages: { dataUrl: string; y: number }[] = [];
           try {
             const opList = await (page as any).getOperatorList();
@@ -625,8 +703,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             console.warn(`Could not extract images from page ${i}:`, opErr);
           }
 
-          // Normalize page text to ensure indexing consistency with extractQuestionsFromText
-          const normalizedPageText = pageText.replace(/\r\n/g, "\n").replace(/[ \t]+/g, " ");
+          // Page text already normalized above
 
           // Render page to a small compressed JPEG for diagram-option questions
           // (scale 1.0, JPEG 50% quality → ~100-200KB per page)
@@ -649,14 +726,30 @@ const Tests: React.FC<Props> = ({ showToast }) => {
             startIndex: fullText.length,
             pageNumber: i,
             embeddedImages,
-            pageDataUrl
+            pageDataUrl,
+            isAnswerKeyPage: isAKPage
           });
           fullText += normalizedPageText + "\n\n";
         }
 
         const totalImgs = pageMap.reduce((acc, p) => acc + p.embeddedImages.length, 0);
         console.log(`Extracted PDF text length: ${fullText.length}, Embedded images found: ${totalImgs}`);
-        const questions = extractQuestionsFromText(fullText, pageMap);
+        
+        // Task 1.2: Build filtered text for question extraction (exclude AK pages)
+        let questionsOnlyText = "";
+        pageMap.forEach(p => {
+           if (!p.isAnswerKeyPage) {
+             const start = p.startIndex;
+             const nextP = pageMap.find(pm => pm.pageNumber === p.pageNumber + 1);
+             const end = nextP ? nextP.startIndex : fullText.length;
+             questionsOnlyText += fullText.substring(start, end);
+           }
+        });
+
+        const targetTestMatch = tests.find((t) => (t.id || (t as any)._id) === bulkUploadData.testTitle) || 
+                               detailTests.find((t) => (t.id || (t as any)._id) === bulkUploadData.testTitle);
+        const limit = Number(targetTestMatch?.questions || 0);
+        const questions = extractQuestionsFromText(questionsOnlyText || fullText, pageMap, fullText, limit);
         console.log("Extracted questions count:", questions.length);
         return { questions, extractedImages: allExtractedImages };
       } catch (err) {
@@ -667,195 +760,368 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     return { questions: [], extractedImages: [] };
   }
 
-  function extractQuestionsFromText(text: string, pageMap: any[] = []): any[] {
+  function extractQuestionsFromText(text: string, pageMap: any[] = [], originalFullText: string = "", limit: number = 0): any[] {
     const questions: any[] = [];
-
-    // Normalize text: handle various newline formats and multi-spaces
-    // NOTE: This normalization matches the one used in parseFile for index consistency
     const normalizedText = text.replace(/\r\n/g, "\n").replace(/[ \t]+/g, " ");
+    const answerKeySource = originalFullText || normalizedText;
 
-    // Split into question blocks strictly by "1. ", "2. " etc at start of line
-    const qSplitRegex = /^\s*(\d+)[\.|\)]\s+/gm;
-    let match;
-    const blockInfos: { start: number; text: string }[] = [];
-
-    while ((match = qSplitRegex.exec(normalizedText)) !== null) {
-      const start = match.index;
-      if (blockInfos.length > 0) {
-        blockInfos[blockInfos.length - 1].text = normalizedText.substring(blockInfos[blockInfos.length - 1].start, start);
-      }
-      blockInfos.push({ start, text: "" });
-    }
-
-    if (blockInfos.length > 0) {
-      blockInfos[blockInfos.length - 1].text = normalizedText.substring(blockInfos[blockInfos.length - 1].start);
-    }
-
-    const validBlockInfos = blockInfos.filter(b => b.text.trim().length > 0);
-    const blocks = validBlockInfos.map(b => b.text);
-    const blockStarts = validBlockInfos.map(b => b.start);
-
-    console.log(`Split text into ${blocks.length} potential question blocks.`);
-
-    for (let bIdx = 0; bIdx < blocks.length; bIdx++) {
-      const block = blocks[bIdx];
-
-      // Filtering per Problem 1
-      const firstLine = block.split('\n')[0];
-      if (/Unit-|Assignment-|ELECTRONIC DEVICES|CHAPTER/i.test(firstLine)) continue;
+    const parseAnswerKeyFromText = (fullText: string) => {
+      const keyMap: { [key: number]: string } = {};
+      const lines = fullText.split('\n');
+      // Look at last few lines first, then the whole thing
+      const searchBlocks = [lines.slice(-500).join('\n'), fullText]; 
       
-      const hasOptions = /\([a-dA-D]\)|[A-D][\.|\)]\s/i.test(block);
-      if (!hasOptions) continue;
+      const tablePatterns = [
+        /(\d+)\s+([A-D1-4])(?:\s+|$)/g,
+        /Q\.\s*(\d+)\s*Ans\.\s*([A-D1-4])/gi,
+        /\b(\d+)\s*[\.\)]?\s*([A-D])\b/gi
+      ];
 
-      // Find options: (A), A., A), [A], Option A:
-      const optionMarkerRegex =
-        /(?:\n|[ \t])(?:\(?([A-Da-d])[\s\).\]:]|Option\s*([A-Da-d])[\s.:])(?!\w)/gi;
-
-      let matchOpt;
-      const optionMatches = [];
-      const tempGlobalRegex = new RegExp(optionMarkerRegex);
-      while ((matchOpt = tempGlobalRegex.exec(block)) !== null) {
-        optionMatches.push({
-          index: matchOpt.index,
-          marker: matchOpt[0],
-          label: (matchOpt[1] || matchOpt[2]).toUpperCase(),
-        });
-      }
-
-      let questionPart = "";
-      let optionsArray: string[] = [];
-      let answer = "A";
-      let solution = "";
-
-      if (optionMatches.length > 0) {
-        questionPart = block.substring(0, optionMatches[0].index).trim();
-        for (let i = 0; i < optionMatches.length; i++) {
-          const start = optionMatches[i].index + optionMatches[i].marker.length;
-          const end = i + 1 < optionMatches.length ? optionMatches[i + 1].index : block.length;
-          let optText = block.substring(start, end).trim();
-
-          const ansMatch = optText.match(/(?:Ans(?:wer)?|Correct|उत्तर)[:.\s]*([A-D])/i);
-          if (ansMatch) {
-            answer = ansMatch[1].toUpperCase();
-            optText = optText.substring(0, ansMatch.index).trim();
-          }
-
-          const solMatch = optText.match(/(?:Sol(?:ution)?|Expl(?:anation)?|हल)[:.\s]*([\s\S]*)/i);
-          if (solMatch) {
-            solution = solMatch[1].trim();
-            optText = optText.substring(0, solMatch.index).trim();
-          }
-          if (optText) optionsArray.push(optText);
-        }
-      } else {
-        questionPart = block.trim();
-      }
-
-      let questionEn = questionPart.replace(/^\s*\d+[\.|\)]\s*/i, "").trim();
-      let questionHi = "";
-
-      const hindiRegex = /[\u0900-\u097F]/;
-      if (hindiRegex.test(questionEn)) {
-        const lines = questionEn.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
-        if (lines.length >= 2) {
-          const hasHindi0 = hindiRegex.test(lines[0]);
-          const hasHindi1 = hindiRegex.test(lines[1]);
-          if (hasHindi0 && !hasHindi1) {
-            questionHi = lines[0];
-            questionEn = lines.slice(1).join(" ");
-          } else if (!hasHindi0 && hasHindi1) {
-            questionEn = lines[0];
-            questionHi = lines.slice(1).join(" ");
-          } else if (hasHindi0 && hasHindi1) {
-            questionHi = questionEn;
-            questionEn = "";
-          }
-        } else if (hindiRegex.test(questionEn)) {
-          questionHi = questionEn;
-          questionEn = "";
-        }
-      }
-
-      if (answer === "A") {
-        const globalAns = block.match(/(?:Ans(?:wer)?|Correct|उत्तर)[:.\s]*([A-D])\b/i);
-        if (globalAns) answer = globalAns[1].toUpperCase();
-      }
-
-      const globalSol = block.match(/(?:Sol(?:ution)?|Expl(?:anation)?|हल)[:.\s]*([\s\S]{5,})/i);
-      if (globalSol) solution = globalSol[1].trim();
-
-      // ==== Diagram-Option Detection ====
-      const realTextOptions = optionsArray.filter(o => o.trim().replace(/^[a-d][\s\)\.:]/i, '').trim().length > 5);
-      const hasDiagramOptions = realTextOptions.length < 2;
-
-      let qPageNum = 1;
-      let questionImage = "";
-      let hasDiagramOptionsFlag = false;
-      let needsReview = false;
-
-      if (pageMap && pageMap.length > 0) {
-        const startIdx = blockStarts[bIdx];
-        let matchedPage: any = null;
-        for (const p of pageMap) {
-          if (startIdx >= p.startIndex) {
-            qPageNum = p.pageNumber;
-            matchedPage = p;
-          } else {
-            break;
-          }
-        }
-
-        if (matchedPage) {
-          const questionText = (questionEn + questionHi + block).toLowerCase();
-          const hasFigureRef = /fig(ure)?[\s.]*\d|diagram|circuit|graph|wave|shown below|given below|following figure|refer to|arrangement/i.test(questionText);
-
-          if (hasDiagramOptions) {
-            hasDiagramOptionsFlag = true;
-            questionImage = ""; // Do NOT attach whole page as question image
-            needsReview = true;
-          } else if (matchedPage.embeddedImages && matchedPage.embeddedImages.length > 0) {
-            if (hasFigureRef) {
-              questionImage = matchedPage.embeddedImages[0].dataUrl;
-              needsReview = matchedPage.embeddedImages.length > 1; 
-            } else if (matchedPage.embeddedImages.length === 1) {
-              questionImage = matchedPage.embeddedImages[0].dataUrl;
-              needsReview = false;
-            } else {
-              questionImage = matchedPage.embeddedImages[0].dataUrl;
-              needsReview = true;
+      searchBlocks.forEach((block, idx) => {
+        tablePatterns.forEach(regex => {
+          let match;
+          regex.lastIndex = 0;
+          while ((match = regex.exec(block)) !== null) {
+            const qNum = parseInt(match[1]);
+            let ans = match[2].toUpperCase();
+            if (ans === '1') ans = 'A';
+            else if (ans === '2') ans = 'B';
+            else if (ans === '3') ans = 'C';
+            else if (ans === '4') ans = 'D';
+            
+            if (qNum > 0 && qNum < 500) {
+                if (idx === 0 || !keyMap[qNum]) {
+                    keyMap[qNum] = ans;
+                }
             }
           }
+        });
+      });
+      return keyMap;
+    };
+
+    const answerKeyMap = parseAnswerKeyFromText(answerKeySource);
+
+    const splitQuestionBlocks = (fullText: string) => {
+      const blocks: { number: number; text: string; startIndex: number }[] = [];
+      // Task 2: Decimal protection - dot must be followed by whitespace or letter/Hindi, not another digit
+      const qStartRegex = /^\s*(\d{1,3})\s*(?:[\.\)](?=\s|[A-Za-z\u0900-\u097F]|$)|[ \t]+(?=[A-Za-z\u0900-\u097F]|$))/gm;
+      
+      // Stop splitting at Answer Key section (Task 6)
+      const answerKeyMarkers = ["Answer Key", "ANSWER KEY", "Answer Sheet", "उत्तर कुंजी", "Correct Answer Table"];
+      let cutoffIndex = fullText.length;
+      for (const marker of answerKeyMarkers) {
+        const idx = fullText.lastIndexOf(marker);
+        if (idx !== -1 && idx > fullText.length * 0.7) {
+          cutoffIndex = Math.min(cutoffIndex, idx);
+        }
+      }
+      if (cutoffIndex < fullText.length) {
+          console.log(`[Parser] Answer Key cutoff detected at index ${cutoffIndex}`);
+      }
+      
+      // TASK 2: Boundary Normalization
+      // PDF extraction sometimes puts the next question on the same line as the previous option.
+      // e.g. "more cold 86. The value" -> "more cold\n86. The value"
+      const textToSplit = fullText.substring(0, cutoffIndex)
+        .replace(/([^\n])\s+(\d{1,3})\.\s/g, (match, p1, p2) => {
+            const n = parseInt(p2);
+            if (n > 0 && n <= 500) {
+               // Trace if near Q86
+               if (n >= 85 && n <= 87) {
+                  console.log(`[Parser-Trace] Normalizing boundary for Q${n} found after text: "${p1.slice(-10)}"`);
+               }
+               return p1 + "\n" + p2 + ". ";
+            }
+            return match;
+        });
+
+      let match;
+      let lastMatch = null;
+      let lastAcceptedNumber = 0;
+
+      while ((match = qStartRegex.exec(textToSplit)) !== null) {
+        const qNum = parseInt(match[1]);
+        const matchedLine = textToSplit.substring(match.index, match.index + 50);
+        const rawStart = matchedLine.slice(0, 12);
+
+        // TASK 2: Hard decimal guard (JS level)
+        // Rejects "2.697" or "0.498" which regex might pick up if dot-lookahead is tricky
+        // MUST NOT reject "86. The value"
+        const isDecimal = /^\s*\d{1,3}\.\d/.test(rawStart);
+        if (isDecimal) {
+          if (qNum >= 84 && qNum <= 88) {
+             console.log(`[Parser-Trace] Q${qNum} DECIMAL CHECK on "${rawStart.trim()}": ${isDecimal}`);
+          }
+          continue;
+        }
+
+        // TASK 3: Sequence-aware filtering
+        if (qNum <= lastAcceptedNumber) {
+          if (qNum >= 84 && qNum <= 88) {
+             console.log(`[Parser-Trace] Q${qNum} REJECTED by sequence guard (Last: ${lastAcceptedNumber})`);
+          }
+          continue;
+        }
+
+        if (qNum >= 84 && qNum <= 88) {
+          console.log(`[Parser-Trace] Detected candidate ${qNum} at index ${match.index}. matchedLine: "${matchedLine.substring(0, 30)}..."`);
+        }
+
+        if (lastMatch) {
+          const lastNum = parseInt(lastMatch[1]);
+          const blockText = textToSplit.substring(lastMatch.index, match.index);
+          blocks.push({ 
+            number: lastNum, 
+            text: blockText, 
+            startIndex: lastMatch.index 
+          });
+          if (lastNum >= 84 && lastNum <= 88) {
+            console.log(`[Parser-Trace] Created block for Q${lastNum}. Length: ${blockText.length}`);
+          }
+        }
+        lastMatch = match;
+        lastAcceptedNumber = qNum;
+      }
+      if (lastMatch) {
+        const lastNum = parseInt(lastMatch[1]);
+        const blockText = textToSplit.substring(lastMatch.index);
+        blocks.push({ 
+          number: lastNum, 
+          text: blockText, 
+          startIndex: lastMatch.index 
+        });
+        if (lastNum >= 84 && lastNum <= 88) {
+           console.log(`[Parser-Trace] Created final block for Q${lastNum}. Length: ${blockText.length}`);
+        }
+      }
+      const filtered = blocks.filter(b => {
+        const t = b.text.trim();
+        if (t.length < 10) return false;
+        // Detect answer key table rows: "10 A 20 A 30 B" or "A 20 A 30 B"
+        const answerKeyPattern = /\b\d{1,3}\s+[A-D1-4]\b/g;
+        const matches = t.match(answerKeyPattern);
+        
+        // REFINED: Only drop if it's extremely dense with answers and relatively short
+        // AND it doesn't look like a legitimate formula question (Task 2)
+        if (matches && matches.length >= 5 && t.length < 150 && !t.includes('?') && !t.includes('।')) {
+           console.log(`[Parser] Filtering out block starting with ${b.number} as dense answer key. Text: "${t.substring(0, 50)}..."`);
+           return false;
+        }
+        
+        if (t.includes("Q. A. Q. A.") && t.length < 100) return false;
+        
+        if (b.number >= 84 && b.number <= 88) {
+           console.log(`[Parser-Trace] Q${b.number} passed block filter. Length: ${t.length}`);
+        }
+        return true;
+      });
+      console.log(`[Parser] Split into ${blocks.length} blocks, ${filtered.length} remaining after filter.`);
+      return filtered;
+    };
+
+    const parseOptions = (blockText: string) => {
+      let options: string[] = [];
+      let mode: 'numeric' | 'upper' | 'lower' | 'none' = 'none';
+      let stem = blockText;
+
+      // Detect patterns
+      const numericMatches = [...blockText.matchAll(/\((1|2|3|4)\)/g)];
+      const upperMatches = [...blockText.matchAll(/(?:\n|[ \t])([A-D])[\.\)]\s/g)];
+      const lowerMatches = [...blockText.matchAll(/\(([a-d])\)/g)];
+      const lowerDotMatches = [...blockText.matchAll(/(?:\n|[ \t])([a-d])[\.\)]\s/g)];
+
+      if (numericMatches.length >= 4) {
+        mode = 'numeric';
+        const firstOptIndex = numericMatches[0].index!;
+        stem = blockText.substring(0, firstOptIndex).trim();
+        const parts = blockText.substring(firstOptIndex).split(/\((1|2|3|4)\)/);
+        for (let i = 2; i < parts.length; i += 2) {
+           options.push(parts[i].trim());
+        }
+      } else if (upperMatches.length >= 4) {
+        mode = 'upper';
+        const firstOptIndex = upperMatches[0].index!;
+        stem = blockText.substring(0, firstOptIndex).trim();
+        const parts = blockText.substring(firstOptIndex).split(/(?:\n|[ \t])[A-D][\.\)]\s/);
+        options = parts.filter(p => p.trim().length > 0).map(p => p.trim());
+      } else if (lowerMatches.length >= 4) {
+        mode = 'lower';
+        const firstOptIndex = lowerMatches[0].index!;
+        stem = blockText.substring(0, firstOptIndex).trim();
+        const parts = blockText.substring(firstOptIndex).split(/\(([a-d])\)/);
+        for (let i = 2; i < parts.length; i += 2) {
+          options.push(parts[i].trim());
+        }
+      } else if (lowerDotMatches.length >= 4) {
+        mode = 'lower';
+        const firstOptIndex = lowerDotMatches[0].index!;
+        stem = blockText.substring(0, firstOptIndex).trim();
+        const parts = blockText.substring(firstOptIndex).split(/(?:\n|[ \t])[a-d][\.\)]\s/);
+        options = parts.filter(p => p.trim().length > 0).map(p => p.trim());
+      }
+
+      // Task 3: Option Guard - Stop capturing if next question is found inside option text
+      options = options.map(opt => {
+        const nextQ = opt.match(/(?:\b|\s|^)(\d{1,3})\.\s/);
+        if (nextQ) {
+          const n = parseInt(nextQ[1]);
+          if (n > 0 && n <= 500) return opt.substring(0, nextQ.index).trim();
+        }
+        return opt;
+      });
+
+      return { options: options.slice(0, 4), stem, mode };
+    };
+
+    const normalizeLanguages = (stem: string) => {
+      const hindiRegex = /[\u0900-\u097F]/;
+      const lines = stem.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+      let enLines: string[] = [];
+      let hiLines: string[] = [];
+
+      lines.forEach(l => {
+        if (hindiRegex.test(l)) hiLines.push(l);
+        else enLines.push(l);
+      });
+
+      // Detect complex formula questions to preserve line breaks
+      const mathSymbols = stem.match(/[\+\-\=\×\÷\>\<\%\$]/g) || [];
+      const decimals = stem.match(/\d+\.\d+/g) || [];
+      const isComplexFormula = (mathSymbols.length + decimals.length) >= 3;
+
+      let qEn = enLines.join(isComplexFormula ? '\n' : ' ').trim();
+      let qHi = hiLines.join(isComplexFormula ? '\n' : ' ').trim();
+      if (!qEn && qHi) qEn = qHi;
+
+      return { qEn, qHi, isComplexFormula };
+    };
+
+    const rawBlocks = splitQuestionBlocks(normalizedText);
+    const parsedNumbers = new Set<number>();
+    const legacyHindiRegex = /fuEufyf|gfj;k.kk|dks|iz|vk|;g/i;
+
+    rawBlocks.forEach((blockObj) => {
+      const { number, text: blockText, startIndex } = blockObj;
+      const { options, stem, mode } = parseOptions(blockText);
+      const { qEn, qHi, isComplexFormula } = normalizeLanguages(stem);
+
+      let answer = answerKeyMap[number] || "";
+      if (!answer) {
+        const inlineAns = blockText.match(/(?:Ans(?:wer)?|Correct|उत्तर)[:.\s]*([A-D1-4])/i);
+        if (inlineAns) {
+          answer = inlineAns[1].toUpperCase();
+          if (answer === '1') answer = 'A';
+          else if (answer === '2') answer = 'B';
+          else if (answer === '3') answer = 'C';
+          else if (answer === '4') answer = 'D';
         }
       }
 
-      if (!hasDiagramOptionsFlag && optionsArray.length < 2) {
-          needsReview = true;
+      const solMatch = blockText.match(/(?:Sol(?:ution)?|Expl(?:anation)?|हल)[:.\s]+([\s\S]*)/i);
+      const solution = ""; // Task 6: Keep solution blank by default
+
+      let qPageNum = 1;
+      let matchedPage = null;
+      if (pageMap && pageMap.length > 0) {
+        for (const p of pageMap) {
+          if (startIndex >= p.startIndex) {
+            qPageNum = p.pageNumber;
+            matchedPage = p;
+          } else break;
+        }
       }
 
-      const finalOptions = hasDiagramOptionsFlag
-        ? ["A", "B", "C", "D"]
-        : (optionsArray.length >= 2 ? optionsArray.slice(0, 4) : ["Option A", "Option B", "Option C", "Option D"]);
+      let questionImage = "";
+      if (matchedPage && matchedPage.embeddedImages?.length > 0) {
+        questionImage = matchedPage.embeddedImages[0].dataUrl;
+      }
 
-      if (questionEn || questionHi) {
+      const cleanQEn = qEn.replace(/^\s*\d+[\.\)]?\s*/, "").trim();
+      const cleanQHi = qHi.replace(/^\s*\d+[\.\)]?\s*/, "").trim();
+      
+      const isLegacyHindi = legacyHindiRegex.test(cleanQEn) || legacyHindiRegex.test(cleanQHi) || legacyHindiRegex.test(options.join(" "));
+
+      if (cleanQEn || cleanQHi) {
+        if (number >= 84 && number <= 88) {
+          console.log(`[Parser-Trace] Q${number} parsed successfully. cleanQEn length: ${cleanQEn.length}, options count: ${options.length}`);
+        }
+        parsedNumbers.add(number);
         questions.push({
           id: questions.length + 1,
-          questionEn: questionEn || questionHi,
-          questionHi: questionEn ? questionHi : "",
+          questionNumber: number,
+          originalQuestionNumber: number,
+          orderIndex: number,
+          questionEn: cleanQEn,
+          questionHi: cleanQHi,
           type: "Multiple Choice",
-          options: finalOptions,
+          options: options.length >= 4 ? options.slice(0, 4) : ["", "", "", ""],
           correctAnswer: answer,
-          positiveMarks: 4,
-          negativeMarks: -1,
-          solution: solution || "Extracted from document",
+          positiveMarks: undefined,
+          negativeMarks: undefined,
+          solution: "",
+          explanation: "",
+          detailedExplanation: "",
+          answerExplanation: "",
           pageNumber: qPageNum,
-          hasDiagramOptions: hasDiagramOptionsFlag,
+          hasDiagramOptions: options.length < 2 && mode === 'none',
           questionImage,
-          needsReview
+          needsReview: !answer || options.length < 4 || isLegacyHindi || isComplexFormula,
+          warningReason: isLegacyHindi ? "Legacy encoded Hindi text detected; PDF text layer is not Unicode." : undefined,
+          reviewReason: isLegacyHindi ? "Legacy Hindi text detected" : 
+                        isComplexFormula ? "Complex formula layout detected; verify against PDF." : 
+                        !answer ? "Missing answer" : "Incomplete options"
         });
       }
-    }
+    });
 
-    return questions;
+    // Task B: Handle duplicates and sort (Task 2)
+    const grouped = new Map<number, any[]>();
+    questions.forEach(q => {
+      const num = q.originalQuestionNumber;
+      if (!grouped.has(num)) grouped.set(num, []);
+      grouped.get(num)!.push(q);
+    });
+
+    const uniqueQuestions: any[] = [];
+    grouped.forEach((list, num) => {
+      if (num >= 84 && num <= 88) {
+         console.log(`[Parser-Trace] Grouped Map for Q${num} has ${list.length} entries.`);
+      }
+      if (list.length === 1) {
+        uniqueQuestions.push(list[0]);
+      } else {
+        // Pick the best one: usually the one with longest English text
+        const best = list.reduce((prev, curr) => {
+           const prevLen = (prev.questionEn || "").length;
+           const currLen = (curr.questionEn || "").length;
+           return currLen > prevLen ? curr : prev;
+        });
+        uniqueQuestions.push(best);
+      }
+    });
+
+    console.log(`[Parser] Unique questions: ${uniqueQuestions.length}. Numbers: ${uniqueQuestions.map(q => q.originalQuestionNumber).join(",")}`);
+
+    // Sequence info — warning only, never blocks upload
+    const finalNumbersArr = uniqueQuestions.map(q => q.originalQuestionNumber).sort((a,b) => a-b);
+    const duplicates: number[] = [];
+    const seen = new Set<number>();
+    uniqueQuestions.forEach(q => {
+      if (seen.has(q.originalQuestionNumber)) duplicates.push(q.originalQuestionNumber);
+      seen.add(q.originalQuestionNumber);
+    });
+
+    if (limit > 0 && uniqueQuestions.length !== limit) {
+      console.warn(`[Parser] PDF has ${uniqueQuestions.length} questions but this test is configured for ${limit}. Uploading exactly what was parsed.`);
+    }
+    if (duplicates.length > 0) {
+      console.warn(`[Parser] Duplicate question numbers detected: ${duplicates.join(", ")}`);
+    }
+    console.log(`[Parser] Final parsed count: ${uniqueQuestions.length}. Numbers: ${finalNumbersArr.join(",")}`);
+    // isInvalidSequence is intentionally NOT set — count mismatch never blocks upload.
+
+    return uniqueQuestions;
   }
   const [viewingFormatModal, setViewingFormatModal] = useState<string | null>(
     null,
@@ -1305,7 +1571,14 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       if (viewingQuestionEditor && editorId) {
         try {
           const qs = await testsAPI.getQuestions(editorId);
-          setEditorQuestions(Array.isArray(qs) ? qs : []);
+          const sortedQs = Array.isArray(qs) 
+            ? [...qs].sort((a, b) => {
+                const aNum = a.orderIndex || a.originalQuestionNumber || a.questionNumber || a.order || 0;
+                const bNum = b.orderIndex || b.originalQuestionNumber || b.questionNumber || b.order || 0;
+                return aNum - bNum;
+              })
+            : [];
+          setEditorQuestions(sortedQs);
         } catch (err) {
           setEditorQuestions([]);
         }
@@ -2909,7 +3182,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                   <div className="space-y-8">
                     <div className="flex items-start gap-4">
                       <span className="text-[16px] font-black text-gray-800 shrink-0 leading-[1.6]">
-                        {idx + 1}.
+                        {q.originalQuestionNumber || q.questionNumber || idx + 1}.
                       </span>
                       <div className="flex-1">
                         <div className="text-[16px] font-bold text-gray-800 leading-[1.6] pr-64">
@@ -3582,7 +3855,11 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     const previewQuestions =
       bulkUploadData.parsedQuestions &&
         bulkUploadData.parsedQuestions.length > 0
-        ? bulkUploadData.parsedQuestions
+        ? [...bulkUploadData.parsedQuestions].sort((a, b) => {
+            const aNum = a.orderIndex || a.originalQuestionNumber || a.questionNumber || a.order || 0;
+            const bNum = b.orderIndex || b.originalQuestionNumber || b.questionNumber || b.order || 0;
+            return aNum - bNum;
+          })
         : [];
 
     const extractedImages = bulkUploadData.extractedImages || [];
@@ -3608,6 +3885,12 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           "No questions to upload. Please parse a file first.",
           "error",
         );
+        return;
+      }
+
+      // Zero-question guard — only block if nothing was parsed
+      if ((bulkUploadData.parsedQuestions || []).length === 0) {
+        showToast("No questions were parsed from the file. Please check the PDF format.", "error");
         return;
       }
 
@@ -3637,15 +3920,13 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           ),
         );
 
-        const limit = targetTestMatch?.noOfQuestions || 0;
+        const configuredLimit = targetTestMatch?.noOfQuestions || 0;
         const currentCount = existingQuestions.length;
+        const parsedCount = (bulkUploadData.parsedQuestions || []).length;
 
-        if (limit > 0 && currentCount >= limit) {
-          showToast(
-            `Test already has ${currentCount} questions. Limit is ${limit}.`,
-            "error",
-          );
-          return;
+        // Show informational warning if PDF count differs from test config — never block
+        if (configuredLimit > 0 && parsedCount !== configuredLimit) {
+          console.warn(`[Upload] PDF has ${parsedCount} questions but this test is configured for ${configuredLimit}. Uploading all ${parsedCount} parsed questions.`);
         }
 
         // 2. Prepare payload - Standardization to displayOptions
@@ -3665,9 +3946,15 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           }
         };
 
-        let filteredList = (bulkUploadData.parsedQuestions || []).filter(
-          (q) => !existingTexts.has((q.questionEn || "").trim().toLowerCase()),
-        );
+        let filteredList = (bulkUploadData.parsedQuestions || [])
+          .filter(
+            (q) => !existingTexts.has((q.questionEn || "").trim().toLowerCase()),
+          )
+          .sort((a, b) => {
+            const aNum = a.orderIndex || a.originalQuestionNumber || a.questionNumber || a.order || 0;
+            const bNum = b.orderIndex || b.originalQuestionNumber || b.questionNumber || b.order || 0;
+            return aNum - bNum;
+          });
 
         // Scoring settings from test
         const defaultMarks = targetTestMatch?.marksPerQuestion || targetTestMatch?.marks;
@@ -3685,7 +3972,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
 
         setIsParsing(true);
         let questionsToUpload = await Promise.all(
-          filteredList.map(async (q) => {
+          filteredList.map(async (q, index) => {
             const qImageUrl = await uploadBase64Image(q.questionImage || "");
             
             const processedOptions = await Promise.all(
@@ -3710,10 +3997,10 @@ const Tests: React.FC<Props> = ({ showToast }) => {
               questionHi: q.questionHi || "",
               questionImage: qImageUrl,
               type: "Multiple Choice Question",
-              marks: q.positiveMarks || q.marks || defaultMarks,
-              negative: q.negativeMarks || q.negative || defaultNeg,
-              positiveMarks: q.positiveMarks || q.marks || defaultMarks,
-              negativeMarks: q.negativeMarks || q.negative || defaultNeg,
+              marks: q.positiveMarks ?? q.marks ?? defaultMarks,
+              negative: q.negativeMarks ?? q.negative ?? defaultNeg ?? 0,
+              positiveMarks: q.positiveMarks ?? q.marks ?? defaultMarks,
+              negativeMarks: q.negativeMarks ?? q.negative ?? defaultNeg ?? 0,
               displayOptions: processedOptions,
               hasDiagramOptions: q.hasDiagramOptions || false,
               solution: {
@@ -3721,6 +4008,11 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 text: q.solution || "",
               },
               format: bulkUploadData.format || "default",
+              // Critical for persistence and ordering (Task 2)
+              orderIndex: q.originalQuestionNumber || q.questionNumber || (index + 1),
+              order: q.originalQuestionNumber || q.questionNumber || (index + 1),
+              questionNumber: q.originalQuestionNumber || q.questionNumber || (index + 1),
+              originalQuestionNumber: q.originalQuestionNumber || q.questionNumber || (index + 1),
             };
           })
         );
@@ -3735,17 +4027,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           return;
         }
 
-        // Enforce the limit
-        if (
-          limit > 0 &&
-          currentCount + questionsToUpload.length > limit
-        ) {
-          const allowed = limit - currentCount;
-          showToast(
-            `Only ${allowed} out of ${questionsToUpload.length} new q. will be uploaded as per limit (${limit}).`,
-            "error",
-          );
-          questionsToUpload = questionsToUpload.slice(0, allowed);
+        // Warning only — never drop or slice questions based on configured count
+        if (configuredLimit > 0 && currentCount + questionsToUpload.length > configuredLimit) {
+          console.warn(`[Upload] PDF has ${questionsToUpload.length} questions; combined total (${currentCount + questionsToUpload.length}) exceeds configured count (${configuredLimit}). Uploading all parsed questions.`);
         }
 
         showToast(
@@ -4151,10 +4435,18 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                       File Preview
                     </h3>
                     <p className="text-[10px] text-gray-400">
-                      {previewQuestions.length} questions ·{" "}
-                      {bulkUploadData.file.name.slice(0, 20)}
-                      {bulkUploadData.file.name.length > 20 ? "…" : ""}
+                      {previewQuestions.length} new questions parsed from PDF
                     </p>
+                    {bulkUploadData.uploadMode === 'append' && bulkUploadData.existingCount > 0 && (
+                      <p className="text-[9px] font-bold text-blue-500 uppercase mt-0.5">
+                        {bulkUploadData.existingCount} existing + {previewQuestions.length} new = {bulkUploadData.existingCount + previewQuestions.length} total after append
+                      </p>
+                    )}
+                    {bulkUploadData.uploadMode === 'replace' && (
+                      <p className="text-[9px] font-bold text-red-500 uppercase mt-0.5">
+                        Replace All: Only {previewQuestions.length} new questions will remain
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -4195,15 +4487,15 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           key={idx}
                           className={`px-5 py-6 transition-colors border-l-4 space-y-3 font-serif ${q.needsReview ? 'bg-orange-50/30 border-orange-400 hover:bg-orange-50/50' : 'hover:bg-gray-50/50 border-transparent hover:border-black'}`}
                         >
-                          {q.needsReview && (
-                            <div className="flex items-center gap-2 mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg shrink-0 w-max">
-                              <span className="material-symbols-outlined text-yellow-600 text-[18px]">warning</span>
-                              <span className="text-[12px] font-bold text-yellow-700">Needs Review: Diagram uncertain or missing</span>
+                          {q.warningReason && (
+                            <div className="flex items-center gap-2 mb-2 p-2 bg-orange-50 border border-orange-200 rounded-lg shrink-0 w-max">
+                              <span className="material-symbols-outlined text-orange-600 text-[18px]">warning</span>
+                              <span className="text-[12px] font-bold text-orange-700">{q.warningReason}</span>
                             </div>
                           )}
                           <div className="flex gap-2">
-                            <span className="font-bold text-[13px] text-gray-900 shrink-0">
-                              Question:
+                            <span className="font-bold text-[13px] text-gray-400 shrink-0">
+                              #{q.originalQuestionNumber || idx + 1}
                             </span>
                             <p className="text-[12px] font-medium text-gray-800 leading-relaxed flex-1">
                               {renderQuestionText(q.questionEn)}
@@ -4248,15 +4540,15 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                           key={idx}
                           className={`px-5 py-6 transition-colors border-l-4 space-y-3 font-serif ${q.needsReview ? 'bg-orange-50/30 border-orange-400 hover:bg-orange-50/50' : 'hover:bg-gray-50/50 border-transparent hover:border-black'}`}
                         >
-                          {q.needsReview && (
-                            <div className="flex items-center gap-2 mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded-lg shrink-0 w-max">
-                              <span className="material-symbols-outlined text-yellow-600 text-[18px]">warning</span>
-                              <span className="text-[12px] font-bold text-yellow-700">Needs Review: Diagram uncertain or missing</span>
+                          {q.warningReason && (
+                            <div className="flex items-center gap-2 mb-2 p-2 bg-orange-50 border border-orange-200 rounded-lg shrink-0 w-max">
+                              <span className="material-symbols-outlined text-orange-600 text-[18px]">warning</span>
+                              <span className="text-[12px] font-bold text-orange-700">{q.warningReason}</span>
                             </div>
                           )}
                           <div className="flex gap-2">
                             <span className="font-bold text-[13px] text-gray-900 shrink-0">
-                              {idx + 1}.
+                              {q.originalQuestionNumber || idx + 1}.
                             </span>
                             <div className="space-y-1 flex-1">
                               <p className="text-[12px] font-medium text-gray-800 leading-relaxed">
@@ -4315,8 +4607,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                         >
                           <div className="bg-gray-50 px-3 py-1.5 rounded-md flex justify-between items-center mb-3">
                            <div className="flex items-center gap-2 text-[10px] font-black uppercase">
-                            <span className="text-gray-400">Question {idx + 1}</span>
+                            <span className="text-gray-400">Question {q.originalQuestionNumber || idx + 1}</span>
                             {q.needsReview && <span className="text-yellow-600 bg-yellow-100 px-2 py-0.5 rounded">⚠️ Needs Review</span>}
+                            {q.warningReason && <span className="text-orange-600 bg-orange-100 px-2 py-0.5 rounded">⚠️ Legacy Hindi</span>}
                            </div>
                             <span className="text-[10px] bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-full">
                               GRID STYLE
@@ -4560,7 +4853,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                   onClick={handleFinalBulkUpload}
                   className="w-full bg-gray-900 hover:bg-black text-white py-3 rounded-xl font-bold text-[12px] uppercase tracking-tighter transition-all active:scale-[0.98]"
                 >
-                  PROCEED TO UPLOAD ({previewQuestions.length} Questions)
+                  PROCEED TO UPLOAD ({bulkUploadData.uploadMode === 'replace' ? previewQuestions.length : (bulkUploadData.existingCount + previewQuestions.length)} Total Questions)
                 </button>
 
                 <button
