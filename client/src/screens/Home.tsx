@@ -1240,97 +1240,79 @@ const Home: React.FC = () => {
           </section>
         )}
 
-        {(() => {
-          // Fallback static data that matches the exact screenshot for visualization
-          const displayNews = allNews.length > 0 ? allNews : [
-            {
-              id: 'd1',
-              title: 'मुख्य चुनाव आयुक्त ज्ञानेश कुमार पर महाभियोग',
-              thumbnail: 'https://images.unsplash.com/photo-1555848962-6e79363ec58f?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80',
-            },
-            {
-              id: 'd2',
-              title: 'भारत के विदेशी मुद्रा भंडार में भारी गिरावट',
-              thumbnail: 'https://upload.wikimedia.org/wikipedia/commons/thumb/c/cb/Reserve_Bank_of_India_logo.svg/1024px-Reserve_Bank_of_India_logo.svg.png',
-            },
-            {
-              id: 'd3',
-              title: '(AIFF) के पूर्व महासचिव कुशल दास का निधन',
-              thumbnail: 'https://images.unsplash.com/photo-1542314831-c6a4d14eff4c?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80',
-            }
-          ];
-
-          if (newsLoading) return <div className="animate-pulse h-32 bg-gray-100 rounded-2xl mx-4 mb-4"></div>;
-
-          return (
-            <section className="animate-fade-in-up" style={{ animationDelay: '0.32s' }}>
-              <div className="flex justify-between items-center mb-3">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-1.5 h-7 bg-gradient-to-b from-primary to-primary-600 rounded-full shadow-sm"></div>
-                  <div>
-                    <h2 className="section-title">Latest News</h2>
-                    <p className="section-subtitle">Stay informed with institute news</p>
-                  </div>
+        {allNews.length > 0 && !newsLoading && (
+          <section className="animate-fade-in-up" style={{ animationDelay: '0.32s' }}>
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-1.5 h-7 bg-gradient-to-b from-primary to-primary-600 rounded-full shadow-sm"></div>
+                <div>
+                  <h2 className="section-title">Latest News</h2>
+                  <p className="section-subtitle">Stay informed with institute news</p>
                 </div>
               </div>
-              <div className="space-y-3">
-                {displayNews.slice(0, 4).map((news: any, i: number) => (
-                  <div
-                    key={news.id || i}
-                    onClick={() => {
-                      const id = news.id || news._id || i;
-                      window.open(`/#/news/${id}`, '_blank');
-                    }}
-                    className="bg-white rounded-[16px] p-3 border border-gray-100 flex items-center justify-between gap-4 cursor-pointer hover:shadow-md transition-all duration-300 group"
-                  >
-                    <div className="flex-1 min-w-0">
-                      {news.featured && (
-                        <div className="flex items-center gap-1 mb-1.5">
-                          <span className="bg-amber-100/80 text-amber-700 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1 border border-amber-200/50 shadow-sm transition-all group-hover:scale-105 origin-left">
-                            <span className="material-icons text-[10px] text-amber-500">star</span>
-                            Featured
-                          </span>
-                        </div>
-                      )}
-                      <h4 className="font-semibold text-[14px] text-gray-800 leading-snug line-clamp-2 mb-2 group-hover:text-blue-700 transition-colors">{news.title || news.message}</h4>
-                      <div className="flex items-center gap-1 text-blue-600 font-bold text-[11px] uppercase tracking-wider">
-                        <span>Read Article</span>
-                        <span className="material-symbols-rounded text-[14px]">arrow_forward</span>
+            </div>
+            <div className="space-y-3">
+              {allNews.slice(0, 4).map((news: any, i: number) => (
+                <div
+                  key={news.id || news._id || i}
+                  onClick={() => {
+                    const id = news.id || news._id || i;
+                    window.open(`/#/news/${id}`, '_blank');
+                  }}
+                  className="bg-white rounded-[16px] p-3 border border-gray-100 flex items-center justify-between gap-4 cursor-pointer hover:shadow-md transition-all duration-300 group"
+                >
+                  <div className="flex-1 min-w-0">
+                    {news.featured && (
+                      <div className="flex items-center gap-1 mb-1.5">
+                        <span className="bg-amber-100/80 text-amber-700 px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest flex items-center gap-1 border border-amber-200/50 shadow-sm transition-all group-hover:scale-105 origin-left">
+                          <span className="material-icons text-[10px] text-amber-500">star</span>
+                          Featured
+                        </span>
                       </div>
-                    </div>
-                    <div className="w-[100px] h-[70px] rounded-xl overflow-hidden shrink-0 shadow-sm border border-gray-50 bg-white flex items-center justify-center">
-                      {news.thumbnail ? (
-                        <img
-                          src={news.thumbnail}
-                          alt="News"
-                          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80';
-                          }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                          <span className="material-symbols-rounded text-gray-400 text-2xl">newspaper</span>
-                        </div>
-                      )}
+                    )}
+                    <h4 className="font-semibold text-[14px] text-gray-800 leading-snug line-clamp-2 mb-2 group-hover:text-blue-700 transition-colors">{news.title || news.message}</h4>
+                    <div className="flex items-center gap-1 text-blue-600 font-bold text-[11px] uppercase tracking-wider">
+                      <span>Read Article</span>
+                      <span className="material-symbols-rounded text-[14px]">arrow_forward</span>
                     </div>
                   </div>
-                ))}
-              </div>
-              {displayNews.length > 4 && (
-                <div className="mt-4 flex justify-center">
-                  <button
-                    onClick={() => navigate('/news')}
-                    className="btn-primary text-xs px-6 py-2.5 rounded-xl flex items-center gap-2 active:scale-[0.97] transition-all duration-200"
-                  >
-                    Read More News
-                    <span className="material-symbols-rounded text-[16px]">arrow_forward</span>
-                  </button>
+                  <div className="w-[100px] h-[70px] rounded-xl overflow-hidden shrink-0 shadow-sm border border-gray-50 bg-white flex items-center justify-center">
+                    {news.thumbnail ? (
+                      <img
+                        src={news.thumbnail}
+                        alt="News"
+                        className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80';
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                        <span className="material-symbols-rounded text-gray-400 text-2xl">newspaper</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )}
-            </section>
-          );
-        })()}
+              ))}
+            </div>
+            {allNews.length > 4 && (
+              <div className="mt-4 flex justify-center">
+                <button
+                  onClick={() => navigate('/news')}
+                  className="btn-primary text-xs px-6 py-2.5 rounded-xl flex items-center gap-2 active:scale-[0.97] transition-all duration-200"
+                >
+                  Read More News
+                  <span className="material-symbols-rounded text-[16px]">arrow_forward</span>
+                </button>
+              </div>
+            )}
+          </section>
+        )}
+
+        {newsLoading && (
+          <div className="animate-pulse h-32 bg-gray-100 rounded-2xl mx-4 mb-4"></div>
+        )}
+
       </main>
 
       <div className="px-4 mb-8 space-y-4">
