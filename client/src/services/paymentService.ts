@@ -1,4 +1,4 @@
-import { API_BASE_URL, getAdminHeaders, getAuthHeaders } from './baseService';
+import { API_BASE_URL, getAdminHeaders, getAuthHeaders, invalidateCache } from './baseService';
 
 // Orders API
 export const ordersAPI = {
@@ -28,6 +28,9 @@ export const purchasesAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create purchase');
+    invalidateCache('my-courses');
+    invalidateCache('courses');
+    invalidateCache('course-detail');
     return response.json();
   },
   getByStudent: async (studentId: string) => {

@@ -9,6 +9,7 @@ interface Props {
   className?: string;
   hideLabel?: boolean;
   uploadType?: 'image' | 'video' | 'pdf';
+  onBeforeUpload?: (file: File) => Promise<boolean> | boolean;
 }
 
 const FileUploadButton: React.FC<Props> = ({
@@ -18,7 +19,8 @@ const FileUploadButton: React.FC<Props> = ({
   icon = 'upload',
   className,
   hideLabel = false,
-  uploadType = 'image'
+  uploadType = 'image',
+  onBeforeUpload
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -26,6 +28,14 @@ const FileUploadButton: React.FC<Props> = ({
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (onBeforeUpload) {
+      const isValid = await onBeforeUpload(file);
+      if (!isValid) {
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+    }
 
     try {
       setUploading(true);

@@ -94,4 +94,4 @@ const QuestionEditorCard: React.FC<QuestionEditorCardProps> = ({
   );
 };
 
-export default QuestionEditorCard;
+export default React.memo(QuestionEditorCard);

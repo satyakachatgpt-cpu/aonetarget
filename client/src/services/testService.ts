@@ -6,24 +6,30 @@ export const questionsAPI = {
     return cachedFetch(`${API_BASE_URL}/questions`, 10000);
   },
   create: async (data: any) => {
-    return apiRequest(`${API_BASE_URL}/questions`, {
+    const res = await apiRequest(`${API_BASE_URL}/questions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
       body: JSON.stringify(data),
     });
+    invalidateCache('questions');
+    return res;
   },
   update: async (id: string, data: any) => {
-    return apiRequest(`${API_BASE_URL}/questions/${id}`, {
+    const res = await apiRequest(`${API_BASE_URL}/questions/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
       body: JSON.stringify(data),
     });
+    invalidateCache('questions');
+    return res;
   },
   delete: async (id: string) => {
-    return apiRequest(`${API_BASE_URL}/questions/${id}`, {
+    const res = await apiRequest(`${API_BASE_URL}/questions/${id}`, {
       method: 'DELETE',
       headers: { ...getAdminHeaders() }
     });
+    invalidateCache('questions');
+    return res;
   },
   bulkDelete: async (ids: string[]) => {
     const response = await fetch(`${API_BASE_URL}/questions/bulk-delete`, {
@@ -270,7 +276,7 @@ export const subjectiveTestsAPI = {
         throw new Error(error.error || error.details || `Failed to create subjective test (${response.status})`);
       }
       const result = await response.json();
-      console.log('Subjective test created successfully:', result);
+      invalidateCache('subjective-tests');
       return result;
     } catch (error) {
       console.error('Subjective Test create error:', error);
@@ -292,6 +298,7 @@ export const subjectiveTestsAPI = {
         const error = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
         throw new Error(error.error || 'Failed to update subjective test');
       }
+      invalidateCache('subjective-tests');
       return response.json();
     } catch (error) {
       console.error('Subjective Test update error:', error);
@@ -309,6 +316,7 @@ export const subjectiveTestsAPI = {
         const error = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
         throw new Error(error.error || 'Failed to delete subjective test');
       }
+      invalidateCache('subjective-tests');
       return response.json();
     } catch (error) {
       console.error('Subjective Test delete error:', error);

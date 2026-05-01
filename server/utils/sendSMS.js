@@ -1,5 +1,6 @@
 import http from 'http';
 import axios from 'axios';
+import { performance } from 'perf_hooks';
 
 // PrimeClick ONLY works on HTTP — their HTTPS drops connections (ECONNRESET)
 const httpAgent = new http.Agent({
@@ -7,9 +8,11 @@ const httpAgent = new http.Agent({
   keepAliveMsecs: 3000,
 });
 
+const isProduction = process.env.NODE_ENV === 'production';
+
 const smsClient = axios.create({
   httpAgent,
-  timeout: 15000,
+  timeout: 8000, // Reduced from 15s to 8s to fail faster if provider is slow
   headers: {
     'Connection': 'keep-alive',
     'User-Agent': 'AoneTarget-SMS/1.0',
@@ -18,7 +21,16 @@ const smsClient = axios.create({
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const maskPhone = (phone) => {
+  if (!phone) return 'unknown';
+  const str = String(phone);
+  return str.length >= 10 ? `${str.slice(0, 2)}******${str.slice(-2)}` : '********';
+};
+
 const sendSMS = async (phone, message, templateId) => {
+  const startTime = performance.now();
+  const masked = maskPhone(phone);
+  
   const url = 'http://sms.primeclick.in/api/mt/SendSMS?' +
     'user=' + process.env.PRIMCLICK_USERNAME +
     '&password=' + process.env.PRIMCLICK_PASSWORD +
@@ -35,26 +47,39 @@ const sendSMS = async (phone, message, templateId) => {
   const MAX_RETRIES = 3;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    const attemptStart = performance.now();
     try {
-      console.log(`[SMS] Attempting to send OTP via ${templateId}`);
+      if (!isProduction) {
+        console.log(`[SMS] Attempt ${attempt}/${MAX_RETRIES} → phone: ${masked}`);
+      }
       
       const response = await smsClient.get(url);
       const data = response.data;
+      const duration = (performance.now() - attemptStart).toFixed(2);
+
+      if (!isProduction) {
+        console.log(`[SMS] PrimeClick response (${duration}ms):`, data);
+      }
 
       if (data?.ErrorCode === '000') {
-        console.log(`[SMS] ✅ Sent to ${phone}`);
-        return { success: true };
+        const totalDuration = (performance.now() - startTime).toFixed(2);
+        console.log(`[SMS] ✅ Provider (PrimeClick) accepted request for ${masked}. Operator delivery pending. (Total: ${totalDuration}ms)`);
+        return { success: true, duration: totalDuration, providerResponse: data };
       } else {
-        console.error(`[SMS] ❌ API error: Code=${data?.ErrorCode}, Msg=${data?.ErrorMessage}`);
-        return { success: false, error: data?.ErrorMessage || `ErrorCode: ${data?.ErrorCode}` };
+        console.error(`[SMS] ❌ Provider (PrimeClick) rejected: Code=${data?.ErrorCode}, Msg=${data?.ErrorMessage}`);
+        return { success: false, error: data?.ErrorMessage || `ErrorCode: ${data?.ErrorCode}`, providerResponse: data };
       }
     } catch (error) {
-      const isRetryable = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNABORTED'].includes(error.code);
-      console.error(`[SMS] Attempt ${attempt} failed: ${error.code} - ${error.message}`);
+      const duration = (performance.now() - attemptStart).toFixed(2);
+      const isRetryable = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNABORTED'].includes(error.code) || error.message.includes('timeout');
+      
+      console.error(`[SMS] Attempt ${attempt} failed (${duration}ms): ${error.code || 'TIMEOUT'} - ${error.message}`);
 
       if (isRetryable && attempt < MAX_RETRIES) {
-        const delay = attempt * 2000;
-        console.log(`[SMS] Retrying in ${delay / 1000}s...`);
+        const delay = attempt * 1500; // Slightly reduced delay
+        if (!isProduction) {
+          console.log(`[SMS] Retrying in ${delay / 1000}s...`);
+        }
         await sleep(delay);
         continue;
       }

@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { RightSideDrawer, DrawerBody } from './DrawerSystem';
 import CustomDropdown from './CustomDropdown';
 import RichTextEditor from '../shared/RichTextEditor';
+import { validateImage } from '../../lib/utils';
+import { uploadAPI } from '../../services/apiClient';
 
 interface AddTestDrawerProps {
     isOpen: boolean;
@@ -10,12 +12,13 @@ interface AddTestDrawerProps {
     editingTest?: any;
     courses: any[];
     defaultCourseId?: string;
+    showToast?: (msg: string, type?: 'success' | 'error') => void;
 }
 
 
 
 
-const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit, editingTest, courses, defaultCourseId }) => {
+const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit, editingTest, courses, defaultCourseId, showToast }) => {
     const [activeTab, setActiveTab] = useState<'basic' | 'advanced'>('basic');
     const [formData, setFormData] = useState({
         name: '',
@@ -34,6 +37,8 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
     });
     const [imagePreview, setImagePreview] = useState<string | null>(null);
     const [showCategoryOptions, setShowCategoryOptions] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+    const imageInputRef = useRef<HTMLInputElement>(null);
     const [showMorePricingOptions, setShowMorePricingOptions] = useState(false);
     const [advSettings, setAdvSettings] = useState({
         disableCoupons: false,
@@ -44,6 +49,7 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
         metaDescription: '',
         enableRichSnippets: false,
     });
+
 
     useEffect(() => {
         if (isOpen) {
@@ -122,15 +128,48 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
         }
     }, [isOpen, editingTest, defaultCourseId]);
 
-    const handleFileSelect = (file: File) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            const base64 = reader.result as string;
-            setImagePreview(base64);
-            setFormData(prev => ({ ...prev, image: base64 }));
-        };
-        reader.readAsDataURL(file);
+    const handleFileSelect = async (file: File) => {
+        if (!file) return;
+        
+        const result = await validateImage(file, {
+            minWidth: 680,
+            minHeight: 400,
+            aspectRatio: 1.7,
+            tolerance: 0.12,
+            label: 'Test Thumbnail'
+        });
+
+        if (!result.valid) {
+            if (showToast) {
+                showToast(result.message || 'Invalid image', 'error');
+            } else {
+                alert(result.message);
+            }
+            if (imageInputRef.current) imageInputRef.current.value = '';
+            return;
+        }
+
+        setIsUploading(true);
+        try {
+            const data = await uploadAPI.uploadImage(file);
+            setImagePreview(data.url);
+            setFormData(prev => ({ ...prev, image: data.url }));
+            if (showToast) showToast('Image uploaded successfully', 'success');
+        } catch (error: any) {
+            console.error('Image upload failed:', error);
+            const errorMsg = `Image upload failed: ${error.message || 'Check connection.'}`;
+            if (showToast) {
+                showToast(errorMsg, 'error');
+            } else {
+                alert(errorMsg);
+            }
+        } finally {
+            setIsUploading(true); // Keeping same as success for now to avoid breaking UI states
+            setIsUploading(false);
+            if (imageInputRef.current) imageInputRef.current.value = '';
+        }
     };
+
 
     return (
         <RightSideDrawer isOpen={isOpen} onClose={onClose} width="850px">
@@ -178,17 +217,21 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
                                             )}
                                         </div>
                                         <div
-                                            onClick={() => document.getElementById('file-upload-input')?.click()}
+                                            onClick={() => imageInputRef.current?.click()}
                                             className="flex-1 border-2 border-dashed border-gray-200 rounded-[32px] flex flex-col items-center justify-center gap-1 cursor-pointer hover:bg-gray-50 transition-all bg-white">
                                             <input
                                                 type="file"
                                                 id="file-upload-input"
                                                 className="hidden"
+                                                ref={imageInputRef}
                                                 onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])}
                                                 accept="image/*"
                                             />
                                             <p className="text-[24px] font-bold text-[#b5b5b5]">Upload Image</p>
                                             <p className="text-[14px] text-[#d4d4d4] font-medium">Click or Drag &amp; Drop your file here.</p>
+                                            <div className="mt-3 px-3 py-1 bg-blue-50 border border-blue-100 rounded-full">
+                                                <p className="text-[11px] font-bold text-blue-600 uppercase tracking-tight">Recommended: 680x400 (17:10 ratio)</p>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

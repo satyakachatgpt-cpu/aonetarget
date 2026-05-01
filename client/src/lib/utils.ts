@@ -6,13 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 const getDevApiBase = () => {
-  if (typeof window === 'undefined') return "http://localhost:5000";
-  const protocol = window.location.protocol;
-  const hostname = window.location.hostname;
-  if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    return `${protocol}//${hostname}:5000`;
-  }
-  return `${protocol}//localhost:5000`;
+  return "";
 };
 
 export const API_BASE = import.meta.env.PROD
@@ -172,3 +166,97 @@ export const getGradientPlaceholder = (text: string | undefined | null, gradient
     initial
   };
 };
+
+// ---------- IMAGE VALIDATION HELPERS ----------
+
+export interface ImageValidationOptions {
+  minWidth?: number;
+  minHeight?: number;
+  aspectRatio?: number;
+  tolerance?: number;
+  label?: string;
+}
+
+export interface ImageValidationResult {
+  valid: boolean;
+  message?: string;
+  width?: number;
+  height?: number;
+  ratio?: number;
+}
+
+/**
+ * Validates an image file before upload.
+ * Checks for minimum dimensions and approximate aspect ratio.
+ */
+export const validateImage = (
+  file: File,
+  options: ImageValidationOptions
+): Promise<ImageValidationResult> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const width = img.width;
+      const height = img.height;
+      const ratio = width / height;
+
+      // Check minimum width
+      if (options.minWidth && width < options.minWidth) {
+        resolve({
+          valid: false,
+          message: `${options.label || 'Image'} is too small. Minimum width: ${options.minWidth}px (Detected: ${width}px).`,
+          width,
+          height,
+          ratio
+        });
+        return;
+      }
+
+      // Check minimum height
+      if (options.minHeight && height < options.minHeight) {
+        resolve({
+          valid: false,
+          message: `${options.label || 'Image'} is too small. Minimum height: ${options.minHeight}px (Detected: ${height}px).`,
+          width,
+          height,
+          ratio
+        });
+        return;
+      }
+
+      // Check aspect ratio with tolerance
+      if (options.aspectRatio) {
+        const tolerance = options.tolerance || 0.1;
+        const diff = Math.abs(ratio - options.aspectRatio);
+
+        if (diff > tolerance) {
+          const expectedRatioStr = options.aspectRatio === 1 ? '1:1' : 
+                                   options.aspectRatio === 1.7 ? '1.7:1' :
+                                   options.aspectRatio === 2 ? '2:1' :
+                                   (Math.abs(1.777 - options.aspectRatio) < 0.01 ? '16:9' : options.aspectRatio.toFixed(2) + ':1');
+          
+          resolve({
+            valid: false,
+            message: `Invalid ${options.label || 'image'} aspect ratio. Recommended: ${expectedRatioStr} (e.g., ${options.minWidth || '---'}x${options.minHeight || '---'}px).`,
+            width,
+            height,
+            ratio
+          });
+          return;
+        }
+      }
+
+      resolve({ valid: true, width, height, ratio });
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve({ valid: false, message: 'Invalid or corrupted image file.' });
+    };
+
+    img.src = objectUrl;
+  });
+};

@@ -73,38 +73,79 @@ export const getAllTests = async (req, res, next) => {
 
     const matchStage = matchConditions.length > 0 ? { $and: matchConditions } : {};
 
-    const tests = await db.collection('tests').find(matchStage).toArray();
+    const pageNum = parseInt(req.query.page);
+    const limitNum = parseInt(req.query.limit);
 
-    // Count questions accurately for each test using OR conditions (handles both 'id' and '_id')
-    const testsWithCounts = await Promise.all(tests.map(async (test) => {
+    let testsQuery = db.collection('tests').find(matchStage);
+
+    if (!isNaN(pageNum) && !isNaN(limitNum) && limitNum > 0) {
+      const totalTests = await db.collection('tests').countDocuments(matchStage);
+      const skip = (pageNum - 1) * limitNum;
+      testsQuery = testsQuery.skip(skip).limit(limitNum);
+      
+      res.setHeader('X-Total-Count', totalTests);
+      res.setHeader('X-Page', pageNum);
+      res.setHeader('X-Limit', limitNum);
+      res.setHeader('Access-Control-Expose-Headers', 'X-Total-Count, X-Page, X-Limit');
+    }
+
+    const tests = await testsQuery.toArray();
+
+    // Batch fetch questions count (N+1 Fix)
+    const testIdsForCount = [];
+    tests.forEach(test => {
       const testId = test.id ? String(test.id) : null;
       const testObjectId = test._id ? test._id.toString() : null;
-
-      const orConditions = [];
       if (testId) {
-        orConditions.push({ testId: testId });
-        if (!isNaN(testId)) orConditions.push({ testId: Number(testId) });
+        testIdsForCount.push(testId);
+        if (!isNaN(testId)) testIdsForCount.push(Number(testId));
+        testIdsForCount.push(`test_${testId}`);
       }
       if (testObjectId && testObjectId !== testId) {
-        orConditions.push({ testId: testObjectId });
-        if (ObjectId.isValid(testObjectId)) {
-          orConditions.push({ testId: new ObjectId(testObjectId) });
-        }
+        testIdsForCount.push(testObjectId);
+        if (ObjectId.isValid(testObjectId)) testIdsForCount.push(new ObjectId(testObjectId));
+        testIdsForCount.push(`test_${testObjectId}`);
       }
-      // also check for "test_ID" format
-      if (testId) orConditions.push({ testId: `test_${testId}` });
-      if (testObjectId) orConditions.push({ testId: `test_${testObjectId}` });
+    });
 
-      const questionCount = orConditions.length > 0
-        ? await db.collection('questions').countDocuments({ $or: orConditions })
-        : 0;
+    let testsWithCounts = tests;
+    if (testIdsForCount.length > 0) {
+      const countQuery = { $or: [{ testId: { $in: testIdsForCount } }] };
+      const questionCounts = await db.collection('questions').aggregate([
+        { $match: countQuery },
+        { $group: { _id: "$testId", count: { $sum: 1 } } }
+      ]).toArray();
 
-      return {
-        ...test,
-        id: testId || testObjectId,
-        questions: questionCount
-      };
-    }));
+      const countMap = {};
+      questionCounts.forEach(c => {
+        const key = c._id ? c._id.toString() : '';
+        countMap[key] = (countMap[key] || 0) + c.count;
+      });
+
+      testsWithCounts = tests.map(test => {
+        const testId = test.id ? String(test.id) : null;
+        const testObjectId = test._id ? test._id.toString() : null;
+
+        let qCount = 0;
+        const keysToCheck = [
+          testId,
+          testId && !isNaN(testId) ? Number(testId).toString() : null,
+          `test_${testId}`,
+          testObjectId,
+          `test_${testObjectId}`
+        ].filter(Boolean);
+
+        [...new Set(keysToCheck)].forEach(k => {
+          if (countMap[k]) qCount += countMap[k];
+        });
+
+        return {
+          ...test,
+          id: testId || testObjectId,
+          questions: qCount || (Array.isArray(test.questions) ? test.questions.length : (test.questions || 0))
+        };
+      });
+    }
 
     // Sort tests by sortingOrder / sortBy (Descending by default as requested: higher number = rank higher)
     testsWithCounts.sort((a, b) => {
@@ -142,10 +183,10 @@ export const getTestById = async (req, res) => {
 
     if (test) {
       // Security Check: Enrollment & Expiry Validation for Students
-      const adminId = req.headers['x-admin-id'] || req.headers['adminid'];
-      const studentId = req.headers['x-student-id'] || req.headers['studentid'] || req.user?.studentId;
+      const isAdmin = req.admin || req.user?.isAdmin || req.user?.role === 'admin';
+      const studentId = req.user?.studentId;
 
-      if (!adminId) {
+      if (!isAdmin) {
         // 1. Resolve student and series IDs
         const seriesId = test.courseId || test.testSeriesId || test.seriesId || test.batchId || (Array.isArray(test.courseIds) ? test.courseIds[0] : null);
         
@@ -682,22 +723,54 @@ export const getCourseTests = async (req, res) => {
     const query = { $or: [{ courseId }, { course: courseId }] };
     const tests = await db.collection('tests').find(query).toArray();
 
-    // Fetch question counts
-    const testsWithCounts = await Promise.all(tests.map(async (test) => {
+    // Fetch question counts (N+1 Fix)
+    const testIdsForCount = [];
+    tests.forEach(test => {
       const testId = test.id || test._id?.toString();
-      const questionFilter = { $or: [{ testId: testId }, { testId: String(testId) }, { testId: testId?.toString() }] };
-      if (testId && !isNaN(testId)) questionFilter.$or.push({ testId: Number(testId) });
-      if (test._id && ObjectId.isValid(test._id.toString())) {
-        questionFilter.$or.push({ testId: new ObjectId(test._id.toString()) });
+      if (testId) {
+        testIdsForCount.push(testId);
+        testIdsForCount.push(String(testId));
+        if (!isNaN(testId)) testIdsForCount.push(Number(testId));
       }
-      const questionCount = await db.collection('questions').countDocuments(questionFilter);
+      if (test._id && ObjectId.isValid(test._id.toString())) {
+        testIdsForCount.push(new ObjectId(test._id.toString()));
+      }
+    });
 
-      return {
-        ...test,
-        id: test.id || test._id?.toString(),
-        questions: questionCount || (Array.isArray(test.questions) ? test.questions.length : (test.questions || 0))
-      };
-    }));
+    let testsWithCounts = tests;
+    if (testIdsForCount.length > 0) {
+      const countQuery = { $or: [{ testId: { $in: testIdsForCount } }] };
+      const questionCounts = await db.collection('questions').aggregate([
+        { $match: countQuery },
+        { $group: { _id: "$testId", count: { $sum: 1 } } }
+      ]).toArray();
+
+      const countMap = {};
+      questionCounts.forEach(c => {
+        const key = c._id ? c._id.toString() : '';
+        countMap[key] = (countMap[key] || 0) + c.count;
+      });
+
+      testsWithCounts = tests.map(test => {
+        const testId = test.id || test._id?.toString();
+        let qCount = 0;
+        
+        const keysToCheck = [
+          testId ? testId.toString() : null,
+          test._id ? test._id.toString() : null
+        ].filter(Boolean);
+
+        [...new Set(keysToCheck)].forEach(k => {
+          if (countMap[k]) qCount += countMap[k];
+        });
+
+        return {
+          ...test,
+          id: test.id || test._id?.toString(),
+          questions: qCount || (Array.isArray(test.questions) ? test.questions.length : (test.questions || 0))
+        };
+      });
+    }
 
     res.json(testsWithCounts);
   } catch (error) {

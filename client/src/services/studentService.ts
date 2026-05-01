@@ -1,4 +1,4 @@
-import { API_BASE_URL, apiRequest, getAdminHeaders } from './baseService';
+import { API_BASE_URL, apiRequest, getAdminHeaders, invalidateCache } from './baseService';
 
 // Users API
 export const usersAPI = {
@@ -33,26 +33,33 @@ export const studentsAPI = {
   },
 
   create: async (studentData: any) => {
-    return apiRequest(`${API_BASE_URL}/students`, {
+    const data = await apiRequest(`${API_BASE_URL}/students`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
       body: JSON.stringify(studentData),
     });
+    invalidateCache('students');
+    return data;
   },
 
   update: async (id: string, studentData: any) => {
-    return apiRequest(`${API_BASE_URL}/students/${id}`, {
+    const data = await apiRequest(`${API_BASE_URL}/students/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
       body: JSON.stringify(studentData),
     });
+    invalidateCache('students');
+    invalidateCache('student-detail');
+    return data;
   },
 
   delete: async (id: string) => {
-    return apiRequest(`${API_BASE_URL}/students/${id}`, {
+    const data = await apiRequest(`${API_BASE_URL}/students/${id}`, {
       method: 'DELETE',
       headers: { ...getAdminHeaders() }
     });
+    invalidateCache('students');
+    return data;
   },
 
   approveDevice: async (studentId: string) => {
@@ -116,6 +123,26 @@ export const studentsAPI = {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || 'Failed to ban user');
     }
+    invalidateCache('students');
+    invalidateCache('blocked-users');
+    return response.json();
+  },
+
+  unbanUser: async (userId: string) => {
+    const response = await fetch(`${API_BASE_URL}/security-admin/unban-user`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify({ userId })
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to unban user');
+    }
+    invalidateCache('students');
+    invalidateCache('blocked-users');
     return response.json();
   },
 
@@ -132,6 +159,9 @@ export const studentsAPI = {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || 'Failed to enroll student');
     }
+    invalidateCache('my-courses');
+    invalidateCache('courses');
+    invalidateCache('course-detail');
     return response.json();
   },
 
@@ -146,6 +176,9 @@ export const studentsAPI = {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.error || 'Failed to unenroll student');
     }
+    invalidateCache('my-courses');
+    invalidateCache('courses');
+    invalidateCache('course-detail');
     return response.json();
   }
 };

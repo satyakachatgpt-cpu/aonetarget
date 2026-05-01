@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { categoriesAPI, subcategoriesAPI, coursesAPI, subjectsAPI, getAuthHeaders } from '../services/apiClient';
 import { getImageUrl } from '../lib/utils';
+import { useAuthStore } from '../store/authStore';
 
 interface Category {
   _id?: string;
@@ -104,7 +105,7 @@ const getVisualGradient = (item: { gradient?: string; color?: string }) => {
 };
 
 const getSubGradient = (color: string) => getVisualGradient({ color });
-function normalizeSubcategoryId(val: string = "") {
+export function normalizeSubcategoryId(val: string = "") {
   if (!val) return "";
   return String(val)
     .toLowerCase()
@@ -114,42 +115,38 @@ function normalizeSubcategoryId(val: string = "") {
     .trim();
 }
 
-function isCategoryMatch(course: any, targetCategory: any) {
+export const normalizeKey = (val: any) => String(val || "").toLowerCase().trim().replace(/[-_]/g, " ");
+
+export const getCourseCategoryKey = (c: any) => {
+  const ids = [c.categoryId, c.category, c.categoryName, c.primaryCategory];
+  if (Array.isArray(c.categories)) ids.push(...c.categories);
+  return ids.map(normalizeKey).filter(Boolean);
+};
+
+export const getCourseLevel1Key = (c: any) => normalizeKey(c.level1Branch || c.examType || c.boardType || "");
+export const getCourseLevel2Key = (c: any) => normalizeKey(c.level2Branch || c.class || c.className || "");
+export const getCourseSubKey = (c: any) => normalizeKey(c.subcategoryId || c.contentType || c.subcategory || "");
+
+export function isCategoryMatch(course: any, targetCategory: any) {
   if (!course || !targetCategory) return false;
   
-  const norm = (s: any) => String(s || "").toLowerCase().trim();
+  const targetId = normalizeKey(targetCategory.id || targetCategory._id);
+  const targetTitle = normalizeKey(targetCategory.title);
+  const courseKeys = getCourseCategoryKey(course);
 
-  const targetId = norm(targetCategory.id || targetCategory._id);
-  const targetTitle = norm(targetCategory.title);
+  // 1. Direct match with target ID or Title
+  if (courseKeys.includes(targetId) || courseKeys.includes(targetTitle)) return true;
   
-  const courseCatId = norm(course.categoryId);
-  const courseCatName = norm(course.category || course.categoryName || course.primaryCategory);
-  const courseCats = Array.isArray(course.categories) ? course.categories.map(c => norm(c)) : [];
-
-  // 1. Direct ID match (Stable)
-  if (courseCatId && targetId && courseCatId === targetId) return true;
-  
-  // 2. Exact Title Match
-  if (targetTitle && (courseCatName === targetTitle || courseCats.includes(targetTitle))) return true;
-
-  // 3. Special Case: Nursing (as requested)
+  // 2. Special Case: Nursing (inclusive)
   const isNursingTarget = targetId.includes('nursing') || targetTitle.includes('nursing');
   if (isNursingTarget) {
-    // For Nursing, we want to be inclusive of "nursing" and "nursing-cet" but exclusive of others
-    if (courseCatId.includes('nursing')) return true;
-    if (courseCatName === 'nursing' || courseCatName === 'nursing cet' || courseCatName === 'nursing-cet') return true;
-    if (courseCats.includes('nursing') || courseCats.includes('nursing cet') || courseCats.includes('nursing-cet')) return true;
-    
-    // Only allow fuzzy match if it's explicitly nursing related and not a school class
-    if (courseCatName.includes('nursing') && !courseCatName.includes('class') && !courseCatName.match(/\d+th/)) return true;
-    
-    return false;
+     return courseKeys.some(k => k.includes('nursing'));
   }
 
-  // 4. Special Case: NEET/IIT-JEE
-  if (targetId === 'neet-iitjee' || targetId === 'neet_iitjee' || targetTitle.includes('neet') || targetTitle.includes('jee')) {
-    const isNeet = courseCatId === 'neet' || courseCatName.includes('neet') || courseCats.some(c => c.includes('neet'));
-    const isJee = courseCatId === 'iit-jee' || courseCatId === 'iit_jee' || courseCatName.includes('jee') || courseCats.some(c => c.includes('jee'));
+  // 3. Special Case: NEET/IIT-JEE (slug mapping)
+  if (targetId.includes('neet') || targetId.includes('jee') || targetTitle.includes('neet') || targetTitle.includes('jee')) {
+    const isNeet = courseKeys.some(k => k.includes('neet'));
+    const isJee = courseKeys.some(k => k.includes('jee') || k.includes('iit'));
     return isNeet || isJee;
   }
   
@@ -170,18 +167,6 @@ const NeetIitJeePage: React.FC<{
   const navigate = useNavigate();
   const branches = category.branchesL1 || [];
   const [activeBranch, setActiveBranch] = useState<string>(branches[0]?.slug || '');
-  const [selectedSubject, setSelectedSubject] = useState<string | null>(null);
-
-  const subjects = useMemo(() => {
-    return allSubjects.filter(s => 
-        isCategoryMatch(s, category) && 
-        (String(s.level1Branch || "").toLowerCase() === String(activeBranch || "").toLowerCase() || s.course === activeBranch) &&
-        !s.subcategoryId // ONLY category-level/global subjects
-    ).map(s => ({
-       ...s,
-       id: s.id || s._id || "" // Normalize ID
-    }));
-  }, [allSubjects, activeBranch, category]);
 
   const categorySubcategories = useMemo(() => {
     return subcategories.filter(s => s.categoryId === category.id && (s.level1Branch === activeBranch || !s.level1Branch));
@@ -192,49 +177,30 @@ const NeetIitJeePage: React.FC<{
       const matchesCat = isCategoryMatch(c, category);
       if (!matchesCat) return false;
       
-      const cL1 = String(c.level1Branch || c.examType || c.boardType || "").toLowerCase().trim();
-      const aL1 = String(activeBranch || "").toLowerCase().trim();
-      if (cL1 !== aL1) return false;
-
-      // Robust Subject Matching
-      if (selectedSubject && selectedSubject !== 'all' && selectedSubject !== '') {
-        const selectedObj = subjects.find(
-          s => String(s.id || s._id) === String(selectedSubject)
-        );
-
-        const selectedId = selectedObj ? String(selectedObj.id || selectedObj._id) : "";
-        const selectedName = selectedObj
-          ? String(selectedObj.label || selectedObj.name || "").trim().toLowerCase()
-          : "";
-
-        const courseSubjectId = String(c.subjectId || "");
-        const courseSubjectName = String(c.subject || "").trim().toLowerCase();
-
-        const matchesSubject =
-          (selectedId && courseSubjectId === selectedId) ||
-          (selectedName && courseSubjectName === selectedName);
-
-        if (!matchesSubject) return false;
-      }
+      const cL1 = getCourseLevel1Key(c);
+      const aL1 = normalizeKey(activeBranch);
+      
+      // Strict Match for primary list
+      if (cL1 && cL1 !== aL1) return false;
 
       return true;
     });
-  }, [courses, activeBranch, selectedSubject, subjects, category]);
+  }, [courses, activeBranch, category]);
 
   const getContentCount = (subId: string) => {
     const requested = normalizeSubcategoryId(subId);
     return courses.filter(c => {
       const matchesCat = isCategoryMatch(c, category);
-      
-      const cL1 = String(c.level1Branch || c.examType || "").toLowerCase().trim();
-      const aL1 = String(activeBranch || "").toLowerCase().trim();
-      const matchesBranch = cL1 === aL1;
+      if (!matchesCat) return false;
 
-      const courseSub = normalizeSubcategoryId(c.subcategoryId || "");
-      const courseType = normalizeSubcategoryId(c.contentType || "");
-      const matchesSub = (courseSub === requested) || (courseType === requested);
+      const cL1 = getCourseLevel1Key(c);
+      const aL1 = normalizeKey(activeBranch);
+      if (cL1 !== aL1) return false;
 
-      return matchesCat && matchesBranch && matchesSub;
+      const courseSub = getCourseSubKey(c);
+      const matchesSub = courseSub === requested || normalizeSubcategoryId(courseSub) === requested;
+
+      return matchesCat && matchesSub;
     }).length;
   };
 
@@ -260,7 +226,7 @@ const NeetIitJeePage: React.FC<{
             {branches.map(b => (
               <button
                 key={b.slug}
-                onClick={() => { setActiveBranch(b.slug); setSelectedSubject(null); }}
+                onClick={() => { setActiveBranch(b.slug); }}
                 className={`flex-1 py-3 rounded-xl text-center transition-all font-bold text-sm flex items-center justify-center gap-2 ${activeBranch === b.slug
                   ? 'bg-white text-[#1A237E] shadow-lg'
                   : 'text-white/80 hover:text-white'
@@ -306,109 +272,74 @@ const NeetIitJeePage: React.FC<{
           })}
         </div>
 
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-            <span className="material-symbols-rounded text-[#303F9F] text-sm">filter_list</span>
-            Filter by Subject
-          </h3>
-          <div className="flex gap-2 overflow-x-auto pb-1 hide-scrollbar">
-            {subjects.map(subj => (
-              <button
-                key={subj.id}
-                onClick={() => setSelectedSubject(selectedSubject === subj.id ? null : subj.id)}
-                className={`flex-1 min-w-[80px] py-3 rounded-xl text-center transition-all active:scale-95 flex flex-col items-center gap-1.5 ${selectedSubject === subj.id
-                  ? `bg-gradient-to-br ${subj.gradient || 'from-[#303F9F] to-[#1A237E]'} text-white shadow-md`
-                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100'
-                  }`}
-              >
-                <span className="material-symbols-rounded text-lg">{subj.icon}</span>
-                <span className="text-[10px] font-bold">{subj.name}</span>
-              </button>
-            ))}
+        <div className="space-y-4 pt-2">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-xs font-semibold text-gray-400 tracking-wide">
+              Recently Added Batches
+            </h3>
           </div>
-        </div>
-
-        {selectedSubject && (
+          
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black text-gray-700">
-                {filteredCourses.length} {filteredCourses.length === 1 ? 'Course' : 'Courses'}
-              </h3>
-              <button
-                onClick={() => setSelectedSubject(null)}
-                className="text-xs text-[#303F9F] font-bold flex items-center gap-1"
-              >
-                <span className="material-symbols-rounded text-sm">clear_all</span>
-                Clear Filter
-              </button>
-            </div>
-            {filteredCourses.length > 0 ? (
-              filteredCourses.map((course, idx) => {
-                const cId = course.id || course._id || '';
-                const courseName = course.name || course.title || 'Course';
-                const coursePrice = course.price || 0;
-                const isFree = coursePrice === 0;
-                const ct = categorySubcategories.find(c => c.id === course.subcategoryId);
+            {(() => {
+              const displayCourses = filteredCourses.filter(c => !getCourseSubKey(c) || !getCourseLevel1Key(c));
 
-                return (
-                  <button
-                    key={cId || idx}
-                    onClick={() => navigate(`/course/${cId}`)}
-                    className="w-full bg-white rounded-2xl p-4 shadow-sm flex gap-4 text-left active:scale-[0.98] transition-all border border-gray-100 hover:shadow-md"
-                  >
-                    <div className={`w-16 h-16 bg-gradient-to-br ${getVisualGradient(ct || {})} rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden relative shadow-sm`}>
-                      {course.settings?.markNewBatch && (
-                        <div className="absolute inset-0 z-10 flex items-center justify-center bg-red-600/90 animate-pulse">
-                          <span className="text-[7px] text-white font-black uppercase tracking-tighter">NEW</span>
-                        </div>
-                      )}
-                      {(course.imageUrl || course.thumbnail) ? (
-                        <img src={getImageUrl(course.imageUrl || course.thumbnail)} alt="" className="w-full h-full object-cover" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                      ) : (
-                        <span className="material-symbols-rounded text-white text-2xl opacity-70">{ct?.icon || 'school'}</span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-bold text-[#1A237E] line-clamp-2 leading-tight">{courseName}</h4>
-                      {course.instructor && (
-                        <p className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
-                          <span className="material-symbols-rounded text-xs">person</span>
-                          {course.instructor}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-2 mt-2 flex-wrap">
-                        {course.subject && (
-                          <span className="bg-blue-50 text-[#303F9F] text-[9px] font-bold px-2 py-0.5 rounded-full capitalize">{course.subject}</span>
+              return displayCourses.length > 0 ? (
+                displayCourses.map((course, idx) => {
+                  const cId = course.id || course._id || '';
+                  const courseName = course.name || course.title || 'Course';
+                  const coursePrice = course.price || 0;
+                  const isFree = coursePrice === 0;
+                  const ct = categorySubcategories.find(c => c.id === course.subcategoryId);
+
+                  return (
+                    <button
+                      key={cId || idx}
+                      onClick={() => navigate(`/course/${cId}`)}
+                      className="flex items-center gap-3 p-3 rounded-xl bg-white shadow-sm border border-gray-100 hover:shadow-md transition-all active:scale-[0.98] text-left w-full"
+                    >
+                      <div className="w-14 h-14 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden relative border border-gray-50">
+                        {(course.imageUrl || course.thumbnail) ? (
+                          <img 
+                            src={getImageUrl(course.imageUrl || course.thumbnail)} 
+                            alt="" 
+                            className="w-full h-full object-cover" 
+                            loading="lazy" 
+                            onError={(e) => { e.currentTarget.style.display = 'none'; }} 
+                          />
+                        ) : (
+                          <div className={`w-full h-full bg-gradient-to-br ${getVisualGradient(ct || {})} flex items-center justify-center`}>
+                            <span className="material-symbols-rounded text-white/50 text-xl">{ct?.icon || 'school'}</span>
+                          </div>
                         )}
-                        {ct && (
-                          <span className="bg-gray-50 text-gray-500 text-[9px] font-bold px-2 py-0.5 rounded-full">{ct.title}</span>
-                        )}
-                        <span className="text-xs font-bold ml-auto">
-                          {enrolledCourseIds.some(eid => String(eid) === String(course.id) || String(eid) === String(course._id)) ? (
-                            <span className="text-brandBlue font-black uppercase text-[10px] tracking-widest flex items-center gap-1">
-                              <span className="material-symbols-rounded text-xs">verified</span>
-                              Enrolled
-                            </span>
-                          ) : isFree ? (
-                            <span className="text-green-600">Free</span>
-                          ) : (
-                            <span className="text-[#1A237E]">₹{coursePrice}</span>
-                          )}
-                        </span>
                       </div>
-                    </div>
-                    <span className="material-symbols-rounded text-gray-300 self-center text-lg">chevron_right</span>
-                  </button>
-                );
-              })
-            ) : (
-              <div className="text-center py-8 bg-white rounded-2xl border border-gray-100">
-                <span className="material-symbols-rounded text-4xl text-gray-200">school</span>
-                <p className="text-sm text-gray-400 mt-2">No courses for this subject yet</p>
-              </div>
-            )}
+                      
+                      <div className="flex-1 min-w-0">
+                        <h4 className="text-sm font-semibold text-gray-900 line-clamp-2 leading-tight">{courseName}</h4>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          {enrolledCourseIds.some(eid => String(eid) === String(course.id) || String(eid) === String(course._id)) ? (
+                            <span className="px-2 py-0.5 text-[10px] bg-teal-50 text-teal-600 rounded-full font-bold">Enrolled</span>
+                          ) : (
+                            <span className="text-sm font-bold text-blue-600">{isFree ? 'Free' : `₹${coursePrice}`}</span>
+                          )}
+                          {course.subject && (
+                            <span className="px-2 py-0.5 text-[10px] bg-blue-50 text-blue-600 rounded-full font-bold">{course.subject}</span>
+                          )}
+                        </div>
+                      </div>
+                      
+                      <span className="material-symbols-rounded text-gray-300 text-lg">chevron_right</span>
+                    </button>
+                  );
+                })
+              ) : (
+                <div className="text-center py-10">
+                  <p className="text-sm text-gray-400 font-medium">No batches available</p>
+                </div>
+              );
+            })()}
           </div>
-        )}
+
+        </div>
       </main>
     </div>
   );
@@ -453,16 +384,17 @@ const GeneralClassPage: React.FC<{
       const matchesCat = isCategoryMatch(c, category);
       if (!matchesCat) return false;
       
-      const cL1 = String(c.level1Branch || c.boardType || "").toLowerCase().trim();
-      const aL1 = String(activeL1 || "").toLowerCase().trim();
+      const cL1 = getCourseLevel1Key(c);
+      const aL1 = normalizeKey(activeL1);
       
-      const cL2 = String(c.level2Branch || "").toLowerCase().trim();
-      const aL2 = String(activeL2 || "").toLowerCase().trim();
+      const cL2 = getCourseLevel2Key(c);
+      const aL2 = normalizeKey(activeL2);
       
-      // Class matching also supports simple numeric match for legacy (e.g. "12" matching "12th")
-      const matchesL2 = cL2 === aL2 || (c.subcategoryId && c.subcategoryId.includes(aL2.replace('th', '')));
-      
-      if (cL1 !== aL1 || !matchesL2) return false;
+      // Level 1 (Board) must match if present
+      if (cL1 && cL1 !== aL1) return false;
+
+      // Level 2 (Class) must match if present
+      if (cL2 && cL2 !== aL2) return false;
 
       // Robust Subject Matching
       if (selectedSubject && selectedSubject !== 'all' && selectedSubject !== '') {
@@ -603,60 +535,73 @@ const GeneralClassPage: React.FC<{
           </div>
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-4">
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-sm font-black text-gray-700 uppercase tracking-tight">
-              {filteredCourses.length} {filteredCourses.length === 1 ? 'Available Course' : 'Available Courses'}
+            <h3 className="text-xs font-semibold text-gray-400 tracking-wide">
+              {selectedSubject ? `${filteredCourses.length} ${filteredCourses.length === 1 ? 'Available Course' : 'Available Courses'}` : 'Recently Added Batches'}
             </h3>
             {selectedSubject && (
-               <button onClick={() => setSelectedSubject(null)} className="text-[10px] text-[#1A237E] font-bold bg-blue-50 px-2 py-1 rounded-full">Clear Filter</button>
+               <button onClick={() => setSelectedSubject(null)} className="text-[11px] text-blue-600 font-bold bg-blue-50 px-3 py-1 rounded-full transition-all active:scale-95">Clear Filter</button>
             )}
           </div>
           
-          {filteredCourses.length > 0 ? (
-            filteredCourses.map((course, idx) => {
-              const cId = course.id || course._id || '';
-              return (
-                <button
-                  key={cId || idx}
-                  onClick={() => navigate(`/course/${cId}`)}
-                  className="w-full bg-white rounded-2xl p-4 shadow-sm flex gap-4 text-left active:scale-[0.98] transition-all border border-gray-100 hover:shadow-md group"
-                >
-                  <div className="w-16 h-16 bg-gradient-to-br from-[#1A237E] to-[#303F9F] rounded-2xl flex items-center justify-center flex-shrink-0 overflow-hidden relative shadow-inner">
-                    {(course.imageUrl || course.thumbnail) ? (
-                      <img src={getImageUrl(course.imageUrl || course.thumbnail)} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-white text-2xl font-black opacity-30">{(course.name || course.title || '?').charAt(0).toUpperCase()}</span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-bold text-gray-800 line-clamp-2 leading-tight group-hover:text-[#1A237E] transition-colors">{course.name || course.title}</h4>
-                    <p className="text-[9px] text-gray-400 mt-1 uppercase font-bold tracking-wider">{activeL1} • {activeL2} • {course.subject}</p>
-                    <div className="flex items-center justify-between mt-3">
-                       {enrolledCourseIds.some(eid => String(eid) === String(course.id) || String(eid) === String(course._id)) ? (
-                         <span className="text-[10px] font-black text-brandBlue uppercase tracking-widest flex items-center gap-1">
-                           <span className="material-symbols-rounded text-xs">verified</span>
-                           Enrolled
-                         </span>
-                       ) : (
-                         <span className="text-xs font-black text-[#1A237E]">{course.price ? `₹${course.price}` : 'Free'}</span>
-                       )}
-                       <span className="text-[9px] bg-green-50 text-green-600 font-bold px-2 py-0.5 rounded-full">New Batch</span>
+          <div className="space-y-3">
+            {(() => {
+              const displayCourses = selectedSubject 
+                ? filteredCourses 
+                : filteredCourses.filter(c => !getCourseSubKey(c) || !getCourseLevel1Key(c) || !getCourseLevel2Key(c));
+
+              return displayCourses.length > 0 ? (
+                displayCourses.map((course, idx) => {
+                const cId = course.id || course._id || '';
+                const courseName = course.name || course.title || 'Course';
+                const coursePrice = course.price || 0;
+                const isFree = coursePrice === 0;
+
+                return (
+                  <button
+                    key={cId || idx}
+                    onClick={() => navigate(`/course/${cId}`)}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-white shadow-sm border border-gray-100 hover:shadow-md transition-all active:scale-[0.98] text-left w-full group"
+                  >
+                    <div className="w-14 h-14 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden relative border border-gray-50">
+                      {(course.imageUrl || course.thumbnail) ? (
+                        <img 
+                          src={getImageUrl(course.imageUrl || course.thumbnail)} 
+                          alt="" 
+                          className="w-full h-full object-cover" 
+                          loading="lazy" 
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-indigo-600 to-violet-700 flex items-center justify-center">
+                          <span className="text-white/50 text-xl font-bold">{(courseName).charAt(0).toUpperCase()}</span>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                  <span className="material-symbols-rounded text-gray-300 self-center group-hover:text-[#1A237E] transition-colors">chevron_right</span>
-                </button>
+                    
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-semibold text-gray-900 line-clamp-2 leading-tight group-hover:text-blue-600 transition-colors">{courseName}</h4>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        {enrolledCourseIds.some(eid => String(eid) === String(course.id) || String(eid) === String(course._id)) ? (
+                          <span className="px-2 py-0.5 text-[10px] bg-teal-50 text-teal-600 rounded-full font-bold">Enrolled</span>
+                        ) : (
+                          <span className="text-sm font-bold text-blue-600">{isFree ? 'Free' : `₹${coursePrice}`}</span>
+                        )}
+                        <span className="px-2 py-0.5 text-[10px] bg-blue-50 text-blue-600 rounded-full font-bold uppercase">{activeL1} • {activeL2}</span>
+                      </div>
+                    </div>
+                    
+                    <span className="material-symbols-rounded text-gray-300 text-lg group-hover:text-blue-600 transition-colors">chevron_right</span>
+                  </button>
+                );
+              })
+              ) : (
+                <div className="text-center py-10">
+                  <p className="text-sm text-gray-400 font-medium">No batches available</p>
+                </div>
               );
-            })
-          ) : (
-            <div className="text-center py-16 bg-white rounded-[2.5rem] border border-gray-100 shadow-sm mt-4">
-              <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                <span className="material-symbols-rounded text-4xl text-gray-200">menu_book</span>
-              </div>
-              <h3 className="text-sm font-bold text-gray-700">Content Coming Soon</h3>
-              <p className="text-[10px] text-gray-400 mt-2 max-w-[200px] mx-auto">Courses for {activeL1.toUpperCase()} {activeL2} {selectedSubject || 'subjects'} will be available soon.</p>
-            </div>
-          )}
+            })()}
+          </div>
         </div>
       </main>
     </div>
@@ -751,52 +696,62 @@ const NursingPage: React.FC<{ category: Category; subcategories: SubCategory[]; 
 
         <div className="mt-8 space-y-4">
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-sm font-black text-gray-700 uppercase tracking-tight">
+            <h3 className="text-xs font-semibold text-gray-400 tracking-wide">
               {courses.length} {courses.length === 1 ? 'Available Course' : 'Available Courses'}
             </h3>
           </div>
           
-          {courses.length > 0 ? (
-            courses.map((course, idx) => {
-              const cId = course.id || course._id || '';
-              return (
-                <button
-                  key={cId || idx}
-                  onClick={() => navigate(`/course/${cId}`)}
-                  className="w-full bg-white rounded-2xl p-4 shadow-sm flex gap-4 text-left active:scale-[0.98] transition-all border border-gray-100 hover:shadow-md group"
-                >
-                  <div className="w-16 h-16 bg-gradient-to-br from-teal-600 to-emerald-700 rounded-2xl flex items-center justify-center flex-shrink-0 overflow-hidden relative shadow-inner">
-                    {(course.imageUrl || course.thumbnail) ? (
-                      <img src={getImageUrl(course.imageUrl || course.thumbnail)} alt="" className="w-full h-full object-cover" />
-                    ) : (
-                      <span className="text-white text-2xl font-black opacity-30">{(course.name || course.title || '?').charAt(0).toUpperCase()}</span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-bold text-gray-800 line-clamp-2 leading-tight group-hover:text-teal-600 transition-colors">{course.name || course.title}</h4>
-                    <p className="text-[9px] text-gray-400 mt-1 uppercase font-bold tracking-wider">{category.title} • {course.subject || 'General'}</p>
-                    <div className="flex items-center justify-between mt-3">
-                       {enrolledCourseIds.some(eid => String(eid) === String(course.id) || String(eid) === String(course._id)) ? (
-                         <span className="text-[10px] font-black text-teal-600 uppercase tracking-widest flex items-center gap-1">
-                           <span className="material-symbols-rounded text-xs">verified</span>
-                           Enrolled
-                         </span>
-                       ) : (
-                         <span className="text-xs font-black text-teal-600">{course.price ? `₹${course.price}` : 'Free'}</span>
-                       )}
-                       <span className="text-[9px] bg-green-50 text-green-600 font-bold px-2 py-0.5 rounded-full">Active</span>
+          <div className="space-y-3">
+            {courses.length > 0 ? (
+              courses.map((course, idx) => {
+                const cId = course.id || course._id || '';
+                const courseName = course.name || course.title || 'Course';
+                const coursePrice = course.price || 0;
+                const isFree = coursePrice === 0;
+
+                return (
+                  <button
+                    key={cId || idx}
+                    onClick={() => navigate(`/course/${cId}`)}
+                    className="flex items-center gap-3 p-3 rounded-xl bg-white shadow-sm border border-gray-100 hover:shadow-md transition-all active:scale-[0.98] text-left w-full group"
+                  >
+                    <div className="w-14 h-14 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden relative border border-gray-50">
+                      {(course.imageUrl || course.thumbnail) ? (
+                        <img 
+                          src={getImageUrl(course.imageUrl || course.thumbnail)} 
+                          alt="" 
+                          className="w-full h-full object-cover" 
+                          loading="lazy" 
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-teal-600 to-emerald-700 flex items-center justify-center">
+                          <span className="text-white/50 text-xl font-bold">{(courseName).charAt(0).toUpperCase()}</span>
+                        </div>
+                      )}
                     </div>
-                  </div>
-                  <span className="material-symbols-rounded text-gray-300 self-center group-hover:text-teal-600 transition-colors">chevron_right</span>
-                </button>
-              );
-            })
-          ) : (
-            <div className="text-center py-12 bg-white rounded-3xl border border-gray-100 shadow-sm">
-              <span className="material-symbols-rounded text-4xl text-gray-200">school</span>
-              <p className="text-xs text-gray-400 mt-2">No courses found in this category</p>
-            </div>
-          )}
+                    
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-semibold text-gray-900 line-clamp-2 leading-tight group-hover:text-teal-600 transition-colors">{courseName}</h4>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        {enrolledCourseIds.some(eid => String(eid) === String(course.id) || String(eid) === String(course._id)) ? (
+                          <span className="px-2 py-0.5 text-[10px] bg-teal-50 text-teal-600 rounded-full font-bold">Enrolled</span>
+                        ) : (
+                          <span className="text-sm font-bold text-teal-600">{isFree ? 'Free' : `₹${coursePrice}`}</span>
+                        )}
+                        <span className="px-2 py-0.5 text-[10px] bg-teal-50 text-teal-600 rounded-full font-bold uppercase">{category.title}</span>
+                      </div>
+                    </div>
+                    
+                    <span className="material-symbols-rounded text-gray-300 text-lg group-hover:text-teal-600 transition-colors">chevron_right</span>
+                  </button>
+                );
+              })
+            ) : (
+              <div className="text-center py-10">
+                <p className="text-sm text-gray-400 font-medium">No batches available</p>
+              </div>
+            )}
+          </div>
         </div>
       </main>
     </div>
@@ -806,6 +761,7 @@ const NursingPage: React.FC<{ category: Category; subcategories: SubCategory[]; 
 const CategoryPage: React.FC = () => {
   const navigate = useNavigate();
   const { categoryId } = useParams<{ categoryId: string }>();
+  const { student } = useAuthStore();
   
   const [category, setCategory] = useState<Category | null>(null);
   const [subcategories, setSubcategories] = useState<SubCategory[]>([]);
@@ -820,8 +776,7 @@ const CategoryPage: React.FC = () => {
     const load = async () => {
       try {
         setLoading(true);
-        const studentData = localStorage.getItem('studentData');
-        const sId = studentData ? JSON.parse(studentData).id : null;
+        const sId = student?.id || student?._id;
 
         const [cats, subs, subjs, coursesRes, enrolledRes] = await Promise.all([
           categoriesAPI.getAll().catch(() => []),
@@ -849,7 +804,7 @@ const CategoryPage: React.FC = () => {
       }
     };
     load();
-  }, [categoryId]);
+  }, [categoryId, student?.id]);
 
   const categoryCourses = useMemo(() => {
     if (categoryId === 'mock-test') {

@@ -28,7 +28,7 @@ const MyCourses: React.FC = () => {
     init();
     window.addEventListener('focus', init);
     return () => window.removeEventListener('focus', init);
-  }, [location.pathname]);
+  }, [location.pathname, student?.id]);
 
   const fetchCourses = async (studentId: string) => {
     try {

@@ -38,7 +38,6 @@ const SubCourses = lazy(() => import('../components/admin/misc/SubCourses'));
 const Subjects = lazy(() => import('../components/admin/misc/Subjects'));
 const Topics = lazy(() => import('../components/admin/misc/Topics'));
 const Instructions = lazy(() => import('../components/admin/misc/Instructions'));
-const ExamDocuments = lazy(() => import('../components/admin/misc/ExamDocuments'));
 const GlobalNews = lazy(() => import('../components/admin/misc/GlobalNews'));
 const PushNotifications = lazy(() => import('../components/admin/misc/PushNotifications'));
 const Referrals = lazy(() => import('../components/admin/Referrals'));
@@ -49,7 +48,7 @@ const ViewFormatPage = lazy(() => import('../components/admin/ViewFormatPage'));
 const SalesReport = lazy(() => import('../components/admin/reports/SalesReport'));
 const NoPurchaseReport = lazy(() => import('../components/admin/reports/NoPurchaseReport'));
 
-export type AdminView = 'dashboard' | 'students' | 'buyers' | 'tokens' | 'coupons' | 'store' | 'institute' | 'questions' | 'question-bank' | 'passages' | 'tests' | 'subjective-test' | 'test-series' | 'all-reports' | 'videos' | 'video-series' | 'live-videos' | 'live-sessions' | 'pdfs' | 'packages' | 'messages' | 'blog' | 'settings' | 'banners' | 'courses' | 'course-content' | 'live-class-scheduler' | 'subcourses' | 'subjects' | 'topics' | 'instructions' | 'exam-documents' | 'global-news' | 'quick-links' | 'push-notifications' | 'categories' | 'misc' | 'referrals' | 'chat-support' | 'free-content' | 'blocked-users' | 'security-center' | 'sales-report' | 'no-purchase-report';
+export type AdminView = 'dashboard' | 'students' | 'buyers' | 'tokens' | 'coupons' | 'store' | 'institute' | 'questions' | 'question-bank' | 'passages' | 'tests' | 'subjective-test' | 'test-series' | 'all-reports' | 'videos' | 'video-series' | 'live-videos' | 'live-sessions' | 'pdfs' | 'packages' | 'messages' | 'blog' | 'settings' | 'banners' | 'courses' | 'course-content' | 'live-class-scheduler' | 'subcourses' | 'subjects' | 'topics' | 'instructions' | 'global-news' | 'quick-links' | 'push-notifications' | 'categories' | 'misc' | 'referrals' | 'chat-support' | 'free-content' | 'blocked-users' | 'security-center' | 'sales-report' | 'no-purchase-report';
 
 interface Props {
   setAuth: (val: boolean) => void;
@@ -226,15 +225,6 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         { id: 'blocked-users', label: 'Blocked Users', icon: 'block' }
       ]
     },
-    {
-      id: 'custom-sections',
-      label: 'Custom Sections',
-      icon: 'build',
-      color: 'text-gray-700',
-      submenu: [
-        { id: 'exam-documents', label: 'Documents', icon: 'folder' }
-      ]
-    },
   ];
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -270,8 +260,8 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         <Route path="dashboard" element={<Dashboard {...props} />} />
         <Route path="categories" element={<Categories {...props} />} />
         <Route path="misc" element={<MiscSection {...props} />} />
-        <Route path="students" element={<Students {...props} />} />
-        <Route path="blocked-users" element={<Students {...props} initialStatus="inactive" viewMode="blocked" />} />
+        <Route path="students" element={<Students key="students" {...props} />} />
+        <Route path="blocked-users" element={<Students key="blocked-users" {...props} initialStatus="inactive" viewMode="blocked" />} />
         <Route path="tokens" element={<Tokens {...props} />} />
         <Route path="coupons" element={<Coupons {...props} />} />
         <Route path="store" element={<Store {...props} />} />
@@ -305,7 +295,6 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         <Route path="subjects" element={<Subjects {...props} />} />
         <Route path="topics" element={<Topics {...props} />} />
         <Route path="instructions" element={<Instructions {...props} />} />
-        <Route path="exam-documents" element={<ExamDocuments {...props} />} />
         <Route path="global-news" element={<GlobalNews {...props} />} />
         <Route path="quick-links" element={<QuickLinks {...props} />} />
         <Route path="push-notifications" element={<PushNotifications {...props} />} />

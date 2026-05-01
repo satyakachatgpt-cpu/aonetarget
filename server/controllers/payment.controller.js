@@ -355,6 +355,12 @@ export const createPurchase = async (req, res) => {
     if (!studentId || !courseId) {
       return res.status(400).json({ error: 'studentId and courseId are required' });
     }
+
+    // ROLE-AWARE SECURITY GUARD:
+    // 1. Admins can always create manual purchases (existing behavior).
+    // 2. Students can only proceed if the server-side verified payable amount is ₹0.
+    const isAdmin = req.admin || req.user?.isAdmin || req.user?.role === 'admin';
+    
     if (!canActForStudent(req, studentId)) {
       return res.status(403).json({ error: 'Forbidden' });
     }
@@ -363,6 +369,7 @@ export const createPurchase = async (req, res) => {
     if (!student) {
       return res.status(404).json({ error: 'Student not found' });
     }
+    const enrolledCourses = Array.isArray(student.enrolledCourses) ? student.enrolledCourses : [];
 
     // 1. Fetch Course from DB (Strict)
     let course = await findCourse(courseId);
@@ -379,28 +386,7 @@ export const createPurchase = async (req, res) => {
       return res.status(404).json({ error: 'Course not found' });
     }
 
-    const safeNumber = (val, fallback = 0) => {
-      const n = Number(val);
-      return Number.isFinite(n) ? n : fallback;
-    };
-
-    const actualCourseId = course.id || course._id.toString();
-    
-    // 2. Comprehensive Idempotency Check (All ID variants)
-    const idVariants = [...new Set([
-      actualCourseId,
-      String(courseId),
-      course.id ? String(course.id) : null,
-      course._id ? course._id.toString() : null,
-      ...(await getRelatedCourseIds(course, actualCourseId))
-    ])].filter(Boolean).map(String);
-
-    const enrolledCourses = (student.enrolledCourses || []).map(id => String(id));
-    if (idVariants.some(id => enrolledCourses.includes(String(id)))) {
-       return res.status(200).json({ success: true, message: 'Already enrolled' });
-    }
-
-    // 3. Price Verification
+    // Resolve Coupon and Price Breakdown
     let coupon = null;
     if (couponCode) {
       coupon = await db.collection('coupons').findOne({ code: couponCode });
@@ -411,44 +397,43 @@ export const createPurchase = async (req, res) => {
       return res.status(400).json({ error: breakdown.invalidReason });
     }
 
-    // Server-Controlled Coin Logic (NaN-Safe)
-    const requestedCoins = Math.max(0, Math.floor(safeNumber(req.body.coinsUsed, 0)));
-    const availableCoins = Math.max(0, Math.floor(safeNumber(student.availableCoins, 0)));
-    
-    const rawTotalAmount = breakdown?.totalAmount;
-    const totalAmountInvalid = !Number.isFinite(Number(rawTotalAmount));
-    const verifiedTotalAmount = totalAmountInvalid ? 999999 : Math.max(0, Number(rawTotalAmount));
-    
-    const maxCoinsAllowed = Math.floor(verifiedTotalAmount * 10); // 1 INR = 10 coins
-    
-    const coinsToDeduct = Math.min(requestedCoins, availableCoins, maxCoinsAllowed);
-    const coinDiscount = coinsToDeduct / 10;
-    
-    const finalPayable = Math.max(0, verifiedTotalAmount - coinDiscount);
-    const isAdmin = !!(req.admin || req.user?.isAdmin || req.user?.role === 'admin');
-
-    // 4. Security Enforcement: Reject direct creation for paid content unless admin
-    // NaN-Safe Enforcement: If finalPayable is NaN (shouldn't happen now), the Math.max(0, ...) ensures it is at least 0.
-    // If verifiedTotalAmount was invalid, we do not silently allow.
-    if (finalPayable > 0 && !isAdmin) {
-      console.warn(`[SECURITY] Blocked direct purchase attempt for student ${studentId} on course ${actualCourseId}`);
-      return res.status(402).json({ 
-        error: 'Paid purchase requires verified payment.',
-        requiresPayment: true,
-        finalPayable: finalPayable
-      });
+    // Resolve Coins Redemption
+    const coinsUsed = req.body.coinsUsed || 0;
+    let coinDiscount = 0;
+    if (coinsUsed > 0) {
+      const available = student?.availableCoins || 0;
+      const actualCoinsToUse = Math.min(coinsUsed, available);
+      coinDiscount = actualCoinsToUse / 10;
     }
+
+    const finalPayableAmount = Math.max(0, breakdown.totalAmount - coinDiscount);
+
+    // SERVER-SIDE INDEPENDENT PRICE VERIFICATION (STRICT BYPASS PROTECTION)
+    if (!isAdmin) {
+      // If server says price > 0, the student MUST use Razorpay flow.
+      if (finalPayableAmount > 0) {
+        console.warn(`[SECURITY] Student ${studentId} attempted payment bypass for course ${courseId}. Verified price: ₹${finalPayableAmount}`);
+        return res.status(403).json({ 
+          error: 'Paid checkout must be completed through the secure payment gateway.',
+          code: 'PAYMENT_GATEWAY_REQUIRED'
+        });
+      }
+    }
+
+    const actualCourseId = course.id || course._id.toString();
 
     const purchase = {
       id: `purchase_${Date.now()}`,
       studentId,
       courseId: actualCourseId,
-      courseName: course.name || course.title || courseId,
-      amount: breakdown.totalAmount, // Store server-verified amount
+      courseName: course.name || course.title,
+      amount: isAdmin ? (typeof amount === 'number' ? amount : finalPayableAmount) : finalPayableAmount,
       basePrice: breakdown.basePrice,
       gstAmount: breakdown.gstAmount,
       gstPercentage: breakdown.gstPercentage,
       discountAmount: breakdown.discountAmount,
+      coinDiscount: coinDiscount,
+      coinsUsed: coinsUsed,
       couponCode: coupon?.code || '',
       paymentMethod: paymentMethod || 'free',
       referralCode: referralCode || null,

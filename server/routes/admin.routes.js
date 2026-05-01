@@ -1,7 +1,7 @@
 import express from 'express';
 import * as adminController from '../controllers/admin.controller.js';
 import { adminMiddleware } from '../middleware/auth.js';
-import { banStudent } from '../controllers/student.controller.js';
+import { banStudent, unbanStudent } from '../controllers/student.controller.js';
 
 const router = express.Router();
 
@@ -15,6 +15,7 @@ router.get('/admin/verify', adminMiddleware, adminController.verifyAdmin);
 
 // Security Dashboard (Direct matches for frontend)
 router.post('/security-admin/ban-user', adminMiddleware, banStudent);
+router.post('/security-admin/unban-user', adminMiddleware, unbanStudent);
 
 // Dashboard Analytics (No middleware in legacy server.js)
 router.get('/admin/dashboard-stats', adminMiddleware, adminController.getDashboardStats);

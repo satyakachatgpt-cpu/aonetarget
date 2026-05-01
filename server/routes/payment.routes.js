@@ -4,7 +4,7 @@ import {
   verifyRazorpayPayment, 
   createPurchase 
 } from '../controllers/payment.controller.js';
-import { authMiddleware } from '../middleware/auth.js';
+import { authMiddleware, adminMiddleware } from '../middleware/auth.js';
 import { paymentLimiter } from '../middleware/security.js';
 
 const router = express.Router();

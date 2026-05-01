@@ -53,3 +53,5 @@ server/uploads/pdfs/*
 !server/uploads/images/.gitkeep
 !server/uploads/videos/.gitkeep
 !server/uploads/pdfs/.gitkeep
+
+*.zip

@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { RightSideDrawer, DrawerHeader, DrawerBody, DrawerFooter, FormLabel, FormInput, FormSelect, PrimaryButton } from './DrawerSystem';
-
+import { validateImage } from '../../lib/utils';
 import { CATEGORY_VISUALS } from '../../config/visualConfig';
 
 const iconOptions = CATEGORY_VISUALS.iconOptions;
 const gradientOptions = CATEGORY_VISUALS.gradientOptions;
-
 
 interface AddCategoryDrawerProps {
   isOpen: boolean;
@@ -13,9 +12,10 @@ interface AddCategoryDrawerProps {
   onSubmit: (data: any) => void;
   editingCategory: any;
   nextOrder: number;
+  showToast?: (msg: string, type?: 'success' | 'error') => void;
 }
 
-const AddCategoryDrawer: React.FC<AddCategoryDrawerProps> = ({ isOpen, onClose, onSubmit, editingCategory, nextOrder }) => {
+const AddCategoryDrawer: React.FC<AddCategoryDrawerProps> = ({ isOpen, onClose, onSubmit, editingCategory, nextOrder, showToast }) => {
   const [formData, setFormData] = useState({
     id: '',
     title: '',
@@ -78,6 +78,33 @@ const AddCategoryDrawer: React.FC<AddCategoryDrawerProps> = ({ isOpen, onClose, 
     }
   }, [isOpen, editingCategory, nextOrder]);
 
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const result = await validateImage(file, {
+        minWidth: 256,
+        minHeight: 256,
+        aspectRatio: 1,
+        tolerance: 0.05,
+        label: 'Category Icon'
+      });
+
+      if (!result.valid) {
+        if (showToast) {
+          showToast(result.message || 'Invalid image', 'error');
+        }
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setFormData({ ...formData, imageUrl: reader.result as string });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   return (
     <RightSideDrawer isOpen={isOpen} onClose={onClose} width="520px">
       <div className="flex justify-between items-center px-8 py-6 border-b border-gray-100 bg-white sticky top-0 z-20">
@@ -96,18 +123,7 @@ const AddCategoryDrawer: React.FC<AddCategoryDrawerProps> = ({ isOpen, onClose, 
             ref={fileInputRef}
             className="hidden"
             accept="image/*"
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              if (file) {
-                // Here you would typically upload to a server
-                // For now, we'll use a local URL placeholder or ask the user
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                  setFormData({ ...formData, imageUrl: reader.result as string });
-                };
-                reader.readAsDataURL(file);
-              }
-            }}
+            onChange={handleImageChange}
           />
 
           <div className="grid grid-cols-2 gap-4">
@@ -367,7 +383,7 @@ const AddCategoryDrawer: React.FC<AddCategoryDrawerProps> = ({ isOpen, onClose, 
           <div>
             <div className="flex items-center justify-between mb-1">
               <FormLabel label="Category Image" />
-              <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">Recommended: 400x320 px (1.25:1 Ratio)</span>
+              <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">Recommended: 256x256 px (1:1 Ratio)</span>
             </div>
             <div className="flex gap-2">
               <FormInput

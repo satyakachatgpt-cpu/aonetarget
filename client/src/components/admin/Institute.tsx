@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { instituteAPI } from '../../services/apiClient';
 import FileUploadButton from '../shared/FileUploadButton';
+import { validateImage } from '../../lib/utils';
 
 interface InstituteSettings {
   name: string;
@@ -86,6 +87,21 @@ const Institute: React.FC<Props> = ({ showToast }) => {
               <div className="absolute bottom-1 right-1">
                 <FileUploadButton
                   onUpload={(url) => setSettings({ ...settings, logo: url })}
+                  onBeforeUpload={async (file) => {
+                    const result = await validateImage(file, {
+                      minWidth: 512,
+                      minHeight: 512,
+                      aspectRatio: 1,
+                      tolerance: 0.05,
+                      label: 'Institute Logo'
+                    });
+
+                    if (!result.valid) {
+                      showToast(result.message || 'Invalid image', 'error');
+                      return false;
+                    }
+                    return true;
+                  }}
                   icon="edit"
                   className="w-9 h-9 bg-[#1A237E] text-white rounded-full flex items-center justify-center shadow-lg hover:scale-110 active:scale-95 transition-all"
                   hideLabel={true}

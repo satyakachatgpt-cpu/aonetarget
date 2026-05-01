@@ -1,10 +1,8 @@
 import React from "react";
-import CustomDropdown from "../CustomDropdown";
-import { formatTime } from "../../../utils/testUtils/testHelpers";
+import CustomDropdown from "./shared/CustomDropdown";
 
 interface TestsResultsTabProps {
-  filteredResults: any[];
-  courses: any[];
+  results: any[];
   resultFilters: {
     series: string;
     test: string;
@@ -12,34 +10,68 @@ interface TestsResultsTabProps {
     type: string;
   };
   setResultFilters: (filters: any) => void;
-  loading: boolean;
-  totalResults: number;
   resultsPageSize: number;
   setResultsPageSize: (size: number) => void;
   resultsCurrentPage: number;
-  setResultsCurrentPage: (updater: (p: number) => number) => void;
-  totalResultsPages: number;
-  resultsShowingStart: number;
-  resultsEndIndex: number;
+  setResultsCurrentPage: (page: number | ((prev: number) => number)) => void;
+  tests: any[];
+  showToast: (msg: string) => void;
   setViewingStudentAnalysis: (result: any) => void;
+  loading: boolean;
 }
 
 const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
-  filteredResults,
-  courses,
+  results,
   resultFilters,
   setResultFilters,
-  loading,
-  totalResults,
   resultsPageSize,
   setResultsPageSize,
   resultsCurrentPage,
   setResultsCurrentPage,
-  totalResultsPages,
-  resultsShowingStart,
-  resultsEndIndex,
+  tests,
+  showToast,
   setViewingStudentAnalysis,
+  loading,
 }) => {
+  const filteredResults = results.filter((res) => {
+    const matchSeries =
+      !resultFilters.series ||
+      res.courseName === resultFilters.series ||
+      res.courseId === resultFilters.series;
+
+    const matchTest =
+      !resultFilters.test ||
+      res.testName === resultFilters.test ||
+      res.testId === resultFilters.test;
+
+    const matchSubject =
+      !resultFilters.subject || res.subject === resultFilters.subject;
+
+    const matchType = !resultFilters.type || res.type === resultFilters.type;
+
+    return matchSeries && matchTest && matchSubject && matchType;
+  });
+
+  const totalResults = filteredResults.length;
+  const totalResultsPages = Math.ceil(totalResults / resultsPageSize);
+  const resultsStartIndex = (resultsCurrentPage - 1) * resultsPageSize;
+  const resultsEndIndex = Math.min(
+    resultsStartIndex + resultsPageSize,
+    totalResults
+  );
+  const paginatedResults = filteredResults.slice(
+    resultsStartIndex,
+    resultsEndIndex
+  );
+  const resultsShowingStart = totalResults === 0 ? 0 : resultsStartIndex + 1;
+
+  const formatTime = (seconds: number) => {
+    if (!seconds) return "-";
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    return h > 0 ? `${h}h ${m}m` : `${m}m ${seconds % 60}s`;
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       {/* Search/Filter Card */}
@@ -50,10 +82,12 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
               Test Series Title
             </label>
             <CustomDropdown
-              options={courses.map((c) => ({
-                value: c.name || c.title || "",
-                label: c.name || c.title || "",
-              }))}
+              options={tests
+                .filter((t) => t.isSeries)
+                .map((t) => ({
+                  value: t.name || t.title || "",
+                  label: t.name || t.title || "",
+                }))}
               value={resultFilters.series}
               onChange={(val: any) =>
                 setResultFilters({ ...resultFilters, series: val, test: "" })
@@ -66,12 +100,11 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
               Test Subject
             </label>
             <CustomDropdown
-              options={[
-                "General Knowledge",
-                "Mathematics",
-                "Reasoning",
-                "English",
-              ].map((s) => ({ value: s, label: s }))}
+              options={Array.from(
+                new Set(results.map((r) => r.subject).filter(Boolean))
+              )
+                .sort()
+                .map((s) => ({ value: s, label: s }))}
               value={resultFilters.subject}
               onChange={(val: any) =>
                 setResultFilters({ ...resultFilters, subject: val })
@@ -84,64 +117,124 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
               Test Type
             </label>
             <CustomDropdown
-              options={["Mock Test", "Practice Test", "Previous Year"].map(
-                (t) => ({ value: t, label: t }),
-              )}
+              options={Array.from(
+                new Set(results.map((r) => r.type).filter(Boolean))
+              )
+                .sort()
+                .map((t) => ({ value: t, label: t }))}
               value={resultFilters.type}
               onChange={(val: any) =>
                 setResultFilters({ ...resultFilters, type: val })
               }
-              placeholder="Test Title"
+              placeholder="Select Type"
             />
           </div>
           <div className="space-y-2">
             <label className="text-[12px] font-medium text-gray-500">
               Test Title
             </label>
-            <input
-              type="text"
-              placeholder="Search Test Name..."
+            <CustomDropdown
+              options={Array.from(
+                new Set(
+                  results
+                    .filter(
+                      (r) =>
+                        !resultFilters.series ||
+                        r.courseName === resultFilters.series ||
+                        r.courseId === resultFilters.series
+                    )
+                    .map((r) => r.testName || r.testTitle)
+                )
+              )
+                .filter(Boolean)
+                .sort()
+                .map((name) => ({
+                  value: name,
+                  label: name,
+                }))}
               value={resultFilters.test}
-              onChange={(e) =>
-                setResultFilters({ ...resultFilters, test: e.target.value })
+              onChange={(val: any) =>
+                setResultFilters({ ...resultFilters, test: val })
               }
-              className="w-full h-11 px-4 bg-gray-50 border border-gray-100 rounded-xl text-[14px] font-medium outline-none focus:border-black transition-all"
+              placeholder="Select Test"
             />
           </div>
         </div>
+        <div className="flex justify-end mt-6">
+          <button
+            onClick={() => showToast("Exporting data...")}
+            className="bg-[#5C67F2] text-white px-8 py-2.5 rounded-xl font-bold text-[14px] hover:bg-[#4B53D3] transition-colors flex items-center gap-2"
+          >
+            Export
+          </button>
+        </div>
       </div>
 
+      {/* Results Table */}
       <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-separate border-spacing-0">
+          <table className="w-full text-left">
             <thead className="bg-[#F8F9FB] border-b border-gray-200">
               <tr>
-                <th className="px-6 py-4 w-[40px] text-center">
+                <th className="px-6 py-4 w-12 text-center">
                   <input
                     type="checkbox"
                     className="w-4 h-4 rounded border-gray-300"
                   />
                 </th>
-                <th className="px-6 py-4 w-[50px] text-[11px] font-black text-gray-400 uppercase tracking-widest text-center">
-                  S. No.
+                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                  <div className="flex items-center gap-1">
+                    S. NO.{" "}
+                    <span className="material-symbols-outlined text-[14px]">
+                      unfold_more
+                    </span>
+                  </div>
                 </th>
-                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest">
-                  Student Details
+                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                  <div className="flex items-center gap-1">
+                    STUDENT DETAILS{" "}
+                    <span className="material-symbols-outlined text-[14px]">
+                      unfold_more
+                    </span>
+                  </div>
                 </th>
-                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest">
-                  Time Taken
+                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                  <div className="flex items-center gap-1">
+                    TIME TAKEN{" "}
+                    <span className="material-symbols-outlined text-[14px]">
+                      unfold_more
+                    </span>
+                  </div>
                 </th>
-                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest">
-                  Marks Obtained
+                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                  <div className="flex items-center gap-1">
+                    MARKS{" "}
+                    <span className="material-symbols-outlined text-[14px]">
+                      unfold_more
+                    </span>
+                  </div>
                 </th>
-                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest text-center">
-                  Re-evaluated
+                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                  <div className="flex items-center gap-1">
+                    RE-EVALUATED MARKS{" "}
+                    <span className="material-symbols-outlined text-[14px]">
+                      unfold_more
+                    </span>
+                  </div>
                 </th>
-                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest">
-                  Submitted At
+                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                  <div className="flex items-center gap-1">
+                    DATE & TIME{" "}
+                    <span className="material-symbols-outlined text-[14px]">
+                      unfold_more
+                    </span>
+                  </div>
                 </th>
-                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest text-center">
-                  Review
+                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap text-center">
+                  ACTIONS{" "}
+                  <span className="material-symbols-outlined text-[14px]">
+                    unfold_more
+                  </span>
                 </th>
               </tr>
             </thead>
@@ -155,7 +248,7 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
                   </td>
                 </tr>
               ) : (
-                filteredResults.map((r, idx) => (
+                paginatedResults.map((r, idx) => (
                   <tr
                     key={r.id}
                     className="hover:bg-gray-50/50 transition-colors"
@@ -166,8 +259,8 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
                         className="w-4 h-4 rounded border-gray-300"
                       />
                     </td>
-                    <td className="px-6 py-4 text-[14px] font-bold text-gray-600 text-center">
-                      {idx + 1}
+                    <td className="px-6 py-4 text-[14px] font-bold text-gray-600">
+                      {resultsStartIndex + idx + 1}
                     </td>
                     <td className="px-6 py-4">
                       <div>
@@ -205,7 +298,7 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
                                 year: "numeric",
                                 month: "2-digit",
                                 day: "2-digit",
-                              },
+                              }
                             )
                           : "N/A"}
                       </p>
@@ -247,7 +340,7 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
               <select
                 value={resultsPageSize}
                 onChange={(e) => setResultsPageSize(Number(e.target.value))}
-                className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
+                className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
               >
                 <option value={10}>10</option>
                 <option value={20}>20</option>
@@ -258,7 +351,8 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
               </span>
             </div>
             <span className="text-[13px] font-medium text-gray-400 italic">
-              Showing {resultsShowingStart} to {resultsEndIndex} of {totalResults} entries
+              Showing {resultsShowingStart} to {resultsEndIndex} of {totalResults}{" "}
+              entries
             </span>
           </div>
 
@@ -271,13 +365,47 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
               Previous
             </button>
             <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
-            <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
-              {resultsCurrentPage}
-            </button>
+
+            {/* Render Truncated Page Numbers */}
+            {(() => {
+              const pages = [];
+              const maxVisible = 3;
+              let start = Math.max(1, resultsCurrentPage - 1);
+              let end = Math.min(totalResultsPages, start + maxVisible - 1);
+
+              if (end === totalResultsPages) {
+                start = Math.max(1, end - maxVisible + 1);
+              }
+
+              for (let i = start; i <= end; i++) {
+                pages.push(
+                  <button
+                    key={i}
+                    onClick={() => setResultsCurrentPage(i)}
+                    className={`h-9 w-9 flex items-center justify-center text-[13px] rounded-xl transition-all ${
+                      resultsCurrentPage === i
+                        ? "font-black bg-black text-white shadow-[0_4px_12px_rgba(0,0,0,0.15)]"
+                        : "font-bold text-gray-400 hover:text-black hover:bg-gray-50"
+                    }`}
+                  >
+                    {i}
+                  </button>
+                );
+              }
+              return pages;
+            })()}
+
             <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
             <button
-              onClick={() => setResultsCurrentPage((p) => Math.min(totalResultsPages, p + 1))}
-              disabled={resultsCurrentPage === totalResultsPages || totalResultsPages === 0}
+              onClick={() =>
+                setResultsCurrentPage((p) =>
+                  Math.min(totalResultsPages, p + 1)
+                )
+              }
+              disabled={
+                resultsCurrentPage === totalResultsPages ||
+                totalResultsPages === 0
+              }
               className="h-9 px-4 flex items-center justify-center text-[13px] font-bold text-gray-400 hover:text-black hover:bg-gray-50 rounded-xl transition-all disabled:opacity-50"
             >
               Next
