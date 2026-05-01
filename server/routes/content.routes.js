@@ -52,7 +52,7 @@ import {
 import { importCourseContent } from '../controllers/content.controller.js';
 import { signVideoUrl } from '../controllers/mediaUrl.controller.js';
 import { authMiddleware, adminMiddleware, optionalAuth } from '../middleware/auth.js';
-import { publicLimiter } from '../middleware/security.js';
+import { publicLimiter, catalogLimiter } from '../middleware/security.js';
 
 const router = express.Router();
 
