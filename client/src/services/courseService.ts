@@ -457,9 +457,7 @@ export const splashScreenAPI = {
 // Quick Links API
 export const quickLinksAPI = {
   getAll: async () => {
-    const response = await fetch(`${API_BASE_URL}/quick-links`);
-    if (!response.ok) throw new Error('Failed to fetch quick links');
-    return response.json();
+    return cachedFetch(`${API_BASE_URL}/quick-links`, 60000);
   },
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/quick-links`, {
@@ -468,6 +466,7 @@ export const quickLinksAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create quick link');
+    invalidateCache('quick-links');
     invalidateCache('home');
     return response.json();
   },
@@ -478,12 +477,14 @@ export const quickLinksAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update quick link');
+    invalidateCache('quick-links');
     invalidateCache('home');
     return response.json();
   },
   delete: async (id: string) => {
     const response = await fetch(`${API_BASE_URL}/quick-links/${id}`, { method: 'DELETE', headers: getAdminHeaders() });
     if (!response.ok) throw new Error('Failed to delete quick link');
+    invalidateCache('quick-links');
     invalidateCache('home');
     return response.json();
   }
@@ -491,9 +492,7 @@ export const quickLinksAPI = {
 // Instructions API
 export const instructionsAPI = {
   getAll: async () => {
-    const response = await fetch(`${API_BASE_URL}/instructions`);
-    if (!response.ok) throw new Error('Failed to fetch instructions');
-    return response.json();
+    return cachedFetch(`${API_BASE_URL}/instructions`, 60000);
   },
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/instructions`, {
@@ -505,6 +504,7 @@ export const instructionsAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create instruction');
+    invalidateCache('instructions');
     return response.json();
   },
   update: async (id: string, data: any) => {
@@ -517,6 +517,7 @@ export const instructionsAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update instruction');
+    invalidateCache('instructions');
     return response.json();
   },
   delete: async (id: string) => {
@@ -525,6 +526,7 @@ export const instructionsAPI = {
       headers: { ...getAdminHeaders() }
     });
     if (!response.ok) throw new Error('Failed to delete instruction');
+    invalidateCache('instructions');
     return response.json();
   }
 };

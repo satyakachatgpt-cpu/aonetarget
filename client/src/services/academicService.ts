@@ -3,9 +3,7 @@ import { API_BASE_URL, cachedFetch, getAdminHeaders, invalidateCache } from './b
 // Instructors API
 export const instructorsAPI = {
   getAll: async () => {
-    const response = await fetch(`${API_BASE_URL}/instructors`);
-    if (!response.ok) throw new Error('Failed to fetch instructors');
-    return response.json();
+    return cachedFetch(`${API_BASE_URL}/instructors`, 60000);
   }
 };
 
@@ -149,9 +147,7 @@ export const subjectsAPI = {
 // Topics API
 export const topicsAPI = {
   getAll: async () => {
-    const response = await fetch(`${API_BASE_URL}/topics`);
-    if (!response.ok) throw new Error('Failed to fetch topics');
-    return response.json();
+    return cachedFetch(`${API_BASE_URL}/topics`, 60000);
   },
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/topics`, {
@@ -163,6 +159,7 @@ export const topicsAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create topic');
+    invalidateCache('topics');
     return response.json();
   },
   update: async (id: string, data: any) => {
@@ -175,6 +172,7 @@ export const topicsAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update topic');
+    invalidateCache('topics');
     return response.json();
   },
   delete: async (id: string) => {
@@ -183,6 +181,7 @@ export const topicsAPI = {
       headers: { ...getAdminHeaders() }
     });
     if (!response.ok) throw new Error('Failed to delete topic');
+    invalidateCache('topics');
     return response.json();
   }
 };
@@ -190,9 +189,7 @@ export const topicsAPI = {
 // Subcourses API
 export const subcoursesAPI = {
   getAll: async () => {
-    const response = await fetch(`${API_BASE_URL}/subcourses`);
-    if (!response.ok) throw new Error('Failed to fetch subcourses');
-    return response.json();
+    return cachedFetch(`${API_BASE_URL}/subcourses`, 60000);
   },
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/subcourses`, {
@@ -204,6 +201,7 @@ export const subcoursesAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to create subcourse');
+    invalidateCache('subcourses');
     return response.json();
   },
   update: async (id: string, data: any) => {
@@ -216,6 +214,7 @@ export const subcoursesAPI = {
       body: JSON.stringify(data),
     });
     if (!response.ok) throw new Error('Failed to update subcourse');
+    invalidateCache('subcourses');
     return response.json();
   },
   delete: async (id: string) => {
@@ -224,6 +223,7 @@ export const subcoursesAPI = {
       headers: { ...getAdminHeaders() }
     });
     if (!response.ok) throw new Error('Failed to delete subcourse');
+    invalidateCache('subcourses');
     return response.json();
   }
 };
