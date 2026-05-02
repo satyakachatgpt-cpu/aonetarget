@@ -272,7 +272,7 @@ const TestsDrawers: React.FC<Props> = ({
                         positiveMarks: marksPerQ,
                         negative: -1,
                         negativeMarks: -1,
-                        sortingOrder: idx + 1 // Use index to maintain PDF order
+                        orderIndex: idx + 1 // Use index to maintain PDF order
                     });
                     successCount++;
                 }

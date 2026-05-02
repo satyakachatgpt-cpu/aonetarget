@@ -130,7 +130,7 @@ export const useTestsBulkUploadUploadLogic = ({
 
       setIsParsing(true);
       let questionsToUpload = await Promise.all(
-        filteredList.map(async (q) => {
+        filteredList.map(async (q, idx) => {
           const qImageUrl = await uploadBase64Image(q.questionImage || "");
           
           const processedOptions = await Promise.all(
@@ -146,6 +146,7 @@ export const useTestsBulkUploadUploadLogic = ({
           );
 
           return {
+            id: q.id,
             testId: testId,
             courseId:
               bulkUploadData.testSeries ||
@@ -161,6 +162,7 @@ export const useTestsBulkUploadUploadLogic = ({
             negativeMarks: q.negativeMarks || q.negative || defaultNeg,
             displayOptions: processedOptions,
             hasDiagramOptions: q.hasDiagramOptions || false,
+            orderIndex: currentCount + idx + 1,
             solution: {
               heading: "Full Solution",
               text: q.solution || "",
