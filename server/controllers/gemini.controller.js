@@ -25,7 +25,8 @@ export const parsePDFWithGemini = async (req, res) => {
       1. Extraction: Extract every question and its options (A, B, C, D) in the exact order they appear.
       2. Language: Support mixed Hindi and English text perfectly. Use UTF-8 for Hindi.
       3. Math/Science: Convert ALL mathematical equations, formulas, and scientific symbols into standard LaTeX format (surrounded by $ symbols).
-      4. Answer Key: Find the "Answer Table" or "Key" (usually on the last page). Match the correct answer (A, B, C, or D) to each question number.
+      4. Answer Key: Find the "Answer Table" or "Key". Match the correct answer to each question.
+      **CRITICAL RULE**: Always normalize the correctAnswer to "A", "B", "C", or "D". If the PDF uses 1, 2, 3, 4, map them: 1->A, 2->B, 3->C, 4->D.
       5. Output Format: Return ONLY a valid JSON array of objects. Do not include any introductory or concluding text. Follow this schema exactly:
       {
         "questionNumber": number,
@@ -35,6 +36,8 @@ export const parsePDFWithGemini = async (req, res) => {
         "correctAnswer": "A" | "B" | "C" | "D",
         "solution": "Explanation if provided in the text, otherwise empty"
       }
+      
+      6. Extraction Detail: Do not include the primary option labels (like "A.", "(1)") in the options text. However, if the text contains statement labels (like "(a)"), preserve them.
       
       Combine multi-page questions logically. Ignore headers, footers, and page numbers.
     `;
@@ -65,11 +68,11 @@ export const parsePDFWithGemini = async (req, res) => {
       }
     }
 
-    // Helper to strip common option markers like (a), (b), A., etc.
+    // Helper to strip ONLY the primary leading marker like (1), (a), A., etc.
     const stripOptionMarkers = (text) => {
       if (!text) return "";
-      // Matches (a), (A), a), A), A., a. at the start of the string
-      return text.replace(/^\s*[\(\[]?([a-dA-D])[\)\].:]\s*/, "").trim();
+      // Strips only the first marker found at the very start of the string
+      return text.trim().replace(/^[\(\[]?([a-zA-Z0-9])[\)\].:]\s*/, "").trim();
     };
 
     console.log(`[Gemini] Successfully parsed ${questions.length} questions`);

@@ -163,6 +163,7 @@ export const useTestsBulkUploadUploadLogic = ({
             displayOptions: processedOptions,
             hasDiagramOptions: q.hasDiagramOptions || false,
             orderIndex: currentCount + idx + 1,
+            correctAnswer: q.correctAnswer,
             solution: {
               heading: "Full Solution",
               text: q.solution || "",
