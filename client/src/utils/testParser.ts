@@ -5,6 +5,8 @@ import * as pdfjsLib from "pdfjs-dist";
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version || "5.5.207"}/build/pdf.worker.min.mjs`;
 
+import { getAdminHeaders } from "../services/baseService";
+
 export async function parseFile(file: File): Promise<{ questions: any[], extractedImages: string[] }> {
   const extension = file.name.split(".").pop()?.toLowerCase();
   const arrayBuffer = await file.arrayBuffer();
@@ -50,6 +52,34 @@ export async function parseFile(file: File): Promise<{ questions: any[], extract
     }
   } else if (extension === "pdf") {
     try {
+      console.log("[testParser] Sending PDF to Gemini AI Backend...");
+      
+      const formData = new FormData();
+      formData.append('pdf', file);
+
+      const response = await fetch('/api/v2/parse/gemini-pdf', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+          'x-admin-id': localStorage.getItem('adminId') || ''
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Gemini Parsing failed');
+      }
+
+      const result = await response.json();
+      return { 
+        questions: result.questions, 
+        extractedImages: [] // Gemini doesn't return separate images yet in this flow
+      };
+      /* 
+      // OLD PDF PARSING LOGIC (DISABLED FOR GEMINI)
+      try {
+        console.log("Starting PDF parsing for:", file.name);
       console.log("Starting PDF parsing for:", file.name);
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
       let fullText = "";
@@ -171,9 +201,11 @@ export async function parseFile(file: File): Promise<{ questions: any[], extract
 
       const questions = extractQuestionsFromText(fullText, pageMap);
       return { questions, extractedImages: allExtractedImages };
-    } catch (err) {
-      console.error("PDF parsing error:", err);
-      return { questions: [], extractedImages: [] };
+      */
+    } catch (err: any) {
+      console.error("PDF AI parsing error:", err);
+      // Optional: alert user or return empty
+      throw err;
     }
   }
   return { questions: [], extractedImages: [] };

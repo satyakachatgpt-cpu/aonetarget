@@ -8,6 +8,7 @@
     "dev": "node --no-deprecation server.js"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "axios": "^1.15.0",
     "bcrypt": "^5.1.1",
     "cheerio": "^1.2.0",
