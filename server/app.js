@@ -22,6 +22,7 @@ import { requestIdMiddleware } from './middleware/requestId.middleware.js';
 
 // Routes
 import uploadV2Routes from './routes/upload.routes.js';
+import geminiRoutes from './routes/gemini.routes.js';
 import authRouter from './routes/auth.routes.js';
 import courseRouter from './routes/course.routes.js';
 import reportsRouter from './routes/admin/reports.routes.js';
@@ -372,6 +373,7 @@ app.use((req, res, next) => {
 
 // --- API Sub-Routers ---
 app.use('/api', uploadV2Routes);
+app.use('/api/v2', geminiRoutes);
 app.use('/api', authRouter);
 app.use('/api', courseRouter);
 app.use('/api/courses/:courseId/tests', courseTestRoutes);

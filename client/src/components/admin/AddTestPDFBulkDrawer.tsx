@@ -25,6 +25,8 @@ const AddTestPDFBulkDrawer: React.FC<AddTestPDFBulkDrawerProps> = ({
         freeFlag: 'Paid',
         exportPdf: 'No'
     });
+    const [isProcessing, setIsProcessing] = useState(false);
+    const [statusMessage, setStatusMessage] = useState('');
 
     const fileInputRef = useRef<HTMLInputElement>(null);
     const imageInputRef = useRef<HTMLInputElement>(null);
@@ -47,18 +49,50 @@ const AddTestPDFBulkDrawer: React.FC<AddTestPDFBulkDrawerProps> = ({
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
-    const handleSubmit = () => {
+    const handleSubmit = async () => {
         if (!selectedFile) return;
-        onSubmit({
-            ...formData,
-            file: selectedFile,
-            title: testTitle,
-            image: testImage
-        });
-        onClose();
-        setSelectedFile(null);
-        setTestImage(null);
-        setTestTitle('');
+        
+        setIsProcessing(true);
+        setStatusMessage('AI is analyzing your PDF... Please wait.');
+        
+        try {
+            const formDataToUpload = new FormData();
+            formDataToUpload.append('pdf', selectedFile);
+
+            const response = await fetch('/api/v2/parse/gemini-pdf', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,
+                    'x-admin-id': localStorage.getItem('adminId') || ''
+                },
+                body: formDataToUpload
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || 'AI Parsing failed');
+            }
+
+            const result = await response.json();
+            
+            onSubmit({
+                ...formData,
+                file: selectedFile,
+                title: testTitle,
+                image: testImage,
+                parsedQuestions: result.questions
+            });
+            
+            onClose();
+            setSelectedFile(null);
+            setTestImage(null);
+            setTestTitle('');
+        } catch (err: any) {
+            alert(err.message || "Something went wrong during AI parsing");
+        } finally {
+            setIsProcessing(false);
+            setStatusMessage('');
+        }
     };
 
     return (
@@ -254,12 +288,22 @@ const AddTestPDFBulkDrawer: React.FC<AddTestPDFBulkDrawerProps> = ({
                                 </div>
                             </div>
                         )}
-                        <div className="mt-auto shrink-0 bg-[#1a202c] py-6 flex items-center justify-center -mx-6 -mb-6">
-                            <button
-                                onClick={handleSubmit}
-                                className="text-white text-[16px] font-bold hover:opacity-90 transition-all outline-none uppercase tracking-[2px]">
-                                Submit
-                            </button>
+                        <div className="mt-auto shrink-0 bg-[#1a202c] py-6 flex flex-col items-center justify-center -mx-6 -mb-6 relative">
+                            {isProcessing ? (
+                                <div className="flex flex-col items-center gap-3 animate-pulse">
+                                    <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                                    <span className="text-white text-[12px] font-bold uppercase tracking-[2px]">
+                                        {statusMessage}
+                                    </span>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={handleSubmit}
+                                    disabled={!selectedFile}
+                                    className={`text-white text-[16px] font-bold hover:opacity-90 transition-all outline-none uppercase tracking-[2px] ${!selectedFile ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                    Submit & Process with AI
+                                </button>
+                            )}
                         </div>
                     </div>
                 </DrawerBody>

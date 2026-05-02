@@ -6,7 +6,7 @@ import SubjectiveTestDrawer from "../SubjectiveTestDrawer";
 import AddTestPDFBulkDrawer from "../AddTestPDFBulkDrawer";
 import AddQuestionDrawer from "../AddQuestionDrawer";
 import BulkEditQuestionsDrawer from "../BulkEditQuestionsDrawer";
-import { testsAPI, getAdminHeaders } from "../../../services/apiClient";
+import { testsAPI, questionsAPI, getAdminHeaders } from "../../../services/apiClient";
 
 interface Props {
   showModal: boolean;
@@ -223,10 +223,70 @@ const TestsDrawers: React.FC<Props> = ({
       <AddTestPDFBulkDrawer
         isOpen={showAddTestPDFBulkDrawer}
         onClose={() => setShowAddTestPDFBulkDrawer(false)}
-        onSubmit={(files) => {
-          console.log("Bulk PDFs Added:", files);
-          setShowAddTestPDFBulkDrawer(false);
-          showToast(`${files.length} PDFs added successfully`, "success");
+        onSubmit={async (data) => {
+          try {
+            showToast("Creating test and uploading questions...", "success");
+            
+            // 1. Create the Test record
+            const targetCourseId =
+              viewingTestSeries?.id ||
+              (viewingTestSeries as any)?._id ||
+              (data.testSeries && data.testSeries.length > 0
+                ? data.testSeries[0]
+                : "");
+
+            const totalMarks = Number(data.marks) || 0;
+            const totalTime = Number(data.time) || 0;
+
+            const testResponse = await testsAPI.create({
+              name: data.title,
+              title: data.title,
+              courseId: targetCourseId,
+              courseIds: [targetCourseId],
+              type: "Standard", 
+              noOfQuestions: data.parsedQuestions?.length || 0,
+              marks: totalMarks,
+              time: totalTime,
+              duration: totalTime,
+              sortBy: data.sortingOrder || "0.00",
+              subject: data.subject || "",
+              isFree: data.freeFlag === 'Free',
+              status: "active"
+            });
+
+            const newTestId = testResponse.id || testResponse._id;
+
+            // 2. Upload Questions sequentially
+            if (data.parsedQuestions && data.parsedQuestions.length > 0) {
+                let successCount = 0;
+                const marksPerQ = totalMarks > 0 ? (totalMarks / data.parsedQuestions.length) : 4;
+
+                // Sequential upload to maintain order
+                for (let idx = 0; idx < data.parsedQuestions.length; idx++) {
+                    const q = data.parsedQuestions[idx];
+                    await questionsAPI.create({
+                        ...q,
+                        testId: newTestId,
+                        courseId: targetCourseId,
+                        marks: marksPerQ,
+                        positiveMarks: marksPerQ,
+                        negative: -1,
+                        negativeMarks: -1,
+                        orderIndex: idx + 1 // Use index to maintain PDF order
+                    });
+                    successCount++;
+                }
+
+                showToast(`Test created with ${successCount} questions!`, "success");
+            } else {
+                showToast("Test created (no questions found)", "success");
+            }
+
+            setShowAddTestPDFBulkDrawer(false);
+            loadData();
+          } catch (err: any) {
+            showToast(err.message || "Failed to complete bulk upload", "error");
+          }
         }}
       />
 

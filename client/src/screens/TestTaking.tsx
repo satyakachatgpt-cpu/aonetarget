@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getImageUrl } from '@/lib/utils';
 import { getAuthHeaders, getAdminHeaders, reportedQuestionsAPI } from '../services/apiClient';
+import { renderQuestionText } from '../components/admin/tests/shared/TestUtils';
+import 'katex/dist/katex.min.css';
 
 type QuestionStatus = 'unanswered' | 'answered' | 'flagged' | 'flagged-answered';
 
@@ -420,7 +422,14 @@ const TestTaking: React.FC = () => {
                   const isCorrect = studentAns === q.correctAnswer;
                   return (
                     <div key={q.id} className={`p-3 rounded-lg border ${studentAns ? (isCorrect ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50') : 'border-gray-200 bg-gray-50'}`}>
-                      <p className="text-xs font-semibold text-gray-700">Q{idx + 1}. {q.question || q.questionEn || q.text}</p>
+                      <div className="text-xs font-semibold text-gray-700">
+                        Q{idx + 1}. {renderQuestionText(q.questionEn || q.question || q.text)}
+                        {q.questionHi && (
+                          <div className="mt-1 text-gray-500 font-medium">
+                            {renderQuestionText(q.questionHi)}
+                          </div>
+                        )}
+                      </div>
                       <div className="mt-1 text-[10px]">
                         {studentAns ? (
                           <span className={isCorrect ? 'text-green-600' : 'text-[#D32F2F]'}>
@@ -756,9 +765,16 @@ const TestTaking: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-xl p-4 shadow-sm mb-4">
-              <p className="text-sm font-medium text-gray-800 leading-relaxed">
-                {currentQuestion.question || currentQuestion.questionEn || currentQuestion.text}
-              </p>
+              <div className="space-y-2">
+                <div className="text-sm font-bold text-gray-800 leading-relaxed">
+                  {renderQuestionText(currentQuestion.questionEn || currentQuestion.question || currentQuestion.text)}
+                </div>
+                {(currentQuestion.questionHi) && (
+                  <div className="text-[13px] text-gray-600 leading-relaxed border-t border-gray-50 pt-2">
+                    {renderQuestionText(currentQuestion.questionHi)}
+                  </div>
+                )}
+              </div>
               {currentQuestion.questionImage && (
                 <img src={getImageUrl(currentQuestion.questionImage)} alt="Question" className="mt-3 max-w-full rounded-lg border max-h-60 object-contain" />
               )}
@@ -788,9 +804,9 @@ const TestTaking: React.FC = () => {
                     </span>
                     <div className="flex-1 min-w-0">
                       {opt.value && (
-                        <span className={`text-sm ${isSelected ? 'text-[#1A237E] font-semibold' : 'text-gray-700'}`}>
-                          {opt.value}
-                        </span>
+                        <div className={`text-sm ${isSelected ? 'text-[#1A237E] font-semibold' : 'text-gray-700'}`}>
+                          {renderQuestionText(opt.value)}
+                        </div>
                       )}
                       {opt.image && (
                         <img src={getImageUrl(opt.image)} alt={`Option ${opt.key}`} className="mt-1 max-h-32 rounded border object-contain" />
