@@ -206,44 +206,47 @@ export const bulkDeleteQuestions = async (req, res) => {
       return res.status(400).json({ error: 'No question IDs provided' });
     }
 
-    const stringIds = finalIds.map(id => String(id));
-    const mongoIds = [];
-    stringIds.forEach(id => {
-      if (id && id.length === 24 && /^[0-9a-fA-F]{24}$/.test(id)) {
-        try {
-          mongoIds.push(new mongoose.Types.ObjectId(id));
-        } catch (e) { }
+    // Build a massive list of all possible ID matches for each provided ID
+    const orConditions = [];
+    finalIds.forEach(id => {
+      if (!id) return;
+      
+      // Match by the 'id' field (common in bulk uploads)
+      orConditions.push({ id: id });
+      orConditions.push({ id: String(id) });
+      if (!isNaN(id)) orConditions.push({ id: Number(id) });
+      
+      // Match by the '_id' field (standard MongoDB ID)
+      if (mongoose.Types.ObjectId.isValid(id)) {
+        orConditions.push({ _id: new mongoose.Types.ObjectId(id) });
       }
+      orConditions.push({ _id: id });
+      orConditions.push({ _id: String(id) });
     });
 
-    const qFilter = {
-      $or: [
-        { id: { $in: finalIds } },
-        { id: { $in: stringIds } },
-        { _id: { $in: mongoIds } },
-        { _id: { $in: stringIds } }
-      ]
-    };
+    if (orConditions.length === 0) {
+      return res.status(400).json({ error: 'Invalid question IDs provided' });
+    }
 
-    const result = await db.collection('questions').deleteMany(qFilter);
-    console.log(`[Bulk Delete] Deleted ${result.deletedCount} questions from the questions collection.`);
+    const qFilter = { $or: orConditions };
 
+    // 1. Delete from global questions collection
+    const mainResult = await db.collection('questions').deleteMany(qFilter);
+    console.log(`[Bulk Delete] Deleted ${mainResult.deletedCount} questions from the global collection.`);
+
+    // 2. Clean up embedded questions in the tests collection
+    let pullCount = 0;
     try {
-      await db.collection('tests').updateMany(
+      const testResult = await db.collection('tests').updateMany(
         { questions: { $type: 'array' } },
         {
           $pull: {
-            questions: {
-              $or: [
-                { id: { $in: finalIds } },
-                { id: { $in: stringIds } },
-                { _id: { $in: mongoIds } },
-                { _id: { $in: stringIds } }
-              ]
-            }
+            questions: { $or: orConditions }
           }
         }
       );
+      pullCount = testResult.modifiedCount;
+      console.log(`[Bulk Delete] Cleaned up questions from ${pullCount} tests.`);
     } catch (pullErr) {
       console.warn('[Bulk Delete] Embedded cleanup warning:', pullErr.message);
     }
@@ -251,7 +254,8 @@ export const bulkDeleteQuestions = async (req, res) => {
     res.json({
       success: true,
       message: `Questions deleted successfully`,
-      deletedCount: result.deletedCount
+      deletedCount: mainResult.deletedCount,
+      testsUpdated: pullCount
     });
   } catch (error) {
     console.error('[Bulk Delete] Server Error:', error);
