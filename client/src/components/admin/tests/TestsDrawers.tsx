@@ -261,7 +261,9 @@ const TestsDrawers: React.FC<Props> = ({
                 let successCount = 0;
                 const marksPerQ = totalMarks > 0 ? (totalMarks / data.parsedQuestions.length) : 4;
 
-                for (const q of data.parsedQuestions) {
+                // Sequential upload to maintain order
+                for (let idx = 0; idx < data.parsedQuestions.length; idx++) {
+                    const q = data.parsedQuestions[idx];
                     await questionsAPI.create({
                         ...q,
                         testId: newTestId,
@@ -269,10 +271,12 @@ const TestsDrawers: React.FC<Props> = ({
                         marks: marksPerQ,
                         positiveMarks: marksPerQ,
                         negative: -1,
-                        negativeMarks: -1
+                        negativeMarks: -1,
+                        sortingOrder: idx + 1 // Use index to maintain PDF order
                     });
                     successCount++;
                 }
+
                 showToast(`Test created with ${successCount} questions!`, "success");
             } else {
                 showToast("Test created (no questions found)", "success");

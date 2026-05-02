@@ -65,27 +65,39 @@ export const parsePDFWithGemini = async (req, res) => {
       }
     }
 
+    // Helper to strip common option markers like (a), (b), A., etc.
+    const stripOptionMarkers = (text) => {
+      if (!text) return "";
+      // Matches (a), (A), a), A), A., a. at the start of the string
+      return text.replace(/^\s*[\(\[]?([a-dA-D])[\)\].:]\s*/, "").trim();
+    };
+
     console.log(`[Gemini] Successfully parsed ${questions.length} questions`);
 
     res.json({
       success: true,
-      questions: questions.map((q, idx) => ({
-        ...q,
-        id: idx + 1,
-        type: "Multiple Choice Question",
-        marks: 4, 
-        negative: -1,
-        displayOptions: (q.options || ["A", "B", "C", "D"]).map((opt, i) => ({
-          id: i + 1,
-          text: opt,
-          image: "",
-          isCorrect: q.correctAnswer === String.fromCharCode(65 + i)
-        })),
-        solution: {
-          heading: "Full Solution",
-          text: q.solution || "Extracted via Gemini AI"
-        }
-      }))
+      questions: questions.map((q, idx) => {
+        // Clean options of duplicate markers
+        const cleanedOptions = (q.options || []).map(opt => stripOptionMarkers(opt));
+        
+        return {
+          ...q,
+          id: idx + 1,
+          questionEn: q.questionEn || "",
+          questionHi: q.questionHi || "",
+          options: cleanedOptions,
+          type: "Multiple Choice Question",
+          marks: 4, 
+          negative: -1,
+          displayOptions: cleanedOptions.map((opt, i) => ({
+            id: i + 1,
+            text: opt,
+            image: "",
+            isCorrect: q.correctAnswer === String.fromCharCode(65 + i)
+          })),
+          explanation: q.solution || "Extracted via Gemini AI"
+        };
+      })
     });
 
   } catch (error) {
