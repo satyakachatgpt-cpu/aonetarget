@@ -128,14 +128,16 @@ const TestsBulkDeleteModal: React.FC<Props> = ({
                 if (idsToDelete.length === 0) return;
 
                 const deletedCount = idsToDelete.length;
+                const testId =
+                  viewingQuestionEditor?.id || viewingQuestionEditor?._id;
+
                 await questionsAPI.bulkDelete(
                   idsToDelete.map((id) => String(id)),
+                  testId
                 );
                 invalidateCache("tests");
 
                 // Refresh questions list for the editor
-                const testId =
-                  viewingQuestionEditor?.id || viewingQuestionEditor?._id;
                 if (testId) {
                   const qs = await testsAPI.getQuestions(testId);
                   setEditorQuestions(qs);

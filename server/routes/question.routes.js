@@ -17,7 +17,7 @@ import { adminMiddleware } from '../middleware/auth.js';
 const router = express.Router();
 
 // Question Bank Routes
-router.get('/', getAllQuestions);
+router.get('/', adminMiddleware, getAllQuestions);
 router.post('/', adminMiddleware, createQuestion);
 router.put('/update-all', adminMiddleware, bulkUpdateQuestions);
 router.delete('/', adminMiddleware, deleteAllQuestions);

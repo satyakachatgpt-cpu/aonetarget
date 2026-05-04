@@ -23,22 +23,24 @@ export const questionsAPI = {
     invalidateCache('questions');
     return res;
   },
-  delete: async (id: string) => {
-    const res = await apiRequest(`${API_BASE_URL}/questions/${id}`, {
+  delete: async (id: string, testId?: string) => {
+    let url = `${API_BASE_URL}/questions/${id}`;
+    if (testId) url += `?testId=${testId}`;
+    const res = await apiRequest(url, {
       method: 'DELETE',
       headers: { ...getAdminHeaders() }
     });
     invalidateCache('questions');
     return res;
   },
-  bulkDelete: async (ids: string[]) => {
+  bulkDelete: async (ids: string[], testId?: string) => {
     const response = await fetch(`${API_BASE_URL}/questions/bulk-delete`, {
       method: 'POST',
       headers: { 
         'Content-Type': 'application/json',
         ...getAdminHeaders()
       },
-      body: JSON.stringify({ questionIds: ids })
+      body: JSON.stringify({ questionIds: ids, testId })
     });
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));

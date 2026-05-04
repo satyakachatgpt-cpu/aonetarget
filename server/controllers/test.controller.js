@@ -14,7 +14,9 @@ import { isPurchaseExpired } from '../utils/helpers.js';
 export const getAllTests = async (req, res, next) => {
   try {
     const startTimeMetric = Date.now();
-    const { courseId, seriesId, testType } = req.query;
+    const courseId = req.query.courseId ? String(req.query.courseId) : undefined;
+    const seriesId = req.query.seriesId ? String(req.query.seriesId) : undefined;
+    const testType = req.query.testType ? String(req.query.testType) : undefined;
 
     let matchConditions = [];
 
