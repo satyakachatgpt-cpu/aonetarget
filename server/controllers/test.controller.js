@@ -305,6 +305,46 @@ export const getTestById = async (req, res) => {
     
     const questions = separateQuestions.length > 0 ? separateQuestions : embeddedQuestions;
     
+    // AUTO-ASSIGN sectionId based on test sections + maxQuestions
+    const testSections = Array.isArray(test.sections) ? test.sections : [];
+    const hasValidSections = testSections.some(s => 
+      s.maxQuestions && parseInt(s.maxQuestions) > 0
+    );
+
+    if (hasValidSections && questions.some(q => !q.sectionId)) {
+      console.log('[SECTION-DEBUG] test.sections:', JSON.stringify(test.sections));
+      console.log('[SECTION-DEBUG] total questions:', questions.length);
+      console.log('[SECTION-DEBUG] hasValidSections:', hasValidSections);
+      console.log('[SECTION-DEBUG] first question sectionId before:', questions[0]?.sectionId);
+
+      let pointer = 0;
+      for (const sec of testSections) {
+        const count = parseInt(sec.maxQuestions) || 0;
+        if (count <= 0) continue;
+        for (let i = pointer; i < pointer + count && i < questions.length; i++) {
+          if (!questions[i].sectionId) {
+            questions[i] = { 
+              ...questions[i], 
+              sectionId: sec.id?.toString() 
+            };
+          }
+        }
+        pointer += count;
+      }
+
+      console.log('[SECTION-DEBUG] first question sectionId after:', questions[0]?.sectionId);
+      console.log('[SECTION-DEBUG] section counts:', 
+        test.sections?.map(sec => ({
+          name: sec.section || sec.partTitle,
+          id: sec.id,
+          maxQ: sec.maxQuestions,
+          assigned: questions.filter(q => 
+            String(q.sectionId) === String(sec.id)
+          ).length
+        }))
+      );
+    }
+    
     // Strip sensitive fields for students to prevent cheating via DevTools
     const isAdmin = req.admin || req.user?.isAdmin || req.user?.role === 'admin';
     const safeQuestions = isAdmin ? questions : questions.map(q => {

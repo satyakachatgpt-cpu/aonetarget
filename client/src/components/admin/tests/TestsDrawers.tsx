@@ -69,6 +69,55 @@ const TestsDrawers: React.FC<Props> = ({
   showBulkEditDrawer,
   setShowBulkEditDrawer,
 }) => {
+  React.useEffect(() => {
+    if (!viewingQuestionEditor || !editorQuestions || editorQuestions.length === 0) return;
+    
+    const testSections = viewingQuestionEditor?.sections || [];
+    if (!testSections || testSections.length === 0) return;
+    
+    const hasMaxQ = testSections.some((s: any) => s.maxQuestions && s.maxQuestions > 0);
+    if (!hasMaxQ) return;
+
+    const alreadyAssigned = editorQuestions.some((q: any) => q.sectionId);
+    if (alreadyAssigned) return;
+
+    let hasChanges = false;
+    let pointer = 0;
+    const assigned = [...editorQuestions];
+    
+    for (const sec of testSections) {
+      const count = parseInt(sec.maxQuestions);
+      if (!count || count <= 0) continue;
+      for (let i = pointer; i < pointer + count && i < assigned.length; i++) {
+        assigned[i] = { ...assigned[i], sectionId: sec.id?.toString() };
+        hasChanges = true;
+      }
+      pointer += count;
+    }
+
+    if (hasChanges) {
+      setEditorQuestions(assigned);
+      
+      const updates = assigned
+        .filter(q => q.sectionId)
+        .map(q => ({ 
+          id: q.id || q._id?.toString(), 
+          sectionId: q.sectionId 
+        }));
+
+      if (updates.length > 0) {
+        fetch('/api/questions/update-all', {
+          method: 'PUT',
+          headers: {
+            ...getAdminHeaders(),
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ updates })
+        }).catch(e => console.error('Failed to auto-assign sections', e));
+      }
+    }
+  }, [viewingQuestionEditor, editorQuestions, setEditorQuestions]);
+
   return (
     <>
       <AddTestDrawer
@@ -305,9 +354,15 @@ const TestsDrawers: React.FC<Props> = ({
               ? viewingAddQuestionForm
               : null
           }
-          sections={[
-            { id: "default", name: viewingQuestionEditor?.name || "Default" },
-          ]}
+          sections={
+            Array.isArray(viewingQuestionEditor?.sections) && 
+            viewingQuestionEditor.sections.length > 0
+              ? viewingQuestionEditor.sections.map((sec: any) => ({
+                  id: sec.id?.toString() || sec._id?.toString() || 'default',
+                  name: sec.partTitle || sec.section || `Section ${sec.id}`
+                }))
+              : [{ id: 'default', name: viewingQuestionEditor?.name || 'Default' }]
+          }
           testId={viewingQuestionEditor?.id || viewingQuestionEditor?._id || ""}
           onSaveAndGoToPrevious={(data) => {
             handleSaveQuestion(data).then(() => {

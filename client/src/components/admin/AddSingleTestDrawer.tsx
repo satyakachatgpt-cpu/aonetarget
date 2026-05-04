@@ -99,7 +99,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
     });
 
     const [sections, setSections] = useState([
-        { id: Date.now(), section: '', maxQuestions: -1, partTitle: '', cutoff: 0, isOptional: true, fixedTiming: false }
+        { id: Date.now(), section: '', maxQuestions: -1, partTitle: '', isOptional: true, fixedTiming: false }
     ]);
 
     const pdfInputRef = useRef<HTMLInputElement>(null);
@@ -192,7 +192,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                     negativeMarking: '',
                     termsAndConditions: ''
                 });
-                setSections([{ id: Date.now(), section: '', maxQuestions: -1, partTitle: '', cutoff: 0, isOptional: true, fixedTiming: false }]);
+                setSections([{ id: Date.now(), section: '', maxQuestions: -1, partTitle: '', isOptional: true, fixedTiming: false }]);
             }
         }
         prevOpenRef.current = isOpen;
@@ -215,7 +215,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
     };
 
     const addSection = () => {
-        setSections([...sections, { id: Date.now(), section: '', maxQuestions: -1, partTitle: '', cutoff: 0, isOptional: true, fixedTiming: false }]);
+        setSections([...sections, { id: Date.now(), section: '', maxQuestions: -1, partTitle: '', isOptional: true, fixedTiming: false }]);
     };
 
     const uiThemes: Record<string, { primary: string; secondary: string }> = {
@@ -231,8 +231,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
 
     const theme = uiThemes[formData.uiType] || uiThemes['Default'];
     
-    // Dynamic section options based on test title
-    const sectionOptions = [{ value: formData.title || 'Draft Test', label: formData.title || 'Draft Test' }];
+    
 
 
     const languages = [
@@ -479,7 +478,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                                                     <th className="w-[160px] px-3 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-left">Test Section<span className="text-red-500 ml-0.5">*</span></th>
                                                     <th className="w-[90px] px-3 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Max Questions</th>
                                                     <th className="px-3 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-left">Part Title</th>
-                                                    <th className="w-[90px] px-3 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Cutoff Score</th>
+
                                                     <th className="w-[80px] px-2 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Is Optional</th>
                                                     <th className="w-[90px] px-2 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Fixed Timing</th>
                                                 </tr>
@@ -488,12 +487,12 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                                                 {sections.map((sec, idx) => (
                                                     <tr key={sec.id} className="hover:bg-gray-50/20 transition-colors">
                                                         <td className="px-2 py-3 w-[160px]">
-                                                            <CustomDropdown
-                                                                options={sectionOptions}
+                                                            <input
+                                                                type="text"
                                                                 value={sec.section}
-                                                                accentColor="#1a202c"
-                                                                onChange={(val: string) => updateSection(sec.id, 'section', val)}
-                                                                placeholder="Select Test Section"
+                                                                placeholder="e.g. Math, Physics"
+                                                                onChange={(e) => updateSection(sec.id, 'section', e.target.value)}
+                                                                className="w-full h-10 px-3 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-700 outline-none focus:border-gray-400 transition-all shadow-sm"
                                                             />
                                                         </td>
                                                         <td className="px-2 py-3 w-[90px]">
@@ -514,15 +513,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                                                                 className="w-full h-10 px-3 border border-gray-200 rounded-xl text-[13px] font-medium text-gray-700 outline-none focus:border-gray-400 transition-all shadow-sm"
                                                             />
                                                         </td>
-                                                        <td className="px-2 py-3 w-[90px]">
-                                                            <input
-                                                                type="number"
-                                                                placeholder="0"
-                                                                value={sec.cutoff}
-                                                                onChange={(e) => updateSection(sec.id, 'cutoff', e.target.value)}
-                                                                className="w-full h-10 px-2 border border-gray-200 rounded-xl text-[13px] font-bold text-gray-700 outline-none text-center focus:border-gray-400 transition-all shadow-sm"
-                                                            />
-                                                        </td>
+
                                                         <td className="px-2 py-3 text-center">
                                                             <div className="flex justify-center">
                                                                 <input

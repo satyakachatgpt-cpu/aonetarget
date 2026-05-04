@@ -339,7 +339,7 @@ const TestTaking: React.FC = () => {
   if (submitted && result) {
     const pctColor = result.percentage >= 70 ? 'text-green-600' : result.percentage >= 40 ? 'text-amber-600' : 'text-[#D32F2F]';
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="bg-gray-50 pb-8">
         <header className="bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white py-4 px-4">
           <div className="flex items-center gap-3">
             <button
@@ -416,7 +416,7 @@ const TestTaking: React.FC = () => {
           {questions.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
               <h3 className="font-bold text-sm mb-3 text-gray-700">Answer Review</h3>
-              <div className="space-y-3 max-h-96 overflow-y-auto">
+              <div className="space-y-3">
                 {questions.map((q, idx) => {
                   const studentAns = answers[q.id];
                   const isCorrect = studentAns === q.correctAnswer;
@@ -545,7 +545,7 @@ const TestTaking: React.FC = () => {
   const isSectionEnabled = (test?.enableSectionSelector === true || test?.enableSectionSelector === 'true') && Array.isArray(test?.sections) && test.sections.length > 0;
   
   const displayQuestions = isSectionEnabled && activeSectionId
-    ? questions.filter((q: any) => q.sectionId?.toString() === activeSectionId)
+    ? questions.filter((q: any) => String(q.sectionId) === String(activeSectionId))
     : questions;
 
   const currentQuestion = displayQuestions[currentIndex];
@@ -637,23 +637,33 @@ const TestTaking: React.FC = () => {
 
       {isSectionEnabled && (
         <div className="bg-white border-b border-gray-100 overflow-x-auto hide-scrollbar flex items-center px-4 py-2 shadow-sm sticky top-[60px] z-20">
-          {test.sections.map((sec: any) => (
-            <button
-              key={sec.id}
-              onClick={() => {
-                setActiveSectionId(sec.id.toString());
-                setCurrentIndex(0);
-                setShowPalette(false);
-              }}
-              className={`whitespace-nowrap px-4 py-2 text-[13px] font-bold rounded-lg transition-all mx-1 ${
-                activeSectionId === sec.id.toString()
-                  ? 'bg-[#1A237E]/10 text-[#1A237E]'
-                  : 'text-gray-500 hover:bg-gray-50'
-              }`}
-            >
-              {sec.partTitle || sec.section || `Section`}
-            </button>
-          ))}
+          {test.sections.map((sec: any) => {
+            const secQCount = questions.filter(
+              (q: any) => String(q.sectionId) === String(sec.id)
+            ).length;
+            return (
+              <button
+                key={sec.id}
+                onClick={() => {
+                  setActiveSectionId(sec.id.toString());
+                  setCurrentIndex(0);
+                  setShowPalette(false);
+                }}
+                className={`whitespace-nowrap px-4 py-2 text-[13px] font-bold rounded-lg transition-all mx-1 ${
+                  activeSectionId === sec.id.toString()
+                    ? 'bg-[#1A237E]/10 text-[#1A237E]'
+                    : 'text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                {sec.partTitle || sec.section || 'Section'}
+                {secQCount > 0 && (
+                  <span className="ml-1.5 text-[11px] opacity-70">
+                    ({secQCount})
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
 
