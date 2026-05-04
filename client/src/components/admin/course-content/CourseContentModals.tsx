@@ -35,6 +35,7 @@ interface CourseContentModalsProps {
   youtubeZoomPdf2Ref: React.RefObject<HTMLInputElement>;
   youtubeZoomStudyMaterialRef: React.RefObject<HTMLInputElement>;
   handleYoutubeZoomSubmit: () => void;
+  resetYoutubeZoomForm: () => void;
   showYoutubeZoomSEO: boolean;
   setShowYoutubeZoomSEO: (show: boolean) => void;
   getAuthHeaders: () => any;
@@ -246,7 +247,8 @@ const CourseContentModals: React.FC<CourseContentModalsProps> = (props) => {
     showImageDrawer,
     setShowImageDrawer,
     showDocumentModal,
-    setShowDocumentModal
+    setShowDocumentModal,
+    resetYoutubeZoomForm
   } = props;
 
   return (
@@ -283,6 +285,7 @@ const CourseContentModals: React.FC<CourseContentModalsProps> = (props) => {
         showYoutubeZoomSEO={showYoutubeZoomSEO}
         setShowYoutubeZoomSEO={setShowYoutubeZoomSEO}
         handleYoutubeZoomSubmit={handleYoutubeZoomSubmit}
+        resetYoutubeZoomForm={resetYoutubeZoomForm}
         getAuthHeaders={getAuthHeaders}
         showToast={showToast}
       />

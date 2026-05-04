@@ -123,6 +123,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
   const resetYoutubeZoomForm = () => {
     setYoutubeZoomForm(initialYoutubeZoomForm);
+    setEditingYoutubeZoom(null);
   };
 
   const resetLiveStreamForm = () => {
@@ -546,7 +547,8 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       chatModeration: video.chatModeration ?? false,
       platform: video.platform || 'YouTube Live',
       streamStatus: video.streamStatus || video.status || 'upcoming',
-      endTime: video.endTime || video.endDateTime || ''
+      endTime: video.endTime || video.endDateTime || '',
+      recordedLink: video.recordedLink || ''
     });
     setShowYoutubeZoomModal(true);
   };
@@ -1034,6 +1036,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         setShowVideoModal={setShowVideoModal}
         setShowDocumentDrawer={setShowDocumentDrawer}
         setShowYoutubeZoomModal={setShowYoutubeZoomModal}
+        resetYoutubeZoomForm={resetYoutubeZoomForm}
         fetchTestSeriesList={fetchTestSeriesList}
         setShowTestDrawer={setShowTestDrawer}
         setShowDocumentModal={setShowDocumentModal}
@@ -1068,7 +1071,8 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
           handleYoutubeZoomImageUpload, handleYoutubeZoomSubmit, handleWebinarImageUpload,
           handleWebinarFileUpload, handleWebinarSubmit, fetchTestsBySeries, handleFilesUpload,
           handleImportAction, handleFolderSubmit, uploadFolderImage, handleVideoSubmit,
-          handleNoteSubmit, handleTestSubmit, handleQuestionSubmit
+          handleNoteSubmit, handleTestSubmit, handleQuestionSubmit,
+          resetYoutubeZoomForm
         }}
         context={{
           courses, testSeriesList, isTestSeriesLoading, omrTests, isOMRTestsLoading,

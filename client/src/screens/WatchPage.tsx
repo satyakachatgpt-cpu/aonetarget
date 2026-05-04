@@ -23,8 +23,25 @@ const WatchPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isAdmin = (location.state as any)?.fromAdmin || new URLSearchParams(location.search).get('admin') === 'true';
-  const returnTo = (location.state as any)?.returnTo;
+  const searchParams = new URLSearchParams(location.search);
+  
+  // Context-only detection for navigation/UI context
+  const isAdminPreview = 
+    (location.state as any)?.fromAdmin || 
+    (location.state as any)?.adminPreview ||
+    searchParams.get('admin') === 'true' || 
+    searchParams.get('adminPreview') === '1';
+
+  // Role detection for internal features (e.g. disabling auto-rotation)
+  const isUserAdmin = localStorage.getItem('isAdminAuthenticated') === 'true';
+
+  let returnTo = (location.state as any)?.returnTo;
+  
+  // SANITIZE returnTo: Allow only internal routes starting with "/", reject HashRouter artifacts or full URLs
+  if (typeof returnTo !== 'string' || !returnTo.startsWith('/') || returnTo.includes('#') || returnTo.includes('://')) {
+    // Fallback to Admin Panel only if explicitly in Preview mode
+    returnTo = isAdminPreview ? '/admin/course-content' : null;
+  }
 
   const [isLandscape, setIsLandscape] = useState(window.innerWidth > window.innerHeight);
   const [playlist, setPlaylist] = useState<any[]>([]);
@@ -119,7 +136,7 @@ const WatchPage: React.FC = () => {
       }
       try {
         setLoading(true);
-        const headers = isAdmin ? { ...getAdminHeaders() } : { ...getAuthHeaders() };
+        const headers = (isAdminPreview || isUserAdmin) ? { ...getAdminHeaders() } : { ...getAuthHeaders() };
         const response = await fetch(`/api/courses/${batchId}/videos`, {
           headers
         });
@@ -152,7 +169,7 @@ const WatchPage: React.FC = () => {
 
   const markVideoComplete = async (vId: string) => {
     const sId = student?.id || student?._id;
-    if (!vId || !sId || !batchId || isAdmin) return;
+    if (!vId || !sId || !batchId || isAdminPreview || isUserAdmin) return;
 
     try {
       if (process.env.NODE_ENV !== 'production') {
@@ -207,7 +224,21 @@ const WatchPage: React.FC = () => {
     );
   }
 
-  const isUpcomingStream = currentVideo.contentType === 'live_stream' && computeEffectiveStatus(currentVideo) !== 'live';
+  const streamStatus = computeEffectiveStatus(currentVideo);
+  const isUpcomingStream = currentVideo.contentType === 'live_stream' && streamStatus === 'upcoming';
+  const isEndedStream = currentVideo.contentType === 'live_stream' && streamStatus === 'ended';
+
+  const replaySource = currentVideo.recordedLink || 
+                      currentVideo.recordingUrl || 
+                      currentVideo.replayUrl || 
+                      currentVideo.playbackUrl || 
+                      currentVideo.videoUrl || 
+                      currentVideo.url || 
+                      currentVideo.youtubeUrl || 
+                      currentVideo.liveUrl || 
+                      currentVideo.streamUrl;
+
+  const isEndedWithoutRecording = isEndedStream && !replaySource;
 
   if (isUpcomingStream) {
     return (
@@ -234,6 +265,31 @@ const WatchPage: React.FC = () => {
     );
   }
 
+  if (isEndedWithoutRecording) {
+    return (
+      <div className="h-[100dvh] bg-[#000000] flex flex-col items-center justify-center overflow-hidden font-outfit relative">
+        <div
+          onPointerDown={(e) => {
+            e.preventDefault(); e.stopPropagation();
+            const state = window.history.state;
+            if (state && state.idx > 0) navigate(-1);
+            else navigate('/live-classes', { replace: true });
+          }}
+          className="fixed top-0 left-0 w-24 h-24 z-[9999999] cursor-pointer group flex items-start justify-start p-6 active:scale-90 transition-all"
+        >
+          <div className="w-10 h-10 bg-white/10 hover:bg-red-600/80 backdrop-blur-3xl border border-white/20 rounded-full text-white flex items-center justify-center shadow-2xl transition-all duration-200">
+            <span className="material-symbols-rounded text-2xl font-bold">close</span>
+          </div>
+        </div>
+        <div className="relative w-24 h-24 mb-6 bg-white/5 rounded-full flex items-center justify-center">
+          <span className="material-symbols-rounded text-5xl text-white/40">pantry</span>
+        </div>
+        <h2 className="text-white text-xl font-black uppercase tracking-widest mb-2 text-center max-w-sm">Recording not available yet</h2>
+        <p className="text-white/40 text-xs font-bold uppercase tracking-[0.2em] text-center max-w-xs">This live session has ended. Replay will appear here when uploaded.</p>
+      </div>
+    );
+  }
+
   const isLive = currentVideo.contentType === 'live_stream' && computeEffectiveStatus(currentVideo) === 'live';
   
   // STABLE VIDEO ID FOR PROGRESS SYNC
@@ -242,7 +298,7 @@ const WatchPage: React.FC = () => {
   return (
     <StudentVideoPlayer
       videoId={stableVideoId}
-      src={toYouTubeEmbed(currentVideo.recordedLink || currentVideo.youtubeUrl || currentVideo.videoUrl || currentVideo.url || currentVideo.embedUrl || '')}
+      src={toYouTubeEmbed(replaySource || '')}
       title={currentVideo.title}
       isLive={isLive}
       chatMessages={liveMessages}
@@ -251,7 +307,7 @@ const WatchPage: React.FC = () => {
       onClose={() => {
         if (returnTo) {
           navigate(returnTo);
-        } else if (isAdmin) {
+        } else if (isAdminPreview) {
           navigate('/admin/course-content');
         } else {
           const state = window.history.state;
@@ -262,7 +318,7 @@ const WatchPage: React.FC = () => {
       onMarkComplete={() => markVideoComplete(stableVideoId)}
       courseId={batchId || (location.state as any)?.courseId}
       courseTitle={currentVideo.courseTitle || (location.state as any)?.courseTitle}
-      isAdmin={isAdmin}
+      isAdmin={isUserAdmin}
       pdf1={currentVideo.pdf1 || currentVideo.pdf1Url || currentVideo.pdfUrl}
       pdf2={currentVideo.pdf2 || currentVideo.pdf2Url}
       studyMaterial={currentVideo.studyMaterial || currentVideo.studyMaterialUrl || currentVideo.documentUrl || currentVideo.material}

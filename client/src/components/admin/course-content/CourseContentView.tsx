@@ -42,6 +42,7 @@ interface CourseContentViewProps {
   showFullDesc: boolean;
   setShowFullDesc: (show: boolean) => void;
   handleEditCourseClick: () => void;
+  resetYoutubeZoomForm: () => void;
 }
 
 const CourseContentView: React.FC<CourseContentViewProps> = ({
@@ -79,7 +80,8 @@ const CourseContentView: React.FC<CourseContentViewProps> = ({
   setShowImportModal,
   showFullDesc,
   setShowFullDesc,
-  handleEditCourseClick
+  handleEditCourseClick,
+  resetYoutubeZoomForm
 }) => {
   return (
     <div className="space-y-0 animate-fade-in pb-10 min-h-screen bg-[#f5f6f8]">
@@ -124,7 +126,7 @@ const CourseContentView: React.FC<CourseContentViewProps> = ({
                   { label: 'Folder', icon: 'folder', onClick: () => { setEditingFolder(null); setShowFolderModal(true); } },
                   { label: 'Video', icon: 'play_circle', onClick: () => { resetVideoForm(); setShowVideoModal(true); } },
                   { label: 'PDF', icon: 'description', onClick: () => setShowDocumentDrawer(true) },
-                  { label: 'Live stream', icon: 'videocam', onClick: () => setShowYoutubeZoomModal(true) },
+                  { label: 'Live stream', icon: 'videocam', onClick: () => { resetYoutubeZoomForm(); setShowYoutubeZoomModal(true); } },
                   { label: 'Test', icon: 'assignment', onClick: () => { fetchTestSeriesList(); setShowTestDrawer(true); } },
                   { label: 'Document', icon: 'article', onClick: () => setShowDocumentModal(true) },
                   { label: 'Import Content', icon: 'download', onClick: () => setShowImportModal(true) }
