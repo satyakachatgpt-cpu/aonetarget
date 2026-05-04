@@ -72,10 +72,10 @@ export const useTestsQuestionActions = ({
     if (!window.confirm("Are you sure you want to delete this question?"))
       return;
     try {
-      await questionsAPI.delete(String(id));
+      const editorId = viewingQuestionEditor?.id || viewingQuestionEditor?._id;
+      await questionsAPI.delete(String(id), editorId);
       invalidateCache("tests");
       showToast("Question deleted successfully", "success");
-      const editorId = viewingQuestionEditor?.id || viewingQuestionEditor?._id;
       if (editorId) {
         const qs = await testsAPI.getQuestions(editorId);
         setEditorQuestions(qs);

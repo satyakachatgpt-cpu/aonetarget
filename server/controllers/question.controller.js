@@ -125,6 +125,7 @@ export const updateQuestion = async (req, res) => {
 export const deleteQuestion = async (req, res) => {
   try {
     const id = req.params.id;
+    const testId = req.query.testId || req.body.testId;
 
     // Build flexible query to match by id field, _id string, or ObjectId
     const orConditions = [
@@ -136,12 +137,24 @@ export const deleteQuestion = async (req, res) => {
     }
     orConditions.push({ _id: id });
 
+    let mainQuery = { $or: orConditions };
+    let testQuery = { questions: { $type: 'array' } };
+
+    if (testId) {
+      mainQuery = { $and: [{ testId: { $in: [testId, String(testId), Number(testId)] } }, mainQuery] };
+      const testIdMatches = [{ id: testId }, { id: String(testId) }, { id: Number(testId) }, { _id: testId }, { _id: String(testId) }];
+      if (mongoose.Types.ObjectId.isValid(testId)) {
+          testIdMatches.push({ _id: new mongoose.Types.ObjectId(testId) });
+      }
+      testQuery = { $and: [{ questions: { $type: 'array' } }, { $or: testIdMatches }] };
+    }
+
     // Deleting from global questions collection
-    const mainResult = await db.collection('questions').deleteMany({ $or: orConditions });
+    const mainResult = await db.collection('questions').deleteMany(mainQuery);
 
     // Clean up embedded questions in any test - only if questions field is an array
     const testResult = await db.collection('tests').updateMany(
-      { questions: { $type: 'array' } },
+      testQuery,
       {
         $pull: {
           questions: {
@@ -199,7 +212,8 @@ export const deleteQuestionsByTest = async (req, res) => {
 
 export const bulkDeleteQuestions = async (req, res) => {
   try {
-    const { ids, questionIds } = req.body;
+    const { ids, questionIds, testId: bodyTestId } = req.body;
+    const testId = bodyTestId || req.query.testId;
     const finalIds = ids || questionIds;
 
     if (!Array.isArray(finalIds) || finalIds.length === 0) {
@@ -228,7 +242,17 @@ export const bulkDeleteQuestions = async (req, res) => {
       return res.status(400).json({ error: 'Invalid question IDs provided' });
     }
 
-    const qFilter = { $or: orConditions };
+    let qFilter = { $or: orConditions };
+    let testFilter = { questions: { $type: 'array' } };
+
+    if (testId) {
+      qFilter = { $and: [{ testId: { $in: [testId, String(testId), Number(testId)] } }, qFilter] };
+      const testIdMatches = [{ id: testId }, { id: String(testId) }, { id: Number(testId) }, { _id: testId }, { _id: String(testId) }];
+      if (mongoose.Types.ObjectId.isValid(testId)) {
+          testIdMatches.push({ _id: new mongoose.Types.ObjectId(testId) });
+      }
+      testFilter = { $and: [{ questions: { $type: 'array' } }, { $or: testIdMatches }] };
+    }
 
     // 1. Delete from global questions collection
     const mainResult = await db.collection('questions').deleteMany(qFilter);
@@ -238,7 +262,7 @@ export const bulkDeleteQuestions = async (req, res) => {
     let pullCount = 0;
     try {
       const testResult = await db.collection('tests').updateMany(
-        { questions: { $type: 'array' } },
+        testFilter,
         {
           $pull: {
             questions: { $or: orConditions }
