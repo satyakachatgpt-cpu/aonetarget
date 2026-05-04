@@ -339,7 +339,7 @@ const TestTaking: React.FC = () => {
   if (submitted && result) {
     const pctColor = result.percentage >= 70 ? 'text-green-600' : result.percentage >= 40 ? 'text-amber-600' : 'text-[#D32F2F]';
     return (
-      <div className="min-h-screen bg-gray-50">
+      <div className="bg-gray-50 pb-8">
         <header className="bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white py-4 px-4">
           <div className="flex items-center gap-3">
             <button
@@ -416,7 +416,7 @@ const TestTaking: React.FC = () => {
           {questions.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
               <h3 className="font-bold text-sm mb-3 text-gray-700">Answer Review</h3>
-              <div className="space-y-3 max-h-96 overflow-y-auto">
+              <div className="space-y-3">
                 {questions.map((q, idx) => {
                   const studentAns = answers[q.id];
                   const isCorrect = studentAns === q.correctAnswer;
