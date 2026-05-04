@@ -90,6 +90,7 @@ export const useLiveContentSubmit = ({
         pdf1: youtubeZoomForm.pdf1,
         pdf2: youtubeZoomForm.pdf2,
         studyMaterial: youtubeZoomForm.studyMaterial,
+        recordedLink: (youtubeZoomForm.recordedLink || '').trim(),
         courseId,
         folderId,
       };

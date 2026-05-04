@@ -19,6 +19,7 @@ interface YoutubeZoomDrawerProps {
   handleYoutubeZoomSubmit: () => void;
   getAuthHeaders: () => any;
   showToast: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+  resetYoutubeZoomForm: () => void;
 }
 
 const YoutubeZoomDrawer: React.FC<YoutubeZoomDrawerProps> = ({
@@ -38,7 +39,8 @@ const YoutubeZoomDrawer: React.FC<YoutubeZoomDrawerProps> = ({
   setShowYoutubeZoomSEO,
   handleYoutubeZoomSubmit,
   getAuthHeaders,
-  showToast
+  showToast,
+  resetYoutubeZoomForm
 }) => {
   if (!showYoutubeZoomModal) return null;
 
@@ -46,14 +48,14 @@ const YoutubeZoomDrawer: React.FC<YoutubeZoomDrawerProps> = ({
     <div className="fixed inset-0 z-[99999] flex justify-end">
       <div
         className="absolute inset-0 bg-black/50 animate-fade-in transition-opacity"
-        onClick={() => { setShowYoutubeZoomModal(false); }}
+        onClick={() => { resetYoutubeZoomForm(); setShowYoutubeZoomModal(false); }}
       />
       <div className="relative w-[500px] bg-white h-full shadow-2xl flex flex-col animate-slide-in-right overflow-hidden transition-all duration-300">
         {/* Header */}
         <div className="flex justify-between items-center px-8 py-4 border-b border-gray-100 shrink-0">
           <h3 className="text-[20px] font-bold text-[#1e1e1e] tracking-tight">{editingYoutubeZoom ? 'Edit Live stream' : 'Add Live stream'}</h3>
           <button
-            onClick={() => { setShowYoutubeZoomModal(false); }}
+            onClick={() => { resetYoutubeZoomForm(); setShowYoutubeZoomModal(false); }}
             className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 text-gray-400 rounded-full transition-all"
           >
             <span className="material-symbols-outlined text-[24px]">close</span>
@@ -140,6 +142,18 @@ const YoutubeZoomDrawer: React.FC<YoutubeZoomDrawerProps> = ({
                     onChange={(e) => setYoutubeZoomForm({ ...youtubeZoomForm, link: e.target.value })}
                     className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all shadow-sm"
                     placeholder="https://..."
+                  />
+                </div>
+
+                {/* Recording / Replay URL */}
+                <div className="space-y-2">
+                  <label className="block text-[13px] font-bold text-gray-600 tracking-tight text-blue-600">Recording / Replay URL (Optional)</label>
+                  <input
+                    type="text"
+                    value={youtubeZoomForm.recordedLink || ''}
+                    onChange={(e) => setYoutubeZoomForm({ ...youtubeZoomForm, recordedLink: e.target.value })}
+                    className="w-full h-[54px] px-5 bg-white border border-blue-100 rounded-[12px] text-[15px] font-medium outline-none focus:border-blue-400 transition-all shadow-sm"
+                    placeholder="Paste YouTube replay or recorded video URL"
                   />
                 </div>
 

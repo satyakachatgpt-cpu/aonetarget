@@ -119,6 +119,7 @@ export interface CourseContentModalRegistryProps {
     handleNoteSubmit: (data: any) => void;
     handleTestSubmit: (data: any) => void;
     handleQuestionSubmit: (data: any) => void;
+    resetYoutubeZoomForm: () => void;
   };
   context: {
     courses: any[];
@@ -181,6 +182,7 @@ const CourseContentModalRegistry: React.FC<CourseContentModalRegistryProps> = ({
       youtubeZoomPdf2Ref={refs.youtubeZoomPdf2Ref}
       youtubeZoomStudyMaterialRef={refs.youtubeZoomStudyMaterialRef}
       handleYoutubeZoomSubmit={handlers.handleYoutubeZoomSubmit}
+      resetYoutubeZoomForm={handlers.resetYoutubeZoomForm}
       showYoutubeZoomSEO={modalState.showYoutubeZoomSEO}
       setShowYoutubeZoomSEO={modalSetters.setShowYoutubeZoomSEO}
       getAuthHeaders={context.getAuthHeaders}

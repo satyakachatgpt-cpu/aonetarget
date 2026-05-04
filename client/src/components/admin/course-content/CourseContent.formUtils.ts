@@ -21,7 +21,8 @@ export const initialYoutubeZoomForm: YoutubeZoomForm = {
   chatModeration: false,
   platform: 'YouTube Live',
   streamStatus: 'upcoming',
-  endTime: ''
+  endTime: '',
+  recordedLink: ''
 };
 
 export const initialLiveStreamForm = {

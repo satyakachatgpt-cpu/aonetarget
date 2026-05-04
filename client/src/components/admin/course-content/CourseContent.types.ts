@@ -152,7 +152,9 @@ export interface YoutubeZoomForm {
   platform: string;
   streamStatus: string;
   endTime?: string;
+  recordedLink?: string;
 }
+
 
 export interface WebinarForm {
   title: string;

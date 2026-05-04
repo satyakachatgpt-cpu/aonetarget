@@ -41,7 +41,7 @@ const ContentItemCard: React.FC<ContentItemCardProps> = ({
   openContentActionMenuId,
   handlers,
 }) => {
-  const isVideo = item.type === 'video' || item.contentType === 'video' || item.contentType === 'recorded' || item.streamStatus === 'recorded';
+  const isVideo = item.type === 'video' || item.contentType === 'video' || item.type === 'live' || item.contentType === 'live_stream' || (item.videoType && (item.videoType === 'youtube_live' || item.videoType === 'youtube_zoom')) || item.contentType === 'recorded' || item.streamStatus === 'recorded';
   const isNote = item.type === 'note' || item.contentType === 'note' || item.type === 'document' || item.contentType === 'document';
   const isTest = item.type === 'test' || item.contentType === 'test';
   const itemId = normalizeId(item._id || item.id);
@@ -65,6 +65,10 @@ const ContentItemCard: React.FC<ContentItemCardProps> = ({
   const isActuallyEnded = currentLiveStatus === 'ended';
   const isActuallyUpcoming = currentLiveStatus === 'upcoming';
 
+  const hasRecordedLink = Boolean(item.recordedLink || item.recordingUrl || item.replayUrl || item.playbackUrl || item.url);
+  const isRecordedLive = isLiveStream && (isActuallyEnded || item.streamStatus === 'recorded') && hasRecordedLink;
+  const isEndedWithoutRecording = isLiveStream && isActuallyEnded && !hasRecordedLink;
+
   return (
     <div
       onClick={() => {
@@ -74,10 +78,11 @@ const ContentItemCard: React.FC<ContentItemCardProps> = ({
           if (link) {
             const isYoutube = link.includes('youtube.com') || link.includes('youtu.be');
             if (isYoutube && courseId) {
-              handlers.onNavigate(`/watch/${courseId}/${itemId}`, {
+              handlers.onNavigate(`/watch/${courseId}/${itemId}?adminPreview=1`, {
                 state: {
                   fromAdmin: true,
-                  returnTo: window.location.pathname + window.location.search + window.location.hash
+                  adminPreview: true,
+                  returnTo: "/admin/course-content"
                 }
               });
             } else {
@@ -87,10 +92,11 @@ const ContentItemCard: React.FC<ContentItemCardProps> = ({
           else handlers.onShowToast('Meeting link not available', 'error');
         } else if (isVideo) {
           if (courseId) {
-            handlers.onNavigate(`/watch/${courseId}/${itemId}`, {
+            handlers.onNavigate(`/watch/${courseId}/${itemId}?adminPreview=1`, {
               state: {
                 fromAdmin: true,
-                returnTo: window.location.pathname + window.location.search + window.location.hash
+                adminPreview: true,
+                returnTo: "/admin/course-content"
               }
             });
           }
@@ -129,11 +135,11 @@ const ContentItemCard: React.FC<ContentItemCardProps> = ({
         ) : (
           <span className={`material-symbols-outlined text-[28px] ${isNote ? 'text-[#f97316]' :
             isTest ? 'text-[#22c55e]' :
-              isLiveStream ? 'text-[#d946ef]' : 'text-[#3b82f6]'
+              isLiveStream ? (isRecordedLive ? 'text-[#3b82f6]' : 'text-[#d946ef]') : 'text-[#3b82f6]'
             }`}>
             {isNote ? 'description' :
               isTest ? 'assignment' :
-                isLiveStream ? 'sensors' : 'play_circle'}
+                isLiveStream ? (isRecordedLive ? 'play_circle' : 'sensors') : 'play_circle'}
           </span>
         )}
         {isActuallyLive && (
@@ -182,7 +188,7 @@ const ContentItemCard: React.FC<ContentItemCardProps> = ({
         </div>
         <div className="flex items-center gap-2 mt-2.5">
           <div className="px-3 py-0.5 rounded-full text-[10px] font-bold text-gray-500 bg-gray-100 w-fit uppercase tracking-wider">
-            {isLiveStream ? 'Live stream' : isNote ? 'PDF' : isTest ? 'Test' : isVideo ? 'Video' : 'Content'}
+            {isRecordedLive ? 'Recorded Video' : isEndedWithoutRecording ? 'Live Ended' : isLiveStream ? 'Live stream' : isNote ? 'PDF' : isTest ? 'Test' : isVideo ? 'Video' : 'Content'}
           </div>
           {(item.pdf1 || item.pdf1Url || item.pdfUrl) && (
             <button 

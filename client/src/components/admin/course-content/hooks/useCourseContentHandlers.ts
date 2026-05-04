@@ -126,7 +126,10 @@ export const useCourseContentHandlers = ({
     onEdit: (item: any, isFolder: boolean, isVideo: boolean, isNote: boolean, isTest: boolean, isLiveStream: boolean) => {
       if (isFolder) handleEditFolder(item);
       else if (isVideo) {
-        if (isLiveStream || item.streamStatus === 'recorded' || item.contentType === 'recorded' || item.pdf1 || item.pdf2 || item.studyMaterial) {
+        const isLiveStreamItem = item.type === 'live' || item.contentType === 'live_stream' || (item.videoType && (item.videoType === 'youtube_live' || item.videoType === 'youtube_zoom'));
+        if (isLiveStreamItem) {
+          handleEditYoutubeZoom(item);
+        } else if (item.streamStatus === 'recorded' || item.contentType === 'recorded' || item.pdf1 || item.pdf2 || item.studyMaterial) {
           handleEditYoutubeZoom(item);
         } else {
           handleEditVideo(item);
