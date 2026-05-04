@@ -7,8 +7,8 @@ const { ObjectId } = mongoose.Types;
 export const getAllQuestions = async (req, res) => {
   try {
     const filter = {};
-    if (req.query.testId) filter.testId = req.query.testId;
-    if (req.query.courseId) filter.courseId = req.query.courseId;
+    if (req.query.testId) filter.testId = String(req.query.testId);
+    if (req.query.courseId) filter.courseId = String(req.query.courseId);
     const questions = await db.collection('questions').find(filter).sort({ orderIndex: 1, id: 1 }).toArray();
     res.json(questions);
   } catch (error) {
