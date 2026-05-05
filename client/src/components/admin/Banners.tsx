@@ -214,9 +214,14 @@ const Banners: React.FC<Props> = ({ showToast }) => {
 
     if (oldIndex === -1 || newIndex === -1) return;
 
-    const newOrderedBanners = arrayMove(banners, oldIndex, newIndex);
+    const rearranged = arrayMove(banners, oldIndex, newIndex);
     
-    // Optimistic Update
+    // Optimistic Update with Order Sync
+    const newOrderedBanners = rearranged.map((banner, index) => ({
+      ...banner,
+      order: index + 1
+    }));
+    
     setBanners(newOrderedBanners);
     setIsReordering(true);
 

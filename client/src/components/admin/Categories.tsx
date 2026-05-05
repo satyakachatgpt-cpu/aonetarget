@@ -440,7 +440,13 @@ const Categories: React.FC<Props> = ({ showToast }) => {
       if (oldIndex === -1 || newIndex === -1) return;
 
       const previousOrder = [...categories];
-      const newOrder = arrayMove(categories, oldIndex, newIndex);
+      const rearranged = arrayMove(categories, oldIndex, newIndex);
+      
+      // Optimistic Update with Order Sync
+      const newOrder = rearranged.map((item, index) => ({
+        ...item,
+        order: index + 1
+      }));
       
       setCategories(newOrder);
       setIsReordering(true);
@@ -463,7 +469,13 @@ const Categories: React.FC<Props> = ({ showToast }) => {
       if (oldIndex === -1 || newIndex === -1) return;
 
       const previousOrder = [...subcategories];
-      const newOrder = arrayMove(subcategories, oldIndex, newIndex);
+      const rearranged = arrayMove(subcategories, oldIndex, newIndex);
+      
+      // Optimistic Update with Order Sync
+      const newOrder = rearranged.map((item, index) => ({
+        ...item,
+        order: index + 1
+      }));
       
       setSubcategories(newOrder);
       setIsReordering(true);

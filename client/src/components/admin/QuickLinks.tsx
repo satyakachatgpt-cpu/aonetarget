@@ -253,14 +253,20 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
         if (!over || active.id === over.id) return;
 
         const getStableId = (item: any) => String(item?._id || item?.id || "");
-        const oldIndex = links.findIndex((item) => getStableId(item) === active.id);
-        const newIndex = links.findIndex((item) => getStableId(item) === over.id);
+        const oldIndex = links.findIndex((l) => getStableId(l) === active.id);
+        const newIndex = links.findIndex((l) => getStableId(l) === over.id);
 
         if (oldIndex === -1 || newIndex === -1) return;
 
-        const newOrderedLinks = arrayMove(links, oldIndex, newIndex);
+        const rearranged = arrayMove(links, oldIndex, newIndex);
         
-        // Optimistic Update
+        // Optimistic Update with SortBy Sync (Descending)
+        const total = rearranged.length;
+        const newOrderedLinks = rearranged.map((item, index) => ({
+            ...item,
+            sortBy: total - index
+        }));
+
         setLinks(newOrderedLinks);
         setIsReordering(true);
 
@@ -269,9 +275,9 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
             await quickLinksAPI.reorder(orderedIds);
             showToast('Order updated successfully');
         } catch (error) {
-            console.error('Failed to reorder quick links:', error);
-            showToast('Failed to update order. Rolling back...', 'error');
-            fetchLinks(); // Rollback
+            console.error('Failed to reorder links:', error);
+            showToast('Failed to save order. Rolling back...', 'error');
+            fetchLinks();
         } finally {
             setIsReordering(false);
         }
