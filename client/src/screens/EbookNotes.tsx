@@ -42,7 +42,12 @@ const EbookNotes: React.FC = () => {
         fetch('/api/subjects').then(r => r.json())
       ]);
       setEbooks(Array.isArray(ebooksRes) ? ebooksRes.filter((e: any) => !e.isFree) : []);
-      setExamDocs(Array.isArray(docsRes) ? docsRes.filter((d: any) => d.status === 'active' && !d.isFree) : []);
+      setExamDocs(Array.isArray(docsRes) ? docsRes.filter((d: any) => d.status === 'active' && !d.isFree).sort((a: any, b: any) => {
+        const aOrder = typeof a.order === 'number' ? a.order : Infinity;
+        const bOrder = typeof b.order === 'number' ? b.order : Infinity;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return String(a._id || '').localeCompare(String(b._id || ''));
+      }) : []);
       setDbSubjects(Array.isArray(subjectsRes) ? subjectsRes : []);
     } catch (error) {
       console.error('Error fetching data:', error);

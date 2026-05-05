@@ -353,6 +353,17 @@ export const deleteBlogPost = async (req, res) => {
 export const getExamDocuments = async (req, res) => {
   try {
     const docs = await db.collection('examDocuments').find({}).toArray();
+    // Sort by order ASC, missing/invalid goes last
+    docs.sort((a, b) => {
+      const aOrder = typeof a.order === 'number' ? a.order : Infinity;
+      const bOrder = typeof b.order === 'number' ? b.order : Infinity;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (aTime !== bTime) return bTime - aTime;
+      return String(a._id || '').localeCompare(String(b._id || ''));
+    });
     res.json(docs);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch exam documents' });
@@ -386,6 +397,46 @@ export const deleteExamDocument = async (req, res) => {
     res.json({ success: true, message: 'Exam document deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete exam document' });
+  }
+};
+
+export const reorderExamDocuments = async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
+    }
+
+    const bulkOps = orderedIds.map((id, index) => {
+      let filter;
+      if (ObjectId.isValid(id)) {
+        filter = { _id: new ObjectId(id) };
+      } else {
+        filter = { id: id };
+      }
+      return {
+        updateOne: {
+          filter,
+          update: { $set: { order: index + 1 } }
+        }
+      };
+    });
+
+    const result = await db.collection('examDocuments').bulkWrite(bulkOps);
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'No Exam Documents matched the provided IDs' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Exam Documents reordered successfully',
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    console.error('Reorder Exam Documents error:', error);
+    res.status(500).json({ error: 'Failed to reorder exam documents', details: error.message });
   }
 };
 

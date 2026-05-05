@@ -36,7 +36,8 @@ import {
   getGenericPdfs,
   updateGenericPdf,
   deleteGenericPdf,
-  reorderPdfs
+  reorderPdfs,
+  reorderExamDocuments
 } from '../controllers/appContent.controller.js';
 import {
   getCourseNotes,
@@ -133,5 +134,6 @@ router.get('/exam-documents', getExamDocuments);
 router.post('/exam-documents', adminMiddleware, createExamDocument);
 router.put('/exam-documents/:id', adminMiddleware, updateExamDocument);
 router.delete('/exam-documents/:id', adminMiddleware, deleteExamDocument);
+router.patch('/exam-documents/reorder', adminMiddleware, reorderExamDocuments);
 
 export default router;

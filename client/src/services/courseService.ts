@@ -345,6 +345,66 @@ export const pdfsAPI = {
   }
 };
 
+// Exam Documents API
+export const examDocumentsAPI = {
+  getAll: async () => {
+    const response = await fetch(`${API_BASE_URL}/exam-documents`);
+    if (!response.ok) throw new Error('Failed to fetch exam documents');
+    return response.json();
+  },
+  create: async (data: any) => {
+    const response = await fetch(`${API_BASE_URL}/exam-documents`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('Failed to create exam document');
+    invalidateCache('course-content');
+    return response.json();
+  },
+  update: async (id: string, data: any) => {
+    const response = await fetch(`${API_BASE_URL}/exam-documents/${id}`, {
+      method: 'PUT',
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) throw new Error('Failed to update exam document');
+    invalidateCache('course-content');
+    return response.json();
+  },
+  delete: async (id: string) => {
+    const response = await fetch(`${API_BASE_URL}/exam-documents/${id}`, { 
+      method: 'DELETE',
+      headers: { ...getAdminHeaders() }
+    });
+    if (!response.ok) throw new Error('Failed to delete exam document');
+    invalidateCache('course-content');
+    return response.json();
+  },
+  reorder: async (orderedIds: string[]) => {
+    const response = await fetch(`${API_BASE_URL}/exam-documents/reorder`, {
+      method: 'PATCH',
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify({ orderedIds }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to reorder exam documents');
+    }
+    invalidateCache('course-content');
+    return response.json();
+  }
+};
+
 // Packages API
 export const packagesAPI = {
   getAll: async () => {

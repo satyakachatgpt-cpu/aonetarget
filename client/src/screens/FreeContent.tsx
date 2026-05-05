@@ -103,7 +103,16 @@ const FreeContent: React.FC = () => {
                 ...getItems(pdfsRes)
             ];
             setFreeNotes(combinedNotes.filter(checkFree).sort((a, b) => (Number(a.sortBy) || 0) - (Number(b.sortBy) || 0)));
-            setExamDocs(getItems(docsRes).filter(item => item.status === 'active' && checkFree(item)));
+            setExamDocs(
+                getItems(docsRes)
+                    .filter((item: any) => item.status === 'active' && checkFree(item))
+                    .sort((a: any, b: any) => {
+                        const aOrder = typeof a.order === 'number' ? a.order : Infinity;
+                        const bOrder = typeof b.order === 'number' ? b.order : Infinity;
+                        if (aOrder !== bOrder) return aOrder - bOrder;
+                        return String(a._id || '').localeCompare(String(b._id || ''));
+                    })
+            );
 
         } catch (error) {
             console.error('Error fetching free content:', error);

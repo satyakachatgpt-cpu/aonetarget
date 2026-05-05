@@ -373,7 +373,14 @@ const Home: React.FC = () => {
         const response = await fetch('/api/exam-documents');
         if (response.ok) {
           const data = await response.json();
-          const active = (Array.isArray(data) ? data : []).filter((d: any) => d.status === 'active');
+          const active = (Array.isArray(data) ? data : [])
+            .filter((d: any) => d.status === 'active')
+            .sort((a: any, b: any) => {
+              const aOrder = typeof a.order === 'number' ? a.order : Infinity;
+              const bOrder = typeof b.order === 'number' ? b.order : Infinity;
+              if (aOrder !== bOrder) return aOrder - bOrder;
+              return String(a._id || '').localeCompare(String(b._id || ''));
+            });
           setExamDocs(active);
         }
       } catch (error) {
