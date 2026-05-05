@@ -764,7 +764,7 @@ const Home: React.FC = () => {
                       navigate(`/explore/${cat.id}`);
                     }
                   }}
-                  className={`relative p-3 rounded-3xl h-[132px] flex flex-col justify-between text-white bg-gradient-to-br ${cat.gradient || CATEGORY_GRADIENTS[i % CATEGORY_GRADIENTS.length]} overflow-hidden cursor-pointer active:scale-[0.97] transition-all duration-200 shadow-elevated hover:shadow-card-hover hover:-translate-y-0.5 group`}
+                  className={`relative p-3 rounded-3xl h-[140px] flex flex-col justify-between text-white bg-gradient-to-br ${cat.gradient || CATEGORY_GRADIENTS[i % CATEGORY_GRADIENTS.length]} overflow-hidden cursor-pointer active:scale-[0.97] transition-all duration-200 shadow-elevated hover:shadow-card-hover hover:-translate-y-0.5 group`}
                 >
                   {cat.imageUrl && (
                     <img src={getImageUrl(cat.imageUrl)} alt={cat.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />

@@ -86,10 +86,18 @@ const AddSubcategoryDrawer: React.FC<AddSubcategoryDrawerProps> = ({
   };
 
   return (
-    <RightSideDrawer isOpen={isOpen} onClose={onClose}>
-      <DrawerHeader title={editingSubcategory ? 'Edit Subcategory' : 'Add Subcategory'} onClose={onClose} />
-      <DrawerBody>
-        <div className="space-y-4">
+    <RightSideDrawer isOpen={isOpen} onClose={onClose} width="520px">
+      <div className="flex justify-between items-center px-8 py-6 border-b border-gray-100 bg-white sticky top-0 z-20">
+        <h3 className="text-[20px] font-black text-[#1e293b] tracking-tight uppercase">
+          {editingSubcategory ? 'Edit Subcategory' : 'Add Subcategory'}
+        </h3>
+        <button onClick={onClose} className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 text-slate-400 hover:text-slate-600 rounded-full transition-all">
+          <span className="material-symbols-outlined text-[24px]">close</span>
+        </button>
+      </div>
+
+      <DrawerBody className="bg-gray-50/30">
+        <div className="space-y-6">
           <div>
             <FormLabel label="Title" required />
             <FormInput value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} placeholder="Subcategory Title" />
@@ -161,7 +169,7 @@ const AddSubcategoryDrawer: React.FC<AddSubcategoryDrawerProps> = ({
 
           <div>
             <FormLabel label="Gradient Picker" />
-            <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+            <div className="grid grid-cols-5 gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
               {gradientOptions.map(opt => (
                 <button
                   key={opt.value}
@@ -187,9 +195,20 @@ const AddSubcategoryDrawer: React.FC<AddSubcategoryDrawerProps> = ({
           </div>
         </div>
       </DrawerBody>
-       <DrawerFooter>
-        <PrimaryButton onClick={() => onSubmit(formData)}>Save Subcategory</PrimaryButton>
-      </DrawerFooter>
+      <div className="p-6 border-t border-gray-100 flex gap-3 bg-white">
+        <button
+          onClick={onClose}
+          className="flex-1 h-[56px] border border-gray-200 text-gray-500 text-[14px] font-black uppercase tracking-wider rounded-xl hover:bg-gray-50 transition-all"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={() => onSubmit(formData)}
+          className="flex-1 h-[56px] bg-[#1e293b] text-white text-[14px] font-black uppercase tracking-wider rounded-xl hover:bg-black transition-all shadow-lg shadow-gray-200"
+        >
+          {editingSubcategory ? 'Update Subcategory' : 'Create Subcategory'}
+        </button>
+      </div>
     </RightSideDrawer>
   );
 };

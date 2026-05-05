@@ -245,7 +245,7 @@ const NeetIitJeePage: React.FC<{
           {loading ? (
             Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="animate-pulse">
-                <div className="bg-gray-200 rounded-2xl h-32 w-full"></div>
+                <div className="bg-gray-200 rounded-2xl h-30 w-full"></div>
               </div>
             ))
           ) : categorySubcategories.map(ct => {
@@ -254,19 +254,21 @@ const NeetIitJeePage: React.FC<{
               <button
                 key={ct.id}
                 onClick={() => navigate(`/content/${ct.id}?branch=${activeBranch}&categoryId=${category.id}`)}
-                className="relative rounded-2xl p-4 text-left transition-all active:scale-95 overflow-hidden shadow-md hover:shadow-lg"
+                className="relative rounded-2xl p-4 text-left transition-all active:scale-95 overflow-hidden shadow-md hover:shadow-lg h-28 flex flex-col justify-between"
               >
                 <div className={`absolute inset-0 bg-gradient-to-br ${getVisualGradient(ct)}`}></div>
-                <div className="relative z-10">
-                  {ct.icon && (
-                    <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mb-3">
-                      <span className="material-symbols-rounded text-white text-2xl">{ct.icon}</span>
-                    </div>
-                  )}
-                  <h3 className="text-white font-bold text-sm leading-tight">{ct.title}</h3>
-                  <p className="text-white/60 text-[10px] mt-1">{count} {count === 1 ? 'Course' : 'Courses'}</p>
+                <div className="relative z-10 flex flex-col h-full justify-between">
+                  <div>
+                    {ct.icon && (
+                      <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mb-3">
+                        <span className="material-symbols-rounded text-white text-2xl">{ct.icon}</span>
+                      </div>
+                    )}
+                    <h3 className="text-white font-bold text-[13px] leading-tight line-clamp-2">{ct.title}</h3>
+                  </div>
+                  <p className="text-white/70 text-[10px] mt-2 font-medium tracking-wide uppercase">{count} {count === 1 ? 'Course' : 'Courses'}</p>
                 </div>
-                <div className="absolute top-2 right-2 w-6 h-6 bg-white/20 rounded-full flex items-center justify-center z-10">
+                <div className="absolute top-2 right-2 w-7 h-7 bg-white/20 rounded-full flex items-center justify-center z-10">
                   <span className="material-symbols-rounded text-white text-sm">arrow_forward</span>
                 </div>
               </button>
@@ -496,7 +498,7 @@ const GeneralClassPage: React.FC<{
               <button
                 key={ct.id}
                 onClick={() => navigate(`/content/${ct.id}?branch=${activeL1}&class=${activeL2}&categoryId=${category.id}`)}
-                className="relative rounded-2xl p-4 text-left transition-all active:scale-95 overflow-hidden shadow-md hover:shadow-lg"
+                className="relative rounded-2xl p-4 text-left transition-all active:scale-95 overflow-hidden shadow-md hover:shadow-lg h-30"
               >
                 <div className={`absolute inset-0 bg-gradient-to-br ${getVisualGradient(ct)}`}></div>
                 <div className="relative z-10 flex flex-col h-full justify-between">
@@ -506,10 +508,10 @@ const GeneralClassPage: React.FC<{
                         <span className="material-symbols-rounded text-white text-xl">{ct.icon}</span>
                       </div>
                     )}
-                    <h3 className="text-white font-bold text-sm leading-tight">{ct.title}</h3>
+                    <h3 className="text-white font-bold text-[13px] leading-tight line-clamp-2">{ct.title}</h3>
                   </div>
                   <div className="mt-4 flex items-center justify-between">
-                    <span className="text-white/60 text-[10px] uppercase font-black tracking-widest">{activeL1} • {activeL2}</span>
+                    <span className="text-white/70 text-[9px] uppercase font-black tracking-widest leading-none">{activeL1} • {activeL2}</span>
                     <span className="material-symbols-rounded text-white text-sm">arrow_forward</span>
                   </div>
                 </div>
