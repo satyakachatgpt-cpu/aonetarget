@@ -843,18 +843,16 @@ const CategoryPage: React.FC = () => {
   }, [categoryId, student?.id]);
 
   const categoryCourses = useMemo(() => {
+    let filtered = [];
     if (categoryId === 'mock-test') {
-      return courses.filter(c =>
+      filtered = courses.filter(c =>
         isCategoryMatch(c, { id: 'mock-test' }) ||
         normalizeSubcategoryId(c.contentType || "") === 'mock_test' ||
         (c.name || c.title || '').toLowerCase().includes('mock test') ||
         (c.name || c.title || '').toLowerCase().includes('test series')
       );
-    }
-
-    if (categoryId?.toLowerCase().includes('nursing')) {
-      const normalizedTarget = "nursing";
-      return courses.filter(course => {
+    } else if (categoryId?.toLowerCase().includes('nursing')) {
+      filtered = courses.filter(course => {
         const values = [
           course.category,
           course.categoryName,
@@ -867,9 +865,21 @@ const CategoryPage: React.FC = () => {
 
         return values.includes("nursing") || values.includes("nursing-cet");
       });
+    } else {
+      filtered = courses.filter(c => isCategoryMatch(c, category || { id: categoryId }));
     }
 
-    return courses.filter(c => isCategoryMatch(c, category || { id: categoryId }));
+    // Explicitly sort by settings.sortingOrder
+    return [...filtered].sort((a, b) => {
+      const getOrderValue = (item: any) => {
+        const n = Number(item?.settings?.sortingOrder);
+        return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+      };
+      const aVal = getOrderValue(a);
+      const bVal = getOrderValue(b);
+      if (aVal !== bVal) return aVal - bVal;
+      return String(a._id || a.id).localeCompare(String(b._id || b.id));
+    });
   }, [courses, categoryId, category]);
 
   const subcategoryCounts = useMemo(() => {

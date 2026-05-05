@@ -187,6 +187,7 @@ const SortablePackageRow = ({
         </div>
       </td>
       <td className="px-4 py-6 text-[13px] font-black text-gray-300">{startIndex + idx + 1}</td>
+      <td className="px-4 py-6 text-[13px] font-black text-navy">{pkg.settings?.sortingOrder || startIndex + idx + 1}</td>
       <td className="px-6 py-6">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 bg-gray-50 rounded-xl flex-shrink-0 flex items-center justify-center border border-gray-100 group-hover:bg-white transition-colors">
@@ -536,20 +537,34 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
+    // Guard: Disable reordering during search or filtering
+    if (searchQuery.trim() !== '' || statusFilter !== 'all') {
+      showToast('Reordering is disabled while search or filters are active', 'error');
+      return;
+    }
+
     const oldIndex = packages.findIndex((pkg) => pkg.id === active.id);
     const newIndex = packages.findIndex((pkg) => pkg.id === over.id);
 
     if (oldIndex === -1 || newIndex === -1) return;
 
     const previousOrder = [...packages];
-    const newOrder = arrayMove(packages, oldIndex, newIndex);
     
-    // Optimistic update
+    // Calculate new order and update settings.sortingOrder optimistically
+    const newOrder = arrayMove(packages, oldIndex, newIndex).map((item, index) => ({
+      ...item,
+      settings: {
+        ...(item.settings || {}),
+        sortingOrder: index + 1
+      }
+    }));
+    
     setPackages(newOrder);
     setIsReordering(true);
 
     try {
-      const orderedIds = newOrder.map(pkg => pkg.id);
+      // Use MongoDB _id for stable reordering persistence
+      const orderedIds = newOrder.map(pkg => pkg._id || pkg.id);
       await packagesAPI.reorder(orderedIds);
       showToast('Order updated successfully', 'success');
     } catch (error) {
@@ -1214,6 +1229,9 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                     </th>
                     <th className="w-[80px] px-4 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] whitespace-nowrap">
                       S. No.
+                    </th>
+                    <th className="w-[80px] px-4 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] whitespace-nowrap">
+                      Order
                     </th>
                     <th className="w-1/3 px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] whitespace-nowrap">
                       Batch Details

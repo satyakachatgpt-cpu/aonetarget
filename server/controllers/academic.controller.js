@@ -732,13 +732,34 @@ export const reorderPackages = async (req, res) => {
       bulkCourses.push({ updateOne: { filter, update } });
     }
 
-    if (bulkPackages.length > 0) await database.collection('packages').bulkWrite(bulkPackages);
-    if (bulkCourses.length > 0) await database.collection('courses').bulkWrite(bulkCourses);
+    let totalMatched = 0;
+    let totalModified = 0;
 
-    res.json({ success: true, message: 'Order updated successfully' });
+    if (bulkPackages.length > 0) {
+      const result = await database.collection('packages').bulkWrite(bulkPackages);
+      totalMatched += result.matchedCount || 0;
+      totalModified += result.modifiedCount || 0;
+    }
+    
+    if (bulkCourses.length > 0) {
+      const result = await database.collection('courses').bulkWrite(bulkCourses);
+      totalMatched += result.matchedCount || 0;
+      totalModified += result.modifiedCount || 0;
+    }
+
+    if (totalMatched === 0) {
+      return res.status(404).json({ error: 'No packages or courses matched the provided IDs' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Order updated successfully',
+      matchedCount: totalMatched,
+      modifiedCount: totalModified
+    });
   } catch (error) {
     console.error('Reorder error:', error);
-    res.status(500).json({ error: 'Failed to reorder' });
+    res.status(500).json({ error: 'Failed to reorder', details: error.message });
   }
 };
 
