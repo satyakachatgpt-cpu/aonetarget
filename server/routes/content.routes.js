@@ -18,6 +18,7 @@ import {
   createInstruction,
   updateInstruction,
   deleteInstruction,
+  reorderInstructions,
   getBlogPosts,
   createBlogPost,
   updateBlogPost,
@@ -83,6 +84,7 @@ router.get('/instructions', getInstructions);
 router.post('/instructions', adminMiddleware, createInstruction);
 router.put('/instructions/:id', adminMiddleware, updateInstruction);
 router.delete('/instructions/:id', adminMiddleware, deleteInstruction);
+router.patch('/instructions/reorder', adminMiddleware, reorderInstructions);
 
 // Blog
 router.get('/blog', getBlogPosts);

@@ -2,8 +2,8 @@ import express from 'express';
 import {
   getCategories, createCategory, updateCategory, deleteCategory, seedCategories, reorderCategories,
   getSubcategories, createSubcategory, updateSubcategory, deleteSubcategory, reorderSubcategories,
-  getSubjects, createSubject, updateSubject, deleteSubject,
-  getTopics, createTopic, updateTopic, deleteTopic,
+  getSubjects, createSubject, updateSubject, deleteSubject, reorderSubjects,
+  getTopics, createTopic, updateTopic, deleteTopic, reorderTopics,
   getFoldersByCourse, createFolder, updateFolder, deleteFolder,
   getPackages, createPackage, updatePackage, deletePackage, reorderPackages,
   getSubcourses, createSubcourse, updateSubcourse, deleteSubcourse,
@@ -34,12 +34,14 @@ router.get('/subjects', getSubjects);
 router.post('/subjects', adminMiddleware, createSubject);
 router.put('/subjects/:id', adminMiddleware, updateSubject);
 router.delete('/subjects/:id', adminMiddleware, deleteSubject);
+router.patch('/subjects/reorder', adminMiddleware, reorderSubjects);
 
 // Topics
 router.get('/topics', getTopics);
 router.post('/topics', adminMiddleware, createTopic);
 router.put('/topics/:id', adminMiddleware, updateTopic);
 router.delete('/topics/:id', adminMiddleware, deleteTopic);
+router.patch('/topics/reorder', adminMiddleware, reorderTopics);
 
 // Folders
 router.get('/courses/:courseId/folders', optionalAuth, getFoldersByCourse);

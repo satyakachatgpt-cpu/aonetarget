@@ -211,8 +211,8 @@ export const reorderQuickLinks = async (req, res) => {
 // Instructions Controllers
 export const getInstructions = async (req, res) => {
   try {
-    const instructions = await db.collection('instructions').find({}).toArray();
-    res.json(instructions);
+    const docs = await db.collection('instructions').find({}).sort({ order: 1 }).toArray();
+    res.json(docs);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch instructions' });
   }
@@ -229,8 +229,15 @@ export const createInstruction = async (req, res) => {
 
 export const updateInstruction = async (req, res) => {
   try {
+    const id = req.params.id;
+    const query = {
+      $or: [
+        { id: id },
+        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
+      ].filter(v => v.id || v._id)
+    };
     const { _id, ...updateData } = req.body;
-    const result = await db.collection('instructions').updateOne({ id: req.params.id }, { $set: updateData });
+    const result = await db.collection('instructions').updateOne(query, { $set: updateData });
     if (result.matchedCount === 0) return res.status(404).json({ error: 'Instruction not found' });
     res.json({ success: true, message: 'Instruction updated' });
   } catch (error) {
@@ -240,11 +247,58 @@ export const updateInstruction = async (req, res) => {
 
 export const deleteInstruction = async (req, res) => {
   try {
-    const result = await db.collection('instructions').deleteOne({ id: req.params.id });
+    const id = req.params.id;
+    const query = {
+      $or: [
+        { id: id },
+        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
+      ].filter(v => v.id || v._id)
+    };
+    const result = await db.collection('instructions').deleteOne(query);
     if (result.deletedCount === 0) return res.status(404).json({ error: 'Instruction not found' });
     res.json({ success: true, message: 'Instruction deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete instruction' });
+  }
+};
+
+export const reorderInstructions = async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
+    }
+
+    const bulkOps = orderedIds.map((id, index) => {
+      let filter;
+      if (ObjectId.isValid(id)) {
+        filter = { _id: new ObjectId(id) };
+      } else {
+        filter = { id: id };
+      }
+      return {
+        updateOne: {
+          filter,
+          update: { $set: { order: index + 1 } }
+        }
+      };
+    });
+
+    const result = await db.collection('instructions').bulkWrite(bulkOps);
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'No instructions matched the provided IDs' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Instructions reordered successfully',
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    console.error('Reorder instructions error:', error);
+    res.status(500).json({ error: 'Failed to reorder instructions', details: error.message });
   }
 };
 

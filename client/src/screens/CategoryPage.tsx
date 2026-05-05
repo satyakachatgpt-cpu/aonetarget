@@ -816,7 +816,19 @@ const CategoryPage: React.FC = () => {
             return String(a._id || a.id).localeCompare(String(b._id || b.id));
           })
         );
-        setSubjects((Array.isArray(subjs) ? subjs : []).filter((s: Subject) => s.status === 'active'));
+        setSubjects((Array.isArray(subjs) ? subjs : [])
+          .filter((s: Subject) => s.status === 'active')
+          .sort((a: any, b: any) => {
+            const getOrderValue = (val: any) => {
+              const n = Number(val);
+              return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+            };
+            const aVal = getOrderValue(a.order);
+            const bVal = getOrderValue(b.order);
+            if (aVal !== bVal) return aVal - bVal;
+            return String(a._id || a.id).localeCompare(String(b._id || b.id));
+          })
+        );
         
         const purchasedIds = Array.isArray(enrolledRes) ? enrolledRes.map((c: any) => c.id || c._id) : [];
         setEnrolledCourseIds(purchasedIds);

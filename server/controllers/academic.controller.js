@@ -282,7 +282,7 @@ export const getSubjects = async (req, res) => {
     if (level1Branch) query.level1Branch = level1Branch;
     if (level2Branch) query.level2Branch = level2Branch;
 
-    const subjects = await db.collection('subjects').find(query).toArray();
+    const subjects = await db.collection('subjects').find(query).sort({ order: 1 }).toArray();
     res.json(subjects);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch subjects' });
@@ -301,7 +301,14 @@ export const createSubject = async (req, res) => {
 export const updateSubject = async (req, res) => {
   try {
     const { _id, ...updateData } = req.body;
-    const result = await db.collection('subjects').updateOne({ id: req.params.id }, { $set: updateData });
+    const id = req.params.id;
+    const query = {
+      $or: [
+        { id: id },
+        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
+      ].filter(v => v.id || v._id)
+    };
+    const result = await db.collection('subjects').updateOne(query, { $set: updateData });
     if (result.matchedCount === 0) return res.status(404).json({ error: 'Subject not found' });
     res.json({ success: true, message: 'Subject updated' });
   } catch (error) {
@@ -311,7 +318,14 @@ export const updateSubject = async (req, res) => {
 
 export const deleteSubject = async (req, res) => {
   try {
-    const result = await db.collection('subjects').deleteOne({ id: req.params.id });
+    const id = req.params.id;
+    const query = {
+      $or: [
+        { id: id },
+        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
+      ].filter(v => v.id || v._id)
+    };
+    const result = await db.collection('subjects').deleteOne(query);
     if (result.deletedCount === 0) return res.status(404).json({ error: 'Subject not found' });
     res.json({ success: true, message: 'Subject deleted' });
   } catch (error) {
@@ -319,11 +333,51 @@ export const deleteSubject = async (req, res) => {
   }
 };
 
+export const reorderSubjects = async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
+    }
+
+    const bulkOps = orderedIds.map((id, index) => {
+      let filter;
+      if (ObjectId.isValid(id)) {
+        filter = { _id: new ObjectId(id) };
+      } else {
+        filter = { id: id };
+      }
+      return {
+        updateOne: {
+          filter,
+          update: { $set: { order: index + 1 } }
+        }
+      };
+    });
+
+    const result = await db.collection('subjects').bulkWrite(bulkOps);
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'No subjects matched the provided IDs' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Subjects reordered successfully',
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    console.error('Reorder subjects error:', error);
+    res.status(500).json({ error: 'Failed to reorder subjects', details: error.message });
+  }
+};
+
 // --- Topics ---
 
 export const getTopics = async (req, res) => {
   try {
-    const topics = await db.collection('topics').find({}).toArray();
+    const topics = await db.collection('topics').find({}).sort({ order: 1 }).toArray();
     res.json(topics);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch topics' });
@@ -342,7 +396,14 @@ export const createTopic = async (req, res) => {
 export const updateTopic = async (req, res) => {
   try {
     const { _id, ...updateData } = req.body;
-    const result = await db.collection('topics').updateOne({ id: req.params.id }, { $set: updateData });
+    const id = req.params.id;
+    const query = {
+      $or: [
+        { id: id },
+        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
+      ].filter(v => v.id || v._id)
+    };
+    const result = await db.collection('topics').updateOne(query, { $set: updateData });
     if (result.matchedCount === 0) return res.status(404).json({ error: 'Topic not found' });
     res.json({ success: true, message: 'Topic updated' });
   } catch (error) {
@@ -352,11 +413,58 @@ export const updateTopic = async (req, res) => {
 
 export const deleteTopic = async (req, res) => {
   try {
-    const result = await db.collection('topics').deleteOne({ id: req.params.id });
+    const id = req.params.id;
+    const query = {
+      $or: [
+        { id: id },
+        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
+      ].filter(v => v.id || v._id)
+    };
+    const result = await db.collection('topics').deleteOne(query);
     if (result.deletedCount === 0) return res.status(404).json({ error: 'Topic not found' });
     res.json({ success: true, message: 'Topic deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete topic' });
+  }
+};
+
+export const reorderTopics = async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
+    }
+
+    const bulkOps = orderedIds.map((id, index) => {
+      let filter;
+      if (ObjectId.isValid(id)) {
+        filter = { _id: new ObjectId(id) };
+      } else {
+        filter = { id: id };
+      }
+      return {
+        updateOne: {
+          filter,
+          update: { $set: { order: index + 1 } }
+        }
+      };
+    });
+
+    const result = await db.collection('topics').bulkWrite(bulkOps);
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'No topics matched the provided IDs' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Topics reordered successfully',
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    console.error('Reorder topics error:', error);
+    res.status(500).json({ error: 'Failed to reorder topics', details: error.message });
   }
 };
 

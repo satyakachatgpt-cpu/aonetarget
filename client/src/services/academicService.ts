@@ -167,6 +167,22 @@ export const subjectsAPI = {
     if (!response.ok) throw new Error('Failed to delete subject');
     invalidateCache('subjects');
     return response.json();
+  },
+  reorder: async (orderedIds: string[]) => {
+    const response = await fetch(`${API_BASE_URL}/subjects/reorder`, {
+      method: 'PATCH',
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify({ orderedIds }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to reorder subjects');
+    }
+    invalidateCache('subjects');
+    return response.json();
   }
 };
 
@@ -207,6 +223,22 @@ export const topicsAPI = {
       headers: { ...getAdminHeaders() }
     });
     if (!response.ok) throw new Error('Failed to delete topic');
+    invalidateCache('topics');
+    return response.json();
+  },
+  reorder: async (orderedIds: string[]) => {
+    const response = await fetch(`${API_BASE_URL}/topics/reorder`, {
+      method: 'PATCH',
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify({ orderedIds }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to reorder topics');
+    }
     invalidateCache('topics');
     return response.json();
   }
