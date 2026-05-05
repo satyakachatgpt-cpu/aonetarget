@@ -542,15 +542,17 @@ export const reorderPdfs = async (req, res) => {
     }
 
     const bulkOps = orderedIds.map((id, index) => {
-      let filter;
-      if (ObjectId.isValid(id)) {
-        filter = { _id: new ObjectId(id) };
-      } else {
-        filter = { id: id };
-      }
+      // Prioritize MongoDB _id for reordering
+      const query = {
+        $or: [
+          { _id: ObjectId.isValid(id) ? new ObjectId(id) : null },
+          { id: id }
+        ].filter(v => v._id || v.id)
+      };
+
       return {
         updateOne: {
-          filter,
+          filter: query,
           update: { $set: { sortBy: index + 1 } }
         }
       };

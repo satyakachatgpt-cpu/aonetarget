@@ -64,13 +64,17 @@ const SortableRow = ({
     transform,
     transition,
     isDragging
-  } = useSortable({ id: pdf._id || pdf.id, disabled });
+  } = useSortable({ 
+    id: String(pdf._id || ''), 
+    disabled: disabled || !pdf._id 
+  });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+    transform: transform ? CSS.Translate.toString(transform) : undefined,
+    transition: isDragging ? 'none' : transition,
     zIndex: isDragging ? 100 : 'auto',
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.8 : 1,
+    position: 'relative' as 'relative',
   };
 
   return (
@@ -82,13 +86,16 @@ const SortableRow = ({
       <td className="pl-8 pr-4 py-6 text-[13px] font-black text-gray-300">
         <div className="flex items-center gap-3">
           {!disabled && (
-            <span
+            <div
               {...attributes}
               {...listeners}
-              className="material-symbols-outlined text-[18px] text-gray-400 cursor-grab active:cursor-grabbing hover:text-navy transition-colors"
+              className="inline-flex p-2 -ml-2 cursor-grab active:cursor-grabbing hover:bg-gray-100 rounded-lg transition-colors group/handle mr-1"
+              style={{ touchAction: 'none', pointerEvents: 'auto' }}
             >
-              drag_indicator
-            </span>
+              <span className="material-symbols-outlined text-[18px] text-gray-300 group-hover/handle:text-gray-600 transition-colors">
+                drag_indicator
+              </span>
+            </div>
           )}
           {startIndex + idx + 1}
         </div>
@@ -178,8 +185,14 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
   });
 
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 3,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
   );
 
   const handleDragEnd = async (event: DragEndEvent) => {
@@ -209,7 +222,8 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
     setPdfs(newOrder);
 
     try {
-      const orderedIds = newOrder.map(p => getStableId(p));
+      const orderedIds = newOrder.map(p => String(p._id)).filter(id => id !== 'undefined');
+      if (orderedIds.length === 0) return;
       await pdfsAPI.reorder(orderedIds);
       showToast('Order updated successfully', 'success');
     } catch (error) {
@@ -397,47 +411,47 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-gray-50/10 border-b border-gray-100">
-                  <th className="pl-8 pr-4 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap w-[100px]">
-                    S. NO.
-                  </th>
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
-                    TITLE
-                  </th>
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
-                    PRICE
-                  </th>
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap w-[120px]">
-                    SORT BY
-                  </th>
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap w-[150px]">ACTIONS</th>
-                </tr>
-              </thead>
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={paginatedItems.map(p => p._id || p.id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  <tbody className="divide-y divide-gray-50">
-                    {isLoading ? (
-                      <tr>
-                        <td colSpan={5} className="px-8 py-20 text-center text-gray-400 font-medium">Loading resources...</td>
-                      </tr>
-                    ) : paginatedItems.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="px-8 py-20 text-center text-gray-400 font-medium italic">No e-books found</td>
-                      </tr>
-                    ) : (
-                      paginatedItems.map((pdf, idx) => (
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50/10 border-b border-gray-100">
+                    <th className="pl-8 pr-4 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap w-[100px]">
+                      S. NO.
+                    </th>
+                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
+                      TITLE
+                    </th>
+                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
+                      PRICE
+                    </th>
+                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap w-[120px]">
+                      SORT BY
+                    </th>
+                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap w-[150px]">ACTIONS</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={5} className="px-8 py-20 text-center text-gray-400 font-medium">Loading resources...</td>
+                    </tr>
+                  ) : paginatedItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-8 py-20 text-center text-gray-400 font-medium italic">No e-books found</td>
+                    </tr>
+                  ) : (
+                    <SortableContext
+                      items={paginatedItems.filter(p => !!p._id).map(p => String(p._id))}
+                      strategy={verticalListSortingStrategy}
+                      disabled={searchQuery.trim() !== '' || currentPage !== 1}
+                    >
+                      {paginatedItems.map((pdf, idx) => (
                         <SortableRow
-                          key={pdf._id || pdf.id}
+                          key={pdf._id || `temp-${idx}`}
                           pdf={pdf}
                           idx={idx}
                           startIndex={startIndex}
@@ -447,15 +461,14 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
                           handleEdit={handleEdit}
                           handleDelete={handleDelete}
                           getPdfUrl={getPdfUrl}
-                          disabled={searchQuery.trim() !== ''}
+                          disabled={searchQuery.trim() !== '' || currentPage !== 1}
                         />
-                      ))
-                    )}
-                  </tbody>
-                </SortableContext>
-              </DndContext>
-            </table>
-          </div>
+                      ))}
+                    </SortableContext>
+                  )}
+                </tbody>
+              </table>
+            </DndContext>
 
           {/* Pagination Footer */}
           {!isLoading && filteredPdfs.length > 0 && (
