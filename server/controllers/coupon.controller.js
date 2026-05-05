@@ -12,6 +12,17 @@ const { ObjectId } = mongoose.Types;
 export const getCoupons = async (req, res) => {
   try {
     const coupons = await db.collection('coupons').find({}).toArray();
+    // Sort by order ASC, missing/invalid goes last
+    coupons.sort((a, b) => {
+      const aOrder = typeof a.order === 'number' ? a.order : Infinity;
+      const bOrder = typeof b.order === 'number' ? b.order : Infinity;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      
+      const aTime = a.createdDate ? new Date(a.createdDate).getTime() : 0;
+      const bTime = b.createdDate ? new Date(b.createdDate).getTime() : 0;
+      if (aTime !== bTime) return bTime - aTime;
+      return String(a._id || '').localeCompare(String(b._id || ''));
+    });
     res.json(coupons);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch coupons' });
@@ -199,5 +210,46 @@ export const deleteAllCoupons = async (req, res) => {
     res.json({ success: true, message: `Deleted ${result.deletedCount} coupons` });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete all coupons' });
+  }
+};
+
+/**
+ * PATCH /api/coupons/reorder
+ * Reorder coupons using bulkWrite
+ */
+export const reorderCoupons = async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
+    }
+
+    const bulkOps = orderedIds.map((id, index) => {
+      if (!ObjectId.isValid(id)) {
+        throw new Error(`Invalid ObjectId: ${id}`);
+      }
+      return {
+        updateOne: {
+          filter: { _id: new ObjectId(id) },
+          update: { $set: { order: index + 1 } }
+        }
+      };
+    });
+
+    const result = await db.collection('coupons').bulkWrite(bulkOps);
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'No coupons matched the provided IDs' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Coupons reordered successfully',
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    console.error('Reorder coupons error:', error);
+    res.status(500).json({ error: 'Failed to reorder coupons', details: error.message });
   }
 };

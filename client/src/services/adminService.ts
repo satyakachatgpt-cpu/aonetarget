@@ -86,6 +86,18 @@ export const couponsAPI = {
     });
     if (!response.ok) throw new Error('Failed to delete coupon');
     return response.json();
+  },
+  reorder: async (orderedIds: string[]) => {
+    const response = await fetch(`${API_BASE_URL}/coupons/reorder`, {
+      method: 'PATCH',
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify({ orderedIds }),
+    });
+    if (!response.ok) throw new Error('Failed to reorder coupons');
+    return response.json();
   }
 };
 
