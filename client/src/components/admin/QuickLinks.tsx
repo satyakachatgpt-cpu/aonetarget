@@ -66,7 +66,7 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: {
-                distance: 5,
+                distance: 3,
             },
         }),
         useSensor(KeyboardSensor, {
@@ -271,7 +271,8 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
         setIsReordering(true);
 
         try {
-            const orderedIds = newOrderedLinks.map(item => getStableId(item));
+            const orderedIds = newOrderedLinks.map(item => String(item._id)).filter(id => id !== 'undefined');
+            if (orderedIds.length === 0) return;
             await quickLinksAPI.reorder(orderedIds);
             showToast('Order updated successfully');
         } catch (error) {
@@ -338,38 +339,33 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
                     </div>
 
                     <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-gray-50/10 border-b border-gray-100">
-                                    <th className="pl-8 pr-4 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
-                                        <div className="flex items-center gap-1">
-                                            {!isSortingDisabled && <span className="material-symbols-outlined text-[14px] align-middle mr-1">drag_handle</span>}
-                                            S. NO. <span className="material-symbols-outlined text-[14px]">unfold_more</span>
-                                        </div>
-                                    </th>
-                                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
-                                        <div className="flex items-center gap-1">
-                                            IMAGE <span className="material-symbols-outlined text-[14px]">unfold_more</span>
-                                        </div>
-                                    </th>
-                                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
-                                        <div className="flex items-center gap-1">
-                                            TITLE <span className="material-symbols-outlined text-[14px]">unfold_more</span>
-                                        </div>
-                                    </th>
-                                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
-                                        <div className="flex items-center gap-1">
-                                            SORT BY <span className="material-symbols-outlined text-[14px]">unfold_more</span>
-                                        </div>
-                                    </th>
-                                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">ACTIONS</th>
-                                </tr>
-                            </thead>
-                            <DndContext
-                                sensors={sensors}
-                                collisionDetection={closestCenter}
-                                onDragEnd={handleDragEnd}
-                            >
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            onDragEnd={handleDragEnd}
+                        >
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-gray-50/50">
+                                    <tr className="border-b border-gray-100">
+                                        <th className="pl-8 pr-4 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">S.NO.</th>
+                                        <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
+                                            <div className="flex items-center gap-1">
+                                                IMAGE <span className="material-symbols-outlined text-[14px]">unfold_more</span>
+                                            </div>
+                                        </th>
+                                        <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
+                                            <div className="flex items-center gap-1">
+                                                TITLE <span className="material-symbols-outlined text-[14px]">unfold_more</span>
+                                            </div>
+                                        </th>
+                                        <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
+                                            <div className="flex items-center gap-1">
+                                                SORT BY <span className="material-symbols-outlined text-[14px]">unfold_more</span>
+                                            </div>
+                                        </th>
+                                        <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">ACTIONS</th>
+                                    </tr>
+                                </thead>
                                 <tbody className="divide-y divide-gray-50">
                                     {isLoading ? (
                                         <tr>
@@ -381,13 +377,13 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
                                         </tr>
                                     ) : (
                                         <SortableContext
-                                            items={paginatedData.map(item => item._id || item.id)}
+                                            items={paginatedData.filter(item => !!item._id).map(item => String(item._id))}
                                             strategy={verticalListSortingStrategy}
                                             disabled={isSortingDisabled}
                                         >
                                             {paginatedData.map((item: any, idx) => (
                                                 <SortableQuickLinkRow
-                                                    key={item._id || item.id}
+                                                    key={item._id || `temp-${idx}`}
                                                     item={item}
                                                     idx={idx}
                                                     startIndex={startIndex}
@@ -404,8 +400,8 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
                                         </SortableContext>
                                     )}
                                 </tbody>
-                            </DndContext>
-                        </table>
+                            </table>
+                        </DndContext>
                     </div>
                 </div>
 
@@ -585,11 +581,14 @@ const SortableQuickLinkRow = ({
         transform,
         transition,
         isDragging
-    } = useSortable({ id: item._id || item.id });
-
+    } = useSortable({ 
+        id: String(item._id || ''), 
+        disabled: isSortingDisabled || !item._id 
+    });
+    
     const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
+        transform: transform ? CSS.Translate.toString(transform) : undefined,
+        transition: isDragging ? 'none' : transition,
         zIndex: isDragging ? 100 : 1,
         position: 'relative' as 'relative',
         backgroundColor: isDragging ? '#f8fafc' : undefined,
@@ -603,14 +602,17 @@ const SortableQuickLinkRow = ({
             className={`hover:bg-gray-50/50 transition-colors group ${isDragging ? 'shadow-lg border-y border-gray-200' : ''}`}
         >
             <td className="pl-8 pr-4 py-6 text-[13px] font-medium text-gray-600 group-hover:text-black">
-                {!isSortingDisabled && (
-                    <span
+                {!isSortingDisabled && item._id && (
+                    <div
                         {...attributes}
                         {...listeners}
-                        className="material-symbols-outlined text-[18px] align-middle mr-3 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
+                        className="inline-flex p-2 -ml-2 cursor-grab active:cursor-grabbing hover:bg-gray-100 rounded-lg transition-colors group/handle mr-1"
+                        style={{ touchAction: 'none', pointerEvents: 'auto' }}
                     >
-                        drag_indicator
-                    </span>
+                        <span className="material-symbols-outlined text-[18px] text-gray-300 group-hover/handle:text-gray-600 transition-colors">
+                            drag_indicator
+                        </span>
+                    </div>
                 )}
                 {startIndex + idx + 1}
             </td>
