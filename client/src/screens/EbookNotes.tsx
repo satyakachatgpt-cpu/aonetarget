@@ -41,7 +41,7 @@ const EbookNotes: React.FC = () => {
         fetch('/api/exam-documents').then(r => r.json()),
         fetch('/api/subjects').then(r => r.json())
       ]);
-      setEbooks(Array.isArray(ebooksRes) ? ebooksRes.filter((e: any) => !e.isFree) : []);
+      setEbooks(Array.isArray(ebooksRes) ? ebooksRes.filter((e: any) => !e.isFree).sort((a: any, b: any) => (Number(a.sortBy) || 0) - (Number(b.sortBy) || 0)) : []);
       setExamDocs(Array.isArray(docsRes) ? docsRes.filter((d: any) => d.status === 'active' && !d.isFree).sort((a: any, b: any) => {
         const aOrder = typeof a.order === 'number' ? a.order : Infinity;
         const bOrder = typeof b.order === 'number' ? b.order : Infinity;

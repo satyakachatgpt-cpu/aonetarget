@@ -260,7 +260,7 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
 
         const rearranged = arrayMove(links, oldIndex, newIndex);
         
-        // Optimistic Update with SortBy Sync (Descending)
+        // STRICT NORMALIZATION: Recalculate all sortBy values to be sequential and descending
         const total = rearranged.length;
         const newOrderedLinks = rearranged.map((item, index) => ({
             ...item,
@@ -398,6 +398,7 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
                                                     handleEdit={handleEdit}
                                                     handleDelete={handleDelete}
                                                     isSortingDisabled={isSortingDisabled}
+                                                    totalLinks={links.length}
                                                 />
                                             ))}
                                         </SortableContext>
@@ -574,7 +575,8 @@ const SortableQuickLinkRow = ({
     setOpenActionMenuId,
     handleEdit,
     handleDelete,
-    isSortingDisabled
+    isSortingDisabled,
+    totalLinks
 }: any) => {
     const {
         attributes,
@@ -657,7 +659,8 @@ const SortableQuickLinkRow = ({
             </td>
             <td className="px-6 py-6">
                 <span className="px-3 py-1 bg-gray-50 text-gray-500 rounded-lg text-[12px] font-medium border border-gray-100">
-                    {Number(item.sortBy || 0).toFixed(0)}
+                    {/* Show actual sortBy or fallback to calculated descending rank if stale */}
+                    {(item.sortBy && item.sortBy !== 0) ? Number(item.sortBy).toFixed(0) : (totalLinks - (startIndex + idx))}
                 </span>
             </td>
             <td className="px-6 py-6">

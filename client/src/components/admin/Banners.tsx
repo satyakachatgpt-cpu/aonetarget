@@ -216,7 +216,7 @@ const Banners: React.FC<Props> = ({ showToast }) => {
 
     const rearranged = arrayMove(banners, oldIndex, newIndex);
     
-    // Optimistic Update with Order Sync
+    // STRICT NORMALIZATION: Recalculate all order values to be sequential and ascending
     const newOrderedBanners = rearranged.map((banner, index) => ({
       ...banner,
       order: index + 1
@@ -226,6 +226,7 @@ const Banners: React.FC<Props> = ({ showToast }) => {
     setIsReordering(true);
 
     try {
+      // Use stable IDs for reorder payload
       await bannersAPI.reorder(newOrderedBanners.map(b => getStableId(b)));
       showToast('Order updated successfully');
     } catch (error) {
@@ -810,7 +811,8 @@ const SortableBannerRow = ({
       </td>
       <td className="px-6 py-4 text-center">
         <span className="px-3 py-1 bg-gray-100 rounded-md text-[12px] font-bold text-gray-500">
-          {banner.order || 0}
+          {/* Always show current sequential position to avoid confusion with stale DB gaps */}
+          {index + 1}
         </span>
       </td>
       <td className="px-6 py-4 text-right">

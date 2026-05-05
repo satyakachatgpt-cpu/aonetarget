@@ -110,7 +110,8 @@ const SortableRow = ({
       </td>
       <td className="px-6 py-6">
         <span className="px-3 py-1 bg-gray-50 text-gray-500 rounded-lg text-[12px] font-medium border border-gray-100">
-          {(pdf.sortBy || 0).toFixed(0)}
+          {/* Show normalized order (index+1) if sortBy is missing/0 to avoid confusing display */}
+          {(pdf.sortBy && pdf.sortBy !== 0) ? pdf.sortBy.toFixed(0) : (startIndex + idx + 1)}
         </span>
       </td>
       <td className="px-6 py-6">
@@ -191,13 +192,16 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
       return;
     }
 
-    const oldIndex = pdfs.findIndex((p) => (p._id || p.id) === active.id);
-    const newIndex = pdfs.findIndex((p) => (p._id || p.id) === over.id);
+    const getStableId = (item: any) => String(item?._id || item?.id || "");
+    const oldIndex = pdfs.findIndex((p) => getStableId(p) === active.id);
+    const newIndex = pdfs.findIndex((p) => getStableId(p) === over.id);
 
     if (oldIndex === -1 || newIndex === -1) return;
 
-    const previousOrder = [...pdfs];
-    const newOrder = arrayMove(pdfs, oldIndex, newIndex).map((item, index) => ({
+    const rearranged = arrayMove(pdfs, oldIndex, newIndex);
+    
+    // STRICT NORMALIZATION: Recalculate all sortBy values to be sequential and ascending
+    const newOrder = rearranged.map((item, index) => ({
       ...item,
       sortBy: index + 1
     }));
@@ -205,13 +209,13 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
     setPdfs(newOrder);
 
     try {
-      const orderedIds = newOrder.map(p => p._id || p.id);
+      const orderedIds = newOrder.map(p => getStableId(p));
       await pdfsAPI.reorder(orderedIds);
       showToast('Order updated successfully', 'success');
     } catch (error) {
       console.error('Failed to reorder:', error);
       showToast('Failed to save order. Rolling back...', 'error');
-      setPdfs(previousOrder);
+      fetchInitialData();
     }
   };
 
