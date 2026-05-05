@@ -54,11 +54,17 @@ export const reorderBanners = async (req, res) => {
     }
 
     const bulkOps = orderedIds.map((id, index) => {
-      let filter = { id: id };
-      if (ObjectId.isValid(id)) filter = { $or: [{ id: id }, { _id: new ObjectId(id) }] };
+      // Prioritize MongoDB _id for reordering
+      const query = {
+        $or: [
+          { _id: ObjectId.isValid(id) ? new ObjectId(id) : null },
+          { id: id }
+        ].filter(v => v._id || v.id)
+      };
+
       return {
         updateOne: {
-          filter,
+          filter: query,
           update: { $set: { order: index + 1 } }
         }
       };

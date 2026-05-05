@@ -66,7 +66,7 @@ const Banners: React.FC<Props> = ({ showToast }) => {
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 5,
+        distance: 3,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -226,8 +226,9 @@ const Banners: React.FC<Props> = ({ showToast }) => {
     setIsReordering(true);
 
     try {
-      // Use stable IDs for reorder payload
-      await bannersAPI.reorder(newOrderedBanners.map(b => getStableId(b)));
+      const orderedIds = newOrderedBanners.map(b => String(b._id)).filter(id => id !== 'undefined');
+      if (orderedIds.length === 0) return;
+      await bannersAPI.reorder(orderedIds);
       showToast('Order updated successfully');
     } catch (error) {
       console.error('Failed to reorder banners:', error);
@@ -294,10 +295,7 @@ const Banners: React.FC<Props> = ({ showToast }) => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gray-50/50 border-b border-gray-100">
-                  <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-                    {!isSortingDisabled && <span className="material-symbols-outlined text-[14px] align-middle mr-1">drag_handle</span>}
-                    S. NO.
-                  </th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-[100px]">S. NO.</th>
                   <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Image</th>
                   <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Linked To</th>
                   <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider text-center">Sort By</th>
@@ -306,13 +304,13 @@ const Banners: React.FC<Props> = ({ showToast }) => {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 <SortableContext
-                  items={paginatedBanners.map(b => b._id || b.id)}
+                  items={paginatedBanners.filter(b => !!b._id).map(b => String(b._id))}
                   strategy={verticalListSortingStrategy}
                   disabled={isSortingDisabled}
                 >
                   {paginatedBanners.map((banner, index) => (
                     <SortableBannerRow
-                      key={banner._id || banner.id}
+                      key={banner._id || `temp-${index}`}
                       banner={banner}
                       index={startIndex + index}
                       activeActionMenuId={activeActionMenuId}
@@ -757,11 +755,14 @@ const SortableBannerRow = ({
     transform,
     transition,
     isDragging
-  } = useSortable({ id: banner._id || banner.id });
+  } = useSortable({ 
+    id: String(banner._id || ''), 
+    disabled: isSortingDisabled || !banner._id 
+  });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+    transform: transform ? CSS.Translate.toString(transform) : undefined,
+    transition: isDragging ? 'none' : transition,
     zIndex: isDragging ? 100 : 1,
     position: 'relative' as 'relative',
     backgroundColor: isDragging ? '#f8fafc' : undefined,
@@ -775,14 +776,17 @@ const SortableBannerRow = ({
       className={`hover:bg-gray-50/30 transition-colors ${isDragging ? 'shadow-lg border-y border-gray-200' : ''}`}
     >
       <td className="px-6 py-4 text-[13px] font-medium text-gray-500">
-        {!isSortingDisabled && (
-          <span
+        {!isSortingDisabled && banner._id && (
+          <div
             {...attributes}
             {...listeners}
-            className="material-symbols-outlined text-[18px] align-middle mr-3 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
+            className="inline-flex p-2 -ml-2 cursor-grab active:cursor-grabbing hover:bg-gray-100 rounded-lg transition-colors group/handle mr-1"
+            style={{ touchAction: 'none', pointerEvents: 'auto' }}
           >
-            drag_indicator
-          </span>
+            <span className="material-symbols-outlined text-[18px] text-gray-300 group-hover/handle:text-gray-600 transition-colors">
+              drag_indicator
+            </span>
+          </div>
         )}
         {index + 1}
       </td>
