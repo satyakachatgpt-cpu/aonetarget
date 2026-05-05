@@ -1,7 +1,7 @@
 import express from 'express';
 import {
-  getCategories, createCategory, updateCategory, deleteCategory, seedCategories,
-  getSubcategories, createSubcategory, updateSubcategory, deleteSubcategory,
+  getCategories, createCategory, updateCategory, deleteCategory, seedCategories, reorderCategories,
+  getSubcategories, createSubcategory, updateSubcategory, deleteSubcategory, reorderSubcategories,
   getSubjects, createSubject, updateSubject, deleteSubject,
   getTopics, createTopic, updateTopic, deleteTopic,
   getFoldersByCourse, createFolder, updateFolder, deleteFolder,
@@ -19,6 +19,7 @@ router.get('/categories', catalogLimiter, getCategories);
 router.post('/categories', adminMiddleware, createCategory);
 router.put('/categories/:id', adminMiddleware, updateCategory);
 router.delete('/categories/:id', adminMiddleware, deleteCategory);
+router.patch('/categories/reorder', adminMiddleware, reorderCategories);
 router.post('/categories/seed', adminMiddleware, seedCategories);
 
 // Subcategories
@@ -26,6 +27,7 @@ router.get('/subcategories', getSubcategories);
 router.post('/subcategories', adminMiddleware, createSubcategory);
 router.put('/subcategories/:id', adminMiddleware, updateSubcategory);
 router.delete('/subcategories/:id', adminMiddleware, deleteSubcategory);
+router.patch('/subcategories/reorder', adminMiddleware, reorderSubcategories);
 
 // Subjects
 router.get('/subjects', getSubjects);

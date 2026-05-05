@@ -5,6 +5,23 @@ import Subjects from './misc/Subjects';
 import AddCategoryDrawer from './AddCategoryDrawer';
 import AddSubcategoryDrawer from './AddSubcategoryDrawer';
 import AddSubjectDrawer from './AddSubjectDrawer';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface Category {
   _id?: string;
@@ -85,6 +102,161 @@ const iconOptions = [
   'psychology', 'architecture', 'sports_esports', 'palette', 'music_note',
 ];
 
+// --- Sortable Components ---
+
+interface SortableCategoryCardProps {
+  cat: Category;
+  onEdit: (cat: Category) => void;
+  onDelete: (cat: Category) => void;
+  onManage: (cat: Category) => void;
+  subcategories: SubCategory[];
+  isSortingDisabled: boolean;
+}
+
+const SortableCategoryCard: React.FC<SortableCategoryCardProps> = ({ cat, onEdit, onDelete, onManage, subcategories, isSortingDisabled }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ 
+    id: cat._id || cat.id,
+    disabled: isSortingDisabled
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 'auto',
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style} className="bg-white rounded-2xl shadow-sm border overflow-hidden group">
+      <div className={`bg-gradient-to-r ${cat.gradient} p-5 text-white relative overflow-hidden`}>
+        {cat.imageUrl && (
+          <img src={cat.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover opacity-20" />
+        )}
+        <div className="flex items-center justify-between relative z-10">
+          <div className="flex items-center gap-3">
+            {!isSortingDisabled && (
+              <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 -ml-2 opacity-40 hover:opacity-100 transition-opacity">
+                <span className="material-symbols-rounded text-lg">drag_indicator</span>
+              </div>
+            )}
+            {cat.icon && (
+              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                <span className="material-icons-outlined text-2xl">{cat.icon}</span>
+              </div>
+            )}
+            <div>
+              <h3 className="font-black text-lg tracking-tight">{cat.title}</h3>
+              <p className="text-white/70 text-xs font-medium">{cat.subtitle}</p>
+            </div>
+          </div>
+          <div className="flex gap-1">
+            <button onClick={() => onEdit(cat)} className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-all backdrop-blur-sm">
+              <span className="material-icons-outlined text-sm">edit</span>
+            </button>
+            <button onClick={() => onDelete(cat)} className="p-2 bg-white/20 rounded-lg hover:bg-red-500/50 transition-all backdrop-blur-sm">
+              <span className="material-icons-outlined text-sm">delete</span>
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className="p-4">
+        <p className="text-xs text-gray-500 min-h-[32px]">{cat.description}</p>
+        <div className="flex items-center gap-3 mt-3 text-xs mb-4">
+          <span className={`px-2 py-1 rounded-full ${cat.isActive ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'} font-bold`}>
+            {cat.isActive ? 'Active' : 'Inactive'}
+          </span>
+          {cat.tag && <span className="px-2 py-1 bg-amber-100 text-amber-600 rounded-full font-bold">{cat.tag}</span>}
+          <span className="text-gray-400">Order: {cat.order}</span>
+          <span className="text-gray-400">ID: {cat.id}</span>
+        </div>
+        
+        <div className="flex items-center justify-between pt-4 border-t border-slate-50">
+          <p className="text-xs text-gray-400 font-medium">
+            {subcategories.filter(s => s.categoryId === cat.id).length} subcategories
+          </p>
+          <button
+            onClick={() => onManage(cat)}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-black transition-all shadow-sm"
+          >
+            <span className="material-symbols-outlined text-[16px]">account_tree</span>
+            Manage Hierarchy
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface SortableSubcategoryRowProps {
+  sub: SubCategory;
+  onEdit: (sub: SubCategory) => void;
+  onDelete: (sub: SubCategory) => void;
+  categories: Category[];
+  isSortingDisabled: boolean;
+}
+
+const SortableSubcategoryRow: React.FC<SortableSubcategoryRowProps> = ({ sub, onEdit, onDelete, categories, isSortingDisabled }) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ 
+    id: sub._id || sub.id,
+    disabled: isSortingDisabled
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : 'auto',
+    opacity: isDragging ? 0.5 : 1,
+    background: isDragging ? '#f8fafc' : 'transparent',
+  };
+
+  const parentCat = categories.find(c => c.id === sub.categoryId);
+
+  return (
+    <tr ref={setNodeRef} style={style} className="border-b hover:bg-gray-50 transition-all">
+      <td className="p-4">
+        <div className="flex items-center gap-3">
+          {!isSortingDisabled && (
+            <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 opacity-40 hover:opacity-100 transition-opacity">
+              <span className="material-symbols-rounded text-lg">drag_indicator</span>
+            </div>
+          )}
+          {sub.icon && (
+            <div className={`w-10 h-10 ${sub.gradient ? `bg-gradient-to-br ${sub.gradient}` : sub.color} rounded-lg flex items-center justify-center shadow-sm`}>
+              <span className="material-icons-outlined text-white text-lg">{sub.icon}</span>
+            </div>
+          )}
+        </div>
+      </td>
+      <td className="p-4">
+        <p className="text-sm font-bold text-gray-800">{sub.title}</p>
+        {sub.description && <p className="text-xs text-gray-400 mt-0.5">{sub.description}</p>}
+      </td>
+      <td className="p-4">
+        <span className={`px-3 py-1 bg-gradient-to-r ${parentCat?.gradient || 'from-gray-400 to-gray-500'} text-white text-xs font-bold rounded-full`}>
+          {parentCat?.title || sub.categoryId}
+        </span>
+      </td>
+      <td className="p-4 text-xs text-gray-500">{sub.parentPath || '-'}</td>
+      <td className="p-4">
+        <span className={`px-2 py-1 rounded-full text-xs font-bold ${sub.isActive ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
+          {sub.isActive ? 'Active' : 'Inactive'}
+        </span>
+      </td>
+      <td className="p-4 text-sm text-gray-500">{sub.order}</td>
+      <td className="p-4 text-right">
+        <div className="flex gap-1 justify-end">
+          <button onClick={() => onEdit(sub)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-all">
+            <span className="material-icons-outlined text-sm">edit</span>
+          </button>
+          <button onClick={() => onDelete(sub)} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all">
+            <span className="material-icons-outlined text-sm">delete</span>
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+};
+
 const Categories: React.FC<Props> = ({ showToast }) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<SubCategory[]>([]);
@@ -102,6 +274,12 @@ const Categories: React.FC<Props> = ({ showToast }) => {
   const [editingSubj, setEditingSubj] = useState<Subject | null>(null);
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+  const [isReordering, setIsReordering] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   // --- Context-Aware Management States ---
   const [contextCategory, setContextCategory] = useState<Category | null>(null);
@@ -246,6 +424,59 @@ const Categories: React.FC<Props> = ({ showToast }) => {
       loadData();
     } catch (error) {
       showToast('Failed to delete subject', 'error');
+    }
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    if (activeTab === 'categories') {
+      const oldIndex = categories.findIndex((c) => (c._id || c.id) === active.id);
+      const newIndex = categories.findIndex((c) => (c._id || c.id) === over.id);
+
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      const previousOrder = [...categories];
+      const newOrder = arrayMove(categories, oldIndex, newIndex);
+      
+      setCategories(newOrder);
+      setIsReordering(true);
+
+      try {
+        const orderedIds = newOrder.map(c => c._id || c.id) as string[];
+        await categoriesAPI.reorder(orderedIds);
+        showToast('Categories reordered successfully', 'success');
+      } catch (error) {
+        console.error('Failed to reorder categories:', error);
+        showToast('Failed to save order. Rolling back...', 'error');
+        setCategories(previousOrder);
+      } finally {
+        setIsReordering(false);
+      }
+    } else if (activeTab === 'subcategories') {
+      const oldIndex = subcategories.findIndex((s) => (s._id || s.id) === active.id);
+      const newIndex = subcategories.findIndex((s) => (s._id || s.id) === over.id);
+
+      if (oldIndex === -1 || newIndex === -1) return;
+
+      const previousOrder = [...subcategories];
+      const newOrder = arrayMove(subcategories, oldIndex, newIndex);
+      
+      setSubcategories(newOrder);
+      setIsReordering(true);
+
+      try {
+        const orderedIds = newOrder.map(s => s._id || s.id) as string[];
+        await subcategoriesAPI.reorder(orderedIds);
+        showToast('Subcategories reordered successfully', 'success');
+      } catch (error) {
+        console.error('Failed to reorder subcategories:', error);
+        showToast('Failed to save order. Rolling back...', 'error');
+        setSubcategories(previousOrder);
+      } finally {
+        setIsReordering(false);
+      }
     }
   };
 
@@ -477,63 +708,30 @@ const Categories: React.FC<Props> = ({ showToast }) => {
 
       {activeTab === 'categories' && (
         <div className="space-y-4">
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {(paginatedItems as Category[]).map(cat => (
-              <div key={cat._id || cat.id} className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-                <div className={`bg-gradient-to-r ${cat.gradient} p-5 text-white relative overflow-hidden`}>
-                  {cat.imageUrl && (
-                    <img src={cat.imageUrl} alt="" className="absolute inset-0 w-full h-full object-cover opacity-20" />
-                  )}
-                  <div className="flex items-center justify-between relative z-10">
-                    <div className="flex items-center gap-3">
-                      {cat.icon && (
-                        <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                          <span className="material-icons-outlined text-2xl">{cat.icon}</span>
-                        </div>
-                      )}
-                      <div>
-                        <h3 className="font-black text-lg tracking-tight">{cat.title}</h3>
-                        <p className="text-white/70 text-xs font-medium">{cat.subtitle}</p>
-                      </div>
-                    </div>
-                    <div className="flex gap-1">
-                      <button onClick={() => openEditCategory(cat)} className="p-2 bg-white/20 rounded-lg hover:bg-white/30 transition-all backdrop-blur-sm">
-                        <span className="material-icons-outlined text-sm">edit</span>
-                      </button>
-                      <button onClick={() => handleDeleteCategory(cat)} className="p-2 bg-white/20 rounded-lg hover:bg-red-500/50 transition-all backdrop-blur-sm">
-                        <span className="material-icons-outlined text-sm">delete</span>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <div className="p-4">
-                  <p className="text-xs text-gray-500 min-h-[32px]">{cat.description}</p>
-                  <div className="flex items-center gap-3 mt-3 text-xs mb-4">
-                    <span className={`px-2 py-1 rounded-full ${cat.isActive ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'} font-bold`}>
-                      {cat.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                    {cat.tag && <span className="px-2 py-1 bg-amber-100 text-amber-600 rounded-full font-bold">{cat.tag}</span>}
-                    <span className="text-gray-400">Order: {cat.order}</span>
-                    <span className="text-gray-400">ID: {cat.id}</span>
-                  </div>
-                  
-                  <div className="flex items-center justify-between pt-4 border-t border-slate-50">
-                    <p className="text-xs text-gray-400 font-medium">
-                      {subcategories.filter(s => s.categoryId === cat.id).length} subcategories
-                    </p>
-                    <button
-                      onClick={() => handleEnterContext(cat)}
-                      className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl text-[11px] font-black uppercase tracking-wider hover:bg-black transition-all shadow-sm"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">account_tree</span>
-                      Manage Hierarchy
-                    </button>
-                  </div>
-                </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={paginatedItems.map(item => item._id || item.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {(paginatedItems as Category[]).map(cat => (
+                  <SortableCategoryCard
+                    key={cat._id || cat.id}
+                    cat={cat}
+                    onEdit={openEditCategory}
+                    onDelete={handleDeleteCategory}
+                    onManage={handleEnterContext}
+                    subcategories={subcategories}
+                    isSortingDisabled={searchQuery.length > 0 || isReordering}
+                  />
+                ))}
               </div>
-            ))}
-          </div>
+            </SortableContext>
+          </DndContext>
 
           {/* Categories Pagination Footers (Will add one global one at the end of the file instead) */}
         </div>
@@ -574,51 +772,32 @@ const Categories: React.FC<Props> = ({ showToast }) => {
                   <th className="text-right p-4 text-xs font-bold text-gray-500 uppercase">Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {(paginatedItems as SubCategory[]).map(sub => {
-                  const parentCat = categories.find(c => c.id === sub.categoryId);
-                  return (
-                    <tr key={sub._id || sub.id} className="border-b hover:bg-gray-50 transition-all">
-                      <td className="p-4">
-                        {sub.icon && (
-                          <div className={`w-10 h-10 ${sub.gradient ? `bg-gradient-to-br ${sub.gradient}` : sub.color} rounded-lg flex items-center justify-center shadow-sm`}>
-                            <span className="material-icons-outlined text-white text-lg">{sub.icon}</span>
-                          </div>
-                        )}
-                      </td>
-                      <td className="p-4">
-                        <p className="text-sm font-bold text-gray-800">{sub.title}</p>
-                        {sub.description && <p className="text-xs text-gray-400 mt-0.5">{sub.description}</p>}
-                      </td>
-                      <td className="p-4">
-                        <span className={`px-3 py-1 bg-gradient-to-r ${parentCat?.gradient || 'from-gray-400 to-gray-500'} text-white text-xs font-bold rounded-full`}>
-                          {parentCat?.title || sub.categoryId}
-                        </span>
-                      </td>
-                      <td className="p-4 text-xs text-gray-500">{sub.parentPath || '-'}</td>
-                      <td className="p-4">
-                        <span className={`px-2 py-1 rounded-full text-xs font-bold ${sub.isActive ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'}`}>
-                          {sub.isActive ? 'Active' : 'Inactive'}
-                        </span>
-                      </td>
-                      <td className="p-4 text-sm text-gray-500">{sub.order}</td>
-                      <td className="p-4 text-right">
-                        <div className="flex gap-1 justify-end">
-                          <button onClick={() => openEditSubcategory(sub)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-all">
-                            <span className="material-icons-outlined text-sm">edit</span>
-                          </button>
-                          <button onClick={() => handleDeleteSubcategory(sub)} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all">
-                            <span className="material-icons-outlined text-sm">delete</span>
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-                {paginatedItems.length === 0 && (
-                  <tr><td colSpan={7} className="p-8 text-center text-gray-400 text-sm">No subcategories found</td></tr>
-                )}
-              </tbody>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={paginatedItems.map(item => item._id || item.id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <tbody>
+                    {(paginatedItems as SubCategory[]).map(sub => (
+                      <SortableSubcategoryRow
+                        key={sub._id || sub.id}
+                        sub={sub}
+                        onEdit={openEditSubcategory}
+                        onDelete={handleDeleteSubcategory}
+                        categories={categories}
+                        isSortingDisabled={searchQuery.length > 0 || isReordering}
+                      />
+                    ))}
+                    {paginatedItems.length === 0 && (
+                      <tr><td colSpan={7} className="p-8 text-center text-gray-400 text-sm">No subcategories found</td></tr>
+                    )}
+                  </tbody>
+                </SortableContext>
+              </DndContext>
             </table>
           </div>
         </div>

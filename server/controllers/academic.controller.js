@@ -128,6 +128,36 @@ export const seedCategories = async (req, res) => {
   }
 };
 
+export const reorderCategories = async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
+    }
+
+    const bulkOps = orderedIds.map((id, index) => {
+      let filter;
+      try {
+        filter = { _id: new ObjectId(id) };
+      } catch {
+        filter = { id: id };
+      }
+      return {
+        updateOne: {
+          filter,
+          update: { $set: { order: index + 1 } }
+        }
+      };
+    });
+
+    await db.collection('categories').bulkWrite(bulkOps);
+    res.json({ success: true, message: 'Categories reordered successfully' });
+  } catch (error) {
+    console.error('Reorder categories error:', error);
+    res.status(500).json({ error: 'Failed to reorder categories' });
+  }
+};
+
 // --- Subcategories ---
 
 export const getSubcategories = async (req, res) => {
@@ -185,6 +215,36 @@ export const deleteSubcategory = async (req, res) => {
     res.json({ success: true, message: 'Subcategory deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete subcategory' });
+  }
+};
+
+export const reorderSubcategories = async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
+    }
+
+    const bulkOps = orderedIds.map((id, index) => {
+      let filter;
+      try {
+        filter = { _id: new ObjectId(id) };
+      } catch {
+        filter = { id: id };
+      }
+      return {
+        updateOne: {
+          filter,
+          update: { $set: { order: index + 1 } }
+        }
+      };
+    });
+
+    await db.collection('subcategories').bulkWrite(bulkOps);
+    res.json({ success: true, message: 'Subcategories reordered successfully' });
+  } catch (error) {
+    console.error('Reorder subcategories error:', error);
+    res.status(500).json({ error: 'Failed to reorder subcategories' });
   }
 };
 

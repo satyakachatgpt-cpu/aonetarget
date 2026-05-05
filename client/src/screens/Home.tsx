@@ -237,7 +237,12 @@ const Home: React.FC = () => {
     const fetchCategories = async () => {
       try {
         const data = await categoriesAPI.getAll();
-        const active = (Array.isArray(data) ? data : []).filter((c: any) => c.isActive);
+        const active = (Array.isArray(data) ? data : [])
+          .filter((c: any) => c.isActive)
+          .sort((a: any, b: any) => {
+            if (a.order !== b.order) return (a.order || 0) - (b.order || 0);
+            return String(a._id || a.id).localeCompare(String(b._id || b.id));
+          });
         setCategories(active);
       } catch (error) {
         console.error('Failed to fetch categories:', error);

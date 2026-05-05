@@ -56,6 +56,19 @@ export const categoriesAPI = {
     invalidateCache('categories');
     invalidateCache('subcategories');
     return response.json();
+  },
+  reorder: async (orderedIds: string[]) => {
+    const response = await fetch(`${API_BASE_URL}/categories/reorder`, {
+      method: 'PATCH',
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify({ orderedIds }),
+    });
+    if (!response.ok) throw new Error('Failed to reorder categories');
+    invalidateCache('categories');
+    return response.json();
   }
 };
 
@@ -97,6 +110,19 @@ export const subcategoriesAPI = {
       headers: { ...getAdminHeaders() }
     });
     if (!response.ok) throw new Error('Failed to delete subcategory');
+    invalidateCache('subcategories');
+    return response.json();
+  },
+  reorder: async (orderedIds: string[]) => {
+    const response = await fetch(`${API_BASE_URL}/subcategories/reorder`, {
+      method: 'PATCH',
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify({ orderedIds }),
+    });
+    if (!response.ok) throw new Error('Failed to reorder subcategories');
     invalidateCache('subcategories');
     return response.json();
   }

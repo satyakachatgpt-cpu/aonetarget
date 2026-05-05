@@ -803,7 +803,13 @@ const CategoryPage: React.FC = () => {
           String(c._id).toLowerCase() === String(categoryId).toLowerCase()
         );
         setCategory(cat || null);
-        setSubcategories((Array.isArray(subs) ? subs : []).filter((s: SubCategory) => s.isActive));
+        setSubcategories((Array.isArray(subs) ? subs : [])
+          .filter((s: SubCategory) => s.isActive)
+          .sort((a: any, b: any) => {
+            if (a.order !== b.order) return (a.order || 0) - (b.order || 0);
+            return String(a._id || a.id).localeCompare(String(b._id || b.id));
+          })
+        );
         setSubjects((Array.isArray(subjs) ? subjs : []).filter((s: Subject) => s.status === 'active'));
         
         const purchasedIds = Array.isArray(enrolledRes) ? enrolledRes.map((c: any) => c.id || c._id) : [];
