@@ -774,9 +774,11 @@ const Home: React.FC = () => {
                     <span className="glass bg-white/20 text-[8px] font-medium px-2.5 py-1 rounded-full uppercase tracking-wider">
                       {cat.tag || 'COURSE'}
                     </span>
-                    <div className="w-9 h-9 glass bg-white/20 rounded-2xl flex items-center justify-center border border-white/20">
-                      <span className="material-symbols-rounded text-white text-lg">{cat.icon || CATEGORY_ICONS[cat.title] || 'auto_stories'}</span>
-                    </div>
+                    {cat.icon && (
+                      <div className="w-9 h-9 glass bg-white/20 rounded-2xl flex items-center justify-center border border-white/20">
+                        <span className="material-symbols-rounded text-white text-lg">{cat.icon}</span>
+                      </div>
+                    )}
                   </div>
                   <div className="relative z-10">
                     <h3 className="font-semibold text-[16.8px] leading-tight line-clamp-2">{cat.title}</h3>

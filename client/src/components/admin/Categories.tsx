@@ -487,9 +487,11 @@ const Categories: React.FC<Props> = ({ showToast }) => {
                   )}
                   <div className="flex items-center justify-between relative z-10">
                     <div className="flex items-center gap-3">
-                      <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
-                        <span className="material-icons-outlined text-2xl">{cat.icon}</span>
-                      </div>
+                      {cat.icon && (
+                        <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                          <span className="material-icons-outlined text-2xl">{cat.icon}</span>
+                        </div>
+                      )}
                       <div>
                         <h3 className="font-black text-lg tracking-tight">{cat.title}</h3>
                         <p className="text-white/70 text-xs font-medium">{cat.subtitle}</p>
@@ -578,9 +580,11 @@ const Categories: React.FC<Props> = ({ showToast }) => {
                   return (
                     <tr key={sub._id || sub.id} className="border-b hover:bg-gray-50 transition-all">
                       <td className="p-4">
-                        <div className={`w-10 h-10 ${sub.gradient ? `bg-gradient-to-br ${sub.gradient}` : sub.color} rounded-lg flex items-center justify-center shadow-sm`}>
-                          <span className="material-icons-outlined text-white text-lg">{sub.icon}</span>
-                        </div>
+                        {sub.icon && (
+                          <div className={`w-10 h-10 ${sub.gradient ? `bg-gradient-to-br ${sub.gradient}` : sub.color} rounded-lg flex items-center justify-center shadow-sm`}>
+                            <span className="material-icons-outlined text-white text-lg">{sub.icon}</span>
+                          </div>
+                        )}
                       </td>
                       <td className="p-4">
                         <p className="text-sm font-bold text-gray-800">{sub.title}</p>
@@ -640,9 +644,11 @@ const Categories: React.FC<Props> = ({ showToast }) => {
                     <td className="p-4 text-sm font-bold text-gray-400">{startIndex + idx + 1}</td>
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <div className={`w-8 h-8 ${subj.gradient ? `bg-gradient-to-br ${subj.gradient} text-white` : 'bg-indigo-50 text-indigo-600'} rounded-lg flex items-center justify-center shadow-sm`}>
-                          <span className="material-icons-outlined text-[18px]">{subj.icon}</span>
-                        </div>
+                        {subj.icon && (
+                          <div className={`w-8 h-8 ${subj.gradient ? `bg-gradient-to-br ${subj.gradient} text-white` : 'bg-indigo-50 text-indigo-600'} rounded-lg flex items-center justify-center shadow-sm`}>
+                            <span className="material-icons-outlined text-[18px]">{subj.icon}</span>
+                          </div>
+                        )}
                         <span className="text-sm font-bold text-gray-800">{subj.name}</span>
                       </div>
                     </td>
