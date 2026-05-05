@@ -20,7 +20,7 @@ const AddCategoryDrawer: React.FC<AddCategoryDrawerProps> = ({ isOpen, onClose, 
     id: '',
     title: '',
     subtitle: '',
-    icon: 'school',
+    icon: '',
     gradient: 'from-blue-600 to-indigo-700',
     description: '',
     tag: '',
@@ -43,7 +43,7 @@ const AddCategoryDrawer: React.FC<AddCategoryDrawerProps> = ({ isOpen, onClose, 
           id: editingCategory.id || '',
           title: editingCategory.title,
           subtitle: editingCategory.subtitle || '',
-          icon: editingCategory.icon || 'school',
+          icon: editingCategory.icon || '',
           gradient: editingCategory.gradient || 'from-blue-600 to-indigo-700',
           description: editingCategory.description || '',
           tag: editingCategory.tag || '',
@@ -61,7 +61,7 @@ const AddCategoryDrawer: React.FC<AddCategoryDrawerProps> = ({ isOpen, onClose, 
           id: '',
           title: '',
           subtitle: '',
-          icon: 'school',
+          icon: '',
           gradient: 'from-blue-600 to-indigo-700',
           description: '',
           tag: '',
@@ -202,7 +202,19 @@ const AddCategoryDrawer: React.FC<AddCategoryDrawerProps> = ({ isOpen, onClose, 
           </div>
 
           <div>
-            <FormLabel label="Icon" />
+            <div className="flex justify-between items-center pr-2">
+              <FormLabel label="Icon" />
+              {formData.icon && (
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, icon: '' })}
+                  className="text-[10px] font-black text-red-500 bg-red-50 px-2 py-1 rounded-full border border-red-100 flex items-center gap-1 hover:bg-red-500 hover:text-white transition-all active:scale-95 mb-2"
+                >
+                  <span className="material-symbols-outlined text-[14px]">close</span>
+                  Clear
+                </button>
+              )}
+            </div>
             <div className="grid grid-cols-9 gap-2">
               {iconOptions.map(icon => (
                 <button

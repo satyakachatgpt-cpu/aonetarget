@@ -29,7 +29,7 @@ const AddSubjectDrawer: React.FC<AddSubjectDrawerProps> = ({
     level1Branch: defaultLevel1Branch,
     level2Branch: defaultLevel2Branch,
     course: '',
-    icon: 'school',
+    icon: '',
     gradient: 'from-indigo-500 to-blue-600',
     status: 'active' as 'active' | 'inactive',
   });
@@ -54,7 +54,7 @@ const AddSubjectDrawer: React.FC<AddSubjectDrawerProps> = ({
           level1Branch: editingSubject.level1Branch || '',
           level2Branch: editingSubject.level2Branch || '',
           course: editingSubject.course || '',
-          icon: editingSubject.icon || 'school',
+          icon: editingSubject.icon || '',
           gradient: editingSubject.gradient || '',
           status: editingSubject.status || 'active',
         });
@@ -67,7 +67,7 @@ const AddSubjectDrawer: React.FC<AddSubjectDrawerProps> = ({
             level1Branch: defaultLevel1Branch || cat?.branchesL1?.[0]?.slug || '',
             level2Branch: defaultLevel2Branch || cat?.branchesL2?.[0]?.slug || '',
             course: cat?.branchesL1?.find((b: any) => b.slug === defaultLevel1Branch)?.label || cat?.branchesL1?.[0]?.label || '',
-            icon: 'school',
+            icon: '',
             gradient: 'from-indigo-500 to-blue-600',
             status: 'active',
          });
@@ -150,7 +150,19 @@ const AddSubjectDrawer: React.FC<AddSubjectDrawerProps> = ({
           </div>
 
           <div>
-            <FormLabel label="Icon Picker" />
+            <div className="flex justify-between items-center pr-1">
+              <FormLabel label="Icon Picker" />
+              {formData.icon && (
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, icon: '' })}
+                  className="text-[10px] font-black text-red-500 bg-red-50 px-2 py-1 rounded-full border border-red-100 flex items-center gap-1 hover:bg-red-500 hover:text-white transition-all active:scale-95 mb-2 uppercase"
+                >
+                  <span className="material-symbols-outlined text-[14px]">close</span>
+                  Clear
+                </button>
+              )}
+            </div>
             <div className="grid grid-cols-5 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-100 max-h-[220px] overflow-y-auto custom-scrollbar">
               {iconOptions.map(icon => (
                 <button

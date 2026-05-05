@@ -29,7 +29,7 @@ const AddSubcategoryDrawer: React.FC<AddSubcategoryDrawerProps> = ({
     level1Branch: defaultLevel1Branch || '',
     level2Branch: defaultLevel2Branch || '',
     parentPath: '',
-    icon: 'folder',
+    icon: '',
     color: 'bg-blue-500',
     gradient: 'from-[#303F9F] to-[#1A237E]',
     description: '',
@@ -48,7 +48,7 @@ const AddSubcategoryDrawer: React.FC<AddSubcategoryDrawerProps> = ({
           level1Branch: editingSubcategory.level1Branch || '',
           level2Branch: editingSubcategory.level2Branch || '',
           parentPath: editingSubcategory.parentPath || '',
-          icon: editingSubcategory.icon || 'folder',
+          icon: editingSubcategory.icon || '',
           color: editingSubcategory.color || 'bg-blue-500',
           gradient: editingSubcategory.gradient || '',
           description: editingSubcategory.description || '',
@@ -63,7 +63,7 @@ const AddSubcategoryDrawer: React.FC<AddSubcategoryDrawerProps> = ({
          level1Branch: defaultLevel1Branch || cat?.branchesL1?.[0]?.slug || '',
          level2Branch: defaultLevel2Branch || cat?.branchesL2?.[0]?.slug || '',
          parentPath: '',
-         icon: 'folder',
+         icon: '',
          color: 'bg-blue-500',
          gradient: 'from-[#303F9F] to-[#1A237E]',
          description: '',
@@ -132,7 +132,19 @@ const AddSubcategoryDrawer: React.FC<AddSubcategoryDrawerProps> = ({
             <FormInput value={formData.parentPath} onChange={(e) => setFormData({ ...formData, parentPath: e.target.value })} placeholder="e.g. Science / Biology" />
           </div>
           <div>
-            <FormLabel label="Icon Picker" />
+            <div className="flex justify-between items-center pr-1">
+              <FormLabel label="Icon Picker" />
+              {formData.icon && (
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, icon: '' })}
+                  className="text-[10px] font-black text-red-500 bg-red-50 px-2 py-1 rounded-full border border-red-100 flex items-center gap-1 hover:bg-red-500 hover:text-white transition-all active:scale-95 mb-2 uppercase"
+                >
+                  <span className="material-symbols-outlined text-[14px]">close</span>
+                  Clear
+                </button>
+              )}
+            </div>
             <div className="grid grid-cols-5 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-100">
               {iconOptions.map(icon => (
                 <button
