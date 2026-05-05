@@ -477,6 +477,46 @@ export const deleteGenericPdf = async (req, res) => {
   }
 };
 
+export const reorderPdfs = async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
+    }
+
+    const bulkOps = orderedIds.map((id, index) => {
+      let filter;
+      if (ObjectId.isValid(id)) {
+        filter = { _id: new ObjectId(id) };
+      } else {
+        filter = { id: id };
+      }
+      return {
+        updateOne: {
+          filter,
+          update: { $set: { sortBy: index + 1 } }
+        }
+      };
+    });
+
+    const result = await db.collection('pdfs').bulkWrite(bulkOps);
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'No PDFs matched the provided IDs' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'PDFs reordered successfully',
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    console.error('Reorder PDFs error:', error);
+    res.status(500).json({ error: 'Failed to reorder PDFs', details: error.message });
+  }
+};
+
 export const deleteAllPdfs = async (req, res) => {
   try {
     const result = await db.collection('pdfs').deleteMany({});

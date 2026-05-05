@@ -326,6 +326,22 @@ export const pdfsAPI = {
     invalidateCache('study-dashboard');
     invalidateCache('course-detail');
     return response.json();
+  },
+  reorder: async (orderedIds: string[]) => {
+    const response = await fetch(`${API_BASE_URL}/pdfs/reorder`, {
+      method: 'PATCH',
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify({ orderedIds }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to reorder PDFs');
+    }
+    invalidateCache('course-content');
+    return response.json();
   }
 };
 

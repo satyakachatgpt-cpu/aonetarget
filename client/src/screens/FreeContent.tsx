@@ -102,7 +102,7 @@ const FreeContent: React.FC = () => {
                 ...getItems(ebooksRes),
                 ...getItems(pdfsRes)
             ];
-            setFreeNotes(combinedNotes.filter(checkFree));
+            setFreeNotes(combinedNotes.filter(checkFree).sort((a, b) => (Number(a.sortBy) || 0) - (Number(b.sortBy) || 0)));
             setExamDocs(getItems(docsRes).filter(item => item.status === 'active' && checkFree(item)));
 
         } catch (error) {

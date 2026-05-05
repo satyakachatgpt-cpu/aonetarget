@@ -35,7 +35,8 @@ import {
   deleteStandaloneNote,
   getGenericPdfs,
   updateGenericPdf,
-  deleteGenericPdf
+  deleteGenericPdf,
+  reorderPdfs
 } from '../controllers/appContent.controller.js';
 import {
   getCourseNotes,
@@ -103,6 +104,7 @@ router.get('/pdfs', catalogLimiter, getGenericPdfs);
 router.post('/pdfs', adminMiddleware, createStandalonePdf);
 router.put('/pdfs/:id', adminMiddleware, updateGenericPdf);
 router.delete('/pdfs/:id', adminMiddleware, deleteGenericPdf);
+router.patch('/pdfs/reorder', adminMiddleware, reorderPdfs);
 router.delete('/pdfs', adminMiddleware, deleteAllPdfs);
 router.post('/pdfs/bulk', adminMiddleware, bulkCreatePdfs);
 router.put('/pdfs/update-all', adminMiddleware, updateAllPdfs);
