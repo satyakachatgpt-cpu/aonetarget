@@ -195,9 +195,11 @@ const SubCategoryDetail: React.FC = () => {
           </div>
 
           <div className="bg-white/10 backdrop-blur rounded-2xl p-5 flex items-center gap-4">
-            <div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
-              <span className="material-symbols-rounded text-white text-3xl">school</span>
-            </div>
+            {false && (
+              <div className="w-16 h-16 bg-white/20 rounded-xl flex items-center justify-center flex-shrink-0">
+                <span className="material-symbols-rounded text-white text-3xl">school</span>
+              </div>
+            )}
             <div className="text-white">
               <h2 className="text-base font-bold">{label.split(' - ').pop()}</h2>
               <div className="flex items-center gap-3 mt-2 text-[10px]">
@@ -275,9 +277,7 @@ const SubCategoryDetail: React.FC = () => {
                           )}
                           {(course.imageUrl || course.thumbnail) ? (
                             <img src={getImageUrl(course.imageUrl || course.thumbnail)} alt="" className="w-full h-full object-cover" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
-                          ) : (
-                            <span className="text-white text-4xl font-bold opacity-30">{courseName.charAt(0).toUpperCase()}</span>
-                          )}
+                          ) : null}
                         </div>
                         {(course.type === 'live' || course.isLive) && (
                           <span className="absolute top-3 left-3 flex items-center gap-1 bg-[#D32F2F] text-white text-[10px] font-bold px-2.5 py-1 rounded-full shadow-lg">
@@ -416,11 +416,13 @@ const SubCategoryDetail: React.FC = () => {
               </div>
             ) : (
               <div className="text-center py-16 bg-white rounded-2xl border border-gray-100">
-                <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <span className="material-symbols-rounded text-5xl text-gray-200">
-                    {activeTab === 'live' ? 'cast_for_education' : activeTab === 'recorded' ? 'play_circle' : 'school'}
-                  </span>
-                </div>
+                {false && (
+                  <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="material-symbols-rounded text-5xl text-gray-200">
+                      {activeTab === 'live' ? 'cast_for_education' : activeTab === 'recorded' ? 'play_circle' : 'school'}
+                    </span>
+                  </div>
+                )}
                 <p className="text-sm font-bold text-gray-500">
                   {activeTab === 'live' ? 'No live courses available' : activeTab === 'recorded' ? 'No recorded courses available' : 'No courses available yet'}
                 </p>

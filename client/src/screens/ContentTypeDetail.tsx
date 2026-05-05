@@ -374,7 +374,7 @@ const ContentTypeDetail: React.FC = () => {
                     : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100'
                   }`}
               >
-                <span className="material-symbols-rounded text-base">{subj.icon}</span>
+                {subj.icon && <span className="material-symbols-rounded text-base">{subj.icon}</span>}
                 <span className="text-[9px] font-bold">{subj.label}</span>
               </button>
             ))}
@@ -511,9 +511,11 @@ const ContentTypeDetail: React.FC = () => {
           </div>
         ) : (
           <div className="text-center py-12 bg-white rounded-2xl border border-gray-100">
-            <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="material-symbols-rounded text-5xl text-gray-200">{config.icon}</span>
-            </div>
+            {false && (
+              <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="material-symbols-rounded text-5xl text-gray-200">{config.icon}</span>
+              </div>
+            )}
             <p className="text-sm font-bold text-gray-500">No courses available yet</p>
             <p className="text-xs text-gray-400 mt-1.5">Courses will be added soon!</p>
           </div>
