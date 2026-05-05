@@ -254,7 +254,7 @@ const Home: React.FC = () => {
         const data = await bannersAPI.getAll();
         const activeBanners = (Array.isArray(data) ? data : []).filter((b: any) => b.isActive !== false && b.active !== false);
         if (activeBanners.length > 0) {
-          activeBanners.sort((a: Banner, b: Banner) => (a.order || 0) - (b.order || 0));
+          activeBanners.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
           setBanners(activeBanners);
         } else {
           setBanners([{ imageUrl: '/attached_assets/download_1770552281686.png', title: 'Aone Target Institute' }]);
@@ -1340,7 +1340,7 @@ const Home: React.FC = () => {
             {quickLinks.length > 0 ? (
               quickLinks
                 .filter(link => (link as any).type !== 'yt' && (link as any).status !== 'inactive')
-                .sort((a, b) => b.sortBy - a.sortBy)
+                .sort((a: any, b: any) => (Number(b.sortBy) || 0) - (Number(a.sortBy) || 0))
                 .map((link, i) => (
                   <button
                     key={link.id || i}

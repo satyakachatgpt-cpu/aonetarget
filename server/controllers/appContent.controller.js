@@ -6,7 +6,7 @@ const { ObjectId } = mongoose.Types;
 // Banner Controllers
 export const getBanners = async (req, res) => {
   try {
-    const banners = await db.collection('banners').find({}).toArray();
+    const banners = await db.collection('banners').find({}).sort({ order: 1 }).toArray();
     res.json(banners);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch banners' });
@@ -43,6 +43,32 @@ export const deleteBanner = async (req, res) => {
     res.json({ success: true, message: 'Banner deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete banner' });
+  }
+};
+
+export const reorderBanners = async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
+    }
+
+    const bulkOps = orderedIds.map((id, index) => {
+      let filter = { id: id };
+      if (ObjectId.isValid(id)) filter = { $or: [{ id: id }, { _id: new ObjectId(id) }] };
+      return {
+        updateOne: {
+          filter,
+          update: { $set: { order: index + 1 } }
+        }
+      };
+    });
+
+    await db.collection('banners').bulkWrite(bulkOps);
+    res.json({ success: true, message: 'Banners reordered successfully' });
+  } catch (error) {
+    console.error('Reorder banners error:', error);
+    res.status(500).json({ error: 'Failed to reorder banners' });
   }
 };
 
@@ -132,6 +158,33 @@ export const deleteQuickLink = async (req, res) => {
     res.json({ success: true, message: 'Quick link deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete quick link' });
+  }
+};
+
+export const reorderQuickLinks = async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
+    }
+
+    const total = orderedIds.length;
+    const bulkOps = orderedIds.map((id, index) => {
+      let filter = { id: id };
+      if (ObjectId.isValid(id)) filter = { $or: [{ id: id }, { _id: new ObjectId(id) }] };
+      return {
+        updateOne: {
+          filter,
+          update: { $set: { sortBy: total - index } }
+        }
+      };
+    });
+
+    await db.collection('quickLinks').bulkWrite(bulkOps);
+    res.json({ success: true, message: 'Quick links reordered successfully' });
+  } catch (error) {
+    console.error('Reorder quick links error:', error);
+    res.status(500).json({ error: 'Failed to reorder quick links' });
   }
 };
 

@@ -4,6 +4,7 @@ import {
   createBanner,
   updateBanner,
   deleteBanner,
+  reorderBanners,
   getNews,
   createNews,
   updateNews,
@@ -12,6 +13,7 @@ import {
   createQuickLink,
   updateQuickLink,
   deleteQuickLink,
+  reorderQuickLinks,
   getInstructions,
   createInstruction,
   updateInstruction,
@@ -61,6 +63,7 @@ router.get('/banners', getBanners);
 router.post('/banners', adminMiddleware, createBanner);
 router.put('/banners/:id', adminMiddleware, updateBanner);
 router.delete('/banners/:id', adminMiddleware, deleteBanner);
+router.patch('/banners/reorder', adminMiddleware, reorderBanners);
 
 // News
 router.get('/news', getNews);
@@ -73,6 +76,7 @@ router.get('/quick-links', getQuickLinks);
 router.post('/quick-links', adminMiddleware, createQuickLink);
 router.put('/quick-links/:id', adminMiddleware, updateQuickLink);
 router.delete('/quick-links/:id', adminMiddleware, deleteQuickLink);
+router.patch('/quick-links/reorder', adminMiddleware, reorderQuickLinks);
 
 // Instructions
 router.get('/instructions', getInstructions);

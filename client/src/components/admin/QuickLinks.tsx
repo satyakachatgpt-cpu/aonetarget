@@ -6,6 +6,23 @@ import {
     DrawerHeader,
     DrawerFooter
 } from './DrawerSystem';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface QuickLink {
     _id?: string;
@@ -44,6 +61,18 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
         description: '',
         type: 'link' as 'link' | 'yt'
     });
+    const [isReordering, setIsReordering] = useState(false);
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: {
+                distance: 5,
+            },
+        }),
+        useSensor(KeyboardSensor, {
+            coordinateGetter: sortableKeyboardCoordinates,
+        })
+    );
 
     // Standardized Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -219,6 +248,35 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
         }
     };
 
+    const handleDragEnd = async (event: DragEndEvent) => {
+        const { active, over } = event;
+        if (!over || active.id === over.id) return;
+
+        const oldIndex = links.findIndex((item) => (item._id || item.id) === active.id);
+        const newIndex = links.findIndex((item) => (item._id || item.id) === over.id);
+
+        if (oldIndex === -1 || newIndex === -1) return;
+
+        const newOrderedLinks = arrayMove(links, oldIndex, newIndex);
+        
+        // Optimistic Update
+        setLinks(newOrderedLinks);
+        setIsReordering(true);
+
+        try {
+            await quickLinksAPI.reorder(newOrderedLinks.map(item => item._id || item.id));
+            showToast('Order updated successfully');
+        } catch (error) {
+            console.error('Failed to reorder quick links:', error);
+            showToast('Failed to update order. Rolling back...', 'error');
+            fetchLinks(); // Rollback
+        } finally {
+            setIsReordering(false);
+        }
+    };
+
+    const isSortingDisabled = searchQuery.length > 0 || currentPage !== 1 || isReordering || activeTab !== 'Links';
+
     return (
         <div className="bg-[#fafafa] min-h-screen">
             <div className="pt-0 px-6 pb-10 space-y-4">
@@ -277,6 +335,7 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
                                 <tr className="bg-gray-50/10 border-b border-gray-100">
                                     <th className="pl-8 pr-4 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
                                         <div className="flex items-center gap-1">
+                                            {!isSortingDisabled && <span className="material-symbols-outlined text-[14px] align-middle mr-1">drag_handle</span>}
                                             S. NO. <span className="material-symbols-outlined text-[14px]">unfold_more</span>
                                         </div>
                                     </th>
@@ -298,150 +357,45 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
                                     <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">ACTIONS</th>
                                 </tr>
                             </thead>
-<tbody className="divide-y divide-gray-50">
-                                {isLoading ? (
-                                    <tr>
-                                        <td colSpan={5} className="px-8 py-20 text-center text-gray-400">Loading...</td>
-                                    </tr>
-                                ) : paginatedData.length === 0 ? (
-                                    <tr>
-                                        <td colSpan={5} className="px-8 py-20 text-center text-gray-400">No data found</td>
-                                    </tr>
-                                ) : (
-                                    paginatedData.map((item: any, idx) => (
-                                        <tr key={item._id || item.id} className="hover:bg-gray-50/50 transition-colors group">
-                                            <td className="pl-8 pr-4 py-6 text-[13px] font-medium text-gray-600 group-hover:text-black">{startIndex + idx + 1}</td>
-                                            <td className="px-6 py-6 font-bold">
-                                                <div className="w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center p-0.5 bg-white border border-gray-100 shadow-sm relative group/img">
-                                                    {(() => {
-                                                        const getYTThumb = (urlProp: string) => {
-                                                            const url = urlProp || '';
-                                                            if (!url) return null;
-                                                            let vid = '';
-                                                            if (url.includes('v=')) vid = url.split('v=')[1]?.split('&')[0];
-                                                            else if (url.includes('youtu.be/')) vid = url.split('youtu.be/')[1]?.split('?')[0];
-                                                            else vid = url.split('/').pop() || '';
-                                                            return vid ? `https://img.youtube.com/vi/${vid}/hqdefault.jpg` : null;
-                                                        };
-
-                                                        const isVideo = activeTab === 'YT History';
-                                                        const videoUrl = item.url || item.youtubeUrl || '';
-                                                        const thumb = item.imageUrl || item.thumbnail || (isVideo ? getYTThumb(videoUrl) : null);
-
-                                                        return thumb ? (
-                                                            <img
-                                                                src={thumb}
-                                                                className="w-full h-full object-cover rounded-lg"
-                                                                alt={item.title}
-                                                            />
-                                                        ) : (
-                                                            <div className={`w-full h-full flex items-center justify-center ${activeTab === 'Links' ? 'bg-blue-50 text-blue-400' : 'bg-red-50 text-red-400'}`}>
-                                                                <span className="material-symbols-outlined text-[24px]">
-                                                                    {activeTab === 'YT History' ? 'play_circle' : 'link'}
-                                                                </span>
-                                                            </div>
-                                                        );
-                                                    })()}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-6">
-                                                <div className="flex flex-col">
-                                                    <span className="text-[14px] font-bold text-gray-800">{item.title}</span>
-                                                    {activeTab === 'YT History' && item.courseId && (
-                                                        <span className="text-[10px] text-gray-400 font-medium">
-                                                            Course: {courses.find(c => (c._id || c.id) === item.courseId)?.title || item.courseId}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-6">
-                                                <span className="px-3 py-1 bg-gray-50 text-gray-500 rounded-lg text-[12px] font-medium border border-gray-100">
-                                                    {Number(item.sortBy || 0).toFixed(2)}
-                                                </span>
-                                            </td>
-                                            <td className="px-6 py-6">
-                                                <div className="relative row-action-menu-container">
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setOpenActionMenuId(openActionMenuId === (item._id || item.id) ? null : (item._id || item.id));
-                                                        }}
-                                                        className={`px-4 py-2 bg-white border border-gray-200 rounded-xl text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-all flex items-center gap-2 group shadow-sm`}
-                                                    >
-                                                        Actions
-                                                        <span className="material-symbols-outlined text-[18px] text-gray-400 group-hover:text-gray-600">expand_more</span>
-                                                    </button>
-
-                                                    {openActionMenuId === (item._id || item.id) && (
-                                                        <div className={`absolute right-0 ${idx === 0 ? 'top-full mt-2 origin-top-right' : 'bottom-full mb-2 origin-bottom-right'} w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] border border-gray-100 py-3 z-[999] animate-in fade-in zoom-in duration-200`}>
-                                                            {activeTab === 'Links' ? (
-                                                                <>
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            const url = item.url.startsWith('http') ? item.url : `https://${item.url}`;
-                                                                            window.open(url, '_blank');
-                                                                            setOpenActionMenuId(null);
-                                                                        }}
-                                                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-blue-600 hover:bg-blue-50 transition-colors"
-                                                                    >
-                                                                        <span className="material-symbols-outlined text-[20px]">open_in_new</span>
-                                                                        Open Link
-                                                                    </button>
-                                                                    <div className="h-[1px] bg-gray-50 mx-2 my-1"></div>
-                                                                    <button
-                                                                        onClick={() => handleEdit(item)}
-                                                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-gray-600 hover:bg-amber-50 hover:text-amber-600 transition-colors"
-                                                                    >
-                                                                        <span className="material-symbols-outlined text-[20px] text-amber-500">edit</span>
-                                                                        Edit Link
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => { handleDelete(item._id || item.id); setOpenActionMenuId(null); }}
-                                                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition-colors"
-                                                                    >
-                                                                        <span className="material-symbols-outlined text-[20px] text-red-500">delete</span>
-                                                                        Delete Link
-                                                                    </button>
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <button
-                                                                        onClick={() => {
-                                                                            const url = item.url || item.youtubeUrl || '';
-                                                                            const finalUrl = url.startsWith('http') ? url : `https://${url}`;
-                                                                            window.open(finalUrl, '_blank');
-                                                                            setOpenActionMenuId(null);
-                                                                        }}
-                                                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-blue-600 hover:bg-blue-50 transition-colors"
-                                                                    >
-                                                                        <span className="material-symbols-outlined text-[20px]">open_in_new</span>
-                                                                        Goto Link
-                                                                    </button>
-                                                                    <div className="h-[1px] bg-gray-50 mx-2 my-1"></div>
-                                                                    <button
-                                                                        onClick={() => handleEdit(item)}
-                                                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-gray-600 hover:bg-amber-50 hover:text-amber-600 transition-colors"
-                                                                    >
-                                                                        <span className="material-symbols-outlined text-[20px] text-amber-500">edit</span>
-                                                                        Edit
-                                                                    </button>
-                                                                    <button
-                                                                        onClick={() => { handleDelete(item._id || item.id); setOpenActionMenuId(null); }}
-                                                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition-colors"
-                                                                    >
-                                                                        <span className="material-symbols-outlined text-[20px] text-red-500">delete</span>
-                                                                        Delete
-                                                                    </button>
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </td>
+                            <DndContext
+                                sensors={sensors}
+                                collisionDetection={closestCenter}
+                                onDragEnd={handleDragEnd}
+                            >
+                                <tbody className="divide-y divide-gray-50">
+                                    {isLoading ? (
+                                        <tr>
+                                            <td colSpan={5} className="px-8 py-20 text-center text-gray-400">Loading...</td>
                                         </tr>
-                                    ))
-                                )}
-                            </tbody>
+                                    ) : paginatedData.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={5} className="px-8 py-20 text-center text-gray-400">No data found</td>
+                                        </tr>
+                                    ) : (
+                                        <SortableContext
+                                            items={paginatedData.map(item => item._id || item.id)}
+                                            strategy={verticalListSortingStrategy}
+                                            disabled={isSortingDisabled}
+                                        >
+                                            {paginatedData.map((item: any, idx) => (
+                                                <SortableQuickLinkRow
+                                                    key={item._id || item.id}
+                                                    item={item}
+                                                    idx={idx}
+                                                    startIndex={startIndex}
+                                                    activeTab={activeTab}
+                                                    courses={courses}
+                                                    openActionMenuId={openActionMenuId}
+                                                    setOpenActionMenuId={setOpenActionMenuId}
+                                                    handleEdit={handleEdit}
+                                                    handleDelete={handleDelete}
+                                                    isSortingDisabled={isSortingDisabled}
+                                                />
+                                            ))}
+                                        </SortableContext>
+                                    )}
+                                </tbody>
+                            </DndContext>
                         </table>
                     </div>
                 </div>
@@ -599,6 +553,185 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
                 </RightSideDrawer>
             </div>
         </div >
+    );
+};
+
+const SortableQuickLinkRow = ({
+    item,
+    idx,
+    startIndex,
+    activeTab,
+    courses,
+    openActionMenuId,
+    setOpenActionMenuId,
+    handleEdit,
+    handleDelete,
+    isSortingDisabled
+}: any) => {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging
+    } = useSortable({ id: item._id || item.id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+        zIndex: isDragging ? 100 : 1,
+        position: 'relative' as 'relative',
+        backgroundColor: isDragging ? '#f8fafc' : undefined,
+        opacity: isDragging ? 0.8 : 1,
+    };
+
+    return (
+        <tr
+            ref={setNodeRef}
+            style={style}
+            className={`hover:bg-gray-50/50 transition-colors group ${isDragging ? 'shadow-lg border-y border-gray-200' : ''}`}
+        >
+            <td className="pl-8 pr-4 py-6 text-[13px] font-medium text-gray-600 group-hover:text-black">
+                {!isSortingDisabled && (
+                    <span
+                        {...attributes}
+                        {...listeners}
+                        className="material-symbols-outlined text-[18px] align-middle mr-3 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600"
+                    >
+                        drag_indicator
+                    </span>
+                )}
+                {startIndex + idx + 1}
+            </td>
+            <td className="px-6 py-6 font-bold">
+                <div className="w-12 h-12 rounded-xl overflow-hidden flex items-center justify-center p-0.5 bg-white border border-gray-100 shadow-sm relative group/img">
+                    {(() => {
+                        const getYTThumb = (urlProp: string) => {
+                            const url = urlProp || '';
+                            if (!url) return null;
+                            let vid = '';
+                            if (url.includes('v=')) vid = url.split('v=')[1]?.split('&')[0];
+                            else if (url.includes('youtu.be/')) vid = url.split('youtu.be/')[1]?.split('?')[0];
+                            else vid = url.split('/').pop() || '';
+                            return vid ? `https://img.youtube.com/vi/${vid}/hqdefault.jpg` : null;
+                        };
+
+                        const isVideo = activeTab === 'YT History';
+                        const videoUrl = item.url || item.youtubeUrl || '';
+                        const thumb = item.imageUrl || item.thumbnail || (isVideo ? getYTThumb(videoUrl) : null);
+
+                        return thumb ? (
+                            <img
+                                src={thumb}
+                                className="w-full h-full object-cover rounded-lg"
+                                alt={item.title}
+                            />
+                        ) : (
+                            <div className={`w-full h-full flex items-center justify-center ${activeTab === 'Links' ? 'bg-blue-50 text-blue-400' : 'bg-red-50 text-red-400'}`}>
+                                <span className="material-symbols-outlined text-[24px]">
+                                    {activeTab === 'YT History' ? 'play_circle' : 'link'}
+                                </span>
+                            </div>
+                        );
+                    })()}
+                </div>
+            </td>
+            <td className="px-6 py-6">
+                <div className="flex flex-col">
+                    <span className="text-[14px] font-bold text-gray-800">{item.title}</span>
+                    {activeTab === 'YT History' && item.courseId && (
+                        <span className="text-[10px] text-gray-400 font-medium">
+                            Course: {courses.find((c: any) => (c._id || c.id) === item.courseId)?.title || item.courseId}
+                        </span>
+                    )}
+                </div>
+            </td>
+            <td className="px-6 py-6">
+                <span className="px-3 py-1 bg-gray-50 text-gray-500 rounded-lg text-[12px] font-medium border border-gray-100">
+                    {Number(item.sortBy || 0).toFixed(0)}
+                </span>
+            </td>
+            <td className="px-6 py-6">
+                <div className="relative row-action-menu-container">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenActionMenuId(openActionMenuId === (item._id || item.id) ? null : (item._id || item.id));
+                        }}
+                        className={`px-4 py-2 bg-white border border-gray-200 rounded-xl text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-all flex items-center gap-2 group shadow-sm`}
+                    >
+                        Actions
+                        <span className="material-symbols-outlined text-[18px] text-gray-400 group-hover:text-gray-600">expand_more</span>
+                    </button>
+
+                    {openActionMenuId === (item._id || item.id) && (
+                        <div className={`absolute right-0 ${idx === 0 ? 'top-full mt-2 origin-top-right' : 'bottom-full mb-2 origin-bottom-right'} w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] border border-gray-100 py-3 z-[999] animate-in fade-in zoom-in duration-200`}>
+                            {activeTab === 'Links' ? (
+                                <>
+                                    <button
+                                        onClick={() => {
+                                            const url = item.url.startsWith('http') ? item.url : `https://${item.url}`;
+                                            window.open(url, '_blank');
+                                            setOpenActionMenuId(null);
+                                        }}
+                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-blue-600 hover:bg-blue-50 transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-[20px]">open_in_new</span>
+                                        Open Link
+                                    </button>
+                                    <div className="h-[1px] bg-gray-50 mx-2 my-1"></div>
+                                    <button
+                                        onClick={() => handleEdit(item)}
+                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-gray-600 hover:bg-amber-50 hover:text-amber-600 transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-[20px] text-amber-500">edit</span>
+                                        Edit Link
+                                    </button>
+                                    <button
+                                        onClick={() => { handleDelete(item._id || item.id); setOpenActionMenuId(null); }}
+                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-[20px] text-red-500">delete</span>
+                                        Delete Link
+                                    </button>
+                                </>
+                            ) : (
+                                <>
+                                    <button
+                                        onClick={() => {
+                                            const url = item.url || item.youtubeUrl || '';
+                                            const finalUrl = url.startsWith('http') ? url : `https://${url}`;
+                                            window.open(finalUrl, '_blank');
+                                            setOpenActionMenuId(null);
+                                        }}
+                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-blue-600 hover:bg-blue-50 transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-[20px]">open_in_new</span>
+                                        Goto Link
+                                    </button>
+                                    <div className="h-[1px] bg-gray-50 mx-2 my-1"></div>
+                                    <button
+                                        onClick={() => handleEdit(item)}
+                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-gray-600 hover:bg-amber-50 hover:text-amber-600 transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-[20px] text-amber-500">edit</span>
+                                        Edit
+                                    </button>
+                                    <button
+                                        onClick={() => { handleDelete(item._id || item.id); setOpenActionMenuId(null); }}
+                                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition-colors"
+                                    >
+                                        <span className="material-symbols-outlined text-[20px] text-red-500">delete</span>
+                                        Delete
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </td>
+        </tr>
     );
 };
 
