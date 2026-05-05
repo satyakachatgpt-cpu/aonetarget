@@ -806,7 +806,13 @@ const CategoryPage: React.FC = () => {
         setSubcategories((Array.isArray(subs) ? subs : [])
           .filter((s: SubCategory) => s.isActive)
           .sort((a: any, b: any) => {
-            if (a.order !== b.order) return (a.order || 0) - (b.order || 0);
+            const getOrderValue = (val: any) => {
+              const n = Number(val);
+              return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+            };
+            const aVal = getOrderValue(a.order);
+            const bVal = getOrderValue(b.order);
+            if (aVal !== bVal) return aVal - bVal;
             return String(a._id || a.id).localeCompare(String(b._id || b.id));
           })
         );

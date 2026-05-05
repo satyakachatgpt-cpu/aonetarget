@@ -137,9 +137,9 @@ export const reorderCategories = async (req, res) => {
 
     const bulkOps = orderedIds.map((id, index) => {
       let filter;
-      try {
+      if (ObjectId.isValid(id)) {
         filter = { _id: new ObjectId(id) };
-      } catch {
+      } else {
         filter = { id: id };
       }
       return {
@@ -150,11 +150,21 @@ export const reorderCategories = async (req, res) => {
       };
     });
 
-    await db.collection('categories').bulkWrite(bulkOps);
-    res.json({ success: true, message: 'Categories reordered successfully' });
+    const result = await db.collection('categories').bulkWrite(bulkOps);
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'No categories matched the provided IDs' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Categories reordered successfully',
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount
+    });
   } catch (error) {
     console.error('Reorder categories error:', error);
-    res.status(500).json({ error: 'Failed to reorder categories' });
+    res.status(500).json({ error: 'Failed to reorder categories', details: error.message });
   }
 };
 
@@ -227,9 +237,12 @@ export const reorderSubcategories = async (req, res) => {
 
     const bulkOps = orderedIds.map((id, index) => {
       let filter;
-      try {
+      if (ObjectId.isValid(id)) {
         filter = { _id: new ObjectId(id) };
-      } catch {
+      } else {
+        // Fallback to id slug is risky for subcategories due to duplicates, 
+        // but if needed, it should ideally be scoped by categoryId.
+        // For now, we prioritize ObjectId as per analysis.
         filter = { id: id };
       }
       return {
@@ -240,11 +253,21 @@ export const reorderSubcategories = async (req, res) => {
       };
     });
 
-    await db.collection('subcategories').bulkWrite(bulkOps);
-    res.json({ success: true, message: 'Subcategories reordered successfully' });
+    const result = await db.collection('subcategories').bulkWrite(bulkOps);
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'No subcategories matched the provided IDs' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Subcategories reordered successfully',
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount
+    });
   } catch (error) {
     console.error('Reorder subcategories error:', error);
-    res.status(500).json({ error: 'Failed to reorder subcategories' });
+    res.status(500).json({ error: 'Failed to reorder subcategories', details: error.message });
   }
 };
 

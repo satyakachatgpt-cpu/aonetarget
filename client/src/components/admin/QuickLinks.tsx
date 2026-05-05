@@ -252,8 +252,9 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
         const { active, over } = event;
         if (!over || active.id === over.id) return;
 
-        const oldIndex = links.findIndex((item) => (item._id || item.id) === active.id);
-        const newIndex = links.findIndex((item) => (item._id || item.id) === over.id);
+        const getStableId = (item: any) => String(item?._id || item?.id || "");
+        const oldIndex = links.findIndex((item) => getStableId(item) === active.id);
+        const newIndex = links.findIndex((item) => getStableId(item) === over.id);
 
         if (oldIndex === -1 || newIndex === -1) return;
 
@@ -264,7 +265,8 @@ const QuickLinks: React.FC<Props> = ({ showToast }) => {
         setIsReordering(true);
 
         try {
-            await quickLinksAPI.reorder(newOrderedLinks.map(item => item._id || item.id));
+            const orderedIds = newOrderedLinks.map(item => getStableId(item));
+            await quickLinksAPI.reorder(orderedIds);
             showToast('Order updated successfully');
         } catch (error) {
             console.error('Failed to reorder quick links:', error);

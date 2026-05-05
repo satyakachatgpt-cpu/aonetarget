@@ -22,7 +22,8 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 
 interface Banner {
-  id: string;
+  _id?: string;
+  id?: string;
   title: string;
   imageUrl: string;
   linkUrl?: string;
@@ -106,8 +107,14 @@ const Banners: React.FC<Props> = ({ showToast }) => {
 
   const loadBanners = async () => {
     try {
+      setLoading(true);
       const data = await bannersAPI.getAll();
-      setBanners(data.sort((a: Banner, b: Banner) => a.order - b.order));
+      const sorted = (Array.isArray(data) ? data : []).sort((a: Banner, b: Banner) => {
+        const aVal = Number.isFinite(a.order) ? a.order : Number.MAX_SAFE_INTEGER;
+        const bVal = Number.isFinite(b.order) ? b.order : Number.MAX_SAFE_INTEGER;
+        return aVal - bVal;
+      });
+      setBanners(sorted);
     } catch (error) {
       showToast('Failed to load banners', 'error');
     } finally {
@@ -201,8 +208,9 @@ const Banners: React.FC<Props> = ({ showToast }) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
-    const oldIndex = banners.findIndex((b) => b.id === active.id);
-    const newIndex = banners.findIndex((b) => b.id === over.id);
+    const getStableId = (item: any) => String(item?._id || item?.id || "");
+    const oldIndex = banners.findIndex((b) => getStableId(b) === active.id);
+    const newIndex = banners.findIndex((b) => getStableId(b) === over.id);
 
     if (oldIndex === -1 || newIndex === -1) return;
 
@@ -213,7 +221,7 @@ const Banners: React.FC<Props> = ({ showToast }) => {
     setIsReordering(true);
 
     try {
-      await bannersAPI.reorder(newOrderedBanners.map(b => b.id));
+      await bannersAPI.reorder(newOrderedBanners.map(b => getStableId(b)));
       showToast('Order updated successfully');
     } catch (error) {
       console.error('Failed to reorder banners:', error);
@@ -292,13 +300,13 @@ const Banners: React.FC<Props> = ({ showToast }) => {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 <SortableContext
-                  items={paginatedBanners.map(b => b.id)}
+                  items={paginatedBanners.map(b => b._id || b.id)}
                   strategy={verticalListSortingStrategy}
                   disabled={isSortingDisabled}
                 >
                   {paginatedBanners.map((banner, index) => (
                     <SortableBannerRow
-                      key={banner.id}
+                      key={banner._id || banner.id}
                       banner={banner}
                       index={startIndex + index}
                       activeActionMenuId={activeActionMenuId}
@@ -743,7 +751,7 @@ const SortableBannerRow = ({
     transform,
     transition,
     isDragging
-  } = useSortable({ id: banner.id });
+  } = useSortable({ id: banner._id || banner.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),

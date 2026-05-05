@@ -431,9 +431,11 @@ const Categories: React.FC<Props> = ({ showToast }) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
+    const getStableId = (item: any) => String(item?._id || item?.id || "");
+
     if (activeTab === 'categories') {
-      const oldIndex = categories.findIndex((c) => (c._id || c.id) === active.id);
-      const newIndex = categories.findIndex((c) => (c._id || c.id) === over.id);
+      const oldIndex = categories.findIndex((c) => getStableId(c) === active.id);
+      const newIndex = categories.findIndex((c) => getStableId(c) === over.id);
 
       if (oldIndex === -1 || newIndex === -1) return;
 
@@ -444,7 +446,7 @@ const Categories: React.FC<Props> = ({ showToast }) => {
       setIsReordering(true);
 
       try {
-        const orderedIds = newOrder.map(c => c._id || c.id) as string[];
+        const orderedIds = newOrder.map(c => getStableId(c)) as string[];
         await categoriesAPI.reorder(orderedIds);
         showToast('Categories reordered successfully', 'success');
       } catch (error) {
@@ -455,8 +457,8 @@ const Categories: React.FC<Props> = ({ showToast }) => {
         setIsReordering(false);
       }
     } else if (activeTab === 'subcategories') {
-      const oldIndex = subcategories.findIndex((s) => (s._id || s.id) === active.id);
-      const newIndex = subcategories.findIndex((s) => (s._id || s.id) === over.id);
+      const oldIndex = subcategories.findIndex((s) => getStableId(s) === active.id);
+      const newIndex = subcategories.findIndex((s) => getStableId(s) === over.id);
 
       if (oldIndex === -1 || newIndex === -1) return;
 
@@ -467,7 +469,7 @@ const Categories: React.FC<Props> = ({ showToast }) => {
       setIsReordering(true);
 
       try {
-        const orderedIds = newOrder.map(s => s._id || s.id) as string[];
+        const orderedIds = newOrder.map(s => getStableId(s)) as string[];
         await subcategoriesAPI.reorder(orderedIds);
         showToast('Subcategories reordered successfully', 'success');
       } catch (error) {

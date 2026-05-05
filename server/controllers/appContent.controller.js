@@ -64,11 +64,21 @@ export const reorderBanners = async (req, res) => {
       };
     });
 
-    await db.collection('banners').bulkWrite(bulkOps);
-    res.json({ success: true, message: 'Banners reordered successfully' });
+    const result = await db.collection('banners').bulkWrite(bulkOps);
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'No banners matched the provided IDs' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Banners reordered successfully',
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount
+    });
   } catch (error) {
     console.error('Reorder banners error:', error);
-    res.status(500).json({ error: 'Failed to reorder banners' });
+    res.status(500).json({ error: 'Failed to reorder banners', details: error.message });
   }
 };
 
@@ -180,11 +190,21 @@ export const reorderQuickLinks = async (req, res) => {
       };
     });
 
-    await db.collection('quickLinks').bulkWrite(bulkOps);
-    res.json({ success: true, message: 'Quick links reordered successfully' });
+    const result = await db.collection('quickLinks').bulkWrite(bulkOps);
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'No quick links matched the provided IDs' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Quick links reordered successfully',
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount
+    });
   } catch (error) {
     console.error('Reorder quick links error:', error);
-    res.status(500).json({ error: 'Failed to reorder quick links' });
+    res.status(500).json({ error: 'Failed to reorder quick links', details: error.message });
   }
 };
 

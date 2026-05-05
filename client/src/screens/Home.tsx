@@ -240,7 +240,13 @@ const Home: React.FC = () => {
         const active = (Array.isArray(data) ? data : [])
           .filter((c: any) => c.isActive)
           .sort((a: any, b: any) => {
-            if (a.order !== b.order) return (a.order || 0) - (b.order || 0);
+            const getOrderValue = (val: any) => {
+              const n = Number(val);
+              return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+            };
+            const aVal = getOrderValue(a.order);
+            const bVal = getOrderValue(b.order);
+            if (aVal !== bVal) return aVal - bVal;
             return String(a._id || a.id).localeCompare(String(b._id || b.id));
           });
         setCategories(active);
@@ -254,7 +260,13 @@ const Home: React.FC = () => {
         const data = await bannersAPI.getAll();
         const activeBanners = (Array.isArray(data) ? data : []).filter((b: any) => b.isActive !== false && b.active !== false);
         if (activeBanners.length > 0) {
-          activeBanners.sort((a: any, b: any) => (a.order || 0) - (b.order || 0));
+          activeBanners.sort((a: any, b: any) => {
+            const getOrderValue = (val: any) => {
+              const n = Number(val);
+              return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+            };
+            return getOrderValue(a.order) - getOrderValue(b.order);
+          });
           setBanners(activeBanners);
         } else {
           setBanners([{ imageUrl: '/attached_assets/download_1770552281686.png', title: 'Aone Target Institute' }]);
@@ -1340,7 +1352,16 @@ const Home: React.FC = () => {
             {quickLinks.length > 0 ? (
               quickLinks
                 .filter(link => (link as any).type !== 'yt' && (link as any).status !== 'inactive')
-                .sort((a: any, b: any) => (Number(b.sortBy) || 0) - (Number(a.sortBy) || 0))
+                .sort((a: any, b: any) => {
+                  const getSortByValue = (val: any) => {
+                    const n = Number(val);
+                    return Number.isFinite(n) ? n : Number.NEGATIVE_INFINITY;
+                  };
+                  const aVal = getSortByValue(a.sortBy);
+                  const bVal = getSortByValue(b.sortBy);
+                  if (aVal !== bVal) return bVal - aVal; // Descending
+                  return String(b._id || b.id).localeCompare(String(a._id || a.id));
+                })
                 .map((link, i) => (
                   <button
                     key={link.id || i}
