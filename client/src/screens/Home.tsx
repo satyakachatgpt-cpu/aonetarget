@@ -750,7 +750,7 @@ const Home: React.FC = () => {
             </button>
           </div>
           {filteredCategories.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2.5">
               {filteredCategories.slice(0, 6).map((cat, i) => (
                 <div
                   key={cat._id || cat.id || i}
@@ -764,7 +764,7 @@ const Home: React.FC = () => {
                       navigate(`/explore/${cat.id}`);
                     }
                   }}
-                  className={`relative p-3.5 rounded-3xl h-40 flex flex-col justify-between text-white bg-gradient-to-br ${cat.gradient || CATEGORY_GRADIENTS[i % CATEGORY_GRADIENTS.length]} overflow-hidden cursor-pointer active:scale-[0.97] transition-all duration-200 shadow-elevated hover:shadow-card-hover hover:-translate-y-0.5 group`}
+                  className={`relative p-3 rounded-3xl h-[132px] flex flex-col justify-between text-white bg-gradient-to-br ${cat.gradient || CATEGORY_GRADIENTS[i % CATEGORY_GRADIENTS.length]} overflow-hidden cursor-pointer active:scale-[0.97] transition-all duration-200 shadow-elevated hover:shadow-card-hover hover:-translate-y-0.5 group`}
                 >
                   {cat.imageUrl && (
                     <img src={getImageUrl(cat.imageUrl)} alt={cat.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
@@ -774,16 +774,16 @@ const Home: React.FC = () => {
                     <span className="glass bg-white/20 text-[8px] font-medium px-2.5 py-1 rounded-full uppercase tracking-wider">
                       {cat.tag || 'COURSE'}
                     </span>
-                    <div className="w-10 h-10 glass bg-white/20 rounded-2xl flex items-center justify-center border border-white/20">
-                      <span className="material-symbols-rounded text-white text-xl">{cat.icon || CATEGORY_ICONS[cat.title] || 'auto_stories'}</span>
+                    <div className="w-9 h-9 glass bg-white/20 rounded-2xl flex items-center justify-center border border-white/20">
+                      <span className="material-symbols-rounded text-white text-lg">{cat.icon || CATEGORY_ICONS[cat.title] || 'auto_stories'}</span>
                     </div>
                   </div>
                   <div className="relative z-10">
-                    <h3 className="font-medium text-lg leading-tight">{cat.title}</h3>
-                    <span className="text-[10px] opacity-80 font-medium">{cat.subtitle}</span>
+                    <h3 className="font-semibold text-[16.8px] leading-tight line-clamp-2">{cat.title}</h3>
+                    <span className="text-[11.5px] opacity-80 font-medium">{cat.subtitle}</span>
                   </div>
-                  <div className="absolute bottom-3 right-3 h-9 w-9 glass bg-white/25 rounded-full flex items-center justify-center border border-white/30 z-10 group-hover:bg-white/40 group-hover:scale-110 transition-all duration-200">
-                    <span className="material-symbols-rounded text-white text-lg">arrow_forward</span>
+                  <div className="absolute bottom-3 right-3 h-8 w-8 glass bg-white/25 rounded-full flex items-center justify-center border border-white/30 z-10 group-hover:bg-white/40 group-hover:scale-110 transition-all duration-200">
+                    <span className="material-symbols-rounded text-white text-base">arrow_forward</span>
                   </div>
                 </div>
               ))}
