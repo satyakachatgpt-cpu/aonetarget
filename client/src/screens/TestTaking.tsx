@@ -35,6 +35,9 @@ const TestTaking: React.FC = () => {
   const [reportingStatus, setReportingStatus] = useState(false);
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+  const [leaderboard, setLeaderboard] = useState<any[]>([]);
+  const [fetchingLeaderboard, setFetchingLeaderboard] = useState(false);
+  const [viewMode, setViewMode] = useState<'summary' | 'solutions'>('summary');
 
   useEffect(() => {
     // Reset session state when changing tests
@@ -81,7 +84,7 @@ const TestTaking: React.FC = () => {
         throw new Error(`${errData.error || 'Result not found'} (ID: ${resultId})`);
       }
       const resultData = await res.json();
-      
+
       // Fetch the test data as well to get questions
       const testRes = await fetch(`/api/tests/${testId}`, {
         headers: { ...getAuthHeaders(), ...getAdminHeaders() }
@@ -96,7 +99,7 @@ const TestTaking: React.FC = () => {
         correctAnswer: (qn.correctAnswer || qn.correct_answer || qn.answer || qn['Correct Answer'] || qn.correctOption || 'A').toString().toUpperCase()
       }));
       setQuestions(q);
-      
+
       setAnswers(resultData.answers || {});
       setResult(resultData);
       setSubmitted(true);
@@ -265,22 +268,22 @@ const TestTaking: React.FC = () => {
       let obtainedMarks = 0;
       let negativeMarksTotal = 0;
       questions.forEach(q => {
-        const tMarks = (test?.marksPerQuestion !== undefined && test?.marksPerQuestion !== null && test?.marksPerQuestion !== '') ? Number(test.marksPerQuestion) : 
-                       (test?.marks !== undefined && test?.marks !== null && test?.marks !== '') ? Number(test.marks) : null;
-        
-        const qMarks = (q.marks !== undefined && q.marks !== null && q.marks !== '') ? Number(q.marks) : 
-                       (q.positiveMarks !== undefined && q.positiveMarks !== null && q.positiveMarks !== '') ? Number(q.positiveMarks) : null;
-        
+        const tMarks = (test?.marksPerQuestion !== undefined && test?.marksPerQuestion !== null && test?.marksPerQuestion !== '') ? Number(test.marksPerQuestion) :
+          (test?.marks !== undefined && test?.marks !== null && test?.marks !== '') ? Number(test.marks) : null;
+
+        const qMarks = (q.marks !== undefined && q.marks !== null && q.marks !== '') ? Number(q.marks) :
+          (q.positiveMarks !== undefined && q.positiveMarks !== null && q.positiveMarks !== '') ? Number(q.positiveMarks) : null;
+
         const marks = tMarks !== null ? tMarks : (qMarks !== null ? qMarks : 0);
 
-        const tNeg = (test?.negativeMarking !== undefined && test?.negativeMarking !== null && test?.negativeMarking !== '') ? test.negativeMarking : 
-                     (test?.negative !== undefined && test?.negative !== null && test?.negative !== '') ? test.negative : null;
-                     
-        const qNeg = (q.negativeMarks !== undefined && q.negativeMarks !== null && q.negativeMarks !== '') ? q.negativeMarks : 
-                     (q.negative !== undefined && q.negative !== null && q.negative !== '') ? q.negative : null;
-                     
+        const tNeg = (test?.negativeMarking !== undefined && test?.negativeMarking !== null && test?.negativeMarking !== '') ? test.negativeMarking :
+          (test?.negative !== undefined && test?.negative !== null && test?.negative !== '') ? test.negative : null;
+
+        const qNeg = (q.negativeMarks !== undefined && q.negativeMarks !== null && q.negativeMarks !== '') ? q.negativeMarks :
+          (q.negative !== undefined && q.negative !== null && q.negative !== '') ? q.negative : null;
+
         const negMarks = Math.abs(Number(tNeg !== null ? tNeg : (qNeg !== null ? qNeg : 0)));
-        
+
         totalMarks += marks;
         if (answers[q.id]) {
           if (answers[q.id] === q.correctAnswer) {
@@ -310,6 +313,29 @@ const TestTaking: React.FC = () => {
       setConfirmSubmit(false);
     }
   }, [submitted, submitting, testId, student, answers, questions]);
+
+  useEffect(() => {
+    if (submitted && testId) {
+      fetchLeaderboard();
+    }
+  }, [submitted, testId]);
+
+  const fetchLeaderboard = async () => {
+    try {
+      setFetchingLeaderboard(true);
+      const res = await fetch(`/api/tests/${testId}/leaderboard?limit=10`, {
+        headers: getAuthHeaders()
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setLeaderboard(data.leaderboard || []);
+      }
+    } catch (err) {
+      console.error('Failed to fetch leaderboard:', err);
+    } finally {
+      setFetchingLeaderboard(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -354,66 +380,207 @@ const TestTaking: React.FC = () => {
           </div>
         </header>
 
-        <div className="p-4 max-w-md mx-auto">
-          <div className="bg-white rounded-2xl shadow-sm p-6 text-center mb-4">
-            <div className={`text-5xl font-black ${pctColor}`}>{result.percentage}%</div>
-            <p className="text-gray-500 text-sm mt-1">Your Score</p>
-            <div className="mt-3 text-lg font-bold text-gray-800">
-              {result.obtainedMarks} / {result.totalMarks} Marks
-            </div>
-
-            {result.rank !== undefined && result.rank !== null && (
-              <div className="mt-4 inline-flex items-center gap-2 bg-[#1A237E]/5 px-4 py-2 rounded-full border border-[#1A237E]/10">
-                <span className="material-symbols-rounded text-[#1A237E] text-[20px]">emoji_events</span>
-                <span className="text-[14px] font-black text-[#1A237E]">
-                  RANK: {result.rank} / {result.totalStudents || result.rank}
-                </span>
+        <div className="p-4 max-w-5xl mx-auto space-y-4">
+          {/* A) OVERALL ANALYSIS CARD */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3.5 flex flex-col items-center">
+            <h3 className="text-gray-800 text-[11px] font-black w-full text-left mb-2">Overall Analysis</h3>
+            <div className="relative w-[130px] h-[130px] mb-2">
+              <svg className="w-full h-full transform -rotate-90">
+                <circle cx="65" cy="65" r="58" stroke="currentColor" strokeWidth="10" fill="transparent" className="text-gray-100" />
+                <circle cx="65" cy="65" r="58" stroke="currentColor" strokeWidth="10" fill="transparent" 
+                        strokeDasharray={364.42} 
+                        strokeDashoffset={364.42 - (364.42 * (result.percentage || 0)) / 100} 
+                        strokeLinecap="round"
+                        className="text-[#1A237E] transition-all duration-1000 ease-out" />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest leading-none">Overall</span>
+                <span className="text-xl font-black text-[#1A237E]">{result.percentage}%</span>
               </div>
-            )}
+            </div>
+            <div className="text-center mb-2">
+              <div className="text-xl font-black text-gray-800 leading-none">
+                {result.obtainedMarks} <span className="text-gray-300 text-[10px] font-medium">/ {result.totalMarks}</span>
+              </div>
+              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Marks Obtained</p>
+            </div>
+            <div className="flex flex-wrap justify-center gap-1.5 w-full border-t border-gray-50 pt-2.5">
+              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-green-50 text-green-600 border border-green-100">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-600"></span>
+                <span className="text-[9px] font-bold">{result.correctAnswers} Correct</span>
+              </div>
+              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-red-50 text-red-600 border border-red-100">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-600"></span>
+                <span className="text-[9px] font-bold">{result.wrongAnswers} Wrong</span>
+              </div>
+              <div className="flex items-center gap-1 px-2 py-1 rounded-full bg-gray-50 text-gray-500 border border-gray-100">
+                <span className="w-1.5 h-1.5 rounded-full bg-gray-400"></span>
+                <span className="text-[9px] font-bold">{result.unanswered} Skipped</span>
+              </div>
+            </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="bg-white rounded-xl p-4 text-center shadow-sm">
-              <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2">
-                <span className="material-symbols-rounded text-green-600">check_circle</span>
-              </div>
-              <div className="text-lg font-bold text-green-600">{result.correctAnswers}</div>
-              <p className="text-[10px] text-gray-400">Correct</p>
+          {/* Solution Button - Placed between Overall Analysis and Rank */}
+          <button 
+            onClick={() => setViewMode('solutions')}
+            className="w-full bg-white text-[#1A237E] py-4 rounded-2xl text-sm font-black flex items-center justify-center gap-3 shadow-sm border border-blue-100 hover:bg-blue-50 transition-all active:scale-[0.98]"
+          >
+            <span className="material-symbols-rounded text-[22px]">visibility</span>
+            VIEW DETAILED SOLUTIONS & REVIEW
+          </button>
+
+          {viewMode === 'summary' && (
+            <>
+
+          {/* B) RANK + SCORE CARD */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3.5 flex flex-col items-center">
+            <div className="w-full text-center py-1">
+              <h2 className="text-2xl font-black text-[#1A237E] tracking-tight">Rank #{result.rank || '--'}</h2>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
+                {result.totalStudents ? `Of ${result.totalStudents} Students` : 'Of -- Students'}
+              </p>
             </div>
-            <div className="bg-white rounded-xl p-4 text-center shadow-sm">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-2">
-                <span className="material-symbols-rounded text-[#D32F2F]">cancel</span>
+            <div className="w-full space-y-2 mt-2">
+              <div className="flex justify-between items-end">
+                <div>
+                  <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Your Score</p>
+                  <p className="text-base font-black text-gray-800">{result.obtainedMarks} / {result.totalMarks}</p>
+                </div>
+                <div className="text-right">
+                  <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Percentage</p>
+                  <p className="text-base font-black text-[#1A237E]">{result.percentage}%</p>
+                </div>
               </div>
-              <div className="text-lg font-bold text-[#D32F2F]">{result.wrongAnswers}</div>
-              <p className="text-[10px] text-gray-400">Wrong</p>
-            </div>
-            <div className="bg-white rounded-xl p-4 text-center shadow-sm">
-              <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-2">
-                <span className="material-symbols-rounded text-gray-500">remove_circle</span>
+              <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-[#1A237E] to-[#303F9F] rounded-full transition-all duration-1000" style={{ width: `${result.percentage}%` }}></div>
               </div>
-              <div className="text-lg font-bold text-gray-500">{result.unanswered}</div>
-              <p className="text-[10px] text-gray-400">Skipped</p>
             </div>
           </div>
 
-          <div className="bg-white rounded-xl p-4 shadow-sm mb-4">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-gray-500">Time Taken</span>
-              <span className="font-bold text-gray-800">{formatTime(result.timeTaken)}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm mt-2">
-              <span className="text-gray-500">Total Questions</span>
-              <span className="font-bold text-gray-800">{result.totalQuestions}</span>
-            </div>
-            {result.negativeMarksTotal > 0 && (
-              <div className="flex items-center justify-between text-sm mt-2">
-                <span className="text-gray-500">Negative Marks</span>
-                <span className="font-bold text-[#D32F2F]">-{result.negativeMarksTotal}</span>
+          {/* C) TIME ANALYSIS CARD */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3.5 flex flex-col items-center">
+            <h3 className="text-gray-800 text-[11px] font-black w-full text-left mb-0.5">Time Analysis</h3>
+            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest w-full text-left mb-3">
+              Total Test Time: {formatTime((test?.duration || 60) * 60)}
+            </p>
+            <div className="relative w-[130px] h-[130px] mb-2">
+              <svg className="w-full h-full transform -rotate-90">
+                <circle cx="65" cy="65" r="58" stroke="currentColor" strokeWidth="10" fill="transparent" className="text-gray-100" />
+                <circle cx="65" cy="65" r="58" stroke="currentColor" strokeWidth="10" fill="transparent" 
+                        strokeDasharray={364.42} 
+                        strokeDashoffset={364.42 - (364.42 * Math.min(100, (result.timeTaken / (Math.max(1, (test?.duration || 60)) * 60)) * 100)) / 100} 
+                        strokeLinecap="round"
+                        className="text-purple-600 transition-all duration-1000 ease-out" />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest leading-none">Time</span>
+                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest leading-none mt-0.5">Distribution</span>
               </div>
-            )}
+            </div>
+            <div className="text-center">
+              <div className="text-xl font-black text-gray-800 leading-none">{formatTime(result.timeTaken)}</div>
+              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Time Taken</p>
+            </div>
           </div>
 
-          {questions.length > 0 && (
+          {/* D) PERFORMANCE DETAILS STRIP */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+            {[
+              { label: 'Correct', value: result.correctAnswers, color: 'text-green-600', bg: 'bg-green-50', icon: 'check_circle' },
+              { label: 'Wrong', value: result.wrongAnswers, color: 'text-red-600', bg: 'bg-red-50', icon: 'cancel' },
+              { label: 'Skipped', value: result.unanswered, color: 'text-gray-500', bg: 'bg-gray-50', icon: 'remove_circle' },
+              { label: 'Accuracy', value: `${result.percentage}%`, color: 'text-[#1A237E]', bg: 'bg-blue-50', icon: 'ads_click' },
+              { label: 'Total Questions', value: result.totalQuestions, color: 'text-gray-700', bg: 'bg-gray-100', icon: 'quiz' },
+              { label: 'Negative Marks', value: `-${result.negativeMarksTotal || 0}`, color: 'text-amber-700', bg: 'bg-amber-50', icon: 'trending_down' }
+            ].map(stat => (
+              <div key={stat.label} className={`${stat.bg} rounded-xl p-2 flex flex-col border border-transparent`}>
+                <span className="material-symbols-rounded text-base mb-0.5 opacity-70">{stat.icon}</span>
+                <div className={`text-base font-black ${stat.color} leading-none`}>{stat.value}</div>
+                <p className="text-[7px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">{stat.label}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Leaderboard Section */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="p-3 border-b border-gray-50 flex flex-col">
+              <h2 className="text-base font-black text-gray-800 tracking-tight">Leaderboard</h2>
+              <p className="text-[8px] text-gray-400 font-medium">Top 10 Students</p>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50/50 text-[8px] font-bold text-gray-400 uppercase tracking-widest">
+                    <th className="px-3 py-1.5">Rank</th>
+                    <th className="px-3 py-1.5">Student</th>
+                    <th className="px-3 py-1.5">Marks</th>
+                    <th className="px-3 py-1.5">Time</th>
+                  </tr>
+                </thead>
+                <tbody className="text-[11px]">
+                  {fetchingLeaderboard ? (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-6 text-center">
+                        <span className="material-symbols-rounded animate-spin text-xl text-gray-300">progress_activity</span>
+                      </td>
+                    </tr>
+                  ) : leaderboard.length > 0 ? (
+                    leaderboard.map((row, idx) => {
+                      const isMe = String(row.studentId) === String(student?.id);
+                      return (
+                        <tr key={idx} className={`border-b border-gray-50 transition-colors ${isMe ? 'bg-blue-50/50' : 'hover:bg-gray-50/30'}`}>
+                          <td className="px-3 py-1.5">
+                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-black text-[9px]
+                                                ${row.rank === 1 ? 'bg-amber-100 text-amber-600' :
+                                row.rank === 2 ? 'bg-slate-100 text-slate-500' :
+                                  row.rank === 3 ? 'bg-orange-100 text-orange-600' : 'text-gray-400'}`}>
+                              {row.rank}
+                            </div>
+                          </td>
+                          <td className="px-3 py-1.5">
+                            <span className={`font-bold ${isMe ? 'text-[#1A237E]' : 'text-gray-700'}`}>
+                              {row.studentName || 'Unknown'}
+                            </span>
+                          </td>
+                          <td className="px-3 py-1.5 font-black text-gray-800">{row.obtainedMarks}</td>
+                          <td className="px-3 py-1.5 text-gray-500 font-medium">{formatTime(row.timeTaken)}</td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="px-3 py-6 text-center text-gray-400 font-medium">Leaderboard not available</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Current Rank if not in Top 10 */}
+          {result.rank > 10 && (
+            <div className="bg-[#1A237E] rounded-2xl p-4 flex items-center justify-between text-white shadow-lg shadow-blue-900/20">
+              <div className="flex items-center gap-3">
+                <span className="material-symbols-rounded text-sm">info</span>
+                <span className="text-xs font-bold">Your Position: <span className="text-amber-400">#{result.rank}</span></span>
+              </div>
+            </div>
+          )}
+            </>
+          )}
+
+          {viewMode === 'solutions' && (
+            <div className="space-y-4 pb-4">
+              <button 
+                onClick={() => setViewMode('summary')}
+                className="flex items-center gap-2 text-[#1A237E] font-bold text-sm bg-white px-4 py-2.5 rounded-xl shadow-sm border border-blue-50 hover:bg-blue-100 transition-all active:scale-[0.98]"
+              >
+                <span className="material-symbols-rounded">arrow_back</span>
+                Back to Result Summary
+              </button>
+
+              {questions.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
               <h3 className="font-bold text-sm mb-3 text-gray-700">Answer Review</h3>
               <div className="space-y-3">
@@ -442,7 +609,7 @@ const TestTaking: React.FC = () => {
                       {q.explanation && (
                         <p className="text-[10px] text-gray-500 mt-1 italic">{q.explanation}</p>
                       )}
-                      <button 
+                      <button
                         onClick={() => setReportModal({ isOpen: true, question: q })}
                         className="mt-2 flex items-center gap-1 text-[10px] text-amber-600 font-bold hover:bg-amber-50 p-1 rounded transition-colors"
                       >
@@ -455,95 +622,99 @@ const TestTaking: React.FC = () => {
               </div>
             </div>
           )}
-
-          <button
-            onClick={() => {
-              navigate('/mock-tests', { replace: true });
-            }}
-            className="w-full bg-[#1A237E] text-white py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
-          >
-            <span className="material-symbols-rounded text-[18px]">arrow_back</span>
-            Back to Mock Tests
-          </button>
         </div>
+      )}
 
-        {/* Report Question Modal (inside results view) */}
-        {reportModal && (
-          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
-            <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white">
-                <h3 className="text-sm font-bold text-gray-800">Report Issue</h3>
-                <button
-                  onClick={() => setReportModal(null)}
-                  className="text-gray-400 hover:text-black transition-colors"
-                >
-                  <span className="material-symbols-rounded text-[20px]">close</span>
-                </button>
-              </div>
-              
-              <div className="p-6">
-                <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">
-                  <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wider mb-1">Question Content</p>
-                  <p className="text-[12px] text-amber-900 line-clamp-3 leading-relaxed">
-                    {reportModal.question?.question || reportModal.question?.questionEn || reportModal.question?.text}
-                  </p>
-                </div>
+      {viewMode === 'summary' && (
+        <button
+          onClick={() => {
+            navigate('/mock-tests', { replace: true });
+          }}
+          className="w-full bg-[#1A237E] text-white py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+        >
+          <span className="material-symbols-rounded text-[18px]">arrow_back</span>
+          Back to Mock Tests
+        </button>
+      )}
 
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Select Issue Type</p>
-                <div className="space-y-2 mb-4">
-                  {['Formatting Issue', 'Wrong Answer', 'Wrong Question', 'Image Hidden/Broken', 'Other'].map(issue => (
-                    <button
-                      key={issue}
-                      onClick={() => setReportIssue(issue)}
-                      className={`w-full text-left px-4 py-2.5 rounded-xl border text-[13px] transition-all ${reportIssue === issue 
-                        ? 'border-[#1A237E] bg-blue-50 text-[#1A237E] font-bold shadow-sm' 
-                        : 'border-gray-100 text-gray-600 hover:border-gray-200 hover:bg-gray-50'}`}
-                    >
-                      {issue}
-                    </button>
-                  ))}
-                </div>
-
-                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Comment (Optional)</p>
-                <textarea
-                  value={reportComment}
-                  onChange={(e) => setReportComment(e.target.value)}
-                  placeholder="Explain the issue in detail..."
-                  className="w-full h-24 p-3 bg-gray-50 border border-gray-100 rounded-xl text-[13px] mb-5 focus:outline-none focus:border-[#1A237E] focus:bg-white transition-all resize-none"
-                />
-
-                <div className="flex gap-3">
+          {/* Report Question Modal (inside results view) */}
+          {reportModal && (
+            <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-sm">
+              <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 bg-white">
+                  <h3 className="text-sm font-bold text-gray-800">Report Issue</h3>
                   <button
                     onClick={() => setReportModal(null)}
-                    className="flex-1 py-3 rounded-xl border border-gray-100 text-gray-600 text-sm font-bold hover:bg-gray-50 transition-colors"
+                    className="text-gray-400 hover:text-black transition-colors"
                   >
-                    Cancel
+                    <span className="material-symbols-rounded text-[20px]">close</span>
                   </button>
-                  <button
-                    onClick={handleReportSubmit}
-                    disabled={!reportIssue || reportingStatus}
-                    className="flex-1 py-3 rounded-xl bg-[#1A237E] text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98] transition-all"
-                  >
-                    {reportingStatus ? (
-                      <span className="material-symbols-rounded animate-spin text-[18px]">progress_activity</span>
-                    ) : (
-                      <>
-                        <span className="material-symbols-rounded text-[18px]">send</span>
-                        Submit
-                      </>
-                    )}
-                  </button>
+                </div>
+
+                <div className="p-6">
+                  <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">
+                    <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wider mb-1">Question Content</p>
+                    <p className="text-[12px] text-amber-900 line-clamp-3 leading-relaxed">
+                      {reportModal.question?.question || reportModal.question?.questionEn || reportModal.question?.text}
+                    </p>
+                  </div>
+
+                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Select Issue Type</p>
+                  <div className="space-y-2 mb-4">
+                    {['Formatting Issue', 'Wrong Answer', 'Wrong Question', 'Image Hidden/Broken', 'Other'].map(issue => (
+                      <button
+                        key={issue}
+                        onClick={() => setReportIssue(issue)}
+                        className={`w-full text-left px-4 py-2.5 rounded-xl border text-[13px] transition-all ${reportIssue === issue
+                          ? 'border-[#1A237E] bg-blue-50 text-[#1A237E] font-bold shadow-sm'
+                          : 'border-gray-100 text-gray-600 hover:border-gray-200 hover:bg-gray-50'}`}
+                      >
+                        {issue}
+                      </button>
+                    ))}
+                  </div>
+
+                  <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-2">Comment (Optional)</p>
+                  <textarea
+                    value={reportComment}
+                    onChange={(e) => setReportComment(e.target.value)}
+                    placeholder="Explain the issue in detail..."
+                    className="w-full h-24 p-3 bg-gray-50 border border-gray-100 rounded-xl text-[13px] mb-5 focus:outline-none focus:border-[#1A237E] focus:bg-white transition-all resize-none"
+                  />
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setReportModal(null)}
+                      className="flex-1 py-3 rounded-xl border border-gray-100 text-gray-600 text-sm font-bold hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleReportSubmit}
+                      disabled={!reportIssue || reportingStatus}
+                      className="flex-1 py-3 rounded-xl bg-[#1A237E] text-white text-sm font-bold flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20 disabled:opacity-50 disabled:pointer-events-none active:scale-[0.98] transition-all"
+                    >
+                      {reportingStatus ? (
+                        <span className="material-symbols-rounded animate-spin text-[18px]">progress_activity</span>
+                      ) : (
+                        <>
+                          <span className="material-symbols-rounded text-[18px]">send</span>
+                          Submit
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     );
   }
 
   const isSectionEnabled = (test?.enableSectionSelector === true || test?.enableSectionSelector === 'true') && Array.isArray(test?.sections) && test.sections.length > 0;
-  
+
   const displayQuestions = isSectionEnabled && activeSectionId
     ? questions.filter((q: any) => String(q.sectionId) === String(activeSectionId))
     : questions;
@@ -558,58 +729,58 @@ const TestTaking: React.FC = () => {
   if (!loading && !error && !submitted && needsTerms && !hasAcceptedTerms) {
     return (
       <div className="min-h-screen bg-gray-50 flex flex-col">
-          <header className="bg-[#1A237E] text-white py-3 px-4 sticky top-0 z-30 shadow-md">
-            <div className="flex items-center gap-3">
+        <header className="bg-[#1A237E] text-white py-3 px-4 sticky top-0 z-30 shadow-md">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/mock-tests', { replace: true })}
+              className="p-1.5 rounded-full hover:bg-white/20 transition-colors"
+              title="Back to Tests"
+            >
+              <span className="material-symbols-rounded text-[20px]">arrow_back</span>
+            </button>
+            <h1 className="text-sm font-bold flex-1 truncate">{test?.title || test?.name || 'Test Instructions'}</h1>
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto p-4 max-w-4xl mx-auto w-full">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-full">
+            <div className="p-4 md:p-6 border-b border-gray-100 bg-blue-50/30 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-[#1A237E]/10 flex items-center justify-center text-[#1A237E]">
+                  <span className="material-symbols-rounded text-xl">gavel</span>
+                </div>
+                <div>
+                  <h2 className="text-lg font-black text-gray-800 tracking-tight">Terms &amp; Conditions</h2>
+                  <p className="text-xs text-gray-500 font-medium">Please read carefully before starting the test</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-5 md:p-8 flex-1 overflow-y-auto prose max-w-none text-[14.5px] leading-relaxed text-gray-700 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li]:mb-2 [&>ol]:list-decimal [&>ol]:pl-5 [&>ol>li]:mb-2 [&>p]:mb-4" dangerouslySetInnerHTML={{ __html: test.termsAndConditions }} />
+
+            <div className="p-5 md:p-6 border-t border-gray-100 bg-gray-50 flex flex-col gap-3">
+              <div className="text-xs text-center text-gray-500 mb-1">
+                By clicking start, you agree to all the terms listed above. The timer will start immediately.
+              </div>
+              <button
+                onClick={() => {
+                  setHasAcceptedTerms(true);
+                  startTimeRef.current = Date.now();
+                }}
+                className="w-full py-4 bg-[#1A237E] text-white rounded-xl text-[14px] font-bold uppercase tracking-wider hover:bg-[#283593] transition-all shadow-md hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
+              >
+                I Accept &amp; Start Test
+                <span className="material-symbols-rounded text-[20px]">arrow_forward</span>
+              </button>
               <button
                 onClick={() => navigate('/mock-tests', { replace: true })}
-                className="p-1.5 rounded-full hover:bg-white/20 transition-colors"
-                title="Back to Tests"
+                className="w-full py-3 bg-white text-gray-600 rounded-xl text-[13px] font-bold border border-gray-200 hover:bg-gray-50 transition-all"
               >
-                <span className="material-symbols-rounded text-[20px]">arrow_back</span>
+                Cancel
               </button>
-              <h1 className="text-sm font-bold flex-1 truncate">{test?.title || test?.name || 'Test Instructions'}</h1>
             </div>
-          </header>
-          
-          <div className="flex-1 overflow-y-auto p-4 max-w-4xl mx-auto w-full">
-              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-full">
-                  <div className="p-4 md:p-6 border-b border-gray-100 bg-blue-50/30 flex items-center justify-between">
-                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-[#1A237E]/10 flex items-center justify-center text-[#1A237E]">
-                           <span className="material-symbols-rounded text-xl">gavel</span>
-                        </div>
-                        <div>
-                           <h2 className="text-lg font-black text-gray-800 tracking-tight">Terms &amp; Conditions</h2>
-                           <p className="text-xs text-gray-500 font-medium">Please read carefully before starting the test</p>
-                        </div>
-                     </div>
-                  </div>
-                  
-                  <div className="p-5 md:p-8 flex-1 overflow-y-auto prose max-w-none text-[14.5px] leading-relaxed text-gray-700 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li]:mb-2 [&>ol]:list-decimal [&>ol]:pl-5 [&>ol>li]:mb-2 [&>p]:mb-4" dangerouslySetInnerHTML={{ __html: test.termsAndConditions }} />
-                  
-                  <div className="p-5 md:p-6 border-t border-gray-100 bg-gray-50 flex flex-col gap-3">
-                     <div className="text-xs text-center text-gray-500 mb-1">
-                        By clicking start, you agree to all the terms listed above. The timer will start immediately.
-                     </div>
-                     <button
-                        onClick={() => {
-                            setHasAcceptedTerms(true);
-                            startTimeRef.current = Date.now();
-                        }}
-                        className="w-full py-4 bg-[#1A237E] text-white rounded-xl text-[14px] font-bold uppercase tracking-wider hover:bg-[#283593] transition-all shadow-md hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
-                     >
-                        I Accept &amp; Start Test
-                        <span className="material-symbols-rounded text-[20px]">arrow_forward</span>
-                     </button>
-                     <button
-                        onClick={() => navigate('/mock-tests', { replace: true })}
-                        className="w-full py-3 bg-white text-gray-600 rounded-xl text-[13px] font-bold border border-gray-200 hover:bg-gray-50 transition-all"
-                     >
-                        Cancel
-                     </button>
-                  </div>
-              </div>
           </div>
+        </div>
       </div>
     );
   }
@@ -649,11 +820,10 @@ const TestTaking: React.FC = () => {
                   setCurrentIndex(0);
                   setShowPalette(false);
                 }}
-                className={`whitespace-nowrap px-4 py-2 text-[13px] font-bold rounded-lg transition-all mx-1 ${
-                  activeSectionId === sec.id.toString()
+                className={`whitespace-nowrap px-4 py-2 text-[13px] font-bold rounded-lg transition-all mx-1 ${activeSectionId === sec.id.toString()
                     ? 'bg-[#1A237E]/10 text-[#1A237E]'
                     : 'text-gray-500 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 {sec.partTitle || sec.section || 'Section'}
                 {secQCount > 0 && (
@@ -737,21 +907,21 @@ const TestTaking: React.FC = () => {
               </span>
               <div className="flex items-center gap-2">
                 <div className="flex flex-col items-end">
-                   <span className="text-[10px] font-black text-green-600">
-                    +{(function() {
-                      const tMarks = (test?.marksPerQuestion !== undefined && test?.marksPerQuestion !== null && test?.marksPerQuestion !== '') ? Number(test.marksPerQuestion) : 
-                                     (test?.marks !== undefined && test?.marks !== null && test?.marks !== '') ? Number(test.marks) : null;
-                      const qMarks = (currentQuestion?.marks !== undefined && currentQuestion?.marks !== null && currentQuestion?.marks !== '') ? Number(currentQuestion?.marks) : 
-                                     (currentQuestion?.positiveMarks !== undefined && currentQuestion?.positiveMarks !== null && currentQuestion?.positiveMarks !== '') ? Number(currentQuestion?.positiveMarks) : null;
+                  <span className="text-[10px] font-black text-green-600">
+                    +{(function () {
+                      const tMarks = (test?.marksPerQuestion !== undefined && test?.marksPerQuestion !== null && test?.marksPerQuestion !== '') ? Number(test.marksPerQuestion) :
+                        (test?.marks !== undefined && test?.marks !== null && test?.marks !== '') ? Number(test.marks) : null;
+                      const qMarks = (currentQuestion?.marks !== undefined && currentQuestion?.marks !== null && currentQuestion?.marks !== '') ? Number(currentQuestion?.marks) :
+                        (currentQuestion?.positiveMarks !== undefined && currentQuestion?.positiveMarks !== null && currentQuestion?.positiveMarks !== '') ? Number(currentQuestion?.positiveMarks) : null;
                       return tMarks !== null ? tMarks : (qMarks !== null ? qMarks : 0);
                     })()}
                   </span>
                   <span className="text-[10px] font-black text-red-500">
-                    -{(function() {
-                      const tNeg = (test?.negativeMarking !== undefined && test?.negativeMarking !== null && test?.negativeMarking !== '') ? test.negativeMarking : 
-                                   (test?.negative !== undefined && test?.negative !== null && test?.negative !== '') ? test.negative : null;
-                      const qNeg = (currentQuestion?.negativeMarks !== undefined && currentQuestion?.negativeMarks !== null && currentQuestion?.negativeMarks !== '') ? currentQuestion?.negativeMarks : 
-                                   (currentQuestion?.negative !== undefined && currentQuestion?.negative !== null && currentQuestion?.negative !== '') ? currentQuestion?.negative : null;
+                    -{(function () {
+                      const tNeg = (test?.negativeMarking !== undefined && test?.negativeMarking !== null && test?.negativeMarking !== '') ? test.negativeMarking :
+                        (test?.negative !== undefined && test?.negative !== null && test?.negative !== '') ? test.negative : null;
+                      const qNeg = (currentQuestion?.negativeMarks !== undefined && currentQuestion?.negativeMarks !== null && currentQuestion?.negativeMarks !== '') ? currentQuestion?.negativeMarks :
+                        (currentQuestion?.negative !== undefined && currentQuestion?.negative !== null && currentQuestion?.negative !== '') ? currentQuestion?.negative : null;
                       return Math.abs(Number(tNeg !== null ? tNeg : (qNeg !== null ? qNeg : 0)));
                     })()}
                   </span>
@@ -944,7 +1114,7 @@ const TestTaking: React.FC = () => {
                 <span className="material-symbols-rounded text-[20px]">close</span>
               </button>
             </div>
-            
+
             <div className="p-6">
               <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 mb-4">
                 <p className="text-[11px] font-bold text-amber-800 uppercase tracking-wider mb-1">Question Content</p>
@@ -959,8 +1129,8 @@ const TestTaking: React.FC = () => {
                   <button
                     key={issue}
                     onClick={() => setReportIssue(issue)}
-                    className={`w-full text-left px-4 py-2.5 rounded-xl border text-[13px] transition-all ${reportIssue === issue 
-                      ? 'border-[#1A237E] bg-blue-50 text-[#1A237E] font-bold shadow-sm' 
+                    className={`w-full text-left px-4 py-2.5 rounded-xl border text-[13px] transition-all ${reportIssue === issue
+                      ? 'border-[#1A237E] bg-blue-50 text-[#1A237E] font-bold shadow-sm'
                       : 'border-gray-100 text-gray-600 hover:border-gray-200 hover:bg-gray-50'}`}
                   >
                     {issue}
