@@ -6,7 +6,7 @@ const { ObjectId } = mongoose.Types;
 // Banner Controllers
 export const getBanners = async (req, res) => {
   try {
-    const banners = await db.collection('banners').find({}).toArray();
+    const banners = await db.collection('banners').find({}).sort({ order: 1 }).toArray();
     res.json(banners);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch banners' });
@@ -43,6 +43,48 @@ export const deleteBanner = async (req, res) => {
     res.json({ success: true, message: 'Banner deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete banner' });
+  }
+};
+
+export const reorderBanners = async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
+    }
+
+    const bulkOps = orderedIds.map((id, index) => {
+      // Prioritize MongoDB _id for reordering
+      const query = {
+        $or: [
+          { _id: ObjectId.isValid(id) ? new ObjectId(id) : null },
+          { id: id }
+        ].filter(v => v._id || v.id)
+      };
+
+      return {
+        updateOne: {
+          filter: query,
+          update: { $set: { order: index + 1 } }
+        }
+      };
+    });
+
+    const result = await db.collection('banners').bulkWrite(bulkOps);
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'No banners matched the provided IDs' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Banners reordered successfully',
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    console.error('Reorder banners error:', error);
+    res.status(500).json({ error: 'Failed to reorder banners', details: error.message });
   }
 };
 
@@ -135,11 +177,54 @@ export const deleteQuickLink = async (req, res) => {
   }
 };
 
+export const reorderQuickLinks = async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
+    }
+
+    const total = orderedIds.length;
+    const bulkOps = orderedIds.map((id, index) => {
+      // Prioritize MongoDB _id for reordering
+      const query = {
+        $or: [
+          { _id: ObjectId.isValid(id) ? new ObjectId(id) : null },
+          { id: id }
+        ].filter(v => v._id || v.id)
+      };
+
+      return {
+        updateOne: {
+          filter: query,
+          update: { $set: { sortBy: total - index } }
+        }
+      };
+    });
+
+    const result = await db.collection('quickLinks').bulkWrite(bulkOps);
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'No quick links matched the provided IDs' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Quick links reordered successfully',
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    console.error('Reorder quick links error:', error);
+    res.status(500).json({ error: 'Failed to reorder quick links', details: error.message });
+  }
+};
+
 // Instructions Controllers
 export const getInstructions = async (req, res) => {
   try {
-    const instructions = await db.collection('instructions').find({}).toArray();
-    res.json(instructions);
+    const docs = await db.collection('instructions').find({}).sort({ order: 1 }).toArray();
+    res.json(docs);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch instructions' });
   }
@@ -156,8 +241,15 @@ export const createInstruction = async (req, res) => {
 
 export const updateInstruction = async (req, res) => {
   try {
+    const id = req.params.id;
+    const query = {
+      $or: [
+        { id: id },
+        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
+      ].filter(v => v.id || v._id)
+    };
     const { _id, ...updateData } = req.body;
-    const result = await db.collection('instructions').updateOne({ id: req.params.id }, { $set: updateData });
+    const result = await db.collection('instructions').updateOne(query, { $set: updateData });
     if (result.matchedCount === 0) return res.status(404).json({ error: 'Instruction not found' });
     res.json({ success: true, message: 'Instruction updated' });
   } catch (error) {
@@ -167,11 +259,58 @@ export const updateInstruction = async (req, res) => {
 
 export const deleteInstruction = async (req, res) => {
   try {
-    const result = await db.collection('instructions').deleteOne({ id: req.params.id });
+    const id = req.params.id;
+    const query = {
+      $or: [
+        { id: id },
+        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
+      ].filter(v => v.id || v._id)
+    };
+    const result = await db.collection('instructions').deleteOne(query);
     if (result.deletedCount === 0) return res.status(404).json({ error: 'Instruction not found' });
     res.json({ success: true, message: 'Instruction deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete instruction' });
+  }
+};
+
+export const reorderInstructions = async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
+    }
+
+    const bulkOps = orderedIds.map((id, index) => {
+      let filter;
+      if (ObjectId.isValid(id)) {
+        filter = { _id: new ObjectId(id) };
+      } else {
+        filter = { id: id };
+      }
+      return {
+        updateOne: {
+          filter,
+          update: { $set: { order: index + 1 } }
+        }
+      };
+    });
+
+    const result = await db.collection('instructions').bulkWrite(bulkOps);
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'No instructions matched the provided IDs' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Instructions reordered successfully',
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    console.error('Reorder instructions error:', error);
+    res.status(500).json({ error: 'Failed to reorder instructions', details: error.message });
   }
 };
 
@@ -226,6 +365,17 @@ export const deleteBlogPost = async (req, res) => {
 export const getExamDocuments = async (req, res) => {
   try {
     const docs = await db.collection('examDocuments').find({}).toArray();
+    // Sort by order ASC, missing/invalid goes last
+    docs.sort((a, b) => {
+      const aOrder = typeof a.order === 'number' ? a.order : Infinity;
+      const bOrder = typeof b.order === 'number' ? b.order : Infinity;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      if (aTime !== bTime) return bTime - aTime;
+      return String(a._id || '').localeCompare(String(b._id || ''));
+    });
     res.json(docs);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch exam documents' });
@@ -259,6 +409,46 @@ export const deleteExamDocument = async (req, res) => {
     res.json({ success: true, message: 'Exam document deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete exam document' });
+  }
+};
+
+export const reorderExamDocuments = async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
+    }
+
+    const bulkOps = orderedIds.map((id, index) => {
+      let filter;
+      if (ObjectId.isValid(id)) {
+        filter = { _id: new ObjectId(id) };
+      } else {
+        filter = { id: id };
+      }
+      return {
+        updateOne: {
+          filter,
+          update: { $set: { order: index + 1 } }
+        }
+      };
+    });
+
+    const result = await db.collection('examDocuments').bulkWrite(bulkOps);
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'No Exam Documents matched the provided IDs' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Exam Documents reordered successfully',
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    console.error('Reorder Exam Documents error:', error);
+    res.status(500).json({ error: 'Failed to reorder exam documents', details: error.message });
   }
 };
 
@@ -347,6 +537,48 @@ export const deleteGenericPdf = async (req, res) => {
     res.json({ success: true, message: 'PDF deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete PDF' });
+  }
+};
+
+export const reorderPdfs = async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
+    }
+
+    const bulkOps = orderedIds.map((id, index) => {
+      // Prioritize MongoDB _id for reordering
+      const query = {
+        $or: [
+          { _id: ObjectId.isValid(id) ? new ObjectId(id) : null },
+          { id: id }
+        ].filter(v => v._id || v.id)
+      };
+
+      return {
+        updateOne: {
+          filter: query,
+          update: { $set: { sortBy: index + 1 } }
+        }
+      };
+    });
+
+    const result = await db.collection('pdfs').bulkWrite(bulkOps);
+    
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'No PDFs matched the provided IDs' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'PDFs reordered successfully',
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    console.error('Reorder PDFs error:', error);
+    res.status(500).json({ error: 'Failed to reorder PDFs', details: error.message });
   }
 };
 

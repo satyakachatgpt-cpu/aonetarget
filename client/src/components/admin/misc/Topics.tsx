@@ -1,19 +1,123 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { topicsAPI } from '../../../services/apiClient';
 import { RightSideDrawer, DrawerHeader, DrawerBody, DrawerFooter } from '../DrawerSystem';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface Topic {
+  _id?: string;
   id: string;
   name: string;
   subject: string;
   status: 'active' | 'inactive';
   createdDate: string;
   sortBy?: number;
+  order?: number;
 }
 
 interface Props {
   showToast: (m: string, type?: 'success' | 'error') => void;
 }
+
+const SortableRow = ({ item, idx, currentPage, itemsPerPage, activeMenu, setActiveMenu, onToggleStatus, onEdit, onDelete }: any) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: item._id || item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 10 : 1,
+  };
+
+  return (
+    <tr 
+      ref={setNodeRef} 
+      style={style} 
+      className={`hover:bg-gray-50/50 transition-colors group ${isDragging ? 'bg-gray-100' : ''}`}
+    >
+      <td className="px-6 py-4">
+        <div className="flex items-center gap-2">
+          <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-600 transition-colors">
+            <span className="material-symbols-outlined text-[20px]">drag_indicator</span>
+          </button>
+          <span className="font-bold text-gray-400">{(currentPage - 1) * itemsPerPage + idx + 1}</span>
+        </div>
+      </td>
+      <td className="px-5 py-4 font-bold text-gray-700">{item.name}</td>
+      <td className="px-5 py-4">
+        <div className="w-[60px] h-[36px] bg-[#f9fafb] rounded-md overflow-hidden border border-gray-100 flex items-center justify-center group-hover:border-gray-200 transition-all">
+          <span className="material-symbols-outlined text-gray-200 text-[24px]">image</span>
+        </div>
+      </td>
+      <td className="px-5 py-4 font-bold">
+        <span className="px-2.5 py-1 bg-[#f2f2f2] rounded-md text-[11px] font-bold text-gray-500 border border-gray-50 inline-block min-w-[44px] text-center">
+          {(item.sortBy || 0).toFixed(2)}
+        </span>
+      </td>
+      <td className="px-5 py-4">
+        <div className="relative">
+          <button
+            onClick={() => setActiveMenu(activeMenu === item.id ? null : item.id)}
+            className="flex items-center gap-1 px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-[12px] font-bold text-gray-600 hover:bg-gray-50 transition-all"
+          >
+            Actions
+            <span className="material-symbols-outlined text-[14px] text-gray-400">expand_more</span>
+          </button>
+
+          {activeMenu === item.id && (
+            <div className={`absolute right-0 top-full mt-1 w-[160px] bg-white border border-gray-100 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.1)] z-[999] py-1.5 animate-in fade-in zoom-in duration-200 origin-top-right`}>
+              <button
+                onClick={() => onToggleStatus(item)}
+                className={`w-full flex items-center gap-2.5 px-4 py-2 text-[13px] font-medium transition-colors ${item.status === 'active' ? 'text-orange-500 hover:bg-orange-50' : 'text-green-600 hover:bg-green-50'}`}
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  {item.status === 'active' ? 'visibility_off' : 'visibility'}
+                </span>
+                {item.status === 'active' ? 'Disable' : 'Enable'}
+              </button>
+              <button
+                onClick={() => onEdit(item)}
+                className="w-full flex items-center gap-2.5 px-4 py-2 text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[18px] text-blue-400">edit</span>
+                Edit
+              </button>
+              <button
+                onClick={() => onDelete(item.id)}
+                className="w-full flex items-center gap-2.5 px-4 py-2 text-[13px] font-medium text-red-500 hover:bg-red-50 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[18px]">delete</span>
+                Delete
+              </button>
+            </div>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+};
 
 const Topics: React.FC<Props> = ({ showToast }) => {
   const [items, setItems] = useState<Topic[]>([]);
@@ -34,6 +138,10 @@ const Topics: React.FC<Props> = ({ showToast }) => {
   });
 
   const filterRef = useRef<HTMLDivElement>(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   useEffect(() => {
     loadItems();
@@ -57,12 +165,40 @@ const Topics: React.FC<Props> = ({ showToast }) => {
     }
   };
 
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = items.findIndex((item) => (item._id || item.id) === active.id);
+    const newIndex = items.findIndex((item) => (item._id || item.id) === over.id);
+
+    const newItems = arrayMove(items, oldIndex, newIndex);
+    
+    // Optimistic UI update with order and sortBy sync
+    const updatedWithOrder = newItems.map((item, index) => ({
+      ...item,
+      order: index + 1,
+      sortBy: index + 1 // Keep sortBy in sync with order for visibility
+    }));
+    setItems(updatedWithOrder);
+
+    try {
+      const orderedIds = updatedWithOrder.map(item => item._id || item.id);
+      await topicsAPI.reorder(orderedIds);
+      showToast('Reordered successfully');
+    } catch (error) {
+      showToast('Failed to reorder', 'error');
+      loadItems();
+    }
+  };
+
   const filteredItems = items.filter(item => {
     const matchesSearch = !searchQuery || item.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
+  const isSearchOrFilterActive = searchQuery !== '' || statusFilter !== 'all';
   const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
   const paginatedItems = filteredItems.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
@@ -172,114 +308,85 @@ const Topics: React.FC<Props> = ({ showToast }) => {
 
       <div className="bg-white rounded-[1rem] shadow-sm border border-gray-100 overflow-visible pb-32 -mb-32">
         <div className="overflow-visible">
-          <table className="w-full text-left border-separate border-spacing-0">
-            <thead className="bg-[#f8f8f8] border-b border-gray-200">
-              <tr>
-                <th className="px-6 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                  <div className="flex items-center gap-1 cursor-pointer">
-                    S. NO. <span className="material-symbols-outlined text-[12px]">unfold_more</span>
-                  </div>
-                </th>
-                <th className="px-5 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                  <div className="flex items-center gap-1 cursor-pointer">
-                    TOPIC <span className="material-symbols-outlined text-[12px]">unfold_more</span>
-                  </div>
-                </th>
-                <th className="px-5 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                  <div className="flex items-center gap-1">
-                    SUBJECT LOGO <span className="material-symbols-outlined text-[12px]">unfold_more</span>
-                  </div>
-                </th>
-                <th className="px-5 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                  <div className="flex items-center gap-1 cursor-pointer">
-                    SORT BY <span className="material-symbols-outlined text-[12px]">unfold_more</span>
-                  </div>
-                </th>
-                <th className="px-5 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">ACTIONS</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50 text-[13px]">
-              {paginatedItems.length === 0 ? (
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <table className="w-full text-left border-separate border-spacing-0">
+              <thead className="bg-[#f8f8f8] border-b border-gray-200">
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center">
-                    <span className="material-symbols-outlined text-5xl text-gray-100 mb-2 block">topic</span>
-                    <p className="text-gray-400 font-medium">No topics found</p>
-                  </td>
+                  <th className="px-6 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                    <div className="flex items-center gap-1 cursor-pointer">
+                      S. NO. <span className="material-symbols-outlined text-[12px]">unfold_more</span>
+                    </div>
+                  </th>
+                  <th className="px-5 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                    <div className="flex items-center gap-1 cursor-pointer">
+                      TOPIC <span className="material-symbols-outlined text-[12px]">unfold_more</span>
+                    </div>
+                  </th>
+                  <th className="px-5 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                    <div className="flex items-center gap-1">
+                      SUBJECT LOGO <span className="material-symbols-outlined text-[12px]">unfold_more</span>
+                    </div>
+                  </th>
+                  <th className="px-5 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                    <div className="flex items-center gap-1 cursor-pointer">
+                      SORT BY <span className="material-symbols-outlined text-[12px]">unfold_more</span>
+                    </div>
+                  </th>
+                  <th className="px-5 py-3 text-[10px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">ACTIONS</th>
                 </tr>
-              ) : (
-                paginatedItems.map((item, idx) => (
-                  <tr key={item.id} className="hover:bg-gray-50/50 transition-colors group">
-                    <td className="px-6 py-4 font-bold text-gray-400">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
-                    <td className="px-5 py-4 font-bold text-gray-700">{item.name}</td>
-                    <td className="px-5 py-4">
-                      <div className="w-[60px] h-[36px] bg-[#f9fafb] rounded-md overflow-hidden border border-gray-100 flex items-center justify-center group-hover:border-gray-200 transition-all">
-                        <span className="material-symbols-outlined text-gray-200 text-[24px]">image</span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 font-bold">
-                      <span className="px-2.5 py-1 bg-[#f2f2f2] rounded-md text-[11px] font-bold text-gray-500 border border-gray-50 inline-block min-w-[44px] text-center">
-                        {(item.sortBy || 0).toFixed(2)}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <div className="relative">
-                        <button
-                          onClick={() => setActiveMenu(activeMenu === item.id ? null : item.id)}
-                          className="flex items-center gap-1 px-2.5 py-1 bg-white border border-gray-200 rounded-lg text-[12px] font-bold text-gray-600 hover:bg-gray-50 transition-all"
-                        >
-                          Actions
-                          <span className="material-symbols-outlined text-[14px] text-gray-400">expand_more</span>
-                        </button>
-
-                        {activeMenu === item.id && (
-                          <div className={`absolute right-0 ${idx >= paginatedItems.length - 2 ? 'bottom-full mb-1' : 'top-full mt-1'} w-[160px] bg-white border border-gray-100 rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.1)] z-[999] py-1.5 animate-in fade-in zoom-in duration-200 ${idx >= paginatedItems.length - 2 ? 'origin-bottom-right' : 'origin-top-right'}`}>
-                            <button
-                              onClick={async () => {
-                                try {
-                                  const newStatus = item.status === 'active' ? 'inactive' : 'active';
-                                  await topicsAPI.update(item.id, { ...item, status: newStatus });
-                                  showToast(`Topic ${newStatus === 'active' ? 'enabled' : 'disabled'} successfully!`);
-                                  loadItems();
-                                  setActiveMenu(null);
-                                } catch (error) {
-                                  showToast('Failed to update status', 'error');
-                                }
-                              }}
-                              className={`w-full flex items-center gap-2.5 px-4 py-2 text-[13px] font-medium transition-colors ${item.status === 'active' ? 'text-orange-500 hover:bg-orange-50' : 'text-green-600 hover:bg-green-50'}`}
-                            >
-                              <span className="material-symbols-outlined text-[18px]">
-                                {item.status === 'active' ? 'visibility_off' : 'visibility'}
-                              </span>
-                              {item.status === 'active' ? 'Disable' : 'Enable'}
-                            </button>
-                            <button
-                              onClick={() => {
-                                setEditingItem(item);
-                                setFormData({ name: item.name, subject: item.subject, status: item.status, sortBy: (item.sortBy || 0).toFixed(2) });
-                                setShowModal(true);
-                                setActiveMenu(null);
-                              }}
-                              className="w-full flex items-center gap-2.5 px-4 py-2 text-[13px] font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-                            >
-                              <span className="material-symbols-outlined text-[18px] text-blue-400">edit</span>
-                              Edit
-                            </button>
-                            <button
-                              onClick={() => { handleDelete(item.id); setActiveMenu(null); }}
-                              className="w-full flex items-center gap-2.5 px-4 py-2 text-[13px] font-medium text-red-500 hover:bg-red-50 transition-colors"
-                            >
-                              <span className="material-symbols-outlined text-[18px]">delete</span>
-                              Delete
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="divide-y divide-gray-50 text-[13px]">
+                <SortableContext
+                  items={paginatedItems.map(item => item._id || item.id)}
+                  strategy={verticalListSortingStrategy}
+                  disabled={isSearchOrFilterActive}
+                >
+                  {paginatedItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center">
+                        <span className="material-symbols-outlined text-5xl text-gray-100 mb-2 block">topic</span>
+                        <p className="text-gray-400 font-medium">No topics found</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    paginatedItems.map((item, idx) => (
+                      <SortableRow
+                        key={item._id || item.id}
+                        item={item}
+                        idx={idx}
+                        currentPage={currentPage}
+                        itemsPerPage={itemsPerPage}
+                        activeMenu={activeMenu}
+                        setActiveMenu={setActiveMenu}
+                        onToggleStatus={async (item: Topic) => {
+                          try {
+                            const newStatus = item.status === 'active' ? 'inactive' : 'active';
+                            await topicsAPI.update(item.id, { ...item, status: newStatus });
+                            showToast(`Topic ${newStatus === 'active' ? 'enabled' : 'disabled'} successfully!`);
+                            loadItems();
+                            setActiveMenu(null);
+                          } catch (error) {
+                            showToast('Failed to update status', 'error');
+                          }
+                        }}
+                        onEdit={(item: Topic) => {
+                          setEditingItem(item);
+                          setFormData({ name: item.name, subject: item.subject, status: item.status, sortBy: (item.sortBy || 0).toFixed(2) });
+                          setShowModal(true);
+                          setActiveMenu(null);
+                        }}
+                        onDelete={(id: string) => { handleDelete(id); setActiveMenu(null); }}
+                      />
+                    ))
+                  )}
+                </SortableContext>
+              </tbody>
+            </table>
+          </DndContext>
         </div>
 
         {/* Pagination Footer - More Compact */}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getPdfUrl } from '../../lib/utils';
-import { pdfsAPI, coursesAPI, categoriesAPI, uploadAPI } from '../../services/apiClient';
+import { pdfsAPI, coursesAPI, uploadAPI } from '../../services/apiClient';
 import {
   RightSideDrawer,
   DrawerBody,
@@ -10,6 +10,23 @@ import {
   FilePreviewItem,
   PrimaryButton
 } from './DrawerSystem';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface PDF {
   _id?: string;
@@ -27,6 +44,126 @@ interface PDF {
 interface Props {
   showToast: (m: string, type?: 'success' | 'error') => void;
 }
+
+const SortableRow = ({
+  pdf,
+  idx,
+  startIndex,
+  courses,
+  openActionMenuId,
+  setOpenActionMenuId,
+  handleEdit,
+  handleDelete,
+  getPdfUrl,
+  disabled
+}: any) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ 
+    id: String(pdf._id || ''), 
+    disabled: disabled || !pdf._id 
+  });
+
+  const style = {
+    transform: transform ? CSS.Translate.toString(transform) : undefined,
+    transition: isDragging ? 'none' : transition,
+    zIndex: isDragging ? 100 : 'auto',
+    opacity: isDragging ? 0.8 : 1,
+    position: 'relative' as 'relative',
+  };
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={`hover:bg-gray-50/50 transition-colors group ${isDragging ? 'shadow-2xl relative z-10 bg-white' : ''}`}
+    >
+      <td className="pl-8 pr-4 py-6 text-[13px] font-black text-gray-300">
+        <div className="flex items-center gap-3">
+          {!disabled && (
+            <div
+              {...attributes}
+              {...listeners}
+              className="inline-flex p-2 -ml-2 cursor-grab active:cursor-grabbing hover:bg-gray-100 rounded-lg transition-colors group/handle mr-1"
+              style={{ touchAction: 'none', pointerEvents: 'auto' }}
+            >
+              <span className="material-symbols-outlined text-[18px] text-gray-300 group-hover/handle:text-gray-600 transition-colors">
+                drag_indicator
+              </span>
+            </div>
+          )}
+          {startIndex + idx + 1}
+        </div>
+      </td>
+      <td className="px-6 py-6">
+        <div className="flex flex-col gap-0.5">
+          <span className="text-[14px] font-bold text-gray-800">{pdf.title}</span>
+          <div className="flex items-center gap-2">
+            {pdf.courseId && (
+              <span className="text-[11px] px-2 py-0.5 bg-gray-50 text-gray-400 font-medium rounded border border-gray-100 uppercase tracking-tighter">
+                {courses.find((c: any) => (c._id || c.id) === pdf.courseId)?.title || 'Course: ' + pdf.courseId}
+              </span>
+            )}
+          </div>
+        </div>
+      </td>
+      <td className="px-6 py-6">
+        <span className="text-[14px] font-bold text-gray-700">₹{pdf.price || 0}</span>
+      </td>
+      <td className="px-6 py-6">
+        <span className="px-3 py-1 bg-gray-50 text-gray-500 rounded-lg text-[12px] font-medium border border-gray-100">
+          {/* Show normalized order (index+1) if sortBy is missing/0 to avoid confusing display */}
+          {(pdf.sortBy && pdf.sortBy !== 0) ? pdf.sortBy.toFixed(0) : (startIndex + idx + 1)}
+        </span>
+      </td>
+      <td className="px-6 py-6">
+        <div className="relative row-action-menu-container">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpenActionMenuId(openActionMenuId === (pdf._id || pdf.id) ? null : (pdf._id || pdf.id));
+            }}
+            className={`px-4 py-2 bg-white border border-gray-200 rounded-xl text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-all flex items-center gap-2 group shadow-sm`}
+          >
+            Actions
+            <span className="material-symbols-outlined text-[18px] text-gray-400 group-hover:text-gray-600">expand_more</span>
+          </button>
+
+          {openActionMenuId === (pdf._id || pdf.id) && (
+            <div className={`absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-gray-100 py-3 z-[999] animate-in fade-in zoom-in duration-200 origin-top-right`}>
+              <button
+                onClick={() => { window.open(getPdfUrl(pdf.fileUrl), '_blank'); setOpenActionMenuId(null); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[20px] text-blue-500">visibility</span>
+                View PDF
+              </button>
+              <button
+                onClick={() => handleEdit(pdf)}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-gray-600 hover:bg-amber-50 hover:text-amber-600 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[20px] text-blue-500">edit</span>
+                Edit
+              </button>
+              <button
+                onClick={() => { handleDelete(pdf._id || pdf.id); setOpenActionMenuId(null); }}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition-colors"
+              >
+                <span className="material-symbols-outlined text-[20px] text-red-500">delete</span>
+                Delete
+              </button>
+            </div>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+};
 
 const PDFs: React.FC<Props> = ({ showToast }) => {
   const [pdfs, setPdfs] = useState<PDF[]>([]);
@@ -47,6 +184,55 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
     isEbook: true
   });
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 3,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    // Guard: Disable reordering during search or filtering
+    if (searchQuery.trim() !== '') {
+      showToast('Reordering is disabled while search is active', 'error');
+      return;
+    }
+
+    const getStableId = (item: any) => String(item?._id || item?.id || "");
+    const oldIndex = pdfs.findIndex((p) => getStableId(p) === active.id);
+    const newIndex = pdfs.findIndex((p) => getStableId(p) === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const rearranged = arrayMove(pdfs, oldIndex, newIndex);
+    
+    // STRICT NORMALIZATION: Recalculate all sortBy values to be sequential and ascending
+    const newOrder = rearranged.map((item, index) => ({
+      ...item,
+      sortBy: index + 1
+    }));
+
+    setPdfs(newOrder);
+
+    try {
+      const orderedIds = newOrder.map(p => String(p._id)).filter(id => id !== 'undefined');
+      if (orderedIds.length === 0) return;
+      await pdfsAPI.reorder(orderedIds);
+      showToast('Order updated successfully', 'success');
+    } catch (error) {
+      console.error('Failed to reorder:', error);
+      showToast('Failed to save order. Rolling back...', 'error');
+      fetchInitialData();
+    }
+  };
+
   // Standardized Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -58,9 +244,13 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
         pdfsAPI.getAll(),
         coursesAPI.getAll()
       ]);
-      // Filter to only show E-Books
       const pdfList = Array.isArray(pd) ? pd : [];
-      setPdfs(pdfList.filter(p => p.isEbook !== false)); // Default to true or if explicitly marked
+      // Filter to only show E-Books and sort by sortBy ASC
+      const filteredList = pdfList
+        .filter(p => p.isEbook !== false)
+        .sort((a, b) => (Number(a.sortBy) || 0) - (Number(b.sortBy) || 0));
+        
+      setPdfs(filteredList);
       setCourses(Array.isArray(cs) ? cs : []);
     } catch (error) {
       console.error('Failed to fetch data:', error);
@@ -84,7 +274,7 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
 
   const filteredPdfs = pdfs.filter(pdf =>
     pdf.title.toLowerCase().includes(searchQuery.toLowerCase())
-  ).sort((a, b) => (Number(a.sortBy) || 0) - (Number(b.sortBy) || 0));
+  );
 
   // Standardized Pagination Logic
   const totalItems = filteredPdfs.length;
@@ -190,15 +380,14 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
   return (
     <div className="bg-[#fafafa] min-h-screen">
       <div className="pt-0 px-6 pb-10 space-y-4">
-        <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100">
-          {/* Header Section matches Screenshot 2 */}
-          <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-50 bg-white rounded-t-[1.5rem]">
-            <h1 className="text-[18px] font-bold text-gray-800 tracking-tight">E-Books</h1>
+        <div className="bg-white rounded-[1.5rem] shadow-sm border border-gray-100 overflow-hidden">
+          {/* Header Section */}
+          <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-50 bg-white">
+            <h1 className="text-[18px] font-bold text-gray-800 tracking-tight">E-Books / PDFs</h1>
 
             <div className="flex items-center gap-3">
-              {/* Search bar matches Screenshot 2 */}
               <div className="relative group flex-1 md:flex-none">
-                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-[18px] group-focus-within:text-navy transition-colors">search</span>
+                <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">search</span>
                 <input
                   type="text"
                   placeholder="Search"
@@ -208,13 +397,11 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
                 />
               </div>
 
-              {/* Filters button matches Screenshot 2 */}
               <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-xl text-[13px] font-bold text-gray-600 hover:bg-gray-50 transition-all shadow-sm">
                 <span className="material-symbols-outlined text-[18px]">tune</span>
                 Filters
               </button>
 
-              {/* Add button matches Screenshot 2 */}
               <button
                 onClick={handleOpenAdd}
                 className="w-10 h-10 bg-black text-white rounded-xl flex items-center justify-center hover:bg-gray-800 transition-all shadow-md active:scale-95 shrink-0"
@@ -224,116 +411,68 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
             </div>
           </div>
 
-          <div className="overflow-visible pb-32 -mb-32">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-gray-50/10 border-b border-gray-100">
-                  <th className="pl-8 pr-4 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
-                    <div className="flex items-center gap-1">
-                      S. NO. <span className="material-symbols-outlined text-[14px]">unfold_more</span>
-                    </div>
-                  </th>
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
-                    <div className="flex items-center gap-1">
-                      TITLE <span className="material-symbols-outlined text-[14px]">unfold_more</span>
-                    </div>
-                  </th>
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
-                    <div className="flex items-center gap-1">
-                      PRICE <span className="material-symbols-outlined text-[14px]">unfold_more</span>
-                    </div>
-                  </th>
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
-                    <div className="flex items-center gap-1">
-                      SORT BY <span className="material-symbols-outlined text-[14px]">unfold_more</span>
-                    </div>
-                  </th>
-                  <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">ACTIONS</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {isLoading ? (
-                  <tr>
-                    <td colSpan={5} className="px-8 py-20 text-center text-gray-400 font-medium">Loading...</td>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-gray-50/10 border-b border-gray-100">
+                    <th className="pl-8 pr-4 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap w-[100px]">
+                      S. NO.
+                    </th>
+                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
+                      TITLE
+                    </th>
+                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap">
+                      PRICE
+                    </th>
+                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap w-[120px]">
+                      SORT BY
+                    </th>
+                    <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] whitespace-nowrap w-[150px]">ACTIONS</th>
                   </tr>
-                ) : paginatedItems.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-8 py-20 text-center text-gray-400 font-medium italic">No data available in table</td>
-                  </tr>
-                ) : (
-                  paginatedItems.map((pdf: any, idx) => (
-                    <tr key={pdf._id || pdf.id} className="hover:bg-gray-50/50 transition-colors group">
-                      <td className="pl-8 pr-4 py-6 text-[13px] font-black text-gray-300">{startIndex + idx + 1}</td>
-                      <td className="px-6 py-6">
-                        <div className="flex flex-col gap-0.5">
-                          <span className="text-[14px] font-bold text-gray-800">{pdf.title}</span>
-                          <div className="flex items-center gap-2">
-                            {pdf.courseId && (
-                              <span className="text-[11px] px-2 py-0.5 bg-gray-50 text-gray-400 font-medium rounded border border-gray-100 uppercase tracking-tighter">
-                                {courses.find(c => (c._id || c.id) === pdf.courseId)?.title || 'Course: ' + pdf.courseId}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-6">
-                        <span className="text-[14px] font-bold text-gray-700">₹{pdf.price || 0}</span>
-                      </td>
-                      <td className="px-6 py-6">
-                        <span className="px-3 py-1 bg-gray-50 text-gray-500 rounded-lg text-[12px] font-medium border border-gray-100">
-                          {(pdf.sortBy || 0).toFixed(2)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-6">
-                        <div className="relative row-action-menu-container">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setOpenActionMenuId(openActionMenuId === (pdf._id || pdf.id) ? null : (pdf._id || pdf.id));
-                            }}
-                            className={`px-4 py-2 bg-white border border-gray-200 rounded-xl text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-all flex items-center gap-2 group shadow-sm`}
-                          >
-                            Actions
-                            <span className="material-symbols-outlined text-[18px] text-gray-400 group-hover:text-gray-600">expand_more</span>
-                          </button>
-
-                          {openActionMenuId === (pdf._id || pdf.id) && (
-                            <div className={`absolute right-0 ${idx >= filteredPdfs.length - 2 ? 'bottom-full mb-2' : 'top-full mt-2'} w-48 bg-white rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] border border-gray-100 py-3 z-[999] animate-in fade-in zoom-in duration-200 ${idx >= filteredPdfs.length - 2 ? 'origin-bottom-right' : 'origin-top-right'}`}>
-                              <button
-                                onClick={() => { window.open(getPdfUrl(pdf.fileUrl), '_blank'); setOpenActionMenuId(null); }}
-                                className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                              >
-                                <span className="material-symbols-outlined text-[20px] text-blue-500">visibility</span>
-                                View PDF
-                              </button>
-                              <button
-                                onClick={() => handleEdit(pdf)}
-                                className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-gray-600 hover:bg-amber-50 hover:text-amber-600 transition-colors"
-                              >
-                                <span className="material-symbols-outlined text-[20px] text-blue-500">edit</span>
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => { handleDelete(pdf._id || pdf.id); setOpenActionMenuId(null); }}
-                                className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] font-medium text-red-500 hover:bg-red-50 transition-colors"
-                              >
-                                <span className="material-symbols-outlined text-[20px] text-red-500">delete</span>
-                                Delete
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan={5} className="px-8 py-20 text-center text-gray-400 font-medium">Loading resources...</td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  ) : paginatedItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-8 py-20 text-center text-gray-400 font-medium italic">No e-books found</td>
+                    </tr>
+                  ) : (
+                    <SortableContext
+                      items={paginatedItems.filter(p => !!p._id).map(p => String(p._id))}
+                      strategy={verticalListSortingStrategy}
+                      disabled={searchQuery.trim() !== '' || currentPage !== 1}
+                    >
+                      {paginatedItems.map((pdf, idx) => (
+                        <SortableRow
+                          key={pdf._id || `temp-${idx}`}
+                          pdf={pdf}
+                          idx={idx}
+                          startIndex={startIndex}
+                          courses={courses}
+                          openActionMenuId={openActionMenuId}
+                          setOpenActionMenuId={setOpenActionMenuId}
+                          handleEdit={handleEdit}
+                          handleDelete={handleDelete}
+                          getPdfUrl={getPdfUrl}
+                          disabled={searchQuery.trim() !== '' || currentPage !== 1}
+                        />
+                      ))}
+                    </SortableContext>
+                  )}
+                </tbody>
+              </table>
+            </DndContext>
 
-          {/* Standardized Pagination Footer */}
+          {/* Pagination Footer */}
           {!isLoading && filteredPdfs.length > 0 && (
-            <div className="p-6 border-t border-gray-50 flex items-center justify-between bg-white rounded-b-2xl">
+            <div className="p-6 border-t border-gray-50 flex items-center justify-between bg-white">
               <div className="flex items-center gap-3">
                 <div className="relative flex items-center group">
                   <select
@@ -342,13 +481,13 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
                       setPageSize(Number(e.target.value));
                       setCurrentPage(1);
                     }}
-                    className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
+                    className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm"
                   >
                     <option value={10}>10</option>
                     <option value={25}>25</option>
                     <option value={50}>50</option>
                   </select>
-                  <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400 flex items-center justify-center h-full top-0 group-focus-within:text-black">expand_more</span>
+                  <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400">expand_more</span>
                 </div>
                 <span className="text-[13px] font-medium text-gray-400 italic">
                   Showing {showingStart} to {showingEnd} of {totalItems} entries
@@ -364,7 +503,7 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
                   Previous
                 </button>
                 <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
-                <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.15)]">
+                <button className="h-9 w-9 flex items-center justify-center text-[13px] font-black bg-black text-white rounded-xl">
                   {currentPage}
                 </button>
                 <div className="w-[1px] h-4 bg-gray-100 mx-1"></div>
@@ -380,32 +519,28 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
           )}
         </div>
 
-        {/* Premium Add/Edit Drawer matches Screenshot 3 */}
+        {/* Add/Edit Drawer */}
         <RightSideDrawer isOpen={showAddDrawer} onClose={() => setShowAddDrawer(false)} width="480px">
           <DrawerHeader
-            title={editingPdf ? 'Edit E-Books' : 'Add E-Books'}
+            title={editingPdf ? 'Edit E-Book' : 'Add New E-Book'}
             onClose={() => setShowAddDrawer(false)}
           />
           <DrawerBody className="space-y-6 px-8 pt-8 pb-10">
-            {/* Subject and Course Selectors - MATCHING USER REQUEST */}
-            <div className="grid grid-cols-1 gap-5">
-              <div className="space-y-2">
-                <label className="text-[13px] font-bold text-gray-700 ml-1">Select Course <span className="text-red-500">*</span></label>
-                <div className="relative group">
-                  <select
-                    value={formData.courseId}
-                    onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
-                    className="w-full h-[52px] px-5 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-500 transition-all appearance-none cursor-pointer"
-                  >
-                    <option value="">Select Course</option>
-                    {courses.map(c => <option key={c._id || c.id} value={c._id || c.id}>{c.title || c.name}</option>)}
-                  </select>
-                  <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none group-focus-within:text-black">expand_more</span>
-                </div>
+            <div className="space-y-2">
+              <label className="text-[13px] font-bold text-gray-700 ml-1">Select Course <span className="text-red-500">*</span></label>
+              <div className="relative group">
+                <select
+                  value={formData.courseId}
+                  onChange={(e) => setFormData({ ...formData, courseId: e.target.value })}
+                  className="w-full h-[52px] px-5 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-500 transition-all appearance-none cursor-pointer"
+                >
+                  <option value="">Select Course</option>
+                  {courses.map(c => <option key={c._id || c.id} value={c._id || c.id}>{c.title || c.name}</option>)}
+                </select>
+                <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">expand_more</span>
               </div>
             </div>
 
-            {/* Selected File Preview - if already selected or editing */}
             {selectedFile && (
               <FilePreviewItem file={selectedFile} onRemove={() => setSelectedFile(null)} />
             )}
@@ -420,28 +555,26 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
               </div>
             )}
 
-            {/* Upload PDF Section matches Screenshot 3 */}
             <div className="space-y-3">
-              <label className="text-[13px] font-bold text-gray-700 ml-1">Select PDFs</label>
+              <label className="text-[13px] font-bold text-gray-700 ml-1">Upload PDF</label>
               <UploadArea
-                title="UPLOAD PDF"
-                subtitle="Click or Drag & Drop your file here."
+                title="SELECT FILE"
+                subtitle="Click or drag PDF here"
                 accept=".pdf"
                 onFileSelect={(file) => {
                   setSelectedFile(file);
                   if (!formData.title) setFormData(prev => ({ ...prev, title: file.name.split('.')[0] }));
                 }}
-                className="h-[180px]"
+                className="h-[140px]"
               />
             </div>
 
-            {/* Title, Price, SortBy fields */}
             <div className="space-y-5">
               <div className="space-y-2">
                 <label className="text-[13px] font-bold text-gray-700 ml-1">E-Book Title <span className="text-red-500">*</span></label>
                 <input
                   type="text"
-                  placeholder="Enter E-Book Title"
+                  placeholder="Enter Title"
                   value={formData.title}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                   className="w-full h-[52px] px-5 border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-500 transition-all bg-white"
@@ -453,7 +586,6 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
                   <label className="text-[13px] font-bold text-gray-700 ml-1">Price (₹)</label>
                   <input
                     type="number"
-                    placeholder="0"
                     value={formData.price}
                     onChange={(e) => setFormData({ ...formData, price: Number(e.target.value) })}
                     className="w-full h-[52px] px-5 border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-500 transition-all bg-white"
@@ -463,8 +595,6 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
                   <label className="text-[13px] font-bold text-gray-700 ml-1">Sort Order</label>
                   <input
                     type="number"
-                    step="1"
-                    placeholder="3"
                     value={formData.sortBy}
                     onChange={(e) => setFormData({ ...formData, sortBy: Number(e.target.value) })}
                     className="w-full h-[52px] px-5 border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-500 transition-all bg-white"
@@ -478,7 +608,7 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
               onClick={handleSubmit}
               className="h-[64px]"
             >
-              Save changes
+              {editingPdf ? 'Update E-Book' : 'Add E-Book'}
             </PrimaryButton>
           </DrawerFooter>
         </RightSideDrawer>
@@ -488,4 +618,3 @@ const PDFs: React.FC<Props> = ({ showToast }) => {
 };
 
 export default PDFs;
-

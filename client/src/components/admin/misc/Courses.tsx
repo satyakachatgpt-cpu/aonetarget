@@ -1,9 +1,27 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { coursesAPI, categoriesAPI, subcategoriesAPI } from '../../../services/apiClient';
+import { coursesAPI, categoriesAPI, subcategoriesAPI, packagesAPI } from '../../../services/apiClient';
 import RichTextEditor from '../../shared/RichTextEditor';
 import FileUploadButton from '../../shared/FileUploadButton';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface Course {
+  _id?: string;
   id: string;
   name: string;
   description: string;
@@ -22,15 +40,117 @@ interface Course {
   contentType?: 'recorded_batch' | 'live_classroom' | 'crash_course' | 'mock_test';
   subject?: 'biology' | 'chemistry' | 'physics' | 'math';
   boardType?: 'cbse' | 'hbse';
+  settings?: {
+    sortingOrder?: number;
+    [key: string]: any;
+  };
 }
 
 interface Props {
   showToast: (m: string, type?: 'success' | 'error') => void;
 }
 
+const SortableCourseCard = ({ item, idx, startIndex, handleEdit, disabled }: any) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: item.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 100 : 'auto',
+    opacity: isDragging ? 0.8 : 1,
+    position: 'relative' as any,
+  };
+
+  const displayOrder = item.settings?.sortingOrder || (startIndex + idx + 1);
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`bg-white rounded-[2.5rem] p-8 border border-gray-50 shadow-[0_8px_30px_rgb(0,0,0,0.02)] flex gap-8 items-center relative group hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500 ${isDragging ? 'shadow-2xl ring-2 ring-navy/5' : ''}`}
+    >
+      {/* Drag Handle & S.No/Order Column */}
+      <div className="flex flex-col items-center gap-4 shrink-0 pr-4 border-r border-gray-50">
+        {!disabled && (
+          <div
+            {...attributes}
+            {...listeners}
+            className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-navy transition-colors p-1"
+          >
+            <span className="material-symbols-outlined text-[24px]">drag_indicator</span>
+          </div>
+        )}
+        <div className="flex flex-col items-center">
+          <span className="text-[10px] font-black text-gray-300 uppercase tracking-tighter mb-1">S.No</span>
+          <span className="text-[14px] font-black text-gray-400">{startIndex + idx + 1}</span>
+        </div>
+        <div className="flex flex-col items-center pt-2 border-t border-gray-50 w-full">
+          <span className="text-[10px] font-black text-gray-300 uppercase tracking-tighter mb-1">Order</span>
+          <span className="text-[14px] font-black text-navy">{displayOrder}</span>
+        </div>
+      </div>
+
+      {/* Image Preview Card */}
+      <div className="w-[200px] h-[140px] rounded-3xl bg-[#f5f8ff] flex flex-col items-center justify-center gap-3 shrink-0 overflow-hidden relative border border-blue-50/50">
+        {item.imageUrl ? (
+          <img src={item.imageUrl} className="w-full h-full object-cover" alt="" />
+        ) : (
+          <>
+            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm">
+              <span className="material-symbols-outlined text-blue-300 text-[28px]">school</span>
+            </div>
+            <span className="text-[10px] font-black text-blue-400/80 uppercase tracking-widest">No Image</span>
+          </>
+        )}
+      </div>
+
+      {/* Content */}
+      <div className="flex-1 space-y-3">
+        <div className="flex justify-between items-start">
+          <div className="space-y-1">
+            <h4 className="text-[20px] font-black text-gray-900 tracking-tight leading-tight uppercase">{item.name}</h4>
+            <p className="text-[14px] font-bold text-gray-500/80 tracking-tight uppercase">
+              {item.examType ? `${item.examType.toUpperCase()}: ` : ''}{item.name}
+            </p>
+          </div>
+          <div className="text-[20px] font-black text-gray-900">₹{item.price || 'Free'}</div>
+        </div>
+
+        <div className="max-w-2xl">
+          <p className="text-[14px] font-medium text-gray-500 line-clamp-2 leading-relaxed">
+            {item.description ? item.description.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ') : 'Access full course content, videos, and materials.'}
+          </p>
+          <button className="text-[14px] font-black text-blue-600 mt-2 hover:underline">Show more</button>
+        </div>
+
+        <div className="flex justify-between items-end pt-2">
+          <div className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest border shadow-sm ${item.status === 'active' ? 'bg-[#ebfaf2] text-[#22c55e] border-[#d1f2e1]' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
+            {item.status === 'active' ? 'Published' : 'Draft'}
+          </div>
+
+          <button
+            onClick={() => handleEdit(item)}
+            className="relative z-10 px-8 py-2.5 bg-white border border-gray-200 rounded-2xl text-[13px] font-bold text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all shadow-sm active:scale-95 cursor-pointer"
+          >
+            Edit
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const Courses: React.FC<Props> = ({ showToast }) => {
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isReordering, setIsReordering] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [showMoreOptions, setShowMoreOptions] = useState(false);
   const [editingItem, setEditingItem] = useState<Course | null>(null);
@@ -41,6 +161,11 @@ const Courses: React.FC<Props> = ({ showToast }) => {
   const [allSubcategories, setAllSubcategories] = useState<any[]>([]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
   const emptyForm = {
     name: '',
@@ -91,6 +216,49 @@ const Courses: React.FC<Props> = ({ showToast }) => {
     }
   };
 
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    // Guard: Disable reordering during search or filtering
+    if (searchQuery.trim() !== '' || statusFilter !== 'all') {
+      showToast('Reordering is disabled while search or filters are active', 'error');
+      return;
+    }
+
+    const oldIndex = courses.findIndex((c) => c.id === active.id);
+    const newIndex = courses.findIndex((c) => c.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const previousOrder = [...courses];
+    
+    // Calculate new order and update settings.sortingOrder optimistically
+    const newOrder = arrayMove(courses, oldIndex, newIndex).map((item, index) => ({
+      ...item,
+      settings: {
+        ...(item.settings || {}),
+        sortingOrder: index + 1
+      }
+    }));
+    
+    setCourses(newOrder);
+    setIsReordering(true);
+
+    try {
+      // Use MongoDB _id for stable reordering persistence
+      const orderedIds = newOrder.map(c => c._id || c.id);
+      await packagesAPI.reorder(orderedIds);
+      showToast('Order updated successfully', 'success');
+    } catch (error) {
+      console.error('Failed to reorder:', error);
+      showToast('Failed to save order. Rolling back...', 'error');
+      setCourses(previousOrder);
+    } finally {
+      setIsReordering(false);
+    }
+  };
+
   const filteredCourses = courses.filter(item => {
     const matchesSearch = !searchQuery || item.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || item.status === statusFilter;
@@ -98,6 +266,7 @@ const Courses: React.FC<Props> = ({ showToast }) => {
   });
   const totalPages = Math.ceil(filteredCourses.length / itemsPerPage);
   const paginatedItems = filteredCourses.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
 
   const handleSubmit = async () => {
     if (!formData.name || !formData.categoryId) { showToast('Please fill Course Name and Category', 'error'); return; }
@@ -309,59 +478,29 @@ const Courses: React.FC<Props> = ({ showToast }) => {
             <p className="text-gray-400 font-bold uppercase tracking-wider text-sm">No courses found</p>
           </div>
         ) : (
-          paginatedItems.map((item) => (
-            <div key={item.id} className="bg-white rounded-[2.5rem] p-8 border border-gray-50 shadow-[0_8px_30px_rgb(0,0,0,0.02)] flex gap-8 items-center relative group hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] transition-all duration-500">
-              {/* Image Preview Card */}
-              <div className="w-[200px] h-[140px] rounded-3xl bg-[#f5f8ff] flex flex-col items-center justify-center gap-3 shrink-0 overflow-hidden relative border border-blue-50/50">
-                {item.imageUrl ? (
-                  <img src={item.imageUrl} className="w-full h-full object-cover" alt="" />
-                ) : (
-                  <>
-                    <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm">
-                      <span className="material-symbols-outlined text-blue-300 text-[28px]">school</span>
-                    </div>
-                    <span className="text-[10px] font-black text-blue-400/80 uppercase tracking-widest">No Image</span>
-                  </>
-                )}
-              </div>
-
-              {/* Content */}
-              <div className="flex-1 space-y-3">
-                <div className="flex justify-between items-start">
-                  <div className="space-y-1">
-                    <h4 className="text-[20px] font-black text-gray-900 tracking-tight leading-tight uppercase">{item.name}</h4>
-                    <p className="text-[14px] font-bold text-gray-500/80 tracking-tight uppercase">
-                      {item.examType ? `${item.examType.toUpperCase()}: ` : ''}{item.name}
-                    </p>
-                  </div>
-                  <div className="text-[20px] font-black text-gray-900">₹{item.price || 'Free'}</div>
-                </div>
-
-                <div className="max-w-2xl">
-                  <p className="text-[14px] font-medium text-gray-500 line-clamp-2 leading-relaxed">
-                    {item.description ? item.description.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ') : 'Access full course content, videos, and materials.'}
-                  </p>
-                  <button className="text-[14px] font-black text-blue-600 mt-2 hover:underline">Show more</button>
-                </div>
-
-                <div className="flex justify-between items-end pt-2">
-                  <div className={`px-5 py-1.5 rounded-full text-[11px] font-black uppercase tracking-widest border shadow-sm ${item.status === 'active' ? 'bg-[#ebfaf2] text-[#22c55e] border-[#d1f2e1]' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>
-                    {item.status === 'active' ? 'Published' : 'Draft'}
-                  </div>
-
-                  <button
-                    onClick={() => handleEdit(item)}
-                    className="relative z-10 px-8 py-2.5 bg-white border border-gray-200 rounded-2xl text-[13px] font-bold text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-all shadow-sm active:scale-95 cursor-pointer"
-                  >
-                    Edit
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={handleDragEnd}
+          >
+            <SortableContext
+              items={paginatedItems.map(c => c.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {paginatedItems.map((item, idx) => (
+                <SortableCourseCard
+                  key={item.id}
+                  item={item}
+                  idx={idx}
+                  startIndex={startIndex}
+                  handleEdit={handleEdit}
+                  disabled={searchQuery.trim() !== '' || statusFilter !== 'all'}
+                />
+              ))}
+            </SortableContext>
+          </DndContext>
         )}
       </div>
-
       {/* Right Side sliding Drawer */}
       {showModal && (
         <>

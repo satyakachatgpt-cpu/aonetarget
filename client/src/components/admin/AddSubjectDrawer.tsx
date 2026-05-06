@@ -29,7 +29,7 @@ const AddSubjectDrawer: React.FC<AddSubjectDrawerProps> = ({
     level1Branch: defaultLevel1Branch,
     level2Branch: defaultLevel2Branch,
     course: '',
-    icon: 'school',
+    icon: '',
     gradient: 'from-indigo-500 to-blue-600',
     status: 'active' as 'active' | 'inactive',
   });
@@ -54,7 +54,7 @@ const AddSubjectDrawer: React.FC<AddSubjectDrawerProps> = ({
           level1Branch: editingSubject.level1Branch || '',
           level2Branch: editingSubject.level2Branch || '',
           course: editingSubject.course || '',
-          icon: editingSubject.icon || 'school',
+          icon: editingSubject.icon || '',
           gradient: editingSubject.gradient || '',
           status: editingSubject.status || 'active',
         });
@@ -67,7 +67,7 @@ const AddSubjectDrawer: React.FC<AddSubjectDrawerProps> = ({
             level1Branch: defaultLevel1Branch || cat?.branchesL1?.[0]?.slug || '',
             level2Branch: defaultLevel2Branch || cat?.branchesL2?.[0]?.slug || '',
             course: cat?.branchesL1?.find((b: any) => b.slug === defaultLevel1Branch)?.label || cat?.branchesL1?.[0]?.label || '',
-            icon: 'school',
+            icon: '',
             gradient: 'from-indigo-500 to-blue-600',
             status: 'active',
          });
@@ -98,10 +98,18 @@ const AddSubjectDrawer: React.FC<AddSubjectDrawerProps> = ({
   };
 
   return (
-    <RightSideDrawer isOpen={isOpen} onClose={onClose}>
-      <DrawerHeader title={editingSubject ? 'Edit Subject' : 'Add Subject'} onClose={onClose} />
-      <DrawerBody>
-        <div className="space-y-4">
+    <RightSideDrawer isOpen={isOpen} onClose={onClose} width="520px">
+      <div className="flex justify-between items-center px-8 py-6 border-b border-gray-100 bg-white sticky top-0 z-20">
+        <h3 className="text-[20px] font-black text-[#1e293b] tracking-tight uppercase">
+          {editingSubject ? 'Edit Subject' : 'Add Subject'}
+        </h3>
+        <button onClick={onClose} className="w-10 h-10 flex items-center justify-center hover:bg-gray-50 text-slate-400 hover:text-slate-600 rounded-full transition-all">
+          <span className="material-symbols-outlined text-[24px]">close</span>
+        </button>
+      </div>
+
+      <DrawerBody className="bg-gray-50/30">
+        <div className="space-y-6">
            <div>
             <FormLabel label="Subject Name" required />
             <FormInput value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} placeholder="Subject Name" />
@@ -150,7 +158,19 @@ const AddSubjectDrawer: React.FC<AddSubjectDrawerProps> = ({
           </div>
 
           <div>
-            <FormLabel label="Icon Picker" />
+            <div className="flex justify-between items-center pr-1">
+              <FormLabel label="Icon Picker" />
+              {formData.icon && (
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, icon: '' })}
+                  className="text-[10px] font-black text-red-500 bg-red-50 px-2 py-1 rounded-full border border-red-100 flex items-center gap-1 hover:bg-red-500 hover:text-white transition-all active:scale-95 mb-2 uppercase"
+                >
+                  <span className="material-symbols-outlined text-[14px]">close</span>
+                  Clear
+                </button>
+              )}
+            </div>
             <div className="grid grid-cols-5 gap-2 bg-slate-50 p-3 rounded-2xl border border-slate-100 max-h-[220px] overflow-y-auto custom-scrollbar">
               {iconOptions.map(icon => (
                 <button
@@ -170,7 +190,7 @@ const AddSubjectDrawer: React.FC<AddSubjectDrawerProps> = ({
 
           <div>
             <FormLabel label="Gradient Picker" />
-            <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
+            <div className="grid grid-cols-5 gap-3 bg-slate-50 p-3 rounded-2xl border border-slate-100">
               {gradientOptions.map(opt => (
                 <button
                   key={opt.value}
@@ -199,9 +219,20 @@ const AddSubjectDrawer: React.FC<AddSubjectDrawerProps> = ({
           </div>
         </div>
       </DrawerBody>
-      <DrawerFooter>
-        <PrimaryButton onClick={() => onSubmit(formData)}>Save Subject</PrimaryButton>
-      </DrawerFooter>
+      <div className="p-6 border-t border-gray-100 flex gap-3 bg-white">
+        <button
+          onClick={onClose}
+          className="flex-1 h-[56px] border border-gray-200 text-gray-500 text-[14px] font-black uppercase tracking-wider rounded-xl hover:bg-gray-50 transition-all"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={() => onSubmit(formData)}
+          className="flex-1 h-[56px] bg-[#1e293b] text-white text-[14px] font-black uppercase tracking-wider rounded-xl hover:bg-black transition-all shadow-lg shadow-gray-200"
+        >
+          {editingSubject ? 'Update Subject' : 'Create Subject'}
+        </button>
+      </div>
     </RightSideDrawer>
   );
 };

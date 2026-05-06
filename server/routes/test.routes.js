@@ -9,6 +9,8 @@ const router = express.Router({ mergeParams: true });
 router.get('/', optionalAuth, testController.getAllTests);
 router.post('/', adminMiddleware, testController.createTest);
 router.delete('/', adminMiddleware, testController.deleteAllTests);
+router.patch('/reorder', adminMiddleware, testController.reorderTests);
+router.patch('/series/:seriesId/reorder-tests', adminMiddleware, testController.reorderSeriesTests);
 router.post('/bulk', adminMiddleware, testController.bulkCreateTests);
 router.put('/update-all', adminMiddleware, testController.updateAllTests);
 

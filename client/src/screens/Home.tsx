@@ -237,7 +237,18 @@ const Home: React.FC = () => {
     const fetchCategories = async () => {
       try {
         const data = await categoriesAPI.getAll();
-        const active = (Array.isArray(data) ? data : []).filter((c: any) => c.isActive);
+        const active = (Array.isArray(data) ? data : [])
+          .filter((c: any) => c.isActive)
+          .sort((a: any, b: any) => {
+            const getOrderValue = (val: any) => {
+              const n = Number(val);
+              return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+            };
+            const aVal = getOrderValue(a.order);
+            const bVal = getOrderValue(b.order);
+            if (aVal !== bVal) return aVal - bVal;
+            return String(a._id || a.id).localeCompare(String(b._id || b.id));
+          });
         setCategories(active);
       } catch (error) {
         console.error('Failed to fetch categories:', error);
@@ -249,7 +260,13 @@ const Home: React.FC = () => {
         const data = await bannersAPI.getAll();
         const activeBanners = (Array.isArray(data) ? data : []).filter((b: any) => b.isActive !== false && b.active !== false);
         if (activeBanners.length > 0) {
-          activeBanners.sort((a: Banner, b: Banner) => (a.order || 0) - (b.order || 0));
+          activeBanners.sort((a: any, b: any) => {
+            const getOrderValue = (val: any) => {
+              const n = Number(val);
+              return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+            };
+            return getOrderValue(a.order) - getOrderValue(b.order);
+          });
           setBanners(activeBanners);
         } else {
           setBanners([{ imageUrl: '/attached_assets/download_1770552281686.png', title: 'Aone Target Institute' }]);
@@ -347,7 +364,18 @@ const Home: React.FC = () => {
       try {
         const sId = student?.id || student?._id;
         const data = await testSeriesAPI.getAll({ studentId: sId });
-        setTestSeries(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : [];
+        
+        // Sort by sortBy DESC
+        list.sort((a: any, b: any) => {
+          const sortA = parseFloat(String(a.sortBy || "0")) || 0;
+          const sortB = parseFloat(String(b.sortBy || "0")) || 0;
+          if (sortB !== sortA) return sortB - sortA;
+          return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime() || 
+                 String(b._id || b.id).localeCompare(String(a._id || a.id));
+        });
+
+        setTestSeries(list);
       } catch (error) { /* Silent fail */ }
     };
 
@@ -356,7 +384,14 @@ const Home: React.FC = () => {
         const response = await fetch('/api/exam-documents');
         if (response.ok) {
           const data = await response.json();
-          const active = (Array.isArray(data) ? data : []).filter((d: any) => d.status === 'active');
+          const active = (Array.isArray(data) ? data : [])
+            .filter((d: any) => d.status === 'active')
+            .sort((a: any, b: any) => {
+              const aOrder = typeof a.order === 'number' ? a.order : Infinity;
+              const bOrder = typeof b.order === 'number' ? b.order : Infinity;
+              if (aOrder !== bOrder) return aOrder - bOrder;
+              return String(a._id || '').localeCompare(String(b._id || ''));
+            });
           setExamDocs(active);
         }
       } catch (error) {
@@ -750,7 +785,7 @@ const Home: React.FC = () => {
             </button>
           </div>
           {filteredCategories.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2.5">
               {filteredCategories.slice(0, 6).map((cat, i) => (
                 <div
                   key={cat._id || cat.id || i}
@@ -764,7 +799,7 @@ const Home: React.FC = () => {
                       navigate(`/explore/${cat.id}`);
                     }
                   }}
-                  className={`relative p-3.5 rounded-3xl h-40 flex flex-col justify-between text-white bg-gradient-to-br ${cat.gradient || CATEGORY_GRADIENTS[i % CATEGORY_GRADIENTS.length]} overflow-hidden cursor-pointer active:scale-[0.97] transition-all duration-200 shadow-elevated hover:shadow-card-hover hover:-translate-y-0.5 group`}
+                  className={`relative p-3 rounded-3xl h-[140px] flex flex-col justify-between text-white bg-gradient-to-br ${cat.gradient || CATEGORY_GRADIENTS[i % CATEGORY_GRADIENTS.length]} overflow-hidden cursor-pointer active:scale-[0.97] transition-all duration-200 shadow-elevated hover:shadow-card-hover hover:-translate-y-0.5 group`}
                 >
                   {cat.imageUrl && (
                     <img src={getImageUrl(cat.imageUrl)} alt={cat.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
@@ -774,16 +809,18 @@ const Home: React.FC = () => {
                     <span className="glass bg-white/20 text-[8px] font-medium px-2.5 py-1 rounded-full uppercase tracking-wider">
                       {cat.tag || 'COURSE'}
                     </span>
-                    <div className="w-10 h-10 glass bg-white/20 rounded-2xl flex items-center justify-center border border-white/20">
-                      <span className="material-symbols-rounded text-white text-xl">{cat.icon || CATEGORY_ICONS[cat.title] || 'auto_stories'}</span>
-                    </div>
+                    {cat.icon && (
+                      <div className="w-9 h-9 glass bg-white/20 rounded-2xl flex items-center justify-center border border-white/20">
+                        <span className="material-symbols-rounded text-white text-lg">{cat.icon}</span>
+                      </div>
+                    )}
                   </div>
                   <div className="relative z-10">
-                    <h3 className="font-medium text-lg leading-tight">{cat.title}</h3>
-                    <span className="text-[10px] opacity-80 font-medium">{cat.subtitle}</span>
+                    <h3 className="font-semibold text-[16.8px] leading-tight line-clamp-2">{cat.title}</h3>
+                    <span className="text-[11.5px] opacity-80 font-medium">{cat.subtitle}</span>
                   </div>
-                  <div className="absolute bottom-3 right-3 h-9 w-9 glass bg-white/25 rounded-full flex items-center justify-center border border-white/30 z-10 group-hover:bg-white/40 group-hover:scale-110 transition-all duration-200">
-                    <span className="material-symbols-rounded text-white text-lg">arrow_forward</span>
+                  <div className="absolute bottom-3 right-3 h-8 w-8 glass bg-white/25 rounded-full flex items-center justify-center border border-white/30 z-10 group-hover:bg-white/40 group-hover:scale-110 transition-all duration-200">
+                    <span className="material-symbols-rounded text-white text-base">arrow_forward</span>
                   </div>
                 </div>
               ))}
@@ -1333,7 +1370,16 @@ const Home: React.FC = () => {
             {quickLinks.length > 0 ? (
               quickLinks
                 .filter(link => (link as any).type !== 'yt' && (link as any).status !== 'inactive')
-                .sort((a, b) => b.sortBy - a.sortBy)
+                .sort((a: any, b: any) => {
+                  const getSortByValue = (val: any) => {
+                    const n = Number(val);
+                    return Number.isFinite(n) ? n : Number.NEGATIVE_INFINITY;
+                  };
+                  const aVal = getSortByValue(a.sortBy);
+                  const bVal = getSortByValue(b.sortBy);
+                  if (aVal !== bVal) return bVal - aVal; // Descending
+                  return String(b._id || b.id).localeCompare(String(a._id || a.id));
+                })
                 .map((link, i) => (
                   <button
                     key={link.id || i}

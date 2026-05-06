@@ -2,6 +2,23 @@ import React, { useState, useEffect } from 'react';
 import { couponsAPI } from '../../../services/apiClient';
 import { coursesAPI } from '../../../services/courseService';
 import { RightSideDrawer, DrawerHeader, DrawerBody, DrawerFooter } from '../DrawerSystem';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface Course {
   _id: string;
@@ -11,6 +28,7 @@ interface Course {
 }
 
 interface Coupon {
+  _id?: string;
   id: string;
   code: string;
   discountType: 'percentage' | 'flat';
@@ -18,7 +36,7 @@ interface Coupon {
   maxDiscount: number;
   minPurchase: number;
   usedCount: number;
-  usageLimit: number;
+  usageLimit: number | null;
   validFrom: string;
   validUpto: string;
   description: string;
@@ -26,11 +44,144 @@ interface Coupon {
   createdDate: string;
   applicableToAllBatches?: boolean;
   batchIds?: string[];
+  order?: number;
 }
 
 interface Props {
   showToast: (m: string, type?: 'success' | 'error') => void;
 }
+
+const SortableRow = ({ 
+  coupon, 
+  index, 
+  startIndex, 
+  activeMenuId, 
+  setActiveMenuId, 
+  handleEditClick, 
+  handleDeleteCoupon,
+  disabled,
+  batches
+}: any) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: String(coupon._id || ''), disabled: disabled || !coupon._id });
+
+  const style = {
+    transform: transform ? CSS.Translate.toString(transform) : undefined,
+    transition: isDragging ? 'none' : transition,
+    zIndex: isDragging ? 100 : 'auto',
+    opacity: isDragging ? 0.5 : 1,
+    position: 'relative' as const,
+  };
+
+  const isLastFew = index > 2 && index >= (index + 1); // This is tricky due to pagination, will simplify
+
+  return (
+    <tr 
+      ref={setNodeRef} 
+      style={style} 
+      className={`hover:bg-gray-50/30 transition-colors group ${isDragging ? 'bg-white shadow-xl ring-1 ring-black/5' : ''}`}
+    >
+      <td className="px-6 py-5 text-[13px] font-medium text-gray-600">
+        <div className="flex items-center gap-3">
+          {coupon._id ? (
+            <span 
+              {...(!disabled ? attributes : {})} 
+              {...(!disabled ? listeners : {})}
+              style={{ touchAction: 'none', pointerEvents: disabled ? 'none' : 'auto' }}
+              className={`material-symbols-outlined text-[18px] transition-colors px-2 py-2 -ml-2 rounded-lg ${
+                disabled 
+                  ? 'text-gray-200 cursor-not-allowed' 
+                  : 'text-gray-300 cursor-grab active:cursor-grabbing hover:text-black hover:bg-gray-100'
+              }`}
+            >
+              drag_indicator
+            </span>
+          ) : (
+            <span className="w-[34px]" />
+          )}
+          {startIndex + index + 1}
+        </div>
+      </td>
+      <td className="px-6 py-5 text-[13px] font-bold text-gray-800">
+        {coupon.discountType === 'percentage' ? `${coupon.discountValue}%` : `₹${coupon.discountValue}/-`}
+      </td>
+      <td className="px-6 py-5">
+        <span className="text-[13px] font-medium text-gray-800 line-clamp-1">
+          {(() => {
+            const linkedCount = batches.filter((b: any) => 
+              (coupon.batchIds || []).includes(b._id || b.id) || 
+              (Array.isArray(b.discountCodes) && b.discountCodes.some((code: any) => 
+                (code || "").toString().trim().toUpperCase() === (coupon.code || "").toString().trim().toUpperCase()
+              ))
+            ).length;
+            
+            if (coupon.applicableToAllBatches) return 'All Batches';
+            if (linkedCount === 0 && (!coupon.batchIds || coupon.batchIds.length === 0)) return 'All Batches';
+            return `${linkedCount} Selected Batches`;
+          })()}
+        </span>
+      </td>
+      <td className="px-6 py-5">
+        <div className="flex flex-col items-start gap-1">
+          <span className="text-[14px] font-bold text-gray-800 tracking-wider uppercase">{coupon.code}</span>
+          {coupon.status === 'expired' && (
+            <span className="px-2 py-0.5 bg-red-50 text-red-500 text-[10px] font-bold uppercase rounded border border-red-100">
+              Expired
+            </span>
+          )}
+          {coupon.status === 'active' && (
+            <span className="px-2 py-0.5 bg-green-50 text-green-500 text-[10px] font-bold uppercase rounded border border-green-100">
+              Active
+            </span>
+          )}
+          {coupon.status === 'inactive' && (
+            <span className="px-2 py-0.5 bg-gray-50 text-gray-500 text-[10px] font-bold uppercase rounded border border-gray-100">
+              Inactive
+            </span>
+          )}
+        </div>
+      </td>
+      <td className="px-6 py-5 text-[13px] font-medium text-gray-600">
+        {coupon.validUpto ? new Date(coupon.validUpto).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '/') + ' 23:59:00' : '-'}
+      </td>
+      <td className="px-6 py-5 text-right overflow-visible">
+        <div className="relative inline-block text-left">
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveMenuId(activeMenuId === coupon.id ? null : coupon.id);
+            }}
+            className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-[12px] font-bold transition-all ${activeMenuId === coupon.id ? 'bg-navy text-white border-navy' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+          >
+            Actions
+            <span className={`material-symbols-outlined text-[16px] transition-transform duration-200 ${activeMenuId === coupon.id ? 'rotate-180' : ''}`}>expand_more</span>
+          </button>
+
+          <div className={`absolute right-0 top-full mt-1 origin-top-right w-36 bg-white border border-gray-100 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[100] py-1 transition-all duration-200 ${activeMenuId === coupon.id ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'}`}>
+            <button
+              onClick={() => handleEditClick(coupon)}
+              className="w-full px-4 py-2.5 text-left text-[12px] font-bold text-gray-700 hover:bg-indigo-50 flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-sm text-indigo-500">edit</span> Edit
+            </button>
+            <button
+              onClick={() => handleDeleteCoupon(coupon.id, coupon.code)}
+              className="w-full px-4 py-2.5 text-left text-[12px] font-bold text-gray-700 hover:bg-red-50 flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-sm text-red-500">delete</span> Delete
+            </button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+};
 
 const Coupons: React.FC<Props> = ({ showToast }) => {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
@@ -63,6 +214,63 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
     batchIds: [] as string[]
   });
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const isReorderingDisabled = loading || searchQuery.trim() !== '' || statusFilter !== 'all' || currentPage !== 1;
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    
+    if (!over) return;
+    if (active.id === over.id) return;
+
+    if (isReorderingDisabled) {
+      showToast('Reordering is disabled during search or filtering', 'error');
+      return;
+    }
+
+    const oldIndex = paginatedCoupons.findIndex((c) => String(c._id || '') === String(active.id));
+    const newIndex = paginatedCoupons.findIndex((c) => String(c._id || '') === String(over.id));
+
+    if (oldIndex === -1 || newIndex === -1) {
+      showToast('Error calculating order positions', 'error');
+      return;
+    }
+
+    if (oldIndex === newIndex) return;
+
+    const beforeIds = paginatedCoupons.map(c => String(c._id || ''));
+    const reordered = arrayMove(paginatedCoupons, oldIndex, newIndex);
+    const afterIds = reordered.map(c => String(c._id || ''));
+    
+    if (beforeIds.join(',') === afterIds.join(',')) return;
+
+    const previousCoupons = [...coupons];
+    const newCoupons = [...coupons];
+
+    reordered.forEach((coupon, index) => {
+       const mappedOrder = startIndex + index + 1;
+       newCoupons[startIndex + index] = { ...coupon, order: mappedOrder };
+    });
+
+    setCoupons(newCoupons);
+
+    try {
+      const response = await couponsAPI.reorder(afterIds);
+      if (response && response.matchedCount !== undefined && response.matchedCount !== afterIds.length) {
+         throw new Error(`Matched count ${response.matchedCount} does not equal requested ${afterIds.length}`);
+      }
+      showToast('Order updated successfully', 'success');
+    } catch (error) {
+      console.error('Failed to reorder coupons:', error);
+      showToast('Failed to save order. Rolling back...', 'error');
+      setCoupons(previousCoupons);
+    }
+  };
+
   useEffect(() => {
     loadCoupons();
     loadBatches();
@@ -71,6 +279,10 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
     window.addEventListener('click', handleClickOutside);
     return () => window.removeEventListener('click', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
 
   useEffect(() => {
     let filtered = coupons;
@@ -97,7 +309,6 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
     });
 
     setFilteredCoupons(filtered);
-    setCurrentPage(1);
   }, [coupons, searchQuery, statusFilter]);
 
   const totalPages = Math.ceil(filteredCoupons.length / itemsPerPage);
@@ -429,125 +640,69 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
               <p className="text-gray-400 font-bold uppercase tracking-widest text-[12px]">No coupons found</p>
             </div>
           ) : (
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-gray-50/50 border-b border-gray-100">
-                  <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                    <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-700">
-                      S. NO.
-                      <span className="material-symbols-outlined text-sm">unfold_more</span>
-                    </div>
-                  </th>
-                  <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                    <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-700">
-                      DISCOUNT
-                    </div>
-                  </th>
-                  <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                    BATCHES
-                  </th>
-                  <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                    <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-700">
-                      COUPON CODE
-                      <span className="material-symbols-outlined text-sm">unfold_more</span>
-                    </div>
-                  </th>
-                  <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
-                    <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-700">
-                      EXPIRES ON
-                      <span className="material-symbols-outlined text-sm">unfold_more</span>
-                    </div>
-                  </th>
-                  <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">
-                    ACTIONS
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {paginatedCoupons.map((coupon, index) => {
-                  const isLastFew = index > 2 && index >= paginatedCoupons.length - 2;
-                  return (
-                    <tr key={coupon.id} className="hover:bg-gray-50/30 transition-colors group">
-                      <td className="px-6 py-5 text-[13px] font-medium text-gray-600">
-                        {startIndex + index + 1}
-                      </td>
-                      <td className="px-6 py-5 text-[13px] font-bold text-gray-800">
-                        {coupon.discountType === 'percentage' ? `${coupon.discountValue}%` : `₹${coupon.discountValue}/-`}
-                      </td>
-                      <td className="px-6 py-5">
-                        <span className="text-[13px] font-medium text-gray-800 line-clamp-1">
-                          {(() => {
-                            const linkedCount = batches.filter(b => 
-                              (coupon.batchIds || []).includes(b._id || b.id) || 
-                              (Array.isArray(b.discountCodes) && b.discountCodes.some(code => 
-                                (code || "").toString().trim().toUpperCase() === (coupon.code || "").toString().trim().toUpperCase()
-                              ))
-                            ).length;
-                            
-                            if (coupon.applicableToAllBatches) return 'All Batches';
-                            if (linkedCount === 0 && (!coupon.batchIds || coupon.batchIds.length === 0)) return 'All Batches';
-                            return `${linkedCount} Selected Batches`;
-                          })()}
-                        </span>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="flex flex-col items-start gap-1">
-                          <span className="text-[14px] font-bold text-gray-800 tracking-wider uppercase">{coupon.code}</span>
-                          {coupon.status === 'expired' && (
-                            <span className="px-2 py-0.5 bg-red-50 text-red-500 text-[10px] font-bold uppercase rounded border border-red-100">
-                              Expired
-                            </span>
-                          )}
-                          {coupon.status === 'active' && (
-                            <span className="px-2 py-0.5 bg-green-50 text-green-500 text-[10px] font-bold uppercase rounded border border-green-100">
-                              Active
-                            </span>
-                          )}
-                          {coupon.status === 'inactive' && (
-                            <span className="px-2 py-0.5 bg-gray-50 text-gray-500 text-[10px] font-bold uppercase rounded border border-gray-100">
-                              Inactive
-                            </span>
-                          )}
+              <DndContext 
+                sensors={sensors} 
+                collisionDetection={closestCenter} 
+                onDragEnd={handleDragEnd}
+              >
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-gray-50/50 border-b border-gray-100">
+                      <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                        <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-700">
+                          S. NO.
+                          <span className="material-symbols-outlined text-sm">unfold_more</span>
                         </div>
-                      </td>
-                      <td className="px-6 py-5 text-[13px] font-medium text-gray-600">
-                        {coupon.validUpto ? new Date(coupon.validUpto).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '/') + ' 23:59:00' : '-'}
-                      </td>
-                      <td className="px-6 py-5 text-right overflow-visible">
-                        <div className="relative inline-block text-left">
-                          <button 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveMenuId(activeMenuId === coupon.id ? null : coupon.id);
-                            }}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-[12px] font-bold transition-all ${activeMenuId === coupon.id ? 'bg-navy text-white border-navy' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                          >
-                            Actions
-                            <span className={`material-symbols-outlined text-[16px] transition-transform duration-200 ${activeMenuId === coupon.id ? 'rotate-180' : ''}`}>expand_more</span>
-                          </button>
- 
-                          <div className={`absolute right-0 ${isLastFew ? 'bottom-full mb-1 origin-bottom-right' : 'top-full mt-1 origin-top-right'} w-36 bg-white border border-gray-100 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.12)] z-[100] py-1 transition-all duration-200 ${activeMenuId === coupon.id ? 'opacity-100 scale-100 pointer-events-auto' : 'opacity-0 scale-95 pointer-events-none'}`}>
-                            <button
-                              onClick={() => handleEditClick(coupon)}
-                              className="w-full px-4 py-2.5 text-left text-[12px] font-bold text-gray-700 hover:bg-indigo-50 flex items-center gap-2"
-                            >
-                              <span className="material-symbols-outlined text-sm text-indigo-500">edit</span> Edit
-                            </button>
-                            <button
-                              onClick={() => handleDeleteCoupon(coupon.id, coupon.code)}
-                              className="w-full px-4 py-2.5 text-left text-[12px] font-bold text-gray-700 hover:bg-red-50 flex items-center gap-2"
-                            >
-                              <span className="material-symbols-outlined text-sm text-red-500">delete</span> Delete
-                            </button>
-                          </div>
+                      </th>
+                      <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                        <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-700">
+                          DISCOUNT
                         </div>
-                      </td>
-
+                      </th>
+                      <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                        BATCHES
+                      </th>
+                      <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                        <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-700">
+                          COUPON CODE
+                          <span className="material-symbols-outlined text-sm">unfold_more</span>
+                        </div>
+                      </th>
+                      <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                        <div className="flex items-center gap-1.5 cursor-pointer hover:text-gray-700">
+                          EXPIRES ON
+                          <span className="material-symbols-outlined text-sm">unfold_more</span>
+                        </div>
+                      </th>
+                      <th className="px-6 py-4 text-[11px] font-bold text-gray-500 uppercase tracking-wider text-right">
+                        ACTIONS
+                      </th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  </thead>
+                  <SortableContext 
+                    items={paginatedCoupons.map(c => String(c._id || ''))} 
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <tbody className="divide-y divide-gray-50">
+                      {paginatedCoupons.map((coupon, index) => (
+                        <SortableRow
+                          key={String(coupon._id || coupon.id)}
+                          coupon={coupon}
+                          index={index}
+                          startIndex={startIndex}
+                          activeMenuId={activeMenuId}
+                          setActiveMenuId={setActiveMenuId}
+                          handleEditClick={handleEditClick}
+                          handleDeleteCoupon={handleDeleteCoupon}
+                          disabled={isReorderingDisabled}
+                          batches={batches}
+                        />
+                      ))}
+                    </tbody>
+                  </SortableContext>
+                </table>
+              </DndContext>
+
           )}
         </div>
 

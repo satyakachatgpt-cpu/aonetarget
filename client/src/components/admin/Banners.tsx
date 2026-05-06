@@ -3,9 +3,27 @@ import { createPortal } from 'react-dom';
 import { uploadAPI, bannersAPI, coursesAPI } from '../../services/apiClient';
 import { getImageUrl, validateImage } from '../../lib/utils';
 import FileUploadButton from '../shared/FileUploadButton';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface Banner {
-  id: string;
+  _id?: string;
+  id?: string;
   title: string;
   imageUrl: string;
   linkUrl?: string;
@@ -43,6 +61,18 @@ const Banners: React.FC<Props> = ({ showToast }) => {
   const [courseSearchQuery, setCourseSearchQuery] = useState('');
   const [isCourseDropdownOpen, setIsCourseDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [isReordering, setIsReordering] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 3,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const loadCourses = async () => {
     setIsCoursesLoading(true);
@@ -77,8 +107,14 @@ const Banners: React.FC<Props> = ({ showToast }) => {
 
   const loadBanners = async () => {
     try {
+      setLoading(true);
       const data = await bannersAPI.getAll();
-      setBanners(data.sort((a: Banner, b: Banner) => a.order - b.order));
+      const sorted = (Array.isArray(data) ? data : []).sort((a: Banner, b: Banner) => {
+        const aVal = Number.isFinite(a.order) ? a.order : Number.MAX_SAFE_INTEGER;
+        const bVal = Number.isFinite(b.order) ? b.order : Number.MAX_SAFE_INTEGER;
+        return aVal - bVal;
+      });
+      setBanners(sorted);
     } catch (error) {
       showToast('Failed to load banners', 'error');
     } finally {
@@ -168,6 +204,44 @@ const Banners: React.FC<Props> = ({ showToast }) => {
     }
   };
 
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const getStableId = (item: any) => String(item?._id || item?.id || "");
+    const oldIndex = banners.findIndex((b) => getStableId(b) === active.id);
+    const newIndex = banners.findIndex((b) => getStableId(b) === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const rearranged = arrayMove(banners, oldIndex, newIndex);
+    
+    // STRICT NORMALIZATION: Recalculate all order values to be sequential and ascending
+    const newOrderedBanners = rearranged.map((banner, index) => ({
+      ...banner,
+      order: index + 1
+    }));
+    
+    setBanners(newOrderedBanners);
+    setIsReordering(true);
+
+    try {
+      const orderedIds = newOrderedBanners.map(b => String(b._id)).filter(id => id !== 'undefined');
+      if (orderedIds.length === 0) return;
+      await bannersAPI.reorder(orderedIds);
+      showToast('Order updated successfully');
+    } catch (error) {
+      console.error('Failed to reorder banners:', error);
+      showToast('Failed to update order. Rolling back...', 'error');
+      loadBanners(); // Rollback
+    } finally {
+      setIsReordering(false);
+    }
+  };
+
+  // Sorting is only safe when not filtered and on page 1
+  const isSortingDisabled = searchQuery.length > 0 || statusFilter !== 'all' || currentPage !== 1 || isReordering;
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -211,119 +285,50 @@ const Banners: React.FC<Props> = ({ showToast }) => {
           </div>
         </div>
 
-        {/* Data Table */}
-        <div className="overflow-x-visible">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-gray-50/50 border-b border-gray-100">
-                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider">S. NO.</th>
-                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Image</th>
-                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Linked To</th>
-                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider text-center">Sort By</th>
-                <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {paginatedBanners.map((banner, index) => (
-                <tr key={banner.id} className="hover:bg-gray-50/30 transition-colors">
-                  <td className="px-6 py-4 text-[13px] font-medium text-gray-500">{index + 1}</td>
-                  <td className="px-6 py-4">
-                    <div
-                      onClick={() => banner.imageUrl && setPreviewImage(getImageUrl(banner.imageUrl))}
-                      className="w-16 aspect-video bg-gray-100 rounded-md overflow-hidden border border-gray-100 cursor-pointer hover:ring-2 hover:ring-blue-400/50 transition-all active:scale-95 group"
-                    >
-                      {banner.imageUrl ? (
-                        <img src={getImageUrl(banner.imageUrl)} alt={banner.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <span className="material-symbols-outlined text-gray-300 text-sm">image</span>
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-[13px] font-semibold text-gray-700">{banner.title}</span>
-                      <span className={`text-[10px] items-center gap-1.5 flex mt-1 ${banner.active ? 'text-emerald-500' : 'text-gray-400'}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${banner.active ? 'bg-emerald-500' : 'bg-gray-300'}`}></span>
-                        {banner.active ? 'Active' : 'Inactive'}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                    <span className="px-3 py-1 bg-gray-100 rounded-md text-[12px] font-bold text-gray-500">
-                      -{banner.order.toFixed(2)}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="inline-flex items-center gap-2 relative action-menu-container">
-                      <button
-                        onClick={() => setActiveActionMenuId(activeActionMenuId === banner.id ? null : banner.id)}
-                        className={`px-4 py-1.5 border rounded-lg text-[12px] font-bold transition-all flex items-center gap-1 ${activeActionMenuId === banner.id ? 'border-gray-400 bg-gray-50 text-black' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                      >
-                        Actions <span className={`material-symbols-outlined text-[16px] transition-transform duration-200 ${activeActionMenuId === banner.id ? 'rotate-180' : ''}`}>expand_more</span>
-                      </button>
-
-                      {activeActionMenuId === banner.id && (
-                        <div className={`absolute right-0 ${index >= filteredBanners.length - 2 && filteredBanners.length > 2 ? 'bottom-full mb-2' : 'top-full mt-2'} w-56 bg-white border border-gray-100 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.08)] z-[50] py-2 animate-in fade-in zoom-in-95 duration-200`}>
-                          {/* Enabled Toggle */}
-                          <div className="px-4 py-2.5 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
-                            <div className="flex items-center gap-3">
-                              <span className="material-symbols-outlined text-[18px] text-blue-400">info</span>
-                              <span className="text-[14px] font-medium text-gray-600">Enabled</span>
-                            </div>
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                try {
-                                  const updated = { ...banner, active: !banner.active };
-                                  await bannersAPI.update(banner.id, updated);
-                                  setBanners(banners.map(b => b.id === banner.id ? updated : b));
-                                } catch (err) {
-                                  showToast('Failed to update status', 'error');
-                                }
-                              }}
-                              className={`w-10 h-5 rounded-full relative transition-colors ${banner.active ? 'bg-black' : 'bg-gray-200'}`}
-                            >
-                              <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${banner.active ? 'left-[22px]' : 'left-1'}`} />
-                            </button>
-                          </div>
-
-                          {/* Edit Option */}
-                          <button
-                            onClick={() => {
-                              setActiveActionMenuId(null);
-                              openEditModal(banner);
-                            }}
-                            className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50/50 transition-colors text-left"
-                          >
-                            <span className="material-symbols-outlined text-[18px] text-blue-400">edit</span>
-                            <span className="text-[14px] font-medium text-gray-600">Edit</span>
-                          </button>
-
-                          {/* Separator */}
-                          <div className="h-[1px] bg-gray-50 my-1 mx-4" />
-
-                          {/* Delete Option */}
-                          <button
-                            onClick={() => {
-                              setActiveActionMenuId(null);
-                              handleDelete(banner.id);
-                            }}
-                            className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50/50 transition-colors text-left"
-                          >
-                            <span className="material-symbols-outlined text-[18px] text-red-500">delete</span>
-                            <span className="text-[14px] font-medium text-red-500">Delete</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </td>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
+          {/* Data Table */}
+          <div className="overflow-x-visible">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-50/50 border-b border-gray-100">
+                  <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider w-[100px]">S. NO.</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Image</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider">Linked To</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider text-center">Sort By</th>
+                  <th className="px-6 py-4 text-[11px] font-bold text-gray-400 uppercase tracking-wider text-right">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                <SortableContext
+                  items={paginatedBanners.filter(b => !!b._id).map(b => String(b._id))}
+                  strategy={verticalListSortingStrategy}
+                  disabled={isSortingDisabled}
+                >
+                  {paginatedBanners.map((banner, index) => (
+                    <SortableBannerRow
+                      key={banner._id || `temp-${index}`}
+                      banner={banner}
+                      index={startIndex + index}
+                      activeActionMenuId={activeActionMenuId}
+                      setActiveActionMenuId={setActiveActionMenuId}
+                      openEditModal={openEditModal}
+                      handleDelete={handleDelete}
+                      setPreviewImage={setPreviewImage}
+                      banners={banners}
+                      setBanners={setBanners}
+                      showToast={showToast}
+                      isSortingDisabled={isSortingDisabled}
+                    />
+                  ))}
+                </SortableContext>
+              </tbody>
+            </table>
+          </div>
+        </DndContext>
 
         {/* Standardized Pagination Footer */}
         {!loading && filteredBanners.length > 0 && (
@@ -727,6 +732,158 @@ const Banners: React.FC<Props> = ({ showToast }) => {
         document.body
       )}
     </div>
+  );
+};
+
+const SortableBannerRow = ({
+  banner,
+  index,
+  activeActionMenuId,
+  setActiveActionMenuId,
+  openEditModal,
+  handleDelete,
+  setPreviewImage,
+  banners,
+  setBanners,
+  showToast,
+  isSortingDisabled
+}: any) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ 
+    id: String(banner._id || ''), 
+    disabled: isSortingDisabled || !banner._id 
+  });
+
+  const style = {
+    transform: transform ? CSS.Translate.toString(transform) : undefined,
+    transition: isDragging ? 'none' : transition,
+    zIndex: isDragging ? 100 : 1,
+    position: 'relative' as 'relative',
+    backgroundColor: isDragging ? '#f8fafc' : undefined,
+    opacity: isDragging ? 0.8 : 1,
+  };
+
+  return (
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={`hover:bg-gray-50/30 transition-colors ${isDragging ? 'shadow-lg border-y border-gray-200' : ''}`}
+    >
+      <td className="px-6 py-4 text-[13px] font-medium text-gray-500">
+        {!isSortingDisabled && banner._id && (
+          <div
+            {...attributes}
+            {...listeners}
+            className="inline-flex p-2 -ml-2 cursor-grab active:cursor-grabbing hover:bg-gray-100 rounded-lg transition-colors group/handle mr-1"
+            style={{ touchAction: 'none', pointerEvents: 'auto' }}
+          >
+            <span className="material-symbols-outlined text-[18px] text-gray-300 group-hover/handle:text-gray-600 transition-colors">
+              drag_indicator
+            </span>
+          </div>
+        )}
+        {index + 1}
+      </td>
+      <td className="px-6 py-4">
+        <div
+          onClick={() => banner.imageUrl && setPreviewImage(getImageUrl(banner.imageUrl))}
+          className="w-16 aspect-video bg-gray-100 rounded-md overflow-hidden border border-gray-100 cursor-pointer hover:ring-2 hover:ring-blue-400/50 transition-all active:scale-95 group"
+        >
+          {banner.imageUrl ? (
+            <img src={getImageUrl(banner.imageUrl)} alt={banner.title} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center">
+              <span className="material-symbols-outlined text-gray-300 text-sm">image</span>
+            </div>
+          )}
+        </div>
+      </td>
+      <td className="px-6 py-4">
+        <div className="flex flex-col">
+          <span className="text-[13px] font-semibold text-gray-700">{banner.title}</span>
+          <span className={`text-[10px] items-center gap-1.5 flex mt-1 ${banner.active ? 'text-emerald-500' : 'text-gray-400'}`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${banner.active ? 'bg-emerald-500' : 'bg-gray-300'}`}></span>
+            {banner.active ? 'Active' : 'Inactive'}
+          </span>
+        </div>
+      </td>
+      <td className="px-6 py-4 text-center">
+        <span className="px-3 py-1 bg-gray-100 rounded-md text-[12px] font-bold text-gray-500">
+          {/* Always show current sequential position to avoid confusion with stale DB gaps */}
+          {index + 1}
+        </span>
+      </td>
+      <td className="px-6 py-4 text-right">
+        <div className="inline-flex items-center gap-2 relative action-menu-container">
+          <button
+            onClick={() => setActiveActionMenuId(activeActionMenuId === banner.id ? null : banner.id)}
+            className={`px-4 py-1.5 border rounded-lg text-[12px] font-bold transition-all flex items-center gap-1 ${activeActionMenuId === banner.id ? 'border-gray-400 bg-gray-50 text-black' : 'border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+          >
+            Actions <span className={`material-symbols-outlined text-[16px] transition-transform duration-200 ${activeActionMenuId === banner.id ? 'rotate-180' : ''}`}>expand_more</span>
+          </button>
+
+          {activeActionMenuId === banner.id && (
+            <div className={`absolute right-0 ${index >= banners.length - 2 && banners.length > 2 ? 'bottom-full mb-2' : 'top-full mt-2'} w-56 bg-white border border-gray-100 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.08)] z-[50] py-2 animate-in fade-in zoom-in-95 duration-200`}>
+              {/* Enabled Toggle */}
+              <div className="px-4 py-2.5 flex items-center justify-between hover:bg-gray-50/50 transition-colors">
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined text-[18px] text-blue-400">info</span>
+                  <span className="text-[14px] font-medium text-gray-600">Enabled</span>
+                </div>
+                <button
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    try {
+                      const updated = { ...banner, active: !banner.active };
+                      await bannersAPI.update(banner.id, updated);
+                      setBanners(banners.map((b: any) => b.id === banner.id ? updated : b));
+                    } catch (err) {
+                      showToast('Failed to update status', 'error');
+                    }
+                  }}
+                  className={`w-10 h-5 rounded-full relative transition-colors ${banner.active ? 'bg-black' : 'bg-gray-200'}`}
+                >
+                  <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${banner.active ? 'left-[22px]' : 'left-1'}`} />
+                </button>
+              </div>
+
+              {/* Edit Option */}
+              <button
+                onClick={() => {
+                  setActiveActionMenuId(null);
+                  openEditModal(banner);
+                }}
+                className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50/50 transition-colors text-left"
+              >
+                <span className="material-symbols-outlined text-[18px] text-blue-400">edit</span>
+                <span className="text-[14px] font-medium text-gray-600">Edit</span>
+              </button>
+
+              {/* Separator */}
+              <div className="h-[1px] bg-gray-50 my-1 mx-4" />
+
+              {/* Delete Option */}
+              <button
+                onClick={() => {
+                  setActiveActionMenuId(null);
+                  handleDelete(banner.id);
+                }}
+                className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-gray-50/50 transition-colors text-left"
+              >
+                <span className="material-symbols-outlined text-[18px] text-red-500">delete</span>
+                <span className="text-[14px] font-medium text-red-500">Delete</span>
+              </button>
+            </div>
+          )}
+        </div>
+      </td>
+    </tr>
   );
 };
 

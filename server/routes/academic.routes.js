@@ -1,9 +1,9 @@
 import express from 'express';
 import {
-  getCategories, createCategory, updateCategory, deleteCategory, seedCategories,
-  getSubcategories, createSubcategory, updateSubcategory, deleteSubcategory,
-  getSubjects, createSubject, updateSubject, deleteSubject,
-  getTopics, createTopic, updateTopic, deleteTopic,
+  getCategories, createCategory, updateCategory, deleteCategory, seedCategories, reorderCategories,
+  getSubcategories, createSubcategory, updateSubcategory, deleteSubcategory, reorderSubcategories,
+  getSubjects, createSubject, updateSubject, deleteSubject, reorderSubjects,
+  getTopics, createTopic, updateTopic, deleteTopic, reorderTopics,
   getFoldersByCourse, createFolder, updateFolder, deleteFolder,
   getPackages, createPackage, updatePackage, deletePackage, reorderPackages,
   getSubcourses, createSubcourse, updateSubcourse, deleteSubcourse,
@@ -19,6 +19,7 @@ router.get('/categories', catalogLimiter, getCategories);
 router.post('/categories', adminMiddleware, createCategory);
 router.put('/categories/:id', adminMiddleware, updateCategory);
 router.delete('/categories/:id', adminMiddleware, deleteCategory);
+router.patch('/categories/reorder', adminMiddleware, reorderCategories);
 router.post('/categories/seed', adminMiddleware, seedCategories);
 
 // Subcategories
@@ -26,18 +27,21 @@ router.get('/subcategories', getSubcategories);
 router.post('/subcategories', adminMiddleware, createSubcategory);
 router.put('/subcategories/:id', adminMiddleware, updateSubcategory);
 router.delete('/subcategories/:id', adminMiddleware, deleteSubcategory);
+router.patch('/subcategories/reorder', adminMiddleware, reorderSubcategories);
 
 // Subjects
 router.get('/subjects', getSubjects);
 router.post('/subjects', adminMiddleware, createSubject);
 router.put('/subjects/:id', adminMiddleware, updateSubject);
 router.delete('/subjects/:id', adminMiddleware, deleteSubject);
+router.patch('/subjects/reorder', adminMiddleware, reorderSubjects);
 
 // Topics
 router.get('/topics', getTopics);
 router.post('/topics', adminMiddleware, createTopic);
 router.put('/topics/:id', adminMiddleware, updateTopic);
 router.delete('/topics/:id', adminMiddleware, deleteTopic);
+router.patch('/topics/reorder', adminMiddleware, reorderTopics);
 
 // Folders
 router.get('/courses/:courseId/folders', optionalAuth, getFoldersByCourse);

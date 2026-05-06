@@ -11,6 +11,149 @@ import { isPurchaseExpired } from '../utils/helpers.js';
  */
 
 // GET /api/tests
+// GET /api/tests
+export const reorderTests = async (req, res) => {
+  try {
+    const { orderedIds } = req.body;
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
+    }
+
+    const total = orderedIds.length;
+    const bulkOps = orderedIds.map((id, index) => {
+      if (!ObjectId.isValid(id)) return null;
+      return {
+        updateOne: {
+          // Match by _id primarily. We include isSeries: true only if we want strict enforcement,
+          // but some legacy items might be missing it. The frontend ensures these are series.
+          filter: { _id: new ObjectId(id) }, 
+          update: { 
+            $set: { 
+              sortBy: total - index,
+              updatedAt: new Date().toISOString()
+            } 
+          }
+        }
+      };
+    }).filter(Boolean);
+
+    if (bulkOps.length === 0) {
+      return res.status(400).json({ error: 'No valid ObjectIds provided' });
+    }
+
+    const result = await db.collection('tests').bulkWrite(bulkOps);
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'No matching tests found for provided IDs',
+        matchedCount: 0 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Tests reordered successfully',
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount,
+      orderedCount: orderedIds.length
+    });
+  } catch (error) {
+    console.error('Reorder tests error:', error);
+    res.status(500).json({ error: 'Failed to reorder tests', details: error.message });
+  }
+};
+
+/**
+ * Scoped reorder for inner tests within a specific series
+ * PATCH /api/tests/series/:seriesId/reorder-tests
+ */
+export const reorderSeriesTests = async (req, res) => {
+  try {
+    const { seriesId } = req.params;
+    const { orderedIds } = req.body;
+
+    if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
+      return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
+    }
+
+    // 1. Resolve parent series variants for strict scoping
+    const series = await findCourse(seriesId);
+    if (!series) {
+      return res.status(404).json({ error: 'Parent series not found' });
+    }
+    
+    // Only use IDs that directly identify THIS series (not its parent course)
+    const variants = [
+      series._id,
+      String(series._id),
+      series.id,
+      series.slug
+    ].filter(Boolean);
+
+    // Add ObjectId variant for database compatibility if series.id is a valid ObjectId string
+    if (series.id && ObjectId.isValid(series.id) && !variants.includes(new ObjectId(series.id))) {
+      variants.push(new ObjectId(series.id));
+    }
+
+    // 2. Prepare bulk update operations
+    const total = orderedIds.length;
+    const bulkOps = orderedIds.map((id, index) => {
+      const filter = {
+        $or: [
+          { testSeriesId: { $in: variants } },
+          { seriesId: { $in: variants } },
+          { courseId: { $in: variants } },
+          { courseIds: { $in: variants } },
+          { testSeries: { $in: variants } }
+        ]
+      };
+
+      if (ObjectId.isValid(id)) {
+        filter._id = new ObjectId(id);
+      } else {
+        filter.id = id;
+      }
+
+      return {
+        updateOne: {
+          filter,
+          update: { 
+            $set: { 
+              sortBy: total - index,
+              updatedAt: new Date().toISOString()
+            } 
+          }
+        }
+      };
+    });
+
+    const result = await db.collection('tests').bulkWrite(bulkOps);
+
+    if (result.matchedCount !== orderedIds.length) {
+      console.warn(`Reorder mismatch for series ${seriesId}: Received ${orderedIds.length}, matched only ${result.matchedCount}`);
+      return res.status(403).json({ 
+        error: 'Access denied: Some tests were not found or do not belong to this series',
+        matchedCount: result.matchedCount,
+        expectedCount: orderedIds.length,
+        seriesId: seriesId,
+        checkedVariants: variants
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Inner tests reordered successfully',
+      matchedCount: result.matchedCount,
+      modifiedCount: result.modifiedCount,
+      orderedCount: orderedIds.length
+    });
+  } catch (error) {
+    console.error('Reorder series tests error:', error);
+    res.status(500).json({ error: 'Failed to reorder series tests', details: error.message });
+  }
+};
+
 export const getAllTests = async (req, res, next) => {
   try {
     const startTimeMetric = Date.now();
@@ -78,7 +221,7 @@ export const getAllTests = async (req, res, next) => {
     const pageNum = parseInt(req.query.page);
     const limitNum = parseInt(req.query.limit);
 
-    let testsQuery = db.collection('tests').find(matchStage);
+    let testsQuery = db.collection('tests').find(matchStage).sort({ sortBy: -1, createdAt: -1, _id: -1 });
 
     if (!isNaN(pageNum) && !isNaN(limitNum) && limitNum > 0) {
       const totalTests = await db.collection('tests').countDocuments(matchStage);

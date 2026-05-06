@@ -232,7 +232,7 @@ const NeetIitJeePage: React.FC<{
                   : 'text-white/80 hover:text-white'
                   }`}
               >
-                <span className="material-symbols-rounded text-lg">{b.slug === 'neet' ? 'medical_services' : 'engineering'}</span>
+                {b.slug === 'custom_icon_logic_removed' && <span className="material-symbols-rounded text-lg">medical_services</span>}
                 {b.label}
               </button>
             ))}
@@ -245,7 +245,7 @@ const NeetIitJeePage: React.FC<{
           {loading ? (
             Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="animate-pulse">
-                <div className="bg-gray-200 rounded-2xl h-32 w-full"></div>
+                <div className="bg-gray-200 rounded-2xl h-30 w-full"></div>
               </div>
             ))
           ) : categorySubcategories.map(ct => {
@@ -254,17 +254,21 @@ const NeetIitJeePage: React.FC<{
               <button
                 key={ct.id}
                 onClick={() => navigate(`/content/${ct.id}?branch=${activeBranch}&categoryId=${category.id}`)}
-                className="relative rounded-2xl p-4 text-left transition-all active:scale-95 overflow-hidden shadow-md hover:shadow-lg"
+                className="relative rounded-2xl p-4 text-left transition-all active:scale-95 overflow-hidden shadow-md hover:shadow-lg h-28 flex flex-col justify-between"
               >
                 <div className={`absolute inset-0 bg-gradient-to-br ${getVisualGradient(ct)}`}></div>
-                <div className="relative z-10">
-                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mb-3">
-                    <span className="material-symbols-rounded text-white text-2xl">{ct.icon}</span>
+                <div className="relative z-10 flex flex-col h-full justify-between">
+                  <div>
+                    {ct.icon && (
+                      <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center mb-3">
+                        <span className="material-symbols-rounded text-white text-2xl">{ct.icon}</span>
+                      </div>
+                    )}
+                    <h3 className="text-white font-bold text-[13px] leading-tight line-clamp-2">{ct.title}</h3>
                   </div>
-                  <h3 className="text-white font-bold text-sm leading-tight">{ct.title}</h3>
-                  <p className="text-white/60 text-[10px] mt-1">{count} {count === 1 ? 'Course' : 'Courses'}</p>
+                  <p className="text-white/70 text-[10px] mt-2 font-medium tracking-wide uppercase">{count} {count === 1 ? 'Course' : 'Courses'}</p>
                 </div>
-                <div className="absolute top-2 right-2 w-6 h-6 bg-white/20 rounded-full flex items-center justify-center z-10">
+                <div className="absolute top-2 right-2 w-7 h-7 bg-white/20 rounded-full flex items-center justify-center z-10">
                   <span className="material-symbols-rounded text-white text-sm">arrow_forward</span>
                 </div>
               </button>
@@ -306,11 +310,11 @@ const NeetIitJeePage: React.FC<{
                             loading="lazy" 
                             onError={(e) => { e.currentTarget.style.display = 'none'; }} 
                           />
-                        ) : (
+                        ) : ct?.icon ? (
                           <div className={`w-full h-full bg-gradient-to-br ${getVisualGradient(ct || {})} flex items-center justify-center`}>
-                            <span className="material-symbols-rounded text-white/50 text-xl">{ct?.icon || 'school'}</span>
+                            <span className="material-symbols-rounded text-white/50 text-xl">{ct.icon}</span>
                           </div>
-                        )}
+                        ) : null}
                       </div>
                       
                       <div className="flex-1 min-w-0">
@@ -449,7 +453,7 @@ const GeneralClassPage: React.FC<{
                   : 'text-white/80 hover:text-white'
                   }`}
               >
-                <span className="material-symbols-rounded text-lg">{b.slug === 'cbse' ? 'school' : 'account_balance'}</span>
+                {b.slug === 'custom_icon_logic_removed' && <span className="material-symbols-rounded text-lg">school</span>}
                 {b.label}
               </button>
             ))}
@@ -469,9 +473,11 @@ const GeneralClassPage: React.FC<{
             >
               <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-violet-700"></div>
               <div className="relative z-10 flex flex-col h-full justify-between">
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg bg-white/20">
-                  <span className="text-2xl font-black text-white">{b.slug.replace(/\D/g, '')}</span>
-                </div>
+                {false && (
+                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg bg-white/20">
+                    <span className="text-2xl font-black text-white">{b.slug.replace(/\D/g, '')}</span>
+                  </div>
+                )}
                 <div>
                   <h3 className="font-black text-lg text-white">{b.label}</h3>
                   <p className="text-white/60 text-xs font-medium">{category.subtitle || 'Academic Success'}</p>
@@ -492,18 +498,20 @@ const GeneralClassPage: React.FC<{
               <button
                 key={ct.id}
                 onClick={() => navigate(`/content/${ct.id}?branch=${activeL1}&class=${activeL2}&categoryId=${category.id}`)}
-                className="relative rounded-2xl p-4 text-left transition-all active:scale-95 overflow-hidden shadow-md hover:shadow-lg"
+                className="relative rounded-2xl p-4 text-left transition-all active:scale-95 overflow-hidden shadow-md hover:shadow-lg h-30"
               >
                 <div className={`absolute inset-0 bg-gradient-to-br ${getVisualGradient(ct)}`}></div>
                 <div className="relative z-10 flex flex-col h-full justify-between">
                   <div>
-                    <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-3">
-                      <span className="material-symbols-rounded text-white text-xl">{ct.icon}</span>
-                    </div>
-                    <h3 className="text-white font-bold text-sm leading-tight">{ct.title}</h3>
+                    {ct.icon && (
+                      <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center mb-3">
+                        <span className="material-symbols-rounded text-white text-xl">{ct.icon}</span>
+                      </div>
+                    )}
+                    <h3 className="text-white font-bold text-[13px] leading-tight line-clamp-2">{ct.title}</h3>
                   </div>
                   <div className="mt-4 flex items-center justify-between">
-                    <span className="text-white/60 text-[10px] uppercase font-black tracking-widest">{activeL1} • {activeL2}</span>
+                    <span className="text-white/70 text-[9px] uppercase font-black tracking-widest leading-none">{activeL1} • {activeL2}</span>
                     <span className="material-symbols-rounded text-white text-sm">arrow_forward</span>
                   </div>
                 </div>
@@ -528,7 +536,7 @@ const GeneralClassPage: React.FC<{
                     : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-100'
                 }`}
               >
-                <span className="material-symbols-rounded text-lg">{subj.icon}</span>
+                {subj.icon && <span className="material-symbols-rounded text-lg">{subj.icon}</span>}
                 <span className="text-[10px] font-bold">{subj.name}</span>
               </button>
             ))}
@@ -643,9 +651,11 @@ const NursingPage: React.FC<{ category: Category; subcategories: SubCategory[]; 
           </div>
           <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center shadow-lg transform rotate-3">
-                <span className="material-symbols-rounded text-teal-600 text-2xl">{category.icon || 'local_hospital'}</span>
-              </div>
+              {category.icon && (
+                <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center shadow-lg transform rotate-3">
+                  <span className="material-symbols-rounded text-teal-600 text-2xl">{category.icon}</span>
+                </div>
+              )}
               <div>
                 <h2 className="font-bold text-sm">Specialized Coaching</h2>
                 <p className="text-white/70 text-[10px]">{category.description || 'Preparation with expert medical faculty'}</p>
@@ -675,9 +685,11 @@ const NursingPage: React.FC<{ category: Category; subcategories: SubCategory[]; 
               >
                 <div className={`absolute top-0 right-0 w-16 h-16 bg-gradient-to-br ${getVisualGradient(item)} opacity-[0.03] rounded-bl-full`}></div>
                 
-                <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${getVisualGradient(item)} flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                  <span className="material-symbols-rounded text-[22px]">{item.icon}</span>
-                </div>
+                {item.icon && (
+                  <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${getVisualGradient(item)} flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform duration-300`}>
+                    <span className="material-symbols-rounded text-[22px]">{item.icon}</span>
+                  </div>
+                )}
                 
                 <div className="relative z-10">
                   <h3 className="font-black text-[13px] text-gray-800 leading-tight">{item.title}</h3>
@@ -791,8 +803,32 @@ const CategoryPage: React.FC = () => {
           String(c._id).toLowerCase() === String(categoryId).toLowerCase()
         );
         setCategory(cat || null);
-        setSubcategories((Array.isArray(subs) ? subs : []).filter((s: SubCategory) => s.isActive));
-        setSubjects((Array.isArray(subjs) ? subjs : []).filter((s: Subject) => s.status === 'active'));
+        setSubcategories((Array.isArray(subs) ? subs : [])
+          .filter((s: SubCategory) => s.isActive)
+          .sort((a: any, b: any) => {
+            const getOrderValue = (val: any) => {
+              const n = Number(val);
+              return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+            };
+            const aVal = getOrderValue(a.order);
+            const bVal = getOrderValue(b.order);
+            if (aVal !== bVal) return aVal - bVal;
+            return String(a._id || a.id).localeCompare(String(b._id || b.id));
+          })
+        );
+        setSubjects((Array.isArray(subjs) ? subjs : [])
+          .filter((s: Subject) => s.status === 'active')
+          .sort((a: any, b: any) => {
+            const getOrderValue = (val: any) => {
+              const n = Number(val);
+              return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+            };
+            const aVal = getOrderValue(a.order);
+            const bVal = getOrderValue(b.order);
+            if (aVal !== bVal) return aVal - bVal;
+            return String(a._id || a.id).localeCompare(String(b._id || b.id));
+          })
+        );
         
         const purchasedIds = Array.isArray(enrolledRes) ? enrolledRes.map((c: any) => c.id || c._id) : [];
         setEnrolledCourseIds(purchasedIds);
@@ -807,18 +843,16 @@ const CategoryPage: React.FC = () => {
   }, [categoryId, student?.id]);
 
   const categoryCourses = useMemo(() => {
+    let filtered = [];
     if (categoryId === 'mock-test') {
-      return courses.filter(c =>
+      filtered = courses.filter(c =>
         isCategoryMatch(c, { id: 'mock-test' }) ||
         normalizeSubcategoryId(c.contentType || "") === 'mock_test' ||
         (c.name || c.title || '').toLowerCase().includes('mock test') ||
         (c.name || c.title || '').toLowerCase().includes('test series')
       );
-    }
-
-    if (categoryId?.toLowerCase().includes('nursing')) {
-      const normalizedTarget = "nursing";
-      return courses.filter(course => {
+    } else if (categoryId?.toLowerCase().includes('nursing')) {
+      filtered = courses.filter(course => {
         const values = [
           course.category,
           course.categoryName,
@@ -831,9 +865,21 @@ const CategoryPage: React.FC = () => {
 
         return values.includes("nursing") || values.includes("nursing-cet");
       });
+    } else {
+      filtered = courses.filter(c => isCategoryMatch(c, category || { id: categoryId }));
     }
 
-    return courses.filter(c => isCategoryMatch(c, category || { id: categoryId }));
+    // Explicitly sort by settings.sortingOrder
+    return [...filtered].sort((a, b) => {
+      const getOrderValue = (item: any) => {
+        const n = Number(item?.settings?.sortingOrder);
+        return Number.isFinite(n) ? n : Number.MAX_SAFE_INTEGER;
+      };
+      const aVal = getOrderValue(a);
+      const bVal = getOrderValue(b);
+      if (aVal !== bVal) return aVal - bVal;
+      return String(a._id || a.id).localeCompare(String(b._id || b.id));
+    });
   }, [courses, categoryId, category]);
 
   const subcategoryCounts = useMemo(() => {
@@ -920,9 +966,11 @@ const CategoryPage: React.FC = () => {
             <span className="material-symbols-rounded">arrow_back</span>
           </button>
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-              <span className="material-icons-outlined text-2xl">{category.icon}</span>
-            </div>
+            {category.icon && (
+              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                <span className="material-icons-outlined text-2xl">{category.icon}</span>
+              </div>
+            )}
             <div>
               <h1 className="text-xl font-black tracking-tight">{category.title}</h1>
               <p className="text-white/70 text-xs">{category.subtitle}</p>
@@ -978,9 +1026,11 @@ const CategoryPage: React.FC = () => {
                    onClick={() => handleSubClick(sub)}
                    className="bg-gradient-to-br from-gray-50 to-white hover:from-gray-100 hover:to-gray-50 rounded-xl p-4 text-left transition-all active:scale-95 flex items-center gap-3 border border-gray-100 hover:border-gray-200 hover:shadow-md"
                  >
-                   <div className={`w-11 h-11 bg-gradient-to-br ${getVisualGradient(sub)} rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm`}>
-                     <span className="material-icons-outlined text-white text-lg">{sub.icon}</span>
-                   </div>
+                   {sub.icon && (
+                     <div className={`w-11 h-11 bg-gradient-to-br ${getVisualGradient(sub)} rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm`}>
+                       <span className="material-icons-outlined text-white text-lg">{sub.icon}</span>
+                     </div>
+                   )}
                    <div className="min-w-0">
                      <span className="text-xs font-bold text-gray-700 line-clamp-2">{sub.title.replace(sub.parentPath + ' - ', '').replace(sub.parentPath + ' ', '')}</span>
                      <p className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
@@ -1007,9 +1057,11 @@ const CategoryPage: React.FC = () => {
                   onClick={() => handleSubClick(sub)}
                   className="bg-gradient-to-br from-gray-50 to-white hover:from-gray-100 hover:to-gray-50 rounded-xl p-4 text-left transition-all active:scale-95 border border-gray-100 hover:border-gray-200 hover:shadow-md group"
                 >
-                  <div className={`w-12 h-12 bg-gradient-to-br ${getVisualGradient(sub)} rounded-xl flex items-center justify-center mb-3 shadow-sm group-hover:shadow-md transition-shadow`}>
-                    <span className="material-icons-outlined text-white text-xl">{sub.icon}</span>
-                  </div>
+                  {sub.icon && (
+                    <div className={`w-12 h-12 bg-gradient-to-br ${getVisualGradient(sub)} rounded-xl flex items-center justify-center mb-3 shadow-sm group-hover:shadow-md transition-shadow`}>
+                      <span className="material-icons-outlined text-white text-xl">{sub.icon}</span>
+                    </div>
+                  )}
                   <p className="text-xs font-bold text-gray-800">{sub.title}</p>
                   <div className="flex items-center gap-1 mt-1">
                     <span className="material-icons-outlined text-gray-400" style={{ fontSize: '10px' }}>menu_book</span>
@@ -1048,7 +1100,7 @@ const CategoryPage: React.FC = () => {
                       : 'bg-white text-gray-600 border border-gray-200'
                       }`}
                   >
-                    <span className="material-icons-outlined" style={{ fontSize: '14px' }}>{sub.icon}</span>
+                    {sub.icon && <span className="material-icons-outlined" style={{ fontSize: '14px' }}>{sub.icon}</span>}
                     <span className="truncate">{sub.title.replace(sub.parentPath ? sub.parentPath + ' - ' : '', '').replace(sub.parentPath ? sub.parentPath + ' ' : '', '')}</span>
                     {(subcategoryCounts[sub.id] || 0) > 0 && <span className="opacity-70">({subcategoryCounts[sub.id]})</span>}
                   </button>
@@ -1103,7 +1155,7 @@ const CategoryPage: React.FC = () => {
         {categoryCourses.length === 0 && subcategories.length === 0 && (
           <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 shadow-sm mt-8 animate-fade-in">
             <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="material-icons-outlined text-6xl text-gray-200">auto_stories</span>
+              <span className="material-icons-outlined text-6xl text-gray-200">sentiment_satisfied</span>
             </div>
             <h3 className="text-base font-bold text-gray-700">Content Coming Soon</h3>
             <p className="text-xs text-gray-400 mt-2 max-w-[250px] mx-auto font-medium">We are organizing the best materials for this section. Check back shortly!</p>

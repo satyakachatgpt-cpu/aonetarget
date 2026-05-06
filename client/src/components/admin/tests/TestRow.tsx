@@ -1,4 +1,6 @@
 import React from 'react';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface TestRowProps {
   test: any;
@@ -12,6 +14,7 @@ interface TestRowProps {
   onPublish: (id: string) => void;
   onToggleStatus: (test: any) => void;
   onDelete: (id: string) => void;
+  isSortingDisabled?: boolean;
 }
 
 const TestRow: React.FC<TestRowProps> = ({
@@ -26,15 +29,55 @@ const TestRow: React.FC<TestRowProps> = ({
   onPublish,
   onToggleStatus,
   onDelete,
+  isSortingDisabled = false,
 }) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({
+    id: String(test._id),
+    disabled: isSortingDisabled
+  });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    zIndex: isDragging ? 50 : undefined,
+    position: (isDragging ? 'relative' : 'static') as any,
+    opacity: isDragging ? 0.8 : 1,
+  };
+
   return (
-    <tr className="hover:bg-gray-50/30 transition-colors group">
+    <tr
+      ref={setNodeRef}
+      style={style}
+      className={`hover:bg-gray-50/30 transition-colors group ${isDragging ? 'bg-blue-50 shadow-lg' : ''}`}
+    >
       <td className="px-6 py-5 text-[13px] text-gray-700 font-medium">
-        {test.id
-          ? String(test.id).length > 8
-            ? index + 1
-            : String(test.id).replace("test_", "")
-          : index + 1}
+        <div className="flex items-center gap-3">
+          {!isSortingDisabled && (
+            <div
+              {...attributes}
+              {...listeners}
+              className="flex items-center justify-center w-6 h-6 rounded hover:bg-gray-100 cursor-grab active:cursor-grabbing transition-colors"
+              title="Drag to reorder"
+              style={{ touchAction: 'none', pointerEvents: 'auto' }}
+            >
+              <span className="material-symbols-outlined text-[18px] text-gray-300 group-hover:text-gray-400">
+                drag_indicator
+              </span>
+            </div>
+          )}
+          {test.id
+            ? String(test.id).length > 8
+              ? index + 1
+              : String(test.id).replace("test_", "")
+            : index + 1}
+        </div>
       </td>
       <td className="px-6 py-5">
         <div className="w-[84px] h-[48px] bg-white rounded-md overflow-hidden border border-gray-100 flex items-center justify-center p-0.5 group-hover:border-gray-200 transition-all">
@@ -67,7 +110,7 @@ const TestRow: React.FC<TestRowProps> = ({
       <td className="px-6 py-5">
         <div className="bg-[#eff1f3] rounded-3xl h-6 px-4 inline-flex items-center justify-center min-w-[80px]">
           <span className="text-[12px] font-medium text-gray-600">
-            {Number(test.sortBy || 0).toFixed(2)}
+            {index + 1}
           </span>
         </div>
       </td>

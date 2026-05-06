@@ -4,6 +4,7 @@ import {
   createBanner,
   updateBanner,
   deleteBanner,
+  reorderBanners,
   getNews,
   createNews,
   updateNews,
@@ -12,10 +13,12 @@ import {
   createQuickLink,
   updateQuickLink,
   deleteQuickLink,
+  reorderQuickLinks,
   getInstructions,
   createInstruction,
   updateInstruction,
   deleteInstruction,
+  reorderInstructions,
   getBlogPosts,
   createBlogPost,
   updateBlogPost,
@@ -32,7 +35,9 @@ import {
   deleteStandaloneNote,
   getGenericPdfs,
   updateGenericPdf,
-  deleteGenericPdf
+  deleteGenericPdf,
+  reorderPdfs,
+  reorderExamDocuments
 } from '../controllers/appContent.controller.js';
 import {
   getCourseNotes,
@@ -61,6 +66,7 @@ router.get('/banners', getBanners);
 router.post('/banners', adminMiddleware, createBanner);
 router.put('/banners/:id', adminMiddleware, updateBanner);
 router.delete('/banners/:id', adminMiddleware, deleteBanner);
+router.patch('/banners/reorder', adminMiddleware, reorderBanners);
 
 // News
 router.get('/news', getNews);
@@ -73,12 +79,14 @@ router.get('/quick-links', getQuickLinks);
 router.post('/quick-links', adminMiddleware, createQuickLink);
 router.put('/quick-links/:id', adminMiddleware, updateQuickLink);
 router.delete('/quick-links/:id', adminMiddleware, deleteQuickLink);
+router.patch('/quick-links/reorder', adminMiddleware, reorderQuickLinks);
 
 // Instructions
 router.get('/instructions', getInstructions);
 router.post('/instructions', adminMiddleware, createInstruction);
 router.put('/instructions/:id', adminMiddleware, updateInstruction);
 router.delete('/instructions/:id', adminMiddleware, deleteInstruction);
+router.patch('/instructions/reorder', adminMiddleware, reorderInstructions);
 
 // Blog
 router.get('/blog', getBlogPosts);
@@ -97,6 +105,7 @@ router.get('/pdfs', catalogLimiter, getGenericPdfs);
 router.post('/pdfs', adminMiddleware, createStandalonePdf);
 router.put('/pdfs/:id', adminMiddleware, updateGenericPdf);
 router.delete('/pdfs/:id', adminMiddleware, deleteGenericPdf);
+router.patch('/pdfs/reorder', adminMiddleware, reorderPdfs);
 router.delete('/pdfs', adminMiddleware, deleteAllPdfs);
 router.post('/pdfs/bulk', adminMiddleware, bulkCreatePdfs);
 router.put('/pdfs/update-all', adminMiddleware, updateAllPdfs);
@@ -125,5 +134,6 @@ router.get('/exam-documents', getExamDocuments);
 router.post('/exam-documents', adminMiddleware, createExamDocument);
 router.put('/exam-documents/:id', adminMiddleware, updateExamDocument);
 router.delete('/exam-documents/:id', adminMiddleware, deleteExamDocument);
+router.patch('/exam-documents/reorder', adminMiddleware, reorderExamDocuments);
 
 export default router;
