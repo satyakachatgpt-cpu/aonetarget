@@ -13,6 +13,8 @@ interface AddSingleTestDrawerProps {
     showToast?: (m: string, type?: 'success' | 'error') => void;
 }
 
+const DEFAULT_TERMS = '<ul><li>Ensure you have a stable internet connection before starting the test.</li><li>You must attempt all the questions.</li><li>The number of questions, duration and maximum marks have been specified above.</li><li>Some questions may have negative marking. Please attempt them carefully.</li><li>You have to complete the test as per the allotted time.</li><li>This test is setup as per the latest exam pattern and difficulty level.</li><li>Make sure that you complete the test before you submit the test. Do not close the browser before your test is complete.</li><li>Submit your answers before the time limit expires.</li><li>Any attempt to copy, print, or take screenshots of the test is strictly prohibited.</li><li>Follow any specific on-screen prompts or instructions provided by the test platform.</li><li>Pay attention to the time remaining and pace yourself accordingly.</li><li>Read each question carefully and double-check your answers before submitting.</li><li>I have read all the instructions carefully and have understood them. I agree not to cheat or use unfair means in this examination. I understand that using unfair means of any sort for my own or someone else\'s advantage will lead to my immediate disqualification.</li></ul>';
+
 const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
     isOpen,
     onClose,
@@ -95,7 +97,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
         sendTelegramNotice: false,
         marksPerQuestion: '',
         negativeMarking: '',
-        termsAndConditions: ''
+        termsAndConditions: DEFAULT_TERMS
     });
 
     const [sections, setSections] = useState([
@@ -190,7 +192,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                     sendTelegramNotice: false,
                     marksPerQuestion: '',
                     negativeMarking: '',
-                    termsAndConditions: ''
+                    termsAndConditions: DEFAULT_TERMS
                 });
                 setSections([{ id: Date.now(), section: '', maxQuestions: -1, partTitle: '', isOptional: true, fixedTiming: false }]);
             }
@@ -334,7 +336,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                                                         if (!formData.termsAndConditions) {
                                                             setFormData(prev => ({ 
                                                                 ...prev, 
-                                                                termsAndConditions: '<ul><li>Ensure you have a stable internet connection before starting the test.</li><li>You must attempt all the questions.</li></ul>' 
+                                                                termsAndConditions: DEFAULT_TERMS 
                                                             }));
                                                         }
                                                         setShowTermsEditor(true);
@@ -361,7 +363,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                                                     <button 
                                                         type="button"
                                                         onClick={() => {
-                                                            if (formData.termsAndConditions === '<ul><li>Ensure you have a stable internet connection before starting the test.</li><li>You must attempt all the questions.</li></ul>') {
+                                                            if (formData.termsAndConditions === DEFAULT_TERMS) {
                                                                 handleInputChange('termsAndConditions', '');
                                                             }
                                                             setShowTermsEditor(false);
