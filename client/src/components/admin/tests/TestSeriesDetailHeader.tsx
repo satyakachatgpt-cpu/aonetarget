@@ -119,26 +119,6 @@ const TestSeriesDetailHeader: React.FC<TestSeriesDetailHeaderProps> = ({
               <span className="material-symbols-outlined text-[20px] text-gray-500">post_add</span>
               <span className="text-[14px] font-bold text-gray-800">Create Test</span>
             </button>
-            <button
-              onClick={() => {
-                setIsAddMenuOpen(false);
-                onAddPDF();
-              }}
-              className="w-full flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors text-left"
-            >
-              <span className="material-symbols-outlined text-[20px] text-gray-500">picture_as_pdf</span>
-              <span className="text-[14px] font-bold text-gray-800">PDF Test Upload (Single/Bulk)</span>
-            </button>
-            <button
-              onClick={() => {
-                setIsAddMenuOpen(false);
-                onAddSubjective();
-              }}
-              className="w-full flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors text-left"
-            >
-              <span className="material-symbols-outlined text-[20px] text-gray-500">draw</span>
-              <span className="text-[14px] font-bold text-gray-800">Create Subjective Test</span>
-            </button>
           </div>
         )}
       </div>
