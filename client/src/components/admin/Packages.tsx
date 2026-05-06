@@ -533,6 +533,70 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
     setCurrentPage(1);
   }, [searchQuery, statusFilter]);
 
+  const handleManualReorder = async (updatedItem: any) => {
+    try {
+      setIsReordering(true);
+      // 1. Take full current list from packages state
+      const currentList = [...packages];
+      
+      // 2. Sort in current visible order to have a stable base for splice
+      // This matches the loadData sorting logic
+      const sortedList = [...currentList].sort((a, b) => {
+        const getOrder = (item: any) => {
+          const val = item.settings?.sortingOrder ?? item.sortingOrder ?? 1000;
+          return val === 0 ? 1000 : val;
+        };
+        const orderA = getOrder(a);
+        const orderB = getOrder(b);
+        if (orderA !== orderB) return orderA - orderB;
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+      });
+
+      // 3. Remove edited item from the list to prepare for re-insertion
+      const filteredList = sortedList.filter(item => {
+        const itemId = item.id || item._id;
+        const updatedId = updatedItem.id || updatedItem._id;
+        return String(itemId) !== String(updatedId);
+      });
+
+      // 4. Convert entered order to target position
+      // -1, 0, 1 => index 0
+      // N => index N - 1
+      // empty/null/invalid => last
+      const enteredOrder = updatedItem.settings?.sortingOrder;
+      let targetIndex: number;
+      
+      if (enteredOrder === undefined || enteredOrder === null || isNaN(enteredOrder)) {
+        targetIndex = filteredList.length; // Move to last
+      } else if (enteredOrder <= 1) {
+        targetIndex = 0; // Move to first
+      } else if (enteredOrder > filteredList.length + 1) {
+        targetIndex = filteredList.length; // Move to last
+      } else {
+        targetIndex = Math.floor(enteredOrder) - 1;
+      }
+
+      // 5. Insert edited item at target index
+      const newList = [...filteredList];
+      newList.splice(targetIndex, 0, updatedItem);
+
+      // 6. Build full orderedIds from the new sequential list
+      const orderedIds = newList.map(item => item.id || item._id);
+
+      // 7. Call existing reorder endpoint
+      await packagesAPI.reorder(orderedIds);
+      
+      showToast('Order sequence updated successfully', 'success');
+      loadData();
+    } catch (error) {
+      console.error("Manual reorder failed:", error);
+      showToast("Failed to sync order sequence", "error");
+      loadData(); 
+    } finally {
+      setIsReordering(false);
+    }
+  };
+
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -1009,7 +1073,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
   }
 
   if (isAddingCourse) {
-    return <AddCourse onClose={() => { setIsAddingCourse(false); setEditingPackage(null); loadData(); }} courseData={editingPackage} />;
+    return <AddCourse onClose={() => { setIsAddingCourse(false); setEditingPackage(null); loadData(); }} courseData={editingPackage} onSave={handleManualReorder} />;
   }
 
   return (

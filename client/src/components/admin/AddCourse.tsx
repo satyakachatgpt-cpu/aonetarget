@@ -8,9 +8,10 @@ interface Props {
     onClose: () => void;
     courseData?: any;
     showToast?: (msg: string, type?: 'success' | 'error') => void;
+    onSave?: (updatedItem: any) => Promise<void>;
 }
 
-const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast }) => {
+const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) => {
     const isEditMode = !!courseData && !courseData.isDuplicate;
     const [activeStep, setActiveStep] = useState(1);
     const { setSidebarHidden } = useContext(AdminUIContext);
@@ -452,6 +453,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast }) => {
 
             const courseId = courseData?._id || courseData?.id;
             const isPackage = courseId?.toString().startsWith('pkg_');
+            let savedItem = null;
 
             if (isEditMode) {
                 console.log("Updating Course Data:", coursePayload);
@@ -460,11 +462,26 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast }) => {
                 } else {
                     await coursesAPI.update(courseId, coursePayload);
                 }
+                savedItem = { ...courseData, ...coursePayload, id: courseId, _id: courseId };
                 alert("Batch Updated Successfully!");
             } else {
                 console.log("Publishing New Batch Data:", coursePayload);
-                await coursesAPI.create(coursePayload);
+                const result = await coursesAPI.create(coursePayload);
+                savedItem = result;
                 alert("Batch Published Successfully!");
+            }
+
+            if (onSave && savedItem) {
+                // If sortingOrder was empty string, set it to null for onSave to handle as 'last'
+                const finalOrder = sortingOrder === '' ? null : (parseFloat(sortingOrder) || 0);
+                const itemToReorder = { 
+                    ...savedItem, 
+                    settings: { 
+                        ...(savedItem.settings || {}), 
+                        sortingOrder: finalOrder 
+                    } 
+                };
+                await onSave(itemToReorder);
             }
 
             onClose();
