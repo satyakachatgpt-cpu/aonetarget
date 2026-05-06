@@ -13,48 +13,78 @@ export const parsePDFWithGemini = async (req, res) => {
     console.log(`[Gemini] Starting AI analysis for: ${req.file.originalname}`);
 
     const systemPrompt = `
-Act as an expert exam paper digitizer. Extract all questions from the provided PDF exam paper.
+Act as an expert exam paper digitizer. Extract ALL questions from the provided PDF exam paper without missing any.
 
 STRICT RULES:
 
-1. Extraction: Extract every question and its options (A, B, C, D) in exact order.
+1. Extraction: Extract every single question and its options (A, B, C, D) in the exact order they appear. Do not skip any question.
 
-2. Language: Support mixed Hindi and English text perfectly. Use UTF-8 for Hindi.
+2. Language: Support mixed Hindi and English text perfectly. Use UTF-8 for Hindi characters.
 
-3. Math/Science: Convert ALL mathematical equations, formulas, and scientific symbols into LaTeX format (surrounded by $ symbols). Do NOT use LaTeX for table content.
+3. Math/Science: Convert ALL mathematical equations, formulas, and scientific symbols into LaTeX format surrounded by $ symbols (e.g. $x^2 + y^2 = z^2$). Do NOT use LaTeX for table content — use HTML tables instead (see rule 8).
 
-4. Answer Key: Find the "Answer Table" or "Key". Always normalize correctAnswer to "A", "B", "C", or "D". If PDF uses 1,2,3,4 map them: 1->A, 2->B, 3->C, 4->D.
+4. Answer Key: Find the "Answer Table" or "Key" section. Always normalize correctAnswer to "A", "B", "C", or "D". If the PDF uses numbers map them: 1->A, 2->B, 3->C, 4->D. If no answer key exists set correctAnswer to "A" as placeholder.
 
-5. Output Format: Return ONLY a valid JSON array. No extra text before or after. Schema:
+5. Output Format: Return ONLY a valid JSON array. No markdown, no code fences, no extra text before or after. Every object must follow this schema exactly:
 {
   "questionNumber": number,
-  "questionEn": "question text here — if table exists embed HTML table here",
-  "questionHi": "Hindi version if separately present, else empty string",
+  "questionEn": "full question text in English or mixed — embed HTML table here if question has a table",
+  "questionHi": "full question text in Hindi if it exists separately in the PDF, otherwise empty string",
   "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
   "correctAnswer": "A" | "B" | "C" | "D",
-  "solution": "explanation if present, else empty string"
+  "solution": "explanation or solution if provided in the PDF, otherwise empty string",
+  "questionImageBase64": "if the question has a diagram or figure, output it as a base64 encoded PNG/JPEG data URL like data:image/png;base64,... — otherwise empty string",
+  "optionImagesBase64": ["base64 data URL for option A image if option A is an image, else empty string", "same for B", "same for C", "same for D"]
 }
 
-6. Extraction Detail: Do not include primary option labels (A., (1)) in options text. Preserve statement labels like (a) if present.
+6. Option Labels: Do not include the primary option labels (A., B., (1), (2)) in the options text. However preserve internal statement labels like (a), (i), (I) if they appear inside the option text.
 
-7. TABLE RULE — THIS IS MANDATORY:
-If ANY question contains a table (match the following, column matching, assertion-reason table, or any grid of data), you MUST convert that table into an HTML table string and embed it inside questionEn (and questionHi if applicable).
-- The question stem text must come BEFORE the HTML table tag as plain text.
-- Use ONLY inline styles. Zero CSS classes allowed.
-- The HTML must be a single unbroken line — NO newline characters inside the string.
-- Options A/B/C/D stay as normal plain text strings outside the table.
+7. SPECIAL QUESTION TYPES — handle each type as follows:
 
-EXAMPLE — if PDF has this question:
-"100. Match the following. / सही मिलान कीजिए।
-Column I: A. Tuberculosis  B. Influenza  C. Scabies  D. Cholera
-Column II: I. Droplet  II. Contact/enteric  III. Airborne  IV. Contact"
+  TYPE A — Assertion-Reason questions:
+  These have "Assertion (A):" and "Reason (R):" statements followed by 4 options.
+  Put the full assertion and reason text inside questionEn like this:
+  "Assertion (A): [assertion text here] Reason (R): [reason text here]"
+  The 4 options are always the standard assertion-reason choices, extract them as-is.
 
-Then questionEn MUST be exactly like this (single line, HTML embedded):
-"Match the following. / सही मिलान कीजिए।<table style=\"border-collapse:collapse;width:100%;margin-top:8px;\"><thead><tr style=\"background:#f3f4f6;\"><th style=\"border:1px solid #d1d5db;padding:8px 12px;text-align:left;font-weight:600;\">Column I / कॉलम I</th><th style=\"border:1px solid #d1d5db;padding:8px 12px;text-align:left;font-weight:600;\">Item / विषय</th><th style=\"border:1px solid #d1d5db;padding:8px 12px;text-align:left;font-weight:600;\">Column II / कॉलम II</th><th style=\"border:1px solid #d1d5db;padding:8px 12px;text-align:left;font-weight:600;\">Description / विवरण</th></tr></thead><tbody><tr><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">A</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">Tuberculosis / टीबी</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">I</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">Droplet precaution / ड्रॉपलेट प्रीकॉशन</td></tr><tr><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">B</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">Influenza / इन्फ्लुएंजा</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">II</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">Contact/enteric precaution / कॉन्टैक्ट/एंटेरिक प्रीकॉशन</td></tr><tr><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">C</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">Scabies / स्केबीज</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">III</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">Airborne precaution / एयरबोर्न प्रीकॉशन</td></tr><tr><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">D</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">Cholera / कॉलरा</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">IV</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">Contact precaution / कॉन्टैक्ट प्रीकॉशन</td></tr></tbody></table>"
+  TYPE B — Statement based questions (Statement 1 and Statement 2, or multiple statements):
+  Put all statements inside questionEn clearly labeled.
+  EXAMPLE questionEn: "Consider the following statements: Statement 1: [text] Statement 2: [text] Which of the above statements is/are correct?"
 
-Follow this exact pattern for every table question in the PDF. Adjust rows and columns to match the actual table in the PDF.
+  TYPE C — Passage/Comprehension based questions:
+  The passage text goes into questionEn BEFORE the actual question, separated clearly.
+  EXAMPLE questionEn: "PASSAGE: [full passage text here] QUESTION: [the actual question being asked]"
+  Each sub-question of a passage is a SEPARATE question object in the JSON array with the passage repeated in questionEn.
 
-Combine multi-page questions logically. Ignore headers, footers, and page numbers.
+  TYPE D — Integer/Numerical type questions (no options, answer is a number):
+  These questions have no A/B/C/D options in the PDF. Handle them like this:
+  - The actual correct answer is a specific number (e.g. 60)
+  - Create 4 options where one is the correct number and three are plausible wrong numbers (nearby values)
+  - Set correctAnswer to whichever option letter contains the actual correct number
+  - Add "[Integer Type]" at the end of questionEn
+  - EXAMPLE: if answer is 60, options could be ["45", "60", "75", "90"] and correctAnswer "B"
+
+  TYPE E — Fill in the blank questions:
+  Extract as normal MCQ. Show the blank as "______" in questionEn.
+
+  TYPE F — True/False questions:
+  Set options to ["True", "False", "Cannot be determined", "None of these"].
+  correctAnswer maps to A for True, B for False.
+
+8. TABLE RULE — MANDATORY:
+If ANY question contains a table (match the following, column matching, or any grid of data), convert the full table into HTML and embed it inside questionEn. The question stem text must appear as plain text BEFORE the HTML table. Use ONLY inline styles, no CSS classes. HTML must be a single unbroken line with NO newline characters inside the JSON string.
+
+EXAMPLE for match-the-following — questionEn must look like:
+"Match the following. / सही मिलान कीजिए।<table style=\"border-collapse:collapse;width:100%;margin-top:8px;\"><thead><tr style=\"background:#f3f4f6;\"><th style=\"border:1px solid #d1d5db;padding:8px 12px;text-align:left;font-weight:600;\">Column I / कॉलम I</th><th style=\"border:1px solid #d1d5db;padding:8px 12px;text-align:left;font-weight:600;\">Item / विषय</th><th style=\"border:1px solid #d1d5db;padding:8px 12px;text-align:left;font-weight:600;\">Column II / कॉलम II</th><th style=\"border:1px solid #d1d5db;padding:8px 12px;text-align:left;font-weight:600;\">Description / विवरण</th></tr></thead><tbody><tr><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">A</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">Item text</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">I</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">Description text</td></tr></tbody></table>"
+Adjust rows and columns to match the actual table. Options A/B/C/D stay as plain text outside the table.
+
+9. IMAGE RULE — MANDATORY:
+- If a question has a diagram, figure, graph, or image embedded in the PDF next to or below the question text, extract it and put its base64 data URL in the "questionImageBase64" field.
+- If any option (A, B, C, or D) is itself an image/diagram instead of text, extract it and put its base64 data URL in the corresponding index of "optionImagesBase64" array. In this case set the text for that option in "options" array to "[Image Option]".
+- If there is no image for question or options, set "questionImageBase64" to empty string "" and "optionImagesBase64" to ["","","",""].
+- Always output base64 as a complete data URL starting with "data:image/png;base64," or "data:image/jpeg;base64,".
+
+Combine multi-page questions logically. Ignore headers, footers, watermarks, and page numbers.
     `;
 
     const pdfPart = {
@@ -86,12 +116,35 @@ Combine multi-page questions logically. Ignore headers, footers, and page number
       return text.trim().replace(/^[\(\[]?([a-zA-Z0-9])[\)\].:]\s*/, "").trim();
     };
 
+    // Helper — validate base64 data URL
+    const isValidBase64Image = (str) => {
+      if (!str || typeof str !== "string") return false;
+      return str.startsWith("data:image/") && str.includes(";base64,") && str.length > 100;
+    };
+
     console.log(`[Gemini] Successfully parsed ${questions.length} questions`);
 
     res.json({
       success: true,
       questions: questions.map((q, idx) => {
         const cleanedOptions = (q.options || []).map(opt => stripOptionMarkers(opt));
+
+        // Process question image
+        const questionImage = isValidBase64Image(q.questionImageBase64)
+          ? q.questionImageBase64
+          : "";
+
+        // Process option images
+        const rawOptionImages = Array.isArray(q.optionImagesBase64)
+          ? q.optionImagesBase64
+          : ["", "", "", ""];
+        const optionImages = rawOptionImages.map(img =>
+          isValidBase64Image(img) ? img : ""
+        );
+
+        // If any option image exists, mark hasDiagramOptions
+        const hasDiagramOptions = optionImages.some(img => img !== "");
+
         return {
           ...q,
           id: idx + 1,
@@ -99,6 +152,9 @@ Combine multi-page questions logically. Ignore headers, footers, and page number
           question: q.questionEn || "",
           questionEn: q.questionEn || "",
           questionHi: q.questionHi || "",
+          questionImage: questionImage,
+          optionImages: optionImages,
+          hasDiagramOptions: hasDiagramOptions,
           optionA: cleanedOptions[0] || "",
           optionB: cleanedOptions[1] || "",
           optionC: cleanedOptions[2] || "",
@@ -110,7 +166,7 @@ Combine multi-page questions logically. Ignore headers, footers, and page number
           displayOptions: cleanedOptions.map((opt, i) => ({
             id: i + 1,
             text: opt,
-            image: "",
+            image: optionImages[i] || "",
             isCorrect: q.correctAnswer === String.fromCharCode(65 + i)
           })),
           explanation: q.solution || "Extracted via Gemini AI"
