@@ -33,8 +33,10 @@ interface Props {
   handlePublish: (id: string | number, series: any, setter: any) => void;
   handleExportPDF: (test: any, withSol: boolean) => void;
   setViewingReevaluateTest: (test: any) => void;
-  handleDelete: (id: string | number, series: any, setter: any) => void;
+  onDelete: (id: string) => void | Promise<void>;
   toggleStatus: (test: any) => void;
+  onReorderInner: (event: any) => void;
+  isSortingDisabled?: boolean;
   expandedDropdownItem: string | null;
   setExpandedDropdownItem: (val: string | null) => void;
   seriesUsers: any[];
@@ -70,8 +72,10 @@ const TestsSeriesDetailView: React.FC<Props> = ({
   handlePublish,
   handleExportPDF,
   setViewingReevaluateTest,
-  handleDelete,
+  onDelete,
   toggleStatus,
+  onReorderInner,
+  isSortingDisabled,
   expandedDropdownItem,
   setExpandedDropdownItem,
   seriesUsers,
@@ -121,6 +125,7 @@ const TestsSeriesDetailView: React.FC<Props> = ({
           <div className="p-0">
             <TestSeriesDetailList
               tests={detailTests}
+              seriesId={viewingTestSeries?.id || viewingTestSeries?._id}
               activeActionMenuId={activeActionMenuId}
               setActiveActionMenuId={setActiveActionMenuId}
               onViewQuestionEditor={(test) => {
@@ -145,13 +150,13 @@ const TestsSeriesDetailView: React.FC<Props> = ({
               onExportPDF={(test, withSol) => handleExportPDF(test, withSol)}
               onReevaluate={(test) => setViewingReevaluateTest(test)}
               onDelete={(id) => {
-                if (window.confirm("Are you sure you want to delete this test?")) {
-                  handleDelete(id, viewingTestSeries, (val: any) => {}); // Setter is handled in parent
-                }
+                onDelete(id);
               }}
               onToggleStatus={(test) => toggleStatus(test)}
+              onReorder={onReorderInner}
               expandedDropdownItem={expandedDropdownItem}
               setExpandedDropdownItem={setExpandedDropdownItem}
+              isSortingDisabled={isSortingDisabled || detailSearchQuery !== "" || detailFilterOpen}
             />
           </div>
         )}

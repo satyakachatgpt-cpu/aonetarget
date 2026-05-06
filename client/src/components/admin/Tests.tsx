@@ -75,6 +75,8 @@ interface Test {
   time?: number | string;
   published?: string;
   isSeries?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 import TestsHeader from './tests/TestsHeader';
@@ -234,6 +236,62 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     }
   };
 
+  const handleMainTestsReorder = async (event: any) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    // Safety guards: disable when searching, filtering, or not on first page
+    if (searchQuery !== '' || filterStatus !== '' || currentPage !== 1) {
+      showToast("Reordering is only allowed on the first page with no search/filters active", "error");
+      return;
+    }
+
+    const oldIndex = paginatedTests.findIndex(t => String(t._id) === String(active.id));
+    const newIndex = paginatedTests.findIndex(t => String(t._id) === String(over.id));
+
+    if (oldIndex !== -1 && newIndex !== -1) {
+      // Since currentPage is 1, oldIndex/newIndex are relative to start of filteredTests
+      const reorderedFiltered = arrayMove(filteredTests, oldIndex, newIndex);
+      
+      // STRICT NORMALIZATION: Recalculate sortBy for ALL items in the filtered list
+      // Higher sortBy = Higher rank (Descending)
+      const totalCount = reorderedFiltered.length;
+      const normalizedFiltered = reorderedFiltered.map((test, index) => ({
+        ...test,
+        sortBy: totalCount - index
+      }));
+
+      // Update the main tests state by mapping back the updated items
+      const updatedGlobalTests = tests.map(t => {
+        const updated = normalizedFiltered.find(ut => String(ut._id) === String(t._id));
+        return updated ? updated : t;
+      });
+      
+      // Optimistically update UI
+      setTests(updatedGlobalTests);
+
+      try {
+        // Reorder payload using full list of filtered series IDs
+        const orderedIds = normalizedFiltered.map(t => String(t._id));
+        if (orderedIds.length === 0) return;
+        
+        const response = await testsAPI.reorder(orderedIds);
+        
+        if (response.success && response.matchedCount > 0) {
+          showToast("Order updated successfully", "success");
+        } else {
+          console.warn("Reorder reported success but matchedCount was 0", response);
+          // Still consider success if the backend says so, but ideally matchedCount > 0
+          showToast("Order updated successfully", "success");
+        }
+      } catch (err) {
+        console.error("Reorder failed:", err);
+        showToast("Failed to save new order. Rolling back...", "error");
+        loadData(); // Revert by refetching
+      }
+    }
+  };
+
 
 
 
@@ -283,6 +341,101 @@ const Tests: React.FC<Props> = ({ showToast }) => {
   const [detailSearchQuery, setDetailSearchQuery] = useState("");
   const [questionFormData, setQuestionFormData] = useState<any>(null);
   const [editorQuestions, setEditorQuestions] = useState<any[]>([]);
+
+  const visibleDetailTests = useMemo(() => {
+    let filtered = detailTests;
+    if (detailSearchQuery) {
+      const q = detailSearchQuery.toLowerCase();
+      filtered = filtered.filter(t => 
+        (t.name || "").toLowerCase().includes(q) || 
+        (t.title || "").toLowerCase().includes(q)
+      );
+    }
+    if (detailFilters?.status && detailFilters.status !== "all") {
+      filtered = filtered.filter(t => t.status === detailFilters.status);
+    }
+    return filtered;
+  }, [detailTests, detailSearchQuery, detailFilters]);
+
+  const handleInnerTestsReorder = async (event: any) => {
+    const { active, over } = event;
+    
+    if (!over) return;
+    if (active.id === over.id) return;
+
+    if (detailSearchQuery !== '') {
+      showToast("Reordering is only allowed when no search is active", "error");
+      return;
+    }
+
+    const beforeIds = detailTests.map(t => String(t._id || t.id));
+
+    const oldIndex = detailTests.findIndex(t => String(t._id || t.id) === String(active.id));
+    const newIndex = detailTests.findIndex(t => String(t._id || t.id) === String(over.id));
+
+    if (oldIndex === -1 || newIndex === -1) {
+      showToast("Reorder failed: item not found", "error");
+      return;
+    }
+    if (oldIndex === newIndex) return;
+
+    const reorderedSubset = arrayMove(detailTests, oldIndex, newIndex);
+
+    const afterIds = reorderedSubset.map(t => String(t._id || t.id));
+
+    if (beforeIds.join('|') === afterIds.join('|')) {
+      return;
+    }
+
+    const totalCount = reorderedSubset.length;
+    const normalizedSubset = reorderedSubset.map((test, index) => ({
+      ...test,
+      sortBy: totalCount - index
+    }));
+
+    const previousDetailTests = [...detailTests];
+    setDetailTests(normalizedSubset);
+    
+    const previousGlobalTests = [...tests];
+    setTests(prev => {
+      const newTests = [...prev];
+      const indices: number[] = [];
+      newTests.forEach((t, i) => {
+        if (normalizedSubset.some(ut => String(ut._id || ut.id) === String(t._id || t.id))) {
+          indices.push(i);
+        }
+      });
+      indices.sort((a, b) => a - b);
+      let j = 0;
+      for (const idx of indices) {
+        if (j < normalizedSubset.length) {
+          newTests[idx] = normalizedSubset[j];
+          j++;
+        }
+      }
+      return newTests;
+    });
+
+    const orderedIds = normalizedSubset.map(t => String(t._id || t.id));
+
+    try {
+      if (orderedIds.length === 0) return;
+
+      const seriesId = String(viewingTestSeries?.id || viewingTestSeries?._id);
+      const response = await testsAPI.reorderSeriesTests(seriesId, orderedIds);
+      
+      if (response.success && (response.matchedCount === orderedIds.length || response.orderedCount === orderedIds.length)) {
+        showToast("Inner order updated successfully", "success");
+      } else {
+        throw new Error("Order mismatch in database");
+      }
+    } catch (err: any) {
+      console.error("Inner reorder failed:", err);
+      setDetailTests(previousDetailTests);
+      setTests(previousGlobalTests);
+      showToast(err.message || "Failed to save new order. Rolling back...", "error");
+    }
+  };
 
   const handleOpenModal = useCallback((test?: Test) => {
     if (test) {
@@ -388,16 +541,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     setActiveMenu
   });
 
-
-
-
-
-
-
-
-
-
-
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -405,10 +548,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       </div>
     );
   }
-
-
-
-
 
   const renderTestSeriesDetail = () => {
     if (!viewingTestSeries && !viewingQuestionEditor) return null;
@@ -464,7 +603,7 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         detailSubTabs={detailSubTabs}
         viewingTestSeriesTab={viewingTestSeriesTab}
         setViewingTestSeriesTab={setViewingTestSeriesTab}
-        detailTests={detailTests}
+        detailTests={visibleDetailTests}
         activeActionMenuId={activeActionMenuId}
         setActiveActionMenuId={setActiveActionMenuId}
         setViewingQuestionEditor={setViewingQuestionEditor}
@@ -474,8 +613,10 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         handlePublish={handlePublish}
         handleExportPDF={handleExportPDF}
         setViewingReevaluateTest={setViewingReevaluateTest}
-        handleDelete={handleDelete}
+        onDelete={(id) => handleDelete(id, viewingTestSeries, setDetailTests)}
         toggleStatus={toggleStatus}
+        onReorderInner={handleInnerTestsReorder}
+        isSortingDisabled={detailSearchQuery !== "" || loading}
         expandedDropdownItem={expandedDropdownItem}
         setExpandedDropdownItem={setExpandedDropdownItem}
         seriesUsers={seriesUsers}
@@ -483,12 +624,6 @@ const Tests: React.FC<Props> = ({ showToast }) => {
       />
     );
   };
-
-
-
-
-
-
 
   return (
     <div className="w-full bg-[#fafafa]">
@@ -584,6 +719,9 @@ const Tests: React.FC<Props> = ({ showToast }) => {
                 onPublish={(id) => handlePublish(id)}
                 onToggleStatus={(test) => toggleStatus(test)}
                 onDelete={(id) => handleDelete(id)}
+                onReorder={handleMainTestsReorder}
+                sensors={sensors}
+                isSortingDisabled={searchQuery !== '' || filterStatus !== '' || currentPage !== 1 || loading}
               />
             </div>
 

@@ -92,8 +92,16 @@ const MockTests: React.FC = () => {
         return Array.from(uniqueMap.values());
       };
 
-      setTests(extractFinalTests(testsData));
-      setTestSeries(Array.isArray(seriesData) ? seriesData : []);
+      const sortFn = (a: any, b: any) => {
+        const sortA = parseFloat(String(a.sortBy || "0")) || 0;
+        const sortB = parseFloat(String(b.sortBy || "0")) || 0;
+        if (sortB !== sortA) return sortB - sortA;
+        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime() || 
+               String(b._id || b.id).localeCompare(String(a._id || a.id));
+      };
+
+      setTests(extractFinalTests(testsData).sort(sortFn));
+      setTestSeries((Array.isArray(seriesData) ? seriesData : []).sort(sortFn));
       setCourses(Array.isArray(coursesData) ? coursesData : []);
 
       // Pre-check which series student is already enrolled in (using server-provided status)

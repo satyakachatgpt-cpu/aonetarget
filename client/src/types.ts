@@ -108,3 +108,39 @@ export interface Progress {
   completedTests: string[];
   completedNotes: string[];
 }
+
+export interface Test {
+  id: string;
+  _id?: string;
+  name: string;
+  title?: string;
+  course?: string;
+  courseId?: string;
+  courseName?: string;
+  testSeriesId?: string;
+  seriesId?: string;
+  parentId?: string;
+  courseIds?: string[];
+  testSeries?: string[];
+  questions?: number | string;
+  status?: "active" | "inactive" | "scheduled" | "draft";
+  date?: string;
+  openDate?: string;
+  closeDate?: string;
+  duration?: number | string;
+  featured?: boolean;
+  totalAttempts?: number;
+  avgScore?: number;
+  logo?: string;
+  image?: string;
+  price?: number | string;
+  sortBy?: number | string;
+  sortingOrder?: number | string;
+  marks?: number | string;
+  time?: number | string;
+  published?: string;
+  isSeries?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  [key: string]: any;
+}

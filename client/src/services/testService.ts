@@ -159,6 +159,34 @@ export const testsAPI = {
     });
     if (!response.ok) throw new Error('Failed to export PDF');
     return response.blob();
+  },
+  reorder: async (orderedIds: string[]) => {
+    const response = await fetch(`${API_BASE_URL}/tests/reorder`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
+      body: JSON.stringify({ orderedIds }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to reorder tests');
+    }
+    invalidateCache('tests');
+    invalidateCache('test-series');
+    return response.json();
+  },
+  reorderSeriesTests: async (seriesId: string, orderedIds: string[]) => {
+    const response = await fetch(`${API_BASE_URL}/tests/series/${seriesId}/reorder-tests`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
+      body: JSON.stringify({ orderedIds }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || 'Failed to reorder series tests');
+    }
+    invalidateCache('tests');
+    invalidateCache('test-series');
+    return response.json();
   }
 };
 

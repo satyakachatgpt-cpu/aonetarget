@@ -31,29 +31,50 @@ export const getAllTestSeries = async (req, res) => {
     const mergedMap = new Map();
     for (const s of seriesFromCollection) {
       const key = s.id || s._id.toString();
-      mergedMap.set(key, s);
+      mergedMap.set(key, { 
+        ...s, 
+        id: s.id || s._id.toString(),
+        sortBy: parseFloat(String(s.sortBy || "0")) || 0 
+      });
     }
+
     for (const s of seriesFromTests) {
       const key = s.id || s._id.toString();
+      const testSortBy = parseFloat(String(s.sortBy || "0")) || 0;
+      
       if (!mergedMap.has(key)) {
         mergedMap.set(key, {
           ...s,
           id: s.id || s._id.toString(),
           seriesName: s.seriesName || s.name || s.title,
           totalTests: s.totalTests || s.questions || 0,
-          status: s.status || 'active'
+          status: s.status || 'active',
+          sortBy: testSortBy
         });
-      }
-    }
-    for (const s of seriesFromCollection) {
-      const key = s.id || s._id.toString();
-      const existing = mergedMap.get(key);
-      if (existing && !existing.id) {
-        existing.id = key;
+      } else {
+        // Source-of-truth sync: If the item exists in both, prefer the sortBy from the tests collection 
+        // because that is where the Admin reorder happens.
+        const existing = mergedMap.get(key);
+        if (testSortBy > 0) {
+          existing.sortBy = testSortBy;
+        }
       }
     }
 
+    // Final normalization and sort
     const combined = Array.from(mergedMap.values());
+    
+    combined.sort((a, b) => {
+      const sortA = parseFloat(String(a.sortBy || "0")) || 0;
+      const sortB = parseFloat(String(b.sortBy || "0")) || 0;
+      if (sortB !== sortA) return sortB - sortA;
+      
+      const dateA = new Date(a.createdAt || a.openDate || a.date || 0).getTime();
+      const dateB = new Date(b.createdAt || b.openDate || b.date || 0).getTime();
+      if (dateB !== dateA) return dateB - dateA;
+      
+      return String(b._id || b.id).localeCompare(String(a._id || a.id));
+    });
 
     // 2. Pre-fetch parent links for enrollment calculation if needed
     let parentMap = new Map(); // seriesId -> Set of Batch/Package IDs
