@@ -72,8 +72,8 @@ const SortableRow = ({
   } = useSortable({ id: String(coupon._id || ''), disabled: disabled || !coupon._id });
 
   const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
+    transform: transform ? CSS.Translate.toString(transform) : undefined,
+    transition: isDragging ? 'none' : transition,
     zIndex: isDragging ? 100 : 'auto',
     opacity: isDragging ? 0.5 : 1,
     position: 'relative' as const,
@@ -89,14 +89,21 @@ const SortableRow = ({
     >
       <td className="px-6 py-5 text-[13px] font-medium text-gray-600">
         <div className="flex items-center gap-3">
-          {!disabled && coupon._id && (
+          {coupon._id ? (
             <span 
-              {...attributes} 
-              {...listeners}
-              className="material-symbols-outlined text-[18px] text-gray-300 cursor-grab active:cursor-grabbing hover:text-black transition-colors"
+              {...(!disabled ? attributes : {})} 
+              {...(!disabled ? listeners : {})}
+              style={{ touchAction: 'none', pointerEvents: disabled ? 'none' : 'auto' }}
+              className={`material-symbols-outlined text-[18px] transition-colors px-2 py-2 -ml-2 rounded-lg ${
+                disabled 
+                  ? 'text-gray-200 cursor-not-allowed' 
+                  : 'text-gray-300 cursor-grab active:cursor-grabbing hover:text-black hover:bg-gray-100'
+              }`}
             >
               drag_indicator
             </span>
+          ) : (
+            <span className="w-[34px]" />
           )}
           {startIndex + index + 1}
         </div>
@@ -217,27 +224,45 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     
-    if (!over || active.id === over.id) return;
+    if (!over) return;
+    if (active.id === over.id) return;
 
     if (isReorderingDisabled) {
       showToast('Reordering is disabled during search or filtering', 'error');
       return;
     }
 
-    const oldIndex = coupons.findIndex((c) => String(c._id || '') === String(active.id));
-    const newIndex = coupons.findIndex((c) => String(c._id || '') === String(over.id));
+    const oldIndex = paginatedCoupons.findIndex((c) => String(c._id || '') === String(active.id));
+    const newIndex = paginatedCoupons.findIndex((c) => String(c._id || '') === String(over.id));
 
-    if (oldIndex === -1 || newIndex === -1) return;
+    if (oldIndex === -1 || newIndex === -1) {
+      showToast('Error calculating order positions', 'error');
+      return;
+    }
+
+    if (oldIndex === newIndex) return;
+
+    const beforeIds = paginatedCoupons.map(c => String(c._id || ''));
+    const reordered = arrayMove(paginatedCoupons, oldIndex, newIndex);
+    const afterIds = reordered.map(c => String(c._id || ''));
+    
+    if (beforeIds.join(',') === afterIds.join(',')) return;
 
     const previousCoupons = [...coupons];
-    const newOrder = arrayMove(coupons, oldIndex, newIndex);
-    
-    const orderedIds = newOrder.map(c => String(c._id || ''));
-    
-    setCoupons(newOrder);
+    const newCoupons = [...coupons];
+
+    reordered.forEach((coupon, index) => {
+       const mappedOrder = startIndex + index + 1;
+       newCoupons[startIndex + index] = { ...coupon, order: mappedOrder };
+    });
+
+    setCoupons(newCoupons);
 
     try {
-      await couponsAPI.reorder(orderedIds);
+      const response = await couponsAPI.reorder(afterIds);
+      if (response && response.matchedCount !== undefined && response.matchedCount !== afterIds.length) {
+         throw new Error(`Matched count ${response.matchedCount} does not equal requested ${afterIds.length}`);
+      }
       showToast('Order updated successfully', 'success');
     } catch (error) {
       console.error('Failed to reorder coupons:', error);
@@ -254,6 +279,10 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
     window.addEventListener('click', handleClickOutside);
     return () => window.removeEventListener('click', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
 
   useEffect(() => {
     let filtered = coupons;
@@ -280,7 +309,6 @@ const Coupons: React.FC<Props> = ({ showToast }) => {
     });
 
     setFilteredCoupons(filtered);
-    setCurrentPage(1);
   }, [coupons, searchQuery, statusFilter]);
 
   const totalPages = Math.ceil(filteredCoupons.length / itemsPerPage);

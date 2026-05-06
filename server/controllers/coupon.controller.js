@@ -246,7 +246,8 @@ export const reorderCoupons = async (req, res) => {
       success: true, 
       message: 'Coupons reordered successfully',
       matchedCount: result.matchedCount,
-      modifiedCount: result.modifiedCount
+      modifiedCount: result.modifiedCount,
+      orderedCount: orderedIds.length
     });
   } catch (error) {
     console.error('Reorder coupons error:', error);
