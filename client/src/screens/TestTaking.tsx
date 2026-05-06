@@ -37,6 +37,7 @@ const TestTaking: React.FC = () => {
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [leaderboard, setLeaderboard] = useState<any[]>([]);
   const [fetchingLeaderboard, setFetchingLeaderboard] = useState(false);
+  const [viewMode, setViewMode] = useState<'summary' | 'solutions'>('summary');
 
   useEffect(() => {
     // Reset session state when changing tests
@@ -419,6 +420,18 @@ const TestTaking: React.FC = () => {
             </div>
           </div>
 
+          {/* Solution Button - Placed between Overall Analysis and Rank */}
+          <button 
+            onClick={() => setViewMode('solutions')}
+            className="w-full bg-white text-[#1A237E] py-4 rounded-2xl text-sm font-black flex items-center justify-center gap-3 shadow-sm border border-blue-100 hover:bg-blue-50 transition-all active:scale-[0.98]"
+          >
+            <span className="material-symbols-rounded text-[22px]">visibility</span>
+            VIEW DETAILED SOLUTIONS & REVIEW
+          </button>
+
+          {viewMode === 'summary' && (
+            <>
+
           {/* B) RANK + SCORE CARD */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3.5 flex flex-col items-center">
             <div className="w-full text-center py-1">
@@ -554,9 +567,20 @@ const TestTaking: React.FC = () => {
               </div>
             </div>
           )}
+            </>
+          )}
 
+          {viewMode === 'solutions' && (
+            <div className="space-y-4 pb-4">
+              <button 
+                onClick={() => setViewMode('summary')}
+                className="flex items-center gap-2 text-[#1A237E] font-bold text-sm bg-white px-4 py-2.5 rounded-xl shadow-sm border border-blue-50 hover:bg-blue-100 transition-all active:scale-[0.98]"
+              >
+                <span className="material-symbols-rounded">arrow_back</span>
+                Back to Result Summary
+              </button>
 
-          {questions.length > 0 && (
+              {questions.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
               <h3 className="font-bold text-sm mb-3 text-gray-700">Answer Review</h3>
               <div className="space-y-3">
@@ -598,16 +622,20 @@ const TestTaking: React.FC = () => {
               </div>
             </div>
           )}
+        </div>
+      )}
 
-          <button
-            onClick={() => {
-              navigate('/mock-tests', { replace: true });
-            }}
-            className="w-full bg-[#1A237E] text-white py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
-          >
-            <span className="material-symbols-rounded text-[18px]">arrow_back</span>
-            Back to Mock Tests
-          </button>
+      {viewMode === 'summary' && (
+        <button
+          onClick={() => {
+            navigate('/mock-tests', { replace: true });
+          }}
+          className="w-full bg-[#1A237E] text-white py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+        >
+          <span className="material-symbols-rounded text-[18px]">arrow_back</span>
+          Back to Mock Tests
+        </button>
+      )}
 
           {/* Report Question Modal (inside results view) */}
           {reportModal && (
