@@ -364,7 +364,18 @@ const Home: React.FC = () => {
       try {
         const sId = student?.id || student?._id;
         const data = await testSeriesAPI.getAll({ studentId: sId });
-        setTestSeries(Array.isArray(data) ? data : []);
+        const list = Array.isArray(data) ? data : [];
+        
+        // Sort by sortBy DESC
+        list.sort((a: any, b: any) => {
+          const sortA = parseFloat(String(a.sortBy || "0")) || 0;
+          const sortB = parseFloat(String(b.sortBy || "0")) || 0;
+          if (sortB !== sortA) return sortB - sortA;
+          return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime() || 
+                 String(b._id || b.id).localeCompare(String(a._id || a.id));
+        });
+
+        setTestSeries(list);
       } catch (error) { /* Silent fail */ }
     };
 

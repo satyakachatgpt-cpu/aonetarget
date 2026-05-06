@@ -27,6 +27,8 @@ interface Test {
   time?: number | string;
   published?: string;
   isSeries?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 interface Course {
@@ -163,7 +165,9 @@ export const useTestsListLogic = (showToast: (m: string, type?: "success" | "err
     }).sort((a, b) => {
       const sortA = parseFloat(String(a.sortBy || "0")) || 0;
       const sortB = parseFloat(String(b.sortBy || "0")) || 0;
-      return sortB - sortA;
+      if (sortB !== sortA) return sortB - sortA;
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime() || 
+             String(b._id || b.id).localeCompare(String(a._id || a.id));
     });
   }, [tests, debouncedSearchQuery, filterCourse, filterStatus]);
 
