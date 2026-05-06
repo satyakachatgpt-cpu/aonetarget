@@ -257,6 +257,86 @@ const SortableSubcategoryRow: React.FC<SortableSubcategoryRowProps> = ({ sub, on
   );
 };
 
+interface SortableSubjectRowProps {
+  subj: Subject;
+  index: number;
+  startIndex: number;
+  onEdit: (s: Subject) => void;
+  onDelete: (s: Subject) => void;
+  isSortingDisabled: boolean;
+}
+
+const SortableSubjectRow: React.FC<SortableSubjectRowProps> = ({ 
+  subj, 
+  index, 
+  startIndex, 
+  onEdit, 
+  onDelete, 
+  isSortingDisabled 
+}) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ 
+    id: String(subj._id || ''),
+    disabled: isSortingDisabled || !subj._id
+  });
+
+  const style = {
+    transform: transform ? CSS.Translate.toString(transform) : undefined,
+    transition: isDragging ? 'none' : transition,
+    zIndex: isDragging ? 50 : 'auto',
+    opacity: isDragging ? 0.5 : 1,
+    position: 'relative' as const,
+  };
+
+  return (
+    <tr ref={setNodeRef} style={style} className={`border-b hover:bg-gray-50 transition-all group ${isDragging ? 'bg-white shadow-xl ring-1 ring-black/5' : ''}`}>
+      <td className="p-4">
+        <div className="flex items-center gap-3">
+          {subj._id && (
+            <div 
+              {...(!isSortingDisabled ? attributes : {})} 
+              {...(!isSortingDisabled ? listeners : {})} 
+              style={{ touchAction: 'none', pointerEvents: isSortingDisabled ? 'none' : 'auto' }}
+              className={`cursor-grab active:cursor-grabbing p-1 transition-opacity ${isSortingDisabled ? 'opacity-10 text-gray-200' : 'opacity-40 hover:opacity-100 text-gray-400 hover:text-black'}`}
+            >
+              <span className="material-symbols-rounded text-lg">drag_indicator</span>
+            </div>
+          )}
+          <span className="text-sm font-bold text-gray-400">{startIndex + index + 1}</span>
+        </div>
+      </td>
+      <td className="p-4">
+        <div className="flex items-center gap-3">
+          {subj.icon && (
+            <div className={`w-8 h-8 ${subj.gradient ? `bg-gradient-to-br ${subj.gradient} text-white` : 'bg-indigo-50 text-indigo-600'} rounded-lg flex items-center justify-center shadow-sm`}>
+              <span className="material-icons-outlined text-[18px]">{subj.icon}</span>
+            </div>
+          )}
+          <span className="text-sm font-bold text-gray-800">{subj.name}</span>
+        </div>
+      </td>
+      <td className="p-4 text-sm text-gray-600 font-medium">{subj.course || 'General'}</td>
+      <td className="p-4">
+        <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${subj.status === 'active' ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-red-100 text-red-600 border border-red-200'}`}>
+          {subj.status}
+        </span>
+      </td>
+      <td className="p-4 text-xs text-gray-400">
+        {subj.createdDate ? new Date(subj.createdDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
+      </td>
+      <td className="p-4 text-right">
+        <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={() => onEdit(subj)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-all shadow-sm">
+            <span className="material-icons-outlined text-sm">edit</span>
+          </button>
+          <button onClick={() => onDelete(subj)} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all shadow-sm">
+            <span className="material-icons-outlined text-sm">delete</span>
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
+};
+
 const Categories: React.FC<Props> = ({ showToast }) => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<SubCategory[]>([]);
@@ -488,6 +568,49 @@ const Categories: React.FC<Props> = ({ showToast }) => {
         console.error('Failed to reorder subcategories:', error);
         showToast('Failed to save order. Rolling back...', 'error');
         setSubcategories(previousOrder);
+      } finally {
+        setIsReordering(false);
+      }
+    } else if (activeTab === 'subjects') {
+      const currentPaginated = paginatedItems as Subject[];
+      const oldIndex = currentPaginated.findIndex((s) => getStableId(s) === active.id);
+      const newIndex = currentPaginated.findIndex((s) => getStableId(s) === over.id);
+
+      if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return;
+
+      const previousSubjects = [...subjects];
+      const reorderedPaginated = arrayMove(currentPaginated, oldIndex, newIndex);
+      
+      // Update the full subjects list while preserving relative slots
+      const newSubjects = [...subjects];
+      const targetIndices = currentPaginated.map(s => 
+        subjects.findIndex(subj => getStableId(subj) === getStableId(s))
+      ).filter(idx => idx !== -1).sort((a, b) => a - b);
+      
+      reorderedPaginated.forEach((item, idx) => {
+        if (targetIndices[idx] !== undefined) {
+          newSubjects[targetIndices[idx]] = item;
+        }
+      });
+
+      // Normalize all orders globally
+      const finalSubjects = newSubjects.map((s, i) => ({ ...s, order: i + 1 }));
+      
+      setSubjects(finalSubjects);
+      setIsReordering(true);
+
+      try {
+        const orderedIds = finalSubjects.map(s => getStableId(s)) as string[];
+        const response = await subjectsAPI.reorder(orderedIds);
+        if (response && response.success) {
+          showToast('Subjects reordered successfully', 'success');
+        } else {
+          throw new Error('Failed to reorder subjects');
+        }
+      } catch (error: any) {
+        console.error('Failed to reorder subjects:', error);
+        showToast(error.message || 'Failed to save order. Rolling back...', 'error');
+        setSubjects(previousSubjects);
       } finally {
         setIsReordering(false);
       }
@@ -820,57 +943,45 @@ const Categories: React.FC<Props> = ({ showToast }) => {
       {activeTab === 'subjects' && (
         <div className="animate-in fade-in slide-in-from-bottom-2 duration-300 space-y-4">
           <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="bg-gray-50 border-b">
-                  <th className="p-4 text-xs font-bold text-gray-500 uppercase">#</th>
-                  <th className="p-4 text-xs font-bold text-gray-500 uppercase">Subject Name</th>
-                  <th className="p-4 text-xs font-bold text-gray-500 uppercase">Course</th>
-                  <th className="p-4 text-xs font-bold text-gray-500 uppercase">Status</th>
-                  <th className="p-4 text-xs font-bold text-gray-500 uppercase">Date Added</th>
-                  <th className="p-4 text-xs font-bold text-gray-500 uppercase text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(paginatedItems as Subject[]).map((subj, idx) => (
-                  <tr key={subj._id || subj.id} className="border-b hover:bg-gray-50 transition-all group">
-                    <td className="p-4 text-sm font-bold text-gray-400">{startIndex + idx + 1}</td>
-                    <td className="p-4">
-                      <div className="flex items-center gap-3">
-                        {subj.icon && (
-                          <div className={`w-8 h-8 ${subj.gradient ? `bg-gradient-to-br ${subj.gradient} text-white` : 'bg-indigo-50 text-indigo-600'} rounded-lg flex items-center justify-center shadow-sm`}>
-                            <span className="material-icons-outlined text-[18px]">{subj.icon}</span>
-                          </div>
-                        )}
-                        <span className="text-sm font-bold text-gray-800">{subj.name}</span>
-                      </div>
-                    </td>
-                    <td className="p-4 text-sm text-gray-600 font-medium">{subj.course || 'General'}</td>
-                    <td className="p-4">
-                      <span className={`px-2 py-1 rounded-full text-[10px] font-black uppercase ${subj.status === 'active' ? 'bg-green-100 text-green-600 border border-green-200' : 'bg-red-100 text-red-600 border border-red-200'}`}>
-                        {subj.status}
-                      </span>
-                    </td>
-                    <td className="p-4 text-xs text-gray-400">
-                      {subj.createdDate ? new Date(subj.createdDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A'}
-                    </td>
-                    <td className="p-4 text-right">
-                      <div className="flex gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => openEditSubject(subj)} className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-all shadow-sm">
-                          <span className="material-icons-outlined text-sm">edit</span>
-                        </button>
-                        <button onClick={() => handleDeleteSubject(subj)} className="p-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-all shadow-sm">
-                          <span className="material-icons-outlined text-sm">delete</span>
-                        </button>
-                      </div>
-                    </td>
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={handleDragEnd}
+            >
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-gray-50 border-b">
+                    <th className="p-4 text-xs font-bold text-gray-500 uppercase">#</th>
+                    <th className="p-4 text-xs font-bold text-gray-500 uppercase">Subject Name</th>
+                    <th className="p-4 text-xs font-bold text-gray-500 uppercase">Course</th>
+                    <th className="p-4 text-xs font-bold text-gray-500 uppercase">Status</th>
+                    <th className="p-4 text-xs font-bold text-gray-500 uppercase">Date Added</th>
+                    <th className="p-4 text-xs font-bold text-gray-500 uppercase text-right">Actions</th>
                   </tr>
-                ))}
-                {paginatedItems.length === 0 && (
-                  <tr><td colSpan={6} className="p-12 text-center text-gray-400 font-bold uppercase tracking-wider">No subjects found</td></tr>
-                )}
-              </tbody>
-            </table>
+                </thead>
+                <SortableContext
+                  items={(paginatedItems as Subject[]).map(s => String(s._id || ''))}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <tbody>
+                    {(paginatedItems as Subject[]).map((subj, idx) => (
+                      <SortableSubjectRow
+                        key={subj._id || subj.id}
+                        subj={subj}
+                        index={idx}
+                        startIndex={startIndex}
+                        onEdit={openEditSubject}
+                        onDelete={handleDeleteSubject}
+                        isSortingDisabled={searchQuery.length > 0 || isReordering || currentPage !== 1}
+                      />
+                    ))}
+                    {paginatedItems.length === 0 && (
+                      <tr><td colSpan={6} className="p-12 text-center text-gray-400 font-bold uppercase tracking-wider">No subjects found</td></tr>
+                    )}
+                  </tbody>
+                </SortableContext>
+              </table>
+            </DndContext>
           </div>
 
           {/* Common Pagination Footer for all tabs */}
