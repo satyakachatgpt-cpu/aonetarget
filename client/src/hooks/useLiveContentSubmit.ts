@@ -62,6 +62,33 @@ export const useLiveContentSubmit = ({
 
       const streamStatus = youtubeZoomForm.streamStatus || 'upcoming';
 
+      // --- Schedule Validation & Normalization ---
+      const scheduleDate = youtubeZoomForm.scheduleDate || '';
+      const scheduleTime = youtubeZoomForm.scheduleTime || '';
+
+      if ((scheduleDate && !scheduleTime) || (!scheduleDate && scheduleTime)) {
+        showToast(`Please select schedule ${!scheduleDate ? 'date' : 'time'}.`, 'error');
+        return;
+      }
+
+      let scheduledAt = '';
+      if (scheduleDate && scheduleTime) {
+        const localScheduledStr = `${scheduleDate}T${scheduleTime}`;
+        const scheduledDateObj = new Date(localScheduledStr);
+        
+        if (isNaN(scheduledDateObj.getTime())) {
+          showToast('Invalid Schedule Date or Time.', 'error');
+          return;
+        }
+
+        if (scheduledDateObj.getTime() < Date.now()) {
+          showToast('Schedule time cannot be in the past.', 'error');
+          return;
+        }
+
+        scheduledAt = scheduledDateObj.toISOString();
+      }
+
       const streamData = {
         title: youtubeZoomForm.title,
         description: youtubeZoomForm.description,
@@ -91,6 +118,14 @@ export const useLiveContentSubmit = ({
         pdf2: youtubeZoomForm.pdf2,
         studyMaterial: youtubeZoomForm.studyMaterial,
         recordedLink: (youtubeZoomForm.recordedLink || '').trim(),
+        // Schedule fields
+        scheduleDate,
+        scheduleTime,
+        scheduledAt,
+        // Legacy/Mapping fields
+        startTime: scheduledAt,
+        startDateTime: scheduledAt,
+        publishOn: scheduledAt,
         courseId,
         folderId,
       };
@@ -130,6 +165,33 @@ export const useLiveContentSubmit = ({
       const courseId = normalizeId((selectedCourse as any)._id || selectedCourse.id);
       const folderIdVal = currentFolder?._id || currentFolder?.id || null;
       const folderId = normalizeId(folderIdVal);
+      // --- Schedule Validation & Normalization ---
+      const scheduleDate = liveStreamForm.scheduleDate || '';
+      const scheduleTime = liveStreamForm.scheduleTime || '';
+
+      if ((scheduleDate && !scheduleTime) || (!scheduleDate && scheduleTime)) {
+        showToast('Both Schedule Date and Time are required if scheduling.', 'error');
+        return;
+      }
+
+      let scheduledAt = '';
+      if (scheduleDate && scheduleTime) {
+        const localScheduledStr = `${scheduleDate}T${scheduleTime}`;
+        const scheduledDateObj = new Date(localScheduledStr);
+        
+        if (isNaN(scheduledDateObj.getTime())) {
+          showToast('Invalid Schedule Date or Time.', 'error');
+          return;
+        }
+
+        if (scheduledDateObj.getTime() < Date.now()) {
+          showToast('Schedule time cannot be in the past.', 'error');
+          return;
+        }
+
+        scheduledAt = scheduledDateObj.toISOString();
+      }
+
       const streamData = {
         title: liveStreamForm.title,
         description: liveStreamForm.description || '',
@@ -137,7 +199,7 @@ export const useLiveContentSubmit = ({
         courseId: courseId,
         folderId,
         contentType: 'live_stream',
-        type: 'video',
+        type: 'live',
         url: liveStreamForm.streamId,
         streamSource: liveStreamForm.streamSource,
         streamId: liveStreamForm.streamId,
@@ -151,8 +213,17 @@ export const useLiveContentSubmit = ({
         chatVisibility: liveStreamForm.chatVisibility,
         enableChat: liveStreamForm.enableChat,
         enableAttendance: liveStreamForm.enableAttendance,
-        notifyStudents: liveStreamForm.notifyStudents
+        notifyStudents: liveStreamForm.notifyStudents,
+        // Schedule fields
+        scheduleDate,
+        scheduleTime,
+        scheduledAt,
+        // Legacy support
+        startTime: scheduledAt,
+        startDateTime: scheduledAt,
+        publishOn: scheduledAt
       };
+
 
       const response = await fetch(`${API_BASE_URL}/courses/${courseId}/videos`, {
         method: 'POST',

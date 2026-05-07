@@ -407,8 +407,12 @@ export const createCourseVideo = async (req, res) => {
         contentType: 'live_stream', 
         type: videoData.type || 'live',
         status: videoData.status || 'upcoming',
-        url: videoData.meetingLink || videoData.url || videoData.link
+        url: videoData.meetingLink || videoData.url || videoData.link,
+        scheduleDate: videoData.scheduleDate,
+        scheduleTime: videoData.scheduleTime,
+        scheduledAt: videoData.scheduledAt
       } : {}),
+
       courseId: String(courseId),
       folderId: folderId,
       provider: videoData.provider || 'youtube',
@@ -472,8 +476,12 @@ export const updateCourseVideo = async (req, res) => {
         contentType: 'live_stream',
         type: updateData.type || 'live',
         status: updateData.status || finalUpdate.status || 'upcoming',
-        url: updateData.meetingLink || updateData.url || updateData.link || finalUpdate.url
+        url: updateData.meetingLink || updateData.url || updateData.link || finalUpdate.url,
+        scheduleDate: updateData.scheduleDate || finalUpdate.scheduleDate,
+        scheduleTime: updateData.scheduleTime || finalUpdate.scheduleTime,
+        scheduledAt: updateData.scheduledAt || finalUpdate.scheduledAt
       });
+
 
       if (updateData.endTime) finalUpdate.endTime = updateData.endTime;
       if (updateData.endDateTime) finalUpdate.endDateTime = updateData.endDateTime;

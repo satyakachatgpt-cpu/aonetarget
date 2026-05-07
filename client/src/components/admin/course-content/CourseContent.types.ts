@@ -153,6 +153,9 @@ export interface YoutubeZoomForm {
   streamStatus: string;
   endTime?: string;
   recordedLink?: string;
+  scheduleDate?: string;
+  scheduleTime?: string;
+  scheduledAt?: string;
 }
 
 

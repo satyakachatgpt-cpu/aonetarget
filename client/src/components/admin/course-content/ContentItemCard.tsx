@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { getImageUrl, getPdfUrl } from '../../../lib/utils';
 
 interface ContentItemCardProps {
@@ -31,6 +31,28 @@ interface ContentItemCardProps {
 
 const normalizeId = (id: string | undefined | null) => id ? String(id).trim() : null;
 
+// ─── Countdown helper ─────────────
+function formatCountdown(scheduledStr: string) {
+  const t = new Date(scheduledStr.replace(' ', 'T'));
+  const secs = Math.floor((t.getTime() - Date.now()) / 1000);
+  if (secs <= 0) return null;
+  
+  if (secs < 60) return 'Starting soon';
+  if (secs < 3600) {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `Starts in ${m}m ${s}s`;
+  }
+  if (secs < 86400) {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    return `Starts in ${h}h ${m}m`;
+  }
+  const d = Math.floor(secs / 86400);
+  const h = Math.floor((secs % 86400) / 3600);
+  return `Starts in ${d}d ${h}h`;
+}
+
 const ContentItemCard: React.FC<ContentItemCardProps> = ({
   item,
   level,
@@ -41,6 +63,16 @@ const ContentItemCard: React.FC<ContentItemCardProps> = ({
   openContentActionMenuId,
   handlers,
 }) => {
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const isLiveStream = (item?.contentType === 'live_stream' || item?.type === 'live' || item?.streamType === 'live');
+    if (!isLiveStream) return;
+
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [item]);
+
   const isVideo = item.type === 'video' || item.contentType === 'video' || item.type === 'live' || item.contentType === 'live_stream' || (item.videoType && (item.videoType === 'youtube_live' || item.videoType === 'youtube_zoom')) || item.contentType === 'recorded' || item.streamStatus === 'recorded';
   const isNote = item.type === 'note' || item.contentType === 'note' || item.type === 'document' || item.contentType === 'document';
   const isTest = item.type === 'test' || item.contentType === 'test';
@@ -54,9 +86,19 @@ const ContentItemCard: React.FC<ContentItemCardProps> = ({
     if (['ended', 'inactive', 'completed', 'finished', 'disable', 'recorded'].includes(lifecycleStatus)) {
       return 'ended';
     }
-    if (lifecycleStatus === 'live') {
+    if (lifecycleStatus === 'live' || item.isLive === true) {
       return 'live';
     }
+
+    // --- Schedule-Aware promotion ---
+    const scheduledAt = item.scheduledAt || item.scheduledTime || item.startTime || item.publishOn || '';
+    if (scheduledAt) {
+      const scheduledTime = new Date(scheduledAt.replace(' ', 'T')).getTime();
+      if (scheduledTime <= Date.now()) {
+        return 'live'; // Promote to live if time passed
+      }
+    }
+
     return 'upcoming';
   };
 
@@ -68,6 +110,13 @@ const ContentItemCard: React.FC<ContentItemCardProps> = ({
   const hasRecordedLink = Boolean(item.recordedLink || item.recordingUrl || item.replayUrl || item.playbackUrl || item.url);
   const isRecordedLive = isLiveStream && (isActuallyEnded || item.streamStatus === 'recorded') && hasRecordedLink;
   const isEndedWithoutRecording = isLiveStream && isActuallyEnded && !hasRecordedLink;
+
+  const rawScheduledAt = item.scheduledAt || item.scheduledTime || item.startTime || item.publishOn || '';
+  const scheduledISO = rawScheduledAt ? String(rawScheduledAt).replace(' ', 'T') : '';
+  const dateObj = scheduledISO ? new Date(scheduledISO) : null;
+  const isDateValid = dateObj && !isNaN(dateObj.getTime());
+  const formattedSchedule = isDateValid ? dateObj.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }) : null;
+  const countdownText = isActuallyUpcoming && isDateValid ? formatCountdown(scheduledISO) : null;
 
   return (
     <div
@@ -143,8 +192,8 @@ const ContentItemCard: React.FC<ContentItemCardProps> = ({
           </span>
         )}
         {isActuallyLive && (
-          <div className="absolute top-1 left-1 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded flex items-center gap-1">
-            <span className="w-1 h-1 bg-white rounded-full animate-pulse"></span>
+          <div className="absolute top-1 left-1 bg-red-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded flex items-center gap-1 shadow-sm">
+            <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>
             LIVE
           </div>
         )}
@@ -161,33 +210,52 @@ const ContentItemCard: React.FC<ContentItemCardProps> = ({
       </div>
 
       <div className="flex-1 min-w-0">
-        <h4 className="font-bold text-[#1a1a1a] text-[15px] truncate">
+        <h4 className="font-bold text-[#1a1a1a] text-[15px] truncate group-hover:text-blue-600 transition-colors">
           {item.title || item.name}
         </h4>
         <div className="flex flex-col mt-0.5">
           {isActuallyLive && (
-            <span className="text-[10px] text-red-500 font-bold uppercase tracking-wider mb-0.5">Event is live</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-red-500 font-black uppercase tracking-wider flex items-center gap-1">
+                <span className="w-1 h-1 bg-red-500 rounded-full animate-ping"></span>
+                Event is live
+              </span>
+              {formattedSchedule && <span className="text-[9px] text-gray-400 font-bold uppercase tracking-tight">Started: {formattedSchedule}</span>}
+            </div>
           )}
           {isActuallyEnded && (
             <span className="text-[10px] text-gray-500 font-bold uppercase tracking-wider mb-0.5">Event ended</span>
           )}
           {isActuallyUpcoming && (
-            <span className="text-[10px] text-blue-500 font-bold uppercase tracking-wider mb-0.5">Event scheduled</span>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <span className="text-[10px] text-blue-500 font-black uppercase tracking-wider">Event scheduled</span>
+              {countdownText && (
+                <span className="text-[10px] text-orange-500 font-black bg-orange-50 px-2 py-0.5 rounded-full border border-orange-100 flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[12px]">timer</span>
+                  {countdownText}
+                </span>
+              )}
+            </div>
           )}
-          <div className="mt-1">
-            <span className="text-[12px] text-gray-500 font-medium">
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="text-[11px] text-gray-500 font-bold">
               {isVideo ? (
                 isLiveStream ?
-                  `Platform: ${item.platform || 'YouTube'}, Instructor: ${item.instructor || 'N/A'}${item.publishOn ? ` | ${item.publishOn}` : ''}` :
-                  (item.datetime ? `Duration: ${item.duration || 'N/A'}, Views: ${item.views ?? item.viewCount ?? 0}, Date & Time: ${item.datetime}` : `Duration: ${item.duration || 'N/A'}, Views: ${item.views ?? item.viewCount ?? 0}`)
+                  `Platform: ${item.platform || 'YouTube'}` :
+                  (item.datetime ? `Duration: ${item.duration || 'N/A'}, Views: ${item.views ?? item.viewCount ?? 0}, Date: ${item.datetime}` : `Duration: ${item.duration || 'N/A'}, Views: ${item.views ?? item.viewCount ?? 0}`)
               ) : (
-                `Date & Time: ${item.datetime || '09:31 AM 06th March 2026'}`
+                `Date & Time: ${item.datetime || 'N/A'}`
               )}
             </span>
+            {isActuallyUpcoming && formattedSchedule && (
+              <span className="text-[11px] text-blue-600 font-bold bg-blue-50/50 px-2 rounded-md">
+                Time: {formattedSchedule}
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2 mt-2.5">
-          <div className="px-3 py-0.5 rounded-full text-[10px] font-bold text-gray-500 bg-gray-100 w-fit uppercase tracking-wider">
+          <div className="px-3 py-0.5 rounded-full text-[10px] font-bold text-gray-500 bg-gray-100 w-fit uppercase tracking-wider border border-gray-200/50 shadow-sm">
             {isRecordedLive ? 'Recorded Video' : isEndedWithoutRecording ? 'Live Ended' : isLiveStream ? 'Live stream' : isNote ? 'PDF' : isTest ? 'Test' : isVideo ? 'Video' : 'Content'}
           </div>
           {(item.pdf1 || item.pdf1Url || item.pdfUrl) && (

@@ -18,7 +18,13 @@ interface LiveSessionReal {
     scheduledDate: string;
     scheduledTime: string;
     status: string;
+    startTime?: string;
+    startDateTime?: string;
+    publishOn?: string;
+    scheduledAt?: string;
+    streamStatus?: string;
 }
+
 
 interface Props {
     showHeader?: boolean;
@@ -133,7 +139,32 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true, courseId, showToast 
         }
     };
 
+    const handleEdit = (session: any) => {
+        // --- Prefill logic for Schedule Date and Time ---
+        let sDate = '';
+        let sTime = '';
+        
+        // Priority: scheduledAt -> scheduledTime -> startTime -> startDateTime -> publishOn
+        const rawTime = session.scheduledAt || session.scheduledTime || session.startTime || session.startDateTime || session.publishOn || '';
+        
+        if (rawTime) {
+            const d = new Date(rawTime.replace(' ', 'T'));
+            if (!isNaN(d.getTime())) {
+                sDate = d.toISOString().split('T')[0];
+                sTime = d.toTimeString().split(' ')[0].substring(0, 5);
+            }
+        }
+
+        setEditingSession({
+            ...session,
+            scheduleDate: sDate,
+            scheduleTime: sTime
+        });
+        setOpenDropdownId(null);
+    };
+
     const handleGoLive = async (session: LiveSessionReal) => {
+
         setActionLoading(session.id);
         // Use streamStatus as priority for lifecycle state
         const currentLifecycle = (session as any).streamStatus || session.status;
@@ -201,7 +232,8 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true, courseId, showToast 
         if (!editingSession) return;
         setActionLoading(editingSession.id);
         try {
-            const uploadData = { ...editingSession };
+            const uploadData: any = { ...editingSession };
+
 
             // Handle new file uploads
             const fileFields = ['pdf1', 'pdf2', 'studyMaterial'];
@@ -227,7 +259,42 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true, courseId, showToast 
                 (uploadData as any).courseName = course.name || course.title;
             }
 
+            // --- Schedule Validation & Normalization ---
+            const scheduleDate = uploadData.scheduleDate || '';
+            const scheduleTime = uploadData.scheduleTime || '';
+
+            if ((scheduleDate && !scheduleTime) || (!scheduleDate && scheduleTime)) {
+                throw new Error('Both Schedule Date and Time are required if scheduling.');
+            }
+
+            let scheduledAt = uploadData.scheduledAt || '';
+            if (scheduleDate && scheduleTime) {
+                const localScheduledStr = `${scheduleDate}T${scheduleTime}`;
+                const scheduledDateObj = new Date(localScheduledStr);
+                
+                if (isNaN(scheduledDateObj.getTime())) {
+                    throw new Error('Invalid Schedule Date or Time.');
+                }
+
+                // If date/time changed and it's in the past, block
+                // Note: We check if it's different from original or if it's a new schedule
+                if (scheduledDateObj.getTime() < Date.now()) {
+                    // Only block if it's being changed to a past time. 
+                    // If it was already in the past, we allow saving other fields.
+                    // But for simplicity and safety, we block any save if schedule is in past.
+                    throw new Error('Schedule time cannot be in the past.');
+                }
+
+                scheduledAt = scheduledDateObj.toISOString();
+            }
+
+            uploadData.scheduledAt = scheduledAt;
+            uploadData.startTime = scheduledAt;
+            uploadData.startDateTime = scheduledAt;
+            uploadData.publishOn = scheduledAt;
+
             await liveVideosAPI.update(editingSession.id, uploadData);
+
             if (showToast) showToast('Session updated successfully', 'success');
             await fetchData();
             setEditingSession(null);
@@ -267,14 +334,46 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true, courseId, showToast 
                 uploadData.url = uploadData.streamId;
             }
 
+            // --- Schedule Validation & Normalization ---
+            const scheduleDate = uploadData.scheduleDate || '';
+            const scheduleTime = uploadData.scheduleTime || '';
+
+            if ((scheduleDate && !scheduleTime) || (!scheduleDate && scheduleTime)) {
+                throw new Error('Both Schedule Date and Time are required if scheduling.');
+            }
+
+            let scheduledAt = '';
+            if (scheduleDate && scheduleTime) {
+                const localScheduledStr = `${scheduleDate}T${scheduleTime}`;
+                const scheduledDateObj = new Date(localScheduledStr);
+                
+                if (isNaN(scheduledDateObj.getTime())) {
+                    throw new Error('Invalid Schedule Date or Time.');
+                }
+
+                if (scheduledDateObj.getTime() < Date.now()) {
+                    throw new Error('Schedule time cannot be in the past.');
+                }
+
+                scheduledAt = scheduledDateObj.toISOString();
+            }
+
             await liveVideosAPI.create({
                 ...uploadData,
                 courseName: course?.name || course?.title || 'General',
                 status: 'active', // enabled by default
                 streamStatus: 'upcoming', // initial lifecycle state
                 contentType: 'live_stream',
-                type: 'live'
+                type: 'live',
+                scheduleDate,
+                scheduleTime,
+                scheduledAt,
+                // Sync to legacy fields
+                startTime: scheduledAt,
+                startDateTime: scheduledAt,
+                publishOn: scheduledAt
             });
+
             if (showToast) showToast('Session scheduled successfully', 'success');
             setShowLiveStreamDrawer(false);
             fetchData();
@@ -427,12 +526,13 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true, courseId, showToast 
 
                                                             {/* Edit */}
                                                             <button
-                                                                onClick={() => { setEditingSession({ ...session }); setOpenDropdownId(null); }}
+                                                                onClick={() => handleEdit(session)}
                                                                 className="w-full text-left px-4 py-2.5 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 flex items-center gap-2.5"
                                                             >
                                                                 <span className="material-symbols-outlined text-[16px] text-indigo-600">edit</span>
                                                                 Edit
                                                             </button>
+
                                                             {/* Duplicate */}
                                                             <button
                                                                 onClick={() => handleDuplicate(session)}
@@ -579,6 +679,35 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true, courseId, showToast 
                                                 />
                                             </div>
                                         )}
+
+                                        {/* Schedule Section */}
+                                        <div className="space-y-4 pt-2">
+                                            <div className="flex items-center justify-between px-1">
+                                                <label className="text-[13px] font-bold text-gray-700">Schedule (Optional)</label>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="space-y-2">
+                                                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Date</label>
+                                                    <input
+                                                        type="date"
+                                                        min={new Date().toISOString().split('T')[0]}
+                                                        value={(editingSession as any).scheduleDate || ''}
+                                                        onChange={(e) => setEditingSession({ ...editingSession, scheduleDate: e.target.value } as any)}
+                                                        className="w-full h-[54px] bg-[#f8fafc] border border-gray-100 rounded-2xl px-4 text-[14px] font-bold outline-none focus:border-blue-400 focus:bg-white transition-all shadow-sm"
+                                                    />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Time</label>
+                                                    <input
+                                                        type="time"
+                                                        value={(editingSession as any).scheduleTime || ''}
+                                                        onChange={(e) => setEditingSession({ ...editingSession, scheduleTime: e.target.value } as any)}
+                                                        className="w-full h-[54px] bg-[#f8fafc] border border-gray-100 rounded-2xl px-4 text-[14px] font-bold outline-none focus:border-blue-400 focus:bg-white transition-all shadow-sm"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <p className="text-[10px] text-gray-400 ml-1 italic font-medium">Students will see a countdown until this time.</p>
+                                        </div>
 
                                         {/* Status Segmented Toggle */}
                                         <div className="space-y-2">

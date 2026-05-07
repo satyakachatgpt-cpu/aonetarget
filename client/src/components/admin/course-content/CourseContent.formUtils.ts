@@ -22,7 +22,10 @@ export const initialYoutubeZoomForm: YoutubeZoomForm = {
   platform: 'YouTube Live',
   streamStatus: 'upcoming',
   endTime: '',
-  recordedLink: ''
+  recordedLink: '',
+  scheduleDate: '',
+  scheduleTime: '',
+  scheduledAt: ''
 };
 
 export const initialLiveStreamForm = {
@@ -44,8 +47,12 @@ export const initialLiveStreamForm = {
   notifyStudents: true,
   allowDownload: false,
   chatVisibility: 'Everyone',
-  order: '0.00'
+  order: '0.00',
+  scheduleDate: '',
+  scheduleTime: '',
+  scheduledAt: ''
 };
+
 
 export const initialWebinarForm: WebinarForm = {
   title: '',

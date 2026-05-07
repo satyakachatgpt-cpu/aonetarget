@@ -49,13 +49,27 @@ function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
 
   if (isExplicitlyEnded || isImplicitlyEnded || hasEndedLabel) return 'ended';
   if (raw === 'live' || lc.isLive === true) return 'live';
+
+  // --- Schedule-Aware logic ---
+  const scheduledAt = lc.scheduledAt || lc.scheduledTime || lc.startTime || lc.publishOn || '';
+  if (scheduledAt) {
+    const scheduledTime = new Date(scheduledAt.replace(' ', 'T')).getTime();
+    if (scheduledTime > Date.now()) {
+      return 'upcoming';
+    } else if (!isExplicitlyEnded) {
+       return 'live'; // Promote to live if time passed and not explicitly ended
+    }
+  }
+
   return 'upcoming';
 }
 
 
+
 function resolveStreamUrl(lc: any): string {
-  return lc.streamId || lc.videoUrl || lc.url || lc.meetingLink || lc.link || '';
+  return lc.streamId || lc.videoUrl || lc.url || lc.meetingLink || lc.link || lc.streamUrl || '';
 }
+
 
 function useHomeLiveCountdown(scheduledTimeStr: string | undefined) {
   const getSecsLeft = () => {
@@ -73,8 +87,15 @@ function useHomeLiveCountdown(scheduledTimeStr: string | undefined) {
   return secs;
 }
 
-const HomeLiveCountdownDisplay = ({ scheduledTimeStr }: { scheduledTimeStr: string }) => {
+const HomeLiveCountdownDisplay = ({ scheduledTimeStr, onExpire }: { scheduledTimeStr: string, onExpire?: () => void }) => {
   const secs = useHomeLiveCountdown(scheduledTimeStr);
+
+  useEffect(() => {
+    if (secs !== null && secs <= 0 && onExpire) {
+      onExpire();
+    }
+  }, [secs, onExpire]);
+
   if (secs === null || secs <= 0) return <span>Upcoming</span>;
   
   if (secs < 60) {
@@ -93,9 +114,16 @@ const HomeLiveCountdownDisplay = ({ scheduledTimeStr }: { scheduledTimeStr: stri
   return <span>Starts in {hh}:{mm}:{ss}</span>;
 };
 
+
 const Home: React.FC = () => {
   const navigate = useNavigate();
   const { student, isAuthenticated, unreadNotificationsCount } = useAuthStore();
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 30000);
+    return () => clearInterval(timer);
+  }, []);
   const [courses, setCourses] = useState<Course[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [filteredCategories, setFilteredCategories] = useState<any[]>([]);
@@ -976,7 +1004,7 @@ const Home: React.FC = () => {
                               <div className="flex items-center gap-2 mt-1">
                                 <div className="flex items-center gap-1.5 bg-indigo-500/10 backdrop-blur-md text-indigo-600 text-[10px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider border border-indigo-200/50 shadow-sm">
                                   <span className="material-symbols-rounded text-[14px]">schedule</span>
-                                  <HomeLiveCountdownDisplay scheduledTimeStr={scheduledISO} />
+                                  <HomeLiveCountdownDisplay scheduledTimeStr={scheduledISO} onExpire={() => setTick(t => t + 1)} />
                                 </div>
                               </div>
                             </div>

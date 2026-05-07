@@ -34,6 +34,18 @@ function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' | 'recor
 
   if (isExplicitlyEnded || isImplicitlyEnded || hasEndedLabel) return 'ended';
   if (raw === 'live' || lc.isLive === true) return 'live';
+
+  // --- Schedule-Aware logic ---
+  const scheduledAt = lc.scheduledAt || lc.scheduledTime || lc.startTime || lc.publishOn || '';
+  if (scheduledAt) {
+    const scheduledTime = new Date(scheduledAt.replace(' ', 'T')).getTime();
+    if (scheduledTime > Date.now()) {
+      return 'upcoming';
+    } else if (!isExplicitlyEnded) {
+       return 'live'; // Promote to live if time passed and not explicitly ended
+    }
+  }
+
   return 'upcoming';
 }
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { getImageUrl, getPdfUrl, getYouTubeThumbnail } from '../../../lib/utils';
 import { Video } from '../../../types';
 
@@ -14,6 +14,68 @@ interface LiveTabProps {
   computeStatus: (lc: any) => 'live' | 'upcoming' | 'ended' | 'recorded';
 }
 
+// ─── Countdown hook: returns seconds left (null = invalid/no date) ─────────────
+function useSecsLeft(scheduledStr: string | undefined): number | null {
+  const calc = () => {
+    if (!scheduledStr) return null;
+    const t = new Date(scheduledStr.replace(' ', 'T'));
+    if (isNaN(t.getTime())) return null;
+    return Math.floor((t.getTime() - Date.now()) / 1000);
+  };
+  const [secs, setSecs] = useState<number | null>(calc);
+  useEffect(() => {
+    setSecs(calc());
+    const id = setInterval(() => setSecs(calc()), 1000);
+    return () => clearInterval(id);
+  }, [scheduledStr]);
+  return secs;
+}
+
+// ─── Countdown UI Component ────────
+const UpcomingCountdown = ({ scheduledStr, onExpire }: { scheduledStr: string; onExpire?: () => void }) => {
+  const secs = useSecsLeft(scheduledStr);
+
+  useEffect(() => {
+    if (secs !== null && secs <= 0 && onExpire) {
+      onExpire();
+    }
+  }, [secs, onExpire]);
+
+  if (secs === null) return null;
+
+  if (secs <= 0) {
+    return (
+      <div className="flex items-center gap-1.5 bg-red-50 text-red-600 text-[9px] px-2.5 py-1 rounded-full font-black uppercase tracking-widest border border-red-100 animate-pulse">
+        <span className="w-1.5 h-1.5 bg-red-500 rounded-full"></span>
+        Live Now
+      </div>
+    );
+  }
+
+  // Format countdown text
+  let countdownLabel: string;
+  if (secs < 60) {
+    countdownLabel = 'Starting soon';
+  } else if (secs < 86400) {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    countdownLabel = `Starts in ${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
+  } else {
+    const d = Math.floor(secs / 86400);
+    const h = Math.floor((secs % 86400) / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    countdownLabel = `Starts in ${d}d ${String(h).padStart(2, '0')}h ${String(m).padStart(2, '0')}m`;
+  }
+
+  return (
+    <div className={`flex items-center gap-1.5 bg-indigo-500/10 backdrop-blur-md text-[10px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider border border-indigo-200/50 shadow-sm ${secs < 60 ? 'text-orange-500 animate-pulse' : 'text-indigo-600'}`}>
+      <span className="material-symbols-rounded text-[14px]">timer</span>
+      {countdownLabel}
+    </div>
+  );
+};
+
 const LiveTab: React.FC<LiveTabProps> = ({
   liveStreams,
   isEnrolled,
@@ -25,6 +87,13 @@ const LiveTab: React.FC<LiveTabProps> = ({
   onBuyNow,
   computeStatus,
 }) => {
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <div className="space-y-6">
       {!isEnrolled ? (
@@ -129,14 +198,14 @@ const LiveTab: React.FC<LiveTabProps> = ({
                 Upcoming Live Classes
               </h3>
               {liveStreams.filter(live => computeStatus(live) === 'upcoming').map((live, idx) => {
-                const scheduledTime = live.scheduledTime || live.startTime || live.publishOn || live.scheduledAt;
+                const rawTime = live.scheduledAt || live.scheduledTime || live.startTime || live.publishOn || '';
+                const scheduledISO = rawTime ? String(rawTime).replace(' ', 'T') : '';
                 
-                const displayTime = (() => {
-                  if (!scheduledTime) return '';
-                  const d = new Date(String(scheduledTime).replace(' ', 'T'));
-                  if (isNaN(d.getTime())) return '';
-                  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                })();
+                const dateObj = scheduledISO ? new Date(scheduledISO) : null;
+                const isValid = dateObj && !isNaN(dateObj.getTime());
+
+                const formattedDate = isValid ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+                const formattedTime = isValid ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
                   return (
                     <div
@@ -152,11 +221,20 @@ const LiveTab: React.FC<LiveTabProps> = ({
                         </div>
                         <div className="flex-1 min-w-0">
                           <h4 className="font-semibold text-base text-gray-800 truncate tracking-tight group-hover:text-indigo-600 transition-colors">{live.title}</h4>
-                          <div className="flex items-center gap-2 mt-1">
-                            <div className="flex items-center gap-1.5 bg-indigo-500/10 backdrop-blur-md text-indigo-600 text-[10px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider border border-indigo-200/50 shadow-sm">
-                              <span className="material-symbols-rounded text-[14px]">schedule</span>
-                              {displayTime}
-                            </div>
+                          <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                            {isValid && (
+                              <>
+                                <div className="flex items-center gap-1.5 bg-gray-100 text-gray-600 text-[10px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider border border-gray-200 shadow-sm">
+                                  <span className="material-symbols-rounded text-[14px]">calendar_month</span>
+                                  {formattedDate}
+                                </div>
+                                <div className="flex items-center gap-1.5 bg-indigo-500/10 backdrop-blur-md text-indigo-600 text-[10px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider border border-indigo-200/50 shadow-sm">
+                                  <span className="material-symbols-rounded text-[14px]">schedule</span>
+                                  {formattedTime}
+                                </div>
+                                <UpcomingCountdown scheduledStr={scheduledISO} onExpire={() => setTick(t => t + 1)} />
+                              </>
+                            )}
                           </div>
                         </div>
                         <div className="shrink-0">

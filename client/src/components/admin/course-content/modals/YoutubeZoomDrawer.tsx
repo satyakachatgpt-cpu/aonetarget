@@ -145,6 +145,36 @@ const YoutubeZoomDrawer: React.FC<YoutubeZoomDrawerProps> = ({
                   />
                 </div>
 
+                {/* Schedule Section */}
+                <div className="space-y-4 pt-4 border-t border-gray-50">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[13px] font-bold text-gray-600 tracking-tight uppercase">Schedule Live Stream</label>
+                    <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 italic">Optional</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Schedule Date</label>
+                      <input
+                        type="date"
+                        min={new Date().toISOString().split('T')[0]}
+                        value={youtubeZoomForm.scheduleDate || ''}
+                        onChange={(e) => setYoutubeZoomForm({ ...youtubeZoomForm, scheduleDate: e.target.value })}
+                        className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all shadow-sm"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Schedule Time</label>
+                      <input
+                        type="time"
+                        value={youtubeZoomForm.scheduleTime || ''}
+                        onChange={(e) => setYoutubeZoomForm({ ...youtubeZoomForm, scheduleTime: e.target.value })}
+                        className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all shadow-sm"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-gray-400 font-medium italic ml-1 leading-relaxed">Students will see a countdown until this time.</p>
+                </div>
+
                 {/* Recording / Replay URL */}
                 <div className="space-y-2">
                   <label className="block text-[13px] font-bold text-gray-600 tracking-tight text-blue-600">Recording / Replay URL (Optional)</label>
