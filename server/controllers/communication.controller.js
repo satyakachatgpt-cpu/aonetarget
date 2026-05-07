@@ -463,19 +463,87 @@ export const getLiveChatMessages = async (req, res) => {
 export const sendLiveChatMessage = async (req, res) => {
   try {
     const { videoId } = req.params;
-    const { senderId, senderName, message } = req.body;
-    const effectiveSenderId = isAdminRequest(req) ? (senderId || req.user?.adminId || req.user?.id) : req.user?.studentId;
-    const effectiveSenderName = isAdminRequest(req) ? (senderName || req.user?.name || 'Admin') : (req.user?.name || senderName || 'Student');
+    const { message } = req.body;
+
+    if (!message || !message.trim()) {
+      return res.status(400).json({ error: 'Message cannot be empty' });
+    }
+
+    // Get name and role ONLY from verified JWT token, never from body
+    const isAdmin = req.user?.isAdmin || req.user?.role === 'admin';
+
+    const senderId = isAdmin
+      ? (req.user?.adminId || req.user?.id || 'admin')
+      : (req.user?.studentId || req.user?.id);
+
+    const senderName = isAdmin
+      ? (req.user?.name || 'Teacher')
+      : (req.user?.name || 'Student');
+
+    const role = isAdmin ? 'admin' : 'student';
+
+    if (!senderId) {
+      return res.status(401).json({ error: 'Invalid session' });
+    }
+
     const chatMessage = {
       videoId,
-      senderId: effectiveSenderId,
-      senderName: effectiveSenderName,
-      message,
+      senderId,
+      senderName,
+      role,
+      message: message.trim(),
       createdAt: new Date()
     };
+
     await db.collection('liveChatMessages').insertOne(chatMessage);
     res.status(201).json(chatMessage);
   } catch (error) {
+    console.error('sendLiveChatMessage error:', error);
     res.status(500).json({ error: 'Failed to send message' });
   }
 };
+
+export const deleteLiveChatMessage = async (req, res) => {
+  try {
+    const { videoId, messageId } = req.params;
+    
+    console.log('[DELETE] videoId:', videoId, 'messageId:', messageId);
+    
+    let query = { videoId };
+    
+    // Try ObjectId first, fallback to string match
+    if (mongoose.Types.ObjectId.isValid(messageId)) {
+      query._id = new mongoose.Types.ObjectId(messageId);
+    } else {
+      query._id = messageId;
+    }
+    
+    console.log('[DELETE] query:', JSON.stringify(query));
+    
+    const result = await db.collection('liveChatMessages').deleteOne(query);
+    
+    console.log('[DELETE] result:', result);
+    
+    if (result.deletedCount === 0) {
+      // Try without videoId constraint as fallback
+      let fallbackQuery = {};
+      if (mongoose.Types.ObjectId.isValid(messageId)) {
+        fallbackQuery._id = new mongoose.Types.ObjectId(messageId);
+      } else {
+        fallbackQuery._id = messageId;
+      }
+      const fallbackResult = await db.collection('liveChatMessages').deleteOne(fallbackQuery);
+      console.log('[DELETE] fallback result:', fallbackResult);
+      
+      if (fallbackResult.deletedCount === 0) {
+        return res.status(404).json({ error: 'Message not found', messageId, videoId });
+      }
+    }
+    
+    res.json({ success: true, message: 'Message deleted' });
+  } catch (error) {
+    console.error('deleteLiveChatMessage error:', error);
+    res.status(500).json({ error: 'Failed to delete message', details: error.message });
+  }
+};
+

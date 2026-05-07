@@ -19,11 +19,14 @@ const AdminLiveChatPanel: React.FC<AdminLiveChatPanelProps> = ({ videoId, isVisi
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    scrollContainerRef.current?.scrollTo({ 
+      top: scrollContainerRef.current.scrollHeight, 
+      behavior: 'smooth' 
+    });
   };
 
   const fetchMessages = async () => {
@@ -79,6 +82,37 @@ const AdminLiveChatPanel: React.FC<AdminLiveChatPanelProps> = ({ videoId, isVisi
     }
   };
 
+  const handleDeleteMessage = async (messageId: string) => {
+    if (!messageId) {
+      console.error('No messageId provided');
+      return;
+    }
+    try {
+      const token = localStorage.getItem('adminToken');
+      const url = `/api/live-chat/${videoId}/messages/${messageId}`;
+      console.log('Deleting message:', url);
+      
+      const response = await fetch(url, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      const data = await response.json();
+      console.log('Delete response:', response.status, data);
+      
+      if (response.ok) {
+        setMessages(prev => prev.filter(m => String(m._id) !== String(messageId)));
+      } else {
+        console.error('Delete failed:', data);
+      }
+    } catch (error) {
+      console.error('Error deleting message:', error);
+    }
+  };
+
   useEffect(() => {
     if (isVisible) {
       fetchMessages();
@@ -98,7 +132,15 @@ const AdminLiveChatPanel: React.FC<AdminLiveChatPanelProps> = ({ videoId, isVisi
   }, [isVisible, videoId]);
 
   useEffect(() => {
-    scrollToBottom();
+    if (!scrollContainerRef.current) return;
+    
+    const el = scrollContainerRef.current;
+    const isNearBottom = 
+      el.scrollHeight - el.scrollTop - el.clientHeight < 100;
+    
+    if (isNearBottom) {
+      scrollToBottom();
+    }
   }, [messages]);
 
   if (!isVisible) return null;
@@ -131,7 +173,7 @@ const AdminLiveChatPanel: React.FC<AdminLiveChatPanelProps> = ({ videoId, isVisi
       </div>
 
       {/* Messages List */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+      <div ref={scrollContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
         {messages.length === 0 ? (
           <div className="h-full flex items-center justify-center text-gray-500 text-sm">
             No messages yet. Start the conversation!
@@ -142,7 +184,7 @@ const AdminLiveChatPanel: React.FC<AdminLiveChatPanelProps> = ({ videoId, isVisi
             return (
               <div 
                 key={msg._id} 
-                className={`flex flex-col ${isAdminMsg ? 'items-end' : 'items-start'}`}
+                className={`flex flex-col gap-0.5 ${isAdminMsg ? 'items-end' : 'items-start'}`}
               >
                 <div 
                   className={`max-w-[85%] rounded-lg px-3 py-2 ${
@@ -159,13 +201,26 @@ const AdminLiveChatPanel: React.FC<AdminLiveChatPanelProps> = ({ videoId, isVisi
                     <span className="text-[10px] opacity-50 mt-1 self-end">
                       {formatTime(msg.createdAt)}
                     </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                        const id = msg._id?.toString() || String(msg._id);
+                        console.log('Delete clicked, id:', id, 'full msg:', msg);
+                        handleDeleteMessage(id);
+                      }}
+                      className="text-[9px] text-red-500 hover:text-red-300
+                                 px-1 mt-0.5 cursor-pointer select-none block"
+                      type="button"
+                    >
+                      🗑 delete
+                    </button>
                   </div>
                 </div>
               </div>
             );
           })
         )}
-        <div ref={messagesEndRef} />
       </div>
 
       {/* Input Area */}

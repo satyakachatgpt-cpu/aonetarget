@@ -18,7 +18,8 @@ import {
   editChatMessage,
   markChatAsRead,
   getLiveChatMessages,
-  sendLiveChatMessage
+  sendLiveChatMessage,
+  deleteLiveChatMessage
 } from '../controllers/communication.controller.js';
 import { adminMiddleware, authMiddleware } from '../middleware/auth.js';
 
@@ -49,6 +50,7 @@ router.put('/chats/:chatId/read', authMiddleware, markChatAsRead);
 // Live Chat (Phase 19D)
 router.get('/live-chat/:videoId/messages', authMiddleware, getLiveChatMessages);
 router.post('/live-chat/:videoId/messages', authMiddleware, sendLiveChatMessage);
+router.delete('/live-chat/:videoId/messages/:messageId', adminMiddleware, deleteLiveChatMessage);
 
 // Dynamic routes after static
 router.get('/chats', authMiddleware, getChats);
