@@ -137,6 +137,11 @@ const MockTests: React.FC = () => {
 
   const checkEnrollment = async (series: any) => {
     if (!student) return;
+    // Free series - always enrolled
+    if (!series.price || Number(series.price) === 0) {
+      setIsEnrolled(true);
+      return;
+    }
     try {
       const seriesId = series.id || series._id;
       const res = await fetch(`/api/students/${student.id || student._id}/enrolled/${seriesId}`, {
@@ -160,7 +165,12 @@ const MockTests: React.FC = () => {
     const seriesId = String(series.id || series._id);
     const preEnrolled = enrolledSeriesIds.has(seriesId);
     
-    setIsEnrolled(preEnrolled);
+    // Free series - always give access
+    if (!series.price || Number(series.price) === 0) {
+      setIsEnrolled(true);
+    } else {
+      setIsEnrolled(preEnrolled);
+    }
     setCurrentView('tests');
     
     // Refresh status from server to be sure
