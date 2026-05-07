@@ -128,6 +128,36 @@ const LiveStreamDrawer: React.FC<LiveStreamDrawerProps> = ({
                   </div>
                 </div>
 
+                {/* Schedule Section */}
+                <div className="space-y-4 pt-4 border-t border-gray-50">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[13px] font-bold text-gray-600 tracking-tight uppercase">Schedule Live Stream</label>
+                    <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 italic">Optional</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Schedule Date</label>
+                      <input
+                        type="date"
+                        min={new Date().toISOString().split('T')[0]}
+                        value={liveStreamForm.scheduleDate || ''}
+                        onChange={(e) => setLiveStreamForm({ ...liveStreamForm, scheduleDate: e.target.value })}
+                        className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Schedule Time</label>
+                      <input
+                        type="time"
+                        value={liveStreamForm.scheduleTime || ''}
+                        onChange={(e) => setLiveStreamForm({ ...liveStreamForm, scheduleTime: e.target.value })}
+                        className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-gray-400 font-medium italic ml-1 leading-relaxed">Students will see a countdown until this time. If left blank, stream will be visible immediately.</p>
+                </div>
+
                 {/* Status Checkbox-style Toggle */}
                 <div className="space-y-2">
                   <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Status</label>
@@ -146,6 +176,7 @@ const LiveStreamDrawer: React.FC<LiveStreamDrawerProps> = ({
                     </button>
                   </div>
                 </div>
+
 
 
               </div>

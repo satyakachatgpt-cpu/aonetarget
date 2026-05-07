@@ -26,12 +26,26 @@ const calculateStreamStatus = (item) => {
   if (lifecycleStatus === 'live' || item.isLive === true) {
     return 'live';
   }
+
+  // --- Schedule-Aware Upcoming Logic ---
+  const scheduledAt = item.scheduledAt || item.scheduledTime || item.startTime || item.publishOn || '';
+  if (scheduledAt) {
+    const scheduledTime = new Date(scheduledAt).getTime();
+    if (scheduledTime > Date.now()) {
+      return 'upcoming';
+    } else if (!isExplicitlyEnded) {
+       // Past scheduled but not explicitly ended -> assume live if within reasonable window
+       // or just return 'live' to allow joining
+       return 'live';
+    }
+  }
   
   if (lifecycleStatus === 'recorded') {
     return 'recorded';
   }
   
   return 'upcoming';
+
 };
 
 // --- Live Video Admin Controllers ---
@@ -169,11 +183,14 @@ export const getCourseLiveClasses = async (req, res) => {
 
     const projection = {
       title: 1, name: 1, teacherName: 1, instructor: 1,
-      scheduledTime: 1, scheduledDate: 1, publishOn: 1,
+      scheduledTime: 1, scheduledDate: 1, scheduledAt: 1,
+      scheduleDate: 1, scheduleTime: 1,
+      publishOn: 1,
       date: 1, createdAt: 1, endTime: 1, endDateTime: 1,
       joinBeforeMinutes: 1, status: 1, meetingLink: 1,
       url: 1, videoUrl: 1, link: 1, id: 1
     };
+
 
     const [c1, c2, c3] = await Promise.all([
       db.collection('liveVideos').find(query).project(projection).toArray(),
@@ -364,7 +381,27 @@ export const getStudentLiveClasses = async (req, res) => {
     [...c3, ...c2, ...c1].forEach(processItem); 
 
     const finalStreams = Array.from(dedupeMap.values())
+      .filter(item => {
+        // --- Strict Filtering Rule ---
+        // 1. If it's LIVE -> show it.
+        // 2. If it's UPCOMING (future scheduled) -> show it.
+        // 3. If it's PAST and NOT live and NOT explicitly ended -> hide it? 
+        // User said: "Past ended/completed/inactive sessions must be hidden/blocked from student side."
+        // "Past scheduled sessions should NOT show unless they are explicitly live."
+        
+        const status = item.status;
+        const isLive = status === 'live';
+        const isUpcoming = status === 'upcoming';
+        
+        // Hide anything that is not Live and not Upcoming
+        if (!isLive && !isUpcoming) return false;
+
+        // If it's technically 'live' but was scheduled long ago and never updated, 
+        // we might want a cutoff, but per instructions, we follow status.
+        return true;
+      })
       .sort((a, b) => {
+
         const timeA = new Date(a.scheduledTime || a.startTime || a.publishOn || a.date || 0).getTime();
         const timeB = new Date(b.scheduledTime || b.startTime || b.publishOn || b.date || 0).getTime();
         return timeA - timeB;

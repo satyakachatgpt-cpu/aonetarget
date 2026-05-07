@@ -548,7 +548,9 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
       platform: video.platform || 'YouTube Live',
       streamStatus: video.streamStatus || video.status || 'upcoming',
       endTime: video.endTime || video.endDateTime || '',
-      recordedLink: video.recordedLink || ''
+      recordedLink: video.recordedLink || '',
+      scheduleDate: video.scheduleDate || (video.scheduledAt || video.startDateTime || video.startTime || video.publishOn ? new Date(video.scheduledAt || video.startDateTime || video.startTime || video.publishOn).toISOString().split('T')[0] : ''),
+      scheduleTime: video.scheduleTime || (video.scheduledAt || video.startDateTime || video.startTime || video.publishOn ? new Date(video.scheduledAt || video.startDateTime || video.startTime || video.publishOn).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }) : '')
     });
     setShowYoutubeZoomModal(true);
   };

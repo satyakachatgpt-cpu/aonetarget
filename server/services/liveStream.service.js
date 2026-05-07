@@ -33,6 +33,26 @@ export async function syncLiveStream(id, data, operation = 'update') {
     if (data.url || data.streamId || data.link || data.videoUrl || data.streamUrl || data.recordedLink || data.liveLink) {
       syncData.url = data.url || data.streamId || data.link || data.videoUrl || data.streamUrl || data.recordedLink || data.liveLink;
     }
+
+    // --- Schedule Fields Normalization ---
+    const sDate = data.scheduleDate || '';
+    const sTime = data.scheduleTime || '';
+    if (sDate && sTime && !data.scheduledAt) {
+      try {
+        syncData.scheduledAt = new Date(`${sDate}T${sTime}`).toISOString();
+      } catch (e) { /* invalid date, keep as is */ }
+    } else if (data.scheduledAt) {
+      syncData.scheduledAt = data.scheduledAt;
+    }
+
+    // Mirror to all legacy fields for absolute safety
+    if (syncData.scheduledAt) {
+      syncData.startTime = syncData.scheduledAt;
+      syncData.startDateTime = syncData.scheduledAt;
+      syncData.publishOn = syncData.scheduledAt;
+      syncData.scheduledTime = syncData.scheduledAt; // Some components use this variant
+    }
+
     
     // Force Correct Classification
     if (data.status === 'recorded' || data.streamStatus === 'recorded') {

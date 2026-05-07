@@ -585,7 +585,11 @@ export const LiveStreamDrawer: React.FC<{
         studyMaterial: null as File | null,
         pdf1Url: '',
         pdf2Url: '',
-        studyMaterialUrl: ''
+        studyMaterialUrl: '',
+
+        scheduleDate: '',
+        scheduleTime: '',
+        scheduledAt: ''
     });
 
     useEffect(() => {
@@ -600,7 +604,10 @@ export const LiveStreamDrawer: React.FC<{
                 studyMaterial: null,
                 pdf1Url: '',
                 pdf2Url: '',
-                studyMaterialUrl: ''
+                studyMaterialUrl: '',
+                scheduleDate: '',
+                scheduleTime: '',
+                scheduledAt: ''
             });
         }
     }, [isOpen, fixedCourseId]);
@@ -633,8 +640,32 @@ export const LiveStreamDrawer: React.FC<{
                             />
                         </div>
 
-                        <div className="space-y-2">
-
+                        <div className="space-y-4 pt-2">
+                            <div className="flex items-center justify-between px-1">
+                                <label className="text-[13px] font-bold text-gray-700">Schedule (Optional)</label>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Date</label>
+                                    <input
+                                        type="date"
+                                        min={new Date().toISOString().split('T')[0]}
+                                        value={formData.scheduleDate}
+                                        onChange={(e) => setFormData({ ...formData, scheduleDate: e.target.value })}
+                                        className="w-full h-[54px] bg-[#f8fafc] border border-gray-100 rounded-2xl px-4 text-[14px] font-bold outline-none focus:border-blue-400 focus:bg-white transition-all shadow-sm"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest ml-1">Time</label>
+                                    <input
+                                        type="time"
+                                        value={formData.scheduleTime}
+                                        onChange={(e) => setFormData({ ...formData, scheduleTime: e.target.value })}
+                                        className="w-full h-[54px] bg-[#f8fafc] border border-gray-100 rounded-2xl px-4 text-[14px] font-bold outline-none focus:border-blue-400 focus:bg-white transition-all shadow-sm"
+                                    />
+                                </div>
+                            </div>
+                            <p className="text-[10px] text-gray-400 ml-1 italic font-medium">Students will see a countdown until this time.</p>
                         </div>
 
                         <div className="space-y-2">
@@ -668,6 +699,7 @@ export const LiveStreamDrawer: React.FC<{
                                 </p>
                             )}
                         </div>
+
 
                         {!fixedCourseId && !globalCreateMode && (
                             <div className="space-y-2">

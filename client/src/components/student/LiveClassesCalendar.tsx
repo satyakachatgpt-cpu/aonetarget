@@ -85,8 +85,9 @@ const CountdownBadge: React.FC<{ scheduledTime: string }> = ({ scheduledTime }) 
 
 // ─── Smart join handler ───────────────────────────────────────────────────────
 function resolveStreamUrl(cls: any): string {
-  return cls.streamId || cls.videoUrl || cls.url || cls.meetingLink || cls.link || '';
+  return cls.streamId || cls.videoUrl || cls.url || cls.meetingLink || cls.link || cls.streamUrl || '';
 }
+
 
 function handleSmartJoin(cls: any, onJoinLive?: (cls: any) => void, navigate?: any) {
   if (computeStatus(cls) !== 'live') return;
@@ -133,8 +134,21 @@ function computeStatus(cls: any): 'live' | 'upcoming' | 'ended' | 'scheduled' | 
 
   if (isExplicitlyEnded || isImplicitlyEnded || hasEndedLabel) return 'ended';
   if (raw === 'live' || cls.isLive === true) return 'live';
+
+  // --- Schedule-Aware logic ---
+  const scheduledAt = cls.scheduledAt || cls.scheduledTime || cls.startTime || cls.publishOn || '';
+  if (scheduledAt) {
+    const scheduledTime = new Date(scheduledAt.replace(' ', 'T')).getTime();
+    if (scheduledTime > Date.now()) {
+      return 'upcoming';
+    } else if (!isExplicitlyEnded) {
+       return 'live'; // Promote to live if time passed and not explicitly ended
+    }
+  }
+
   return 'upcoming';
 }
+
 
 
 // ─── Main Component ───────────────────────────────────────────────────────────
@@ -219,9 +233,6 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
   };
 
   const getUpcomingClasses = () => {
-    const now = new Date();
-    const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-
     return liveClasses
       .map(c => {
         const normalizedDate = c.scheduledDate || c.date || (c.publishOn ? c.publishOn.split('T')[0] : '');
@@ -230,15 +241,16 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
       })
       .filter(c => {
         const effectiveStatus = computeStatus(c);
-        const isNotEnded = effectiveStatus !== 'ended' && effectiveStatus !== 'recorded';
-        const isNotCancelled = c.status !== 'cancelled';
-        return isNotEnded && isNotCancelled;
+        // Only show Live or Upcoming (future scheduled)
+        return effectiveStatus === 'live' || effectiveStatus === 'upcoming';
       })
       .sort((a, b) => {
-        if (a.date !== b.date) return (a.date || '').localeCompare(b.date || '');
-        return (a.startTime || '').localeCompare(b.startTime || '');
+        const timeA = new Date(getScheduledISO(a) || a.date || 0).getTime();
+        const timeB = new Date(getScheduledISO(b) || b.date || 0).getTime();
+        return timeA - timeB;
       });
   };
+
 
   const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

@@ -6,8 +6,9 @@ import { isLiveUrl, isYouTubeUrl, getEmbedUrl } from '../lib/utils';
 
 // ─── Helper: resolve stream URL ────────────────────────────────────────────────
 function resolveStreamUrl(lc: any): string {
-  return lc.streamId || lc.videoUrl || lc.url || lc.meetingLink || lc.link || '';
+  return lc.streamId || lc.videoUrl || lc.url || lc.meetingLink || lc.link || lc.streamUrl || '';
 }
+
 
 // ─── Helper: compute effective status client-side ──────────────────────────────
 function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
@@ -20,8 +21,21 @@ function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
 
   if (isExplicitlyEnded || isImplicitlyEnded || hasEndedLabel) return 'ended';
   if (raw === 'live' || lc.isLive === true) return 'live';
+
+  // --- Schedule-Aware logic ---
+  const scheduledAt = lc.scheduledAt || lc.scheduledTime || lc.startTime || lc.publishOn || '';
+  if (scheduledAt) {
+    const scheduledTime = new Date(scheduledAt.replace(' ', 'T')).getTime();
+    if (scheduledTime > Date.now()) {
+      return 'upcoming';
+    } else if (!isExplicitlyEnded) {
+       return 'live'; // Promote to live if time passed and not explicitly ended
+    }
+  }
+
   return 'upcoming';
 }
+
 
 // ─── Countdown hook: returns seconds left (null = invalid/no date) ─────────────
 function useSecsLeft(scheduledStr: string | undefined): number | null {
@@ -41,8 +55,14 @@ function useSecsLeft(scheduledStr: string | undefined): number | null {
 }
 
 // ─── Badge + countdown block rendered on the RIGHT of each upcoming card ────────
-const UpcomingCountdown = ({ scheduledStr }: { scheduledStr: string }) => {
+const UpcomingCountdown = ({ scheduledStr, onExpire }: { scheduledStr: string; onExpire?: () => void }) => {
   const secs = useSecsLeft(scheduledStr);
+
+  useEffect(() => {
+    if (secs !== null && secs <= 0 && onExpire) {
+      onExpire();
+    }
+  }, [secs, onExpire]);
 
   // No valid date → just show static badge
   if (secs === null) {
@@ -96,6 +116,7 @@ const UpcomingCountdown = ({ scheduledStr }: { scheduledStr: string }) => {
     </div>
   );
 };
+
 
 const LiveClasses: React.FC = () => {
   const navigate = useNavigate();
@@ -311,7 +332,7 @@ const LiveClasses: React.FC = () => {
                             <div className="flex items-center gap-2 mt-1">
                               <div className="flex items-center gap-1.5 bg-indigo-500/10 backdrop-blur-md text-indigo-600 text-[10px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider border border-indigo-200/50">
                                 <span className="material-symbols-rounded text-[14px]">schedule</span>
-                                {scheduledISO ? <UpcomingCountdown scheduledStr={scheduledISO} /> : 'Scheduled'}
+                                {scheduledISO ? <UpcomingCountdown scheduledStr={scheduledISO} onExpire={() => setTick(t => t + 1)} /> : 'Scheduled'}
                               </div>
                             </div>
                           </div>
