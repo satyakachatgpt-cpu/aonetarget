@@ -477,10 +477,10 @@ export const sendLiveChatMessage = async (req, res) => {
       : (req.user?.studentId || req.user?.id);
 
     const senderName = isAdmin
-      ? (req.user?.name || 'Teacher')
+      ? (req.body.senderName || req.user?.name || 'Teacher')
       : (req.user?.name || 'Student');
 
-    const role = isAdmin ? 'admin' : 'student';
+    const role = isAdmin ? (req.body.role || 'admin') : 'student';
 
     if (!senderId) {
       return res.status(401).json({ error: 'Invalid session' });

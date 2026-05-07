@@ -65,7 +65,7 @@ const AdminLiveChatPanel: React.FC<AdminLiveChatPanelProps> = ({ videoId, isVisi
         },
         body: JSON.stringify({
           senderId: "admin",
-          senderName: adminName,
+          senderName: "Instructor",
           message: inputText,
           role: "admin"
         })
@@ -195,7 +195,7 @@ const AdminLiveChatPanel: React.FC<AdminLiveChatPanelProps> = ({ videoId, isVisi
                 >
                   <div className="flex flex-col">
                     <span className="text-[11px] font-bold opacity-75 mb-0.5">
-                      {isAdminMsg ? 'Teacher' : msg.senderName}
+                      {msg.senderName || (isAdminMsg ? 'Instructor' : 'Student')}
                     </span>
                     <p className="text-sm break-words">{msg.message}</p>
                     <span className="text-[10px] opacity-50 mt-1 self-end">

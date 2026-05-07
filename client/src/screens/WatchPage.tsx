@@ -99,9 +99,14 @@ const WatchPage: React.FC = () => {
       
       const usingAdmin = isAdminPreview && !!adminToken;
       const token = usingAdmin ? adminToken : studentToken;
+      
+      const adminNameFromStore = localStorage.getItem('adminName') || localStorage.getItem('adminUser');
+      const studentNameFromStore = student?.name || student?.phone || 'Student';
+
       const senderName = usingAdmin
-        ? (localStorage.getItem('adminName') || localStorage.getItem('adminUser') || 'Teacher')
-        : (student?.name || student?.phone || 'Student');
+        ? (adminNameFromStore || 'Instructor')
+        : studentNameFromStore;
+
       const senderId = usingAdmin ? 'admin' : (student?.id || student?._id || 'student');
       const role = usingAdmin ? 'admin' : 'student';
 
