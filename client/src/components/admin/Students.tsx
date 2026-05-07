@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useDebounce } from '../../hooks/useDebounce';
 import axios from 'axios';
 import { toast } from 'sonner';
+import * as XLSX from 'xlsx';
 import { indiaStateDistrictMap } from '../../utils/indiaStates';
 import { studentsAPI, coursesAPI, uploadAPI, packagesAPI, testSeriesAPI } from '../../services/apiClient';
 import { getImageUrl } from '../../lib/utils';
@@ -31,6 +32,7 @@ interface StudentFormData {
   city: string;
   district: string;
   class: string;
+  target: string;
   userId: string;
   password?: string;
   confirmPassword?: string;
@@ -54,7 +56,11 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
   const [registrationFilter, setRegistrationFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [deviceFilter, setDeviceFilter] = useState('all');
+  const [dateFilter, setDateFilter] = useState('all');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -96,6 +102,7 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     city: '',
     district: '',
     class: '',
+    target: '',
     userId: '',
     password: '',
     confirmPassword: '',
@@ -153,6 +160,9 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     setRegistrationFilter('all');
     setPaymentFilter('all');
     setDeviceFilter('all');
+    setDateFilter('all');
+    setCustomStartDate('');
+    setCustomEndDate('');
     setCurrentPage(1);
     loadStudents();
   }, [initialStatus, viewMode]);
@@ -176,41 +186,27 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
   const filteredStudents = useMemo(() => {
     let filtered = students;
 
-    if (debouncedSearchQuery) {
-      const lowerQuery = debouncedSearchQuery.toLowerCase();
-      filtered = filtered.filter(s =>
-        (s.name ?? '').toLowerCase().includes(lowerQuery) ||
-        (s.id ?? '').toLowerCase().includes(lowerQuery) ||
-        (s.email ?? '').toLowerCase().includes(lowerQuery) ||
-        (s.phone ?? '').includes(debouncedSearchQuery)
-      );
-    }
-
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(s => s.status === statusFilter);
-    }
-
-    if (registrationFilter !== 'all') {
-      filtered = filtered.filter(s => s.registrationType === registrationFilter);
-    }
-
-    if (paymentFilter !== 'all') {
-      filtered = filtered.filter(s => s.paymentStatus === paymentFilter);
-    }
-
-    if (deviceFilter === 'pending') {
-      filtered = filtered.filter(s => s.pendingDeviceId);
-    } else if (deviceFilter === 'locked') {
-      filtered = filtered.filter(s => s.deviceId && !s.pendingDeviceId);
+    // Backend now handles all filters: search, status, payment, date, and device guard.
+    // Frontend only handles sorting and provides data for pagination.
+    
+    if (sortConfig) {
+      filtered = [...filtered].sort((a, b) => {
+        const aVal = a[sortConfig.key];
+        const bVal = b[sortConfig.key];
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
     }
 
     return filtered;
-  }, [students, debouncedSearchQuery, statusFilter, registrationFilter, paymentFilter, deviceFilter]);
+  }, [students, deviceFilter, sortConfig]);
 
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [debouncedSearchQuery, statusFilter, registrationFilter, paymentFilter, deviceFilter]);
+    loadStudents();
+  }, [debouncedSearchQuery, statusFilter, registrationFilter, paymentFilter, deviceFilter, dateFilter, customStartDate, customEndDate]);
 
   // Calculate pagination
   const totalItems = filteredStudents.length;
@@ -227,13 +223,25 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
   const loadStudents = async () => {
     try {
       setLoading(true);
-      console.log('Loading students...');
-      const data = await studentsAPI.getAll();
-      
+      const params: any = { limit: 1000 };
+      if (debouncedSearchQuery) params.search = debouncedSearchQuery;
+      if (statusFilter !== 'all') params.status = statusFilter;
+      if (registrationFilter !== 'all') params.registrationType = registrationFilter;
+      if (paymentFilter !== 'all') params.paymentStatus = paymentFilter;
+      if (deviceFilter !== 'all') params.deviceFilter = deviceFilter;
+      if (dateFilter !== 'all') {
+        params.dateFilter = dateFilter;
+        if (dateFilter === 'custom') {
+          if (customStartDate) params.startDate = customStartDate;
+          if (customEndDate) params.endDate = customEndDate;
+        }
+      }
+
+      const data = await studentsAPI.getAll(params);
       setStudents(Array.isArray(data) ? data : []);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      console.error('Failed to load students:', errorMsg, error);
+      console.error('Failed to load students:', errorMsg);
       showToast(`Failed to load students: ${errorMsg}`, 'error');
       setStudents([]);
     } finally {
@@ -292,7 +300,8 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       dob: data.dob,
       city: data.district || data.city,
       district: data.district || data.city,
-      class: data.class,
+      class: data.target || data.class,
+      target: data.target || data.class,
       state: data.state,
       userId: data.userId,
       highQualification: data.highQualification,
@@ -470,7 +479,8 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
       state: student.state || getStateFromCity(student.city) || '',
       city: student.city || student.district || '',
       district: student.district || student.city || '',
-      class: student.class || '',
+      class: student.target || student.class || '',
+      target: student.target || student.class || '',
       registrationDate: student.registrationDate || new Date().toISOString().split('T')[0],
       registrationType: student.registrationType || 'regular',
       status: student.status || 'active',
@@ -503,41 +513,118 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
     setSelectedStudent(null);
   };
 
-  const handleExportCSV = () => {
+  const handleExportXLSX = async () => {
     try {
-      const headers = ['ID', 'Name', 'Email', 'Phone', 'DOB', 'Course', 'City', 'Reg Date', 'Reg Type', 'Status', 'Payment'];
-      const rows = filteredStudents.map(s => [
-        s.id,
-        s.name,
-        s.email,
-        s.phone,
-        s.dob,
-        s.course,
-        s.city,
-        s.registrationDate,
-        s.registrationType,
-        s.status,
-        s.paymentStatus
-      ]);
+      setExporting(true);
+      
+      // 1. Fetch Fresh Full Data from API with isExport=true
+      const params: any = { isExport: 'true' };
+      if (debouncedSearchQuery) params.search = debouncedSearchQuery;
+      if (statusFilter !== 'all') params.status = statusFilter;
+      if (registrationFilter !== 'all') params.registrationType = registrationFilter;
+      if (paymentFilter !== 'all') params.paymentStatus = paymentFilter;
+      if (deviceFilter !== 'all') params.deviceFilter = deviceFilter;
+      if (dateFilter !== 'all') {
+        params.dateFilter = dateFilter;
+        if (dateFilter === 'custom') {
+          if (customStartDate) params.startDate = customStartDate;
+          if (customEndDate) params.endDate = customEndDate;
+        }
+      }
 
-      const csvContent = [
-        headers.join(','),
-        ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
-      ].join('\n');
+      const exportData = await studentsAPI.getAll(params);
+      const studentsToExport = Array.isArray(exportData) ? exportData : [];
 
-      const blob = new Blob([csvContent], { type: 'text/csv' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `students-${new Date().toISOString().split('T')[0]}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      if (studentsToExport.length === 0) {
+        showToast('No matching students found to export', 'error');
+        return;
+      }
 
-      showToast(`Exported ${filteredStudents.length} student(s) to CSV`, 'success');
+      // 2. Prepare Data
+      const tableData = studentsToExport.map((s, idx) => {
+        const regDate = s.registrationDate || s.createdAt;
+        const d = regDate ? new Date(regDate) : null;
+        
+        return {
+          'S. No.': idx + 1,
+          'Full Name': s.name || '-',
+          'Student ID / Username': s.userId || s.id || '-',
+          'Email Address': s.email || '-',
+          'Mobile Number': s.phone || '-',
+          'State': s.state || '-',
+          'District': s.district || s.city || '-',
+          'Gender': s.admission?.gender || s.gender || '-',
+          'Target': s.target || s.class || '-',
+          'Higher Education': s.highQualification || s.qualification || '-',
+          'Registration Type / Source': s.registrationType || '-',
+          'Payment Status': (s.paymentStatus || 'pending').toUpperCase(),
+          'Account Status': (s.status || 'active').toUpperCase(),
+          'Admission Date': d ? d.toLocaleDateString('en-GB').replace(/\//g, '-') : '-',
+          'Admission Time': d ? d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: true }).toUpperCase() : '-'
+        };
+      });
+
+      // 2. Create Workbook
+      const ws = XLSX.utils.json_to_sheet([]);
+      
+      // Add Title and Metadata
+      const title = [['A ONE TARGET - STUDENTS ADMISSION REPORT']];
+      const genAt = [[`Generated At: ${new Date().toLocaleString()}`]];
+      const total = [[`Total Students: ${filteredStudents.length}`]];
+      const filters = [[`Filters Applied: Date: ${dateFilter} | Payment: ${paymentFilter} | Search: ${searchQuery || 'None'}`]];
+      
+      XLSX.utils.sheet_add_aoa(ws, title, { origin: 'A1' });
+      XLSX.utils.sheet_add_aoa(ws, genAt, { origin: 'A2' });
+      XLSX.utils.sheet_add_aoa(ws, total, { origin: 'A3' });
+      XLSX.utils.sheet_add_aoa(ws, filters, { origin: 'A4' });
+      
+      // Add actual data starting from row 6
+      XLSX.utils.sheet_add_json(ws, tableData, { origin: 'A6', skipHeader: false });
+
+      // Merges for top rows (up to column O - index 14)
+      ws['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 14 } }, // Title
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 14 } }, // Gen At
+        { s: { r: 2, c: 0 }, e: { r: 2, c: 14 } }, // Total
+        { s: { r: 3, c: 0 }, e: { r: 3, c: 14 } }  // Filters
+      ];
+
+      // Auto-filters from row 6 (up to column O)
+      ws['!autofilter'] = { ref: `A6:O${tableData.length + 6}` };
+
+      // Column widths
+      const wscols = [
+        { wch: 8 },  // S. No.
+        { wch: 25 }, // Name
+        { wch: 25 }, // ID
+        { wch: 30 }, // Email
+        { wch: 15 }, // Mobile
+        { wch: 15 }, // State
+        { wch: 15 }, // District
+        { wch: 10 }, // Gender
+        { wch: 15 }, // Target
+        { wch: 20 }, // Education
+        { wch: 20 }, // Reg Type
+        { wch: 15 }, // Payment
+        { wch: 15 }, // Status
+        { wch: 15 }, // Adm Date
+        { wch: 15 }  // Adm Time
+      ];
+      ws['!cols'] = wscols;
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Students Report');
+
+      // 3. Download
+      const fileName = `students-admission-report-${new Date().toISOString().split('T')[0]}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      
+      showToast(`Exported ${studentsToExport.length} matching students successfully`, 'success');
     } catch (error) {
-      showToast('Failed to export CSV', 'error');
+      console.error('Export error:', error);
+      showToast('Failed to export Excel report', 'error');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -637,8 +724,18 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
         isOpen={isFilterOpen}
         statusFilter={statusFilter}
         setStatusFilter={setStatusFilter}
+        paymentFilter={paymentFilter}
+        setPaymentFilter={setPaymentFilter}
         deviceFilter={deviceFilter}
         setDeviceFilter={setDeviceFilter}
+        dateFilter={dateFilter}
+        setDateFilter={setDateFilter}
+        startDate={customStartDate}
+        setStartDate={setCustomStartDate}
+        endDate={customEndDate}
+        setEndDate={setCustomEndDate}
+        onExport={handleExportXLSX}
+        exporting={exporting}
       />
 
       {/* Table Section */}
@@ -837,10 +934,10 @@ const Students: React.FC<Props> = ({ showToast, initialStatus = 'all', viewMode 
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <FormLabel label="Class" required />
+                    <FormLabel label="Target" required />
                     <FormSelect
-                      value={formData.class}
-                      onChange={(val) => setFormData({ ...formData, class: val })}
+                      value={formData.target || formData.class}
+                      onChange={(val) => setFormData({ ...formData, target: val, class: val })}
                       options={[
                         { value: '9th', label: '9th' },
                         { value: '10th', label: '10th' },

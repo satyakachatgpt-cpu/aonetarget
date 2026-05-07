@@ -327,7 +327,7 @@ export const StudentProfileContent: React.FC<StudentProfileContentProps> = React
                     { label: 'District', value: student.district || student.city },
                     { label: 'Gender', value: student.gender || student.admission?.gender },
                     { label: 'Address', value: student.admission?.fullAddress || student.address },
-                    { label: 'Class', value: student.class },
+                    { label: 'Target', value: student.target || student.class },
                     { label: 'Higher Education', value: student.highQualification },
                     { label: 'Age / DOB', value: student.dob ? new Date(student.dob).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : 'N/A' }
                   ].map((item, idx) => (

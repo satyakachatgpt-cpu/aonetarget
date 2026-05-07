@@ -49,6 +49,7 @@ const studentSchema = new mongoose.Schema({
     alternateNumber: { type: String },
     course: { type: String },
     class: { type: String },
+    target: { type: String, trim: true },
     address: { type: String },
     notes: { type: String },
     paymentStatus: { type: String, default: 'pending' },

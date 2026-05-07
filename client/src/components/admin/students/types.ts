@@ -23,6 +23,8 @@ export interface Student {
   alternateWhatsAppNumber?: string;
   alternateNumber?: string;
   class?: string;
+  target?: string;
+  tag?: string;
   address?: string;
   highQualification?: string;
   height?: string;

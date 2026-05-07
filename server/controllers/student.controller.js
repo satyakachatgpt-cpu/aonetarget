@@ -36,36 +36,156 @@ export const createUser = async (req, res) => {
 
 export const getStudents = async (req, res) => {
   try {
-    const page = parseInt(req.query.page);
-    const limit = parseInt(req.query.limit);
+    const { 
+      page, 
+      limit, 
+      search, 
+      status,
+      dateFilter, 
+      paymentStatus, 
+      deviceFilter,
+      startDate, 
+      endDate,
+      export: exportQuery,
+      isExport: isExportQuery
+    } = req.query;
+
+    const isExport = String(exportQuery || isExportQuery).toLowerCase() === 'true';
+    const pageNum = parseInt(page) || 1;
+    // Default limit to 1000 for admin table view to ensure full filtering works, 
+    // or 5000 for export.
+    const limitNum = isExport ? 5000 : (parseInt(limit) || 1000);
     
-    let query = Student.find({}, {
+    // 1. Build Query
+    const query = {};
+
+    // Search logic
+    if (search) {
+      const safeSearch = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const searchRegex = new RegExp(safeSearch, 'i');
+      query.$or = [
+        { name: searchRegex },
+        { email: searchRegex },
+        { phone: searchRegex },
+        { userId: searchRegex },
+        { id: searchRegex }
+      ];
+    }
+
+    // Account Status Filter
+    if (status && status !== 'all') {
+      if (status === 'active') {
+        query.status = 'active';
+        query.isBanned = { $ne: true };
+      } else if (status === 'inactive' || status === 'blocked') {
+        query.$or = [
+          { status: 'inactive' },
+          { isBanned: true }
+        ];
+      }
+    }
+
+    // Payment Status Filter
+    if (paymentStatus && paymentStatus !== 'all') {
+      query.paymentStatus = paymentStatus;
+    }
+
+    // Device Guard Filter
+    if (deviceFilter && deviceFilter !== 'all') {
+      if (deviceFilter === 'pending') {
+        query.pendingDeviceId = { $ne: null };
+      } else if (deviceFilter === 'locked') {
+        query.deviceId = { $ne: null };
+        query.pendingDeviceId = null;
+      }
+    }
+
+    // Date Filter logic (using createdAt)
+    if (dateFilter && dateFilter !== 'all') {
+      const now = new Date();
+      let start;
+
+      switch (dateFilter) {
+        case 'today':
+          start = new Date();
+          start.setHours(0, 0, 0, 0);
+          break;
+        case 'last24h':
+          start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+          break;
+        case 'last7d':
+          start = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case 'last30d':
+          start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
+        case 'last1y':
+          start = new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+          break;
+        case 'custom':
+          if (startDate || endDate) {
+            query.createdAt = {};
+            if (startDate) query.createdAt.$gte = new Date(startDate);
+            if (endDate) {
+              const end = new Date(endDate);
+              end.setHours(23, 59, 59, 999);
+              query.createdAt.$lte = end;
+            }
+          }
+          break;
+      }
+
+      if (start) {
+        query.createdAt = { $gte: start };
+      }
+    }
+
+    // 2. Execute Query
+    const projection = {
+      password: 0,
       academic: 0,
       documents: 0,
       fees: 0,
-      notes: 0
-    }).sort({ _id: -1 }).lean();
+      otp: 0,
+      token: 0,
+      refreshToken: 0,
+      resetPasswordToken: 0,
+      deviceToken: 0,
+      activeSessions: 0,
+      sessionToken: 0
+    };
 
-    if (!isNaN(page) && !isNaN(limit) && limit > 0) {
-      const totalStudents = await Student.countDocuments();
-      const skip = (page - 1) * limit;
-      query = query.skip(skip).limit(limit);
-      
-      res.setHeader('X-Total-Count', totalStudents);
-      res.setHeader('X-Page', page);
-      res.setHeader('X-Limit', limit);
-      res.setHeader('Access-Control-Expose-Headers', 'X-Total-Count, X-Page, X-Limit');
+    if (!isExport) {
+      projection.notes = 0;
     }
 
-    const students = await query;
+    const totalStudents = await Student.countDocuments(query);
     
-    // Map to include hasPassword and strip password
+    let dbQuery = Student.find(query, projection).sort({ createdAt: -1 }).lean();
+
+    if (!isExport) {
+      const skip = (pageNum - 1) * limitNum;
+      dbQuery = dbQuery.skip(skip).limit(limitNum);
+    } else {
+      dbQuery = dbQuery.limit(limitNum);
+    }
+
+    const students = await dbQuery;
+
+    // Map hasPassword
     const safeStudents = students.map(s => {
       const { password, ...safeS } = s;
       return { ...safeS, hasPassword: !!password };
     });
 
-    console.log(`GET /api/students - Optimized Payload - Found ${students.length} students (Paginated: ${!isNaN(limit)})`);
+    if (!isExport) {
+      res.setHeader('X-Total-Count', totalStudents);
+      res.setHeader('X-Page', pageNum);
+      res.setHeader('X-Limit', limitNum);
+      res.setHeader('Access-Control-Expose-Headers', 'X-Total-Count, X-Page, X-Limit');
+    }
+
+    console.log(`GET /api/students - Found ${students.length} students (Export: ${isExport}) (Query: ${JSON.stringify(query)})`);
     res.json(safeStudents);
   } catch (error) {
     console.error('Error fetching students:', error);
