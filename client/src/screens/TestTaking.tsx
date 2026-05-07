@@ -752,6 +752,23 @@ const TestTaking: React.FC = () => {
   const answeredCount = displayQuestions.filter(q => answers[q.id] !== undefined).length;
   const flaggedCount = displayQuestions.filter(q => flagged.has(q.id)).length;
   const remainingCount = displayQuestions.length - answeredCount;
+  const isSectionMode = Array.isArray(test?.sections) && test.sections.length > 0 && !!activeSectionId;
+  const currentSectionIndex = isSectionMode 
+    ? test.sections.findIndex((s: any) => String(s.id) === String(activeSectionId)) 
+    : -1;
+  const isLastQuestionInSection = currentIndex === displayQuestions.length - 1;
+  const isLastSection = !isSectionMode || currentSectionIndex === -1 || currentSectionIndex === test.sections.length - 1;
+  const isFinalQuestionOfTest = isLastQuestionInSection && isLastSection;
+
+  const handleNextSection = () => {
+    if (!test?.sections || currentSectionIndex === -1) return;
+    const nextSection = test.sections[currentSectionIndex + 1];
+    if (nextSection) {
+      setActiveSectionId(nextSection.id.toString());
+      setCurrentIndex(0);
+      setShowPalette(false);
+    }
+  };
 
   const needsTerms = test?.termsAndConditions && test?.termsAndConditions.trim() !== '' && test?.termsAndConditions !== '<p><br></p>';
 
@@ -1055,13 +1072,21 @@ const TestTaking: React.FC = () => {
           Previous
         </button>
 
-        {currentIndex === displayQuestions.length - 1 ? (
+        {isFinalQuestionOfTest ? (
           <button
             onClick={() => setConfirmSubmit(true)}
             className="flex items-center gap-1 px-6 py-2.5 rounded-lg text-xs font-bold bg-[#D32F2F] text-white"
           >
             <span className="material-symbols-rounded text-[16px]">send</span>
             Submit
+          </button>
+        ) : isLastQuestionInSection && !isLastSection ? (
+          <button
+            onClick={handleNextSection}
+            className="flex items-center gap-1 px-4 py-2.5 rounded-lg text-xs font-bold bg-[#1A237E] text-white"
+          >
+            Next Section
+            <span className="material-symbols-rounded text-[16px]">chevron_right</span>
           </button>
         ) : (
           <button
