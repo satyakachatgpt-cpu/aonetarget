@@ -892,7 +892,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                         <div key={i} className={`flex flex-col gap-1.5 ${msg.role === 'admin' ? 'animate-in zoom-in-95' : 'animate-in fade-in'}`}>
                             <div className="flex items-center justify-between px-1">
                                 <span className={`text-[9px] font-black uppercase tracking-wider ${msg.role === 'admin' ? 'text-blue-500' : 'text-white/40'}`}>
-                                    {msg.role === 'admin' ? 'Instructor' : (msg.senderName || 'Student')}
+                                    {msg.senderName || (msg.role === 'admin' ? 'Instructor' : 'Student')}
                                 </span>
                             </div>
                             <div className={`p-3 rounded-2xl border ${msg.role === 'admin' ? 'bg-blue-600/10 border-blue-500/20' : 'bg-white/5 border-white/5'}`}>

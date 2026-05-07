@@ -5,13 +5,13 @@ import { authMiddleware, adminMiddleware, studentOwnerOrAdmin } from '../middlew
 const router = express.Router();
 
 // Live Video Admin
-router.get('/live-videos', getLiveVideos);
+router.get('/live-videos', adminMiddleware, getLiveVideos);
 router.post('/live-videos', adminMiddleware, createLiveVideo);
 router.put('/live-videos/:id', adminMiddleware, updateLiveVideo);
 router.delete('/live-videos/:id', adminMiddleware, deleteLiveVideo);
 
 // Live Class Admin
-router.get('/live-classes', getLiveClasses);
+router.get('/live-classes', adminMiddleware, getLiveClasses);
 router.post('/live-classes', adminMiddleware, createLiveClass);
 router.put('/live-classes/:id', adminMiddleware, updateLiveClass);
 router.delete('/live-classes/:id', adminMiddleware, deleteLiveClass);
