@@ -26,6 +26,7 @@ const TestTaking: React.FC = () => {
   const [result, setResult] = useState<any>(null);
   const [submitting, setSubmitting] = useState(false);
   const [confirmSubmit, setConfirmSubmit] = useState(false);
+  const [showBackModal, setShowBackModal] = useState(false);
   const [student, setStudent] = useState<any>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(Date.now());
@@ -188,6 +189,38 @@ const TestTaking: React.FC = () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, [questions.length, submitted, hasAcceptedTerms, timeLeft > 0, test?.termsAndConditions]);
+
+  useEffect(() => {
+    // Only trap back button DURING the active test (after terms accepted and before submission)
+    if (submitted || loading || !hasAcceptedTerms) return;
+    
+    window.history.pushState(null, '', window.location.href);
+    const handlePopState = () => {
+      setShowBackModal(true);
+      window.history.pushState(null, '', window.location.href);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [submitted, loading, hasAcceptedTerms]);
+
+  // Handle browser back button on Result Page
+  useEffect(() => {
+    if (!submitted) return;
+
+    // Push a state so popstate fires
+    window.history.pushState(null, '', window.location.href);
+
+    const handlePopState = () => {
+      if (launchedSeriesId) {
+        navigate(`/mock-tests/${launchedSeriesId}`, { replace: true });
+      } else {
+        navigate('/mock-tests', { replace: true });
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [submitted, launchedSeriesId, navigate]);
 
   const formatTime = (secs: number) => {
     const h = Math.floor(secs / 3600);
@@ -354,7 +387,7 @@ const TestTaking: React.FC = () => {
         <div className="text-center bg-white rounded-xl p-8 shadow-sm max-w-sm w-full">
           <span className="material-symbols-rounded text-5xl text-[#D32F2F]">error</span>
           <p className="text-sm text-gray-600 mt-3">{error}</p>
-          <button onClick={() => navigate('/mock-tests', { replace: true })} className="mt-4 bg-[#1A237E] text-white px-6 py-2 rounded-lg text-sm font-bold">
+          <button onClick={() => navigate(-1)} className="mt-4 bg-[#1A237E] text-white px-6 py-2 rounded-lg text-sm font-bold">
             Back to Tests
           </button>
         </div>
@@ -369,9 +402,7 @@ const TestTaking: React.FC = () => {
         <header className="bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white py-4 px-4">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => {
-                navigate('/mock-tests', { replace: true });
-              }}
+              onClick={() => navigate(-1)}
               className="p-2 rounded-full hover:bg-white/20"
             >
               <span className="material-symbols-rounded">arrow_back</span>
@@ -387,11 +418,11 @@ const TestTaking: React.FC = () => {
             <div className="relative w-[130px] h-[130px] mb-2">
               <svg className="w-full h-full transform -rotate-90">
                 <circle cx="65" cy="65" r="58" stroke="currentColor" strokeWidth="10" fill="transparent" className="text-gray-100" />
-                <circle cx="65" cy="65" r="58" stroke="currentColor" strokeWidth="10" fill="transparent" 
-                        strokeDasharray={364.42} 
-                        strokeDashoffset={364.42 - (364.42 * (result.percentage || 0)) / 100} 
-                        strokeLinecap="round"
-                        className="text-[#1A237E] transition-all duration-1000 ease-out" />
+                <circle cx="65" cy="65" r="58" stroke="currentColor" strokeWidth="10" fill="transparent"
+                  strokeDasharray={364.42}
+                  strokeDashoffset={364.42 - (364.42 * (result.percentage || 0)) / 100}
+                  strokeLinecap="round"
+                  className="text-[#1A237E] transition-all duration-1000 ease-out" />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
                 <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest leading-none">Overall</span>
@@ -421,7 +452,7 @@ const TestTaking: React.FC = () => {
           </div>
 
           {/* Solution Button - Placed between Overall Analysis and Rank */}
-          <button 
+          <button
             onClick={() => setViewMode('solutions')}
             className="w-full bg-white text-[#1A237E] py-4 rounded-2xl text-sm font-black flex items-center justify-center gap-3 shadow-sm border border-blue-100 hover:bg-blue-50 transition-all active:scale-[0.98]"
           >
@@ -432,147 +463,147 @@ const TestTaking: React.FC = () => {
           {viewMode === 'summary' && (
             <>
 
-          {/* B) RANK + SCORE CARD */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3.5 flex flex-col items-center">
-            <div className="w-full text-center py-1">
-              <h2 className="text-2xl font-black text-[#1A237E] tracking-tight">Rank #{result.rank || '--'}</h2>
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
-                {result.totalStudents ? `Of ${result.totalStudents} Students` : 'Of -- Students'}
-              </p>
-            </div>
-            <div className="w-full space-y-2 mt-2">
-              <div className="flex justify-between items-end">
-                <div>
-                  <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Your Score</p>
-                  <p className="text-base font-black text-gray-800">{result.obtainedMarks} / {result.totalMarks}</p>
+              {/* B) RANK + SCORE CARD */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3.5 flex flex-col items-center">
+                <div className="w-full text-center py-1">
+                  <h2 className="text-2xl font-black text-[#1A237E] tracking-tight">Rank #{result.rank || '--'}</h2>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-0.5">
+                    {result.totalStudents ? `Of ${result.totalStudents} Students` : 'Of -- Students'}
+                  </p>
                 </div>
-                <div className="text-right">
-                  <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Percentage</p>
-                  <p className="text-base font-black text-[#1A237E]">{result.percentage}%</p>
+                <div className="w-full space-y-2 mt-2">
+                  <div className="flex justify-between items-end">
+                    <div>
+                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Your Score</p>
+                      <p className="text-base font-black text-gray-800">{result.obtainedMarks} / {result.totalMarks}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest">Percentage</p>
+                      <p className="text-base font-black text-[#1A237E]">{result.percentage}%</p>
+                    </div>
+                  </div>
+                  <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-[#1A237E] to-[#303F9F] rounded-full transition-all duration-1000" style={{ width: `${result.percentage}%` }}></div>
+                  </div>
                 </div>
               </div>
-              <div className="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-[#1A237E] to-[#303F9F] rounded-full transition-all duration-1000" style={{ width: `${result.percentage}%` }}></div>
+
+              {/* C) TIME ANALYSIS CARD */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3.5 flex flex-col items-center">
+                <h3 className="text-gray-800 text-[11px] font-black w-full text-left mb-0.5">Time Analysis</h3>
+                <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest w-full text-left mb-3">
+                  Total Test Time: {formatTime((test?.duration || 60) * 60)}
+                </p>
+                <div className="relative w-[130px] h-[130px] mb-2">
+                  <svg className="w-full h-full transform -rotate-90">
+                    <circle cx="65" cy="65" r="58" stroke="currentColor" strokeWidth="10" fill="transparent" className="text-gray-100" />
+                    <circle cx="65" cy="65" r="58" stroke="currentColor" strokeWidth="10" fill="transparent"
+                      strokeDasharray={364.42}
+                      strokeDashoffset={364.42 - (364.42 * Math.min(100, (result.timeTaken / (Math.max(1, (test?.duration || 60)) * 60)) * 100)) / 100}
+                      strokeLinecap="round"
+                      className="text-purple-600 transition-all duration-1000 ease-out" />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                    <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest leading-none">Time</span>
+                    <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest leading-none mt-0.5">Distribution</span>
+                  </div>
+                </div>
+                <div className="text-center">
+                  <div className="text-xl font-black text-gray-800 leading-none">{formatTime(result.timeTaken)}</div>
+                  <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Time Taken</p>
+                </div>
               </div>
-            </div>
-          </div>
 
-          {/* C) TIME ANALYSIS CARD */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-3.5 flex flex-col items-center">
-            <h3 className="text-gray-800 text-[11px] font-black w-full text-left mb-0.5">Time Analysis</h3>
-            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest w-full text-left mb-3">
-              Total Test Time: {formatTime((test?.duration || 60) * 60)}
-            </p>
-            <div className="relative w-[130px] h-[130px] mb-2">
-              <svg className="w-full h-full transform -rotate-90">
-                <circle cx="65" cy="65" r="58" stroke="currentColor" strokeWidth="10" fill="transparent" className="text-gray-100" />
-                <circle cx="65" cy="65" r="58" stroke="currentColor" strokeWidth="10" fill="transparent" 
-                        strokeDasharray={364.42} 
-                        strokeDashoffset={364.42 - (364.42 * Math.min(100, (result.timeTaken / (Math.max(1, (test?.duration || 60)) * 60)) * 100)) / 100} 
-                        strokeLinecap="round"
-                        className="text-purple-600 transition-all duration-1000 ease-out" />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest leading-none">Time</span>
-                <span className="text-[8px] font-bold text-gray-400 uppercase tracking-widest leading-none mt-0.5">Distribution</span>
+              {/* D) PERFORMANCE DETAILS STRIP */}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {[
+                  { label: 'Correct', value: result.correctAnswers, color: 'text-green-600', bg: 'bg-green-50', icon: 'check_circle' },
+                  { label: 'Wrong', value: result.wrongAnswers, color: 'text-red-600', bg: 'bg-red-50', icon: 'cancel' },
+                  { label: 'Skipped', value: result.unanswered, color: 'text-gray-500', bg: 'bg-gray-50', icon: 'remove_circle' },
+                  { label: 'Accuracy', value: `${result.percentage}%`, color: 'text-[#1A237E]', bg: 'bg-blue-50', icon: 'ads_click' },
+                  { label: 'Total Questions', value: result.totalQuestions, color: 'text-gray-700', bg: 'bg-gray-100', icon: 'quiz' },
+                  { label: 'Negative Marks', value: `-${result.negativeMarksTotal || 0}`, color: 'text-amber-700', bg: 'bg-amber-50', icon: 'trending_down' }
+                ].map(stat => (
+                  <div key={stat.label} className={`${stat.bg} rounded-xl p-2 flex flex-col border border-transparent`}>
+                    <span className="material-symbols-rounded text-base mb-0.5 opacity-70">{stat.icon}</span>
+                    <div className={`text-base font-black ${stat.color} leading-none`}>{stat.value}</div>
+                    <p className="text-[7px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">{stat.label}</p>
+                  </div>
+                ))}
               </div>
-            </div>
-            <div className="text-center">
-              <div className="text-xl font-black text-gray-800 leading-none">{formatTime(result.timeTaken)}</div>
-              <p className="text-[8px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Time Taken</p>
-            </div>
-          </div>
 
-          {/* D) PERFORMANCE DETAILS STRIP */}
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-            {[
-              { label: 'Correct', value: result.correctAnswers, color: 'text-green-600', bg: 'bg-green-50', icon: 'check_circle' },
-              { label: 'Wrong', value: result.wrongAnswers, color: 'text-red-600', bg: 'bg-red-50', icon: 'cancel' },
-              { label: 'Skipped', value: result.unanswered, color: 'text-gray-500', bg: 'bg-gray-50', icon: 'remove_circle' },
-              { label: 'Accuracy', value: `${result.percentage}%`, color: 'text-[#1A237E]', bg: 'bg-blue-50', icon: 'ads_click' },
-              { label: 'Total Questions', value: result.totalQuestions, color: 'text-gray-700', bg: 'bg-gray-100', icon: 'quiz' },
-              { label: 'Negative Marks', value: `-${result.negativeMarksTotal || 0}`, color: 'text-amber-700', bg: 'bg-amber-50', icon: 'trending_down' }
-            ].map(stat => (
-              <div key={stat.label} className={`${stat.bg} rounded-xl p-2 flex flex-col border border-transparent`}>
-                <span className="material-symbols-rounded text-base mb-0.5 opacity-70">{stat.icon}</span>
-                <div className={`text-base font-black ${stat.color} leading-none`}>{stat.value}</div>
-                <p className="text-[7px] font-bold text-gray-400 uppercase tracking-wider mt-0.5">{stat.label}</p>
-              </div>
-            ))}
-          </div>
+              {/* Leaderboard Section */}
+              <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="p-3 border-b border-gray-50 flex flex-col">
+                  <h2 className="text-base font-black text-gray-800 tracking-tight">Leaderboard</h2>
+                  <p className="text-[8px] text-gray-400 font-medium">Top 10 Students</p>
+                </div>
 
-          {/* Leaderboard Section */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="p-3 border-b border-gray-50 flex flex-col">
-              <h2 className="text-base font-black text-gray-800 tracking-tight">Leaderboard</h2>
-              <p className="text-[8px] text-gray-400 font-medium">Top 10 Students</p>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50/50 text-[8px] font-bold text-gray-400 uppercase tracking-widest">
-                    <th className="px-3 py-1.5">Rank</th>
-                    <th className="px-3 py-1.5">Student</th>
-                    <th className="px-3 py-1.5">Marks</th>
-                    <th className="px-3 py-1.5">Time</th>
-                  </tr>
-                </thead>
-                <tbody className="text-[11px]">
-                  {fetchingLeaderboard ? (
-                    <tr>
-                      <td colSpan={4} className="px-3 py-6 text-center">
-                        <span className="material-symbols-rounded animate-spin text-xl text-gray-300">progress_activity</span>
-                      </td>
-                    </tr>
-                  ) : leaderboard.length > 0 ? (
-                    leaderboard.map((row, idx) => {
-                      const isMe = String(row.studentId) === String(student?.id);
-                      return (
-                        <tr key={idx} className={`border-b border-gray-50 transition-colors ${isMe ? 'bg-blue-50/50' : 'hover:bg-gray-50/30'}`}>
-                          <td className="px-3 py-1.5">
-                            <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-black text-[9px]
-                                                ${row.rank === 1 ? 'bg-amber-100 text-amber-600' :
-                                row.rank === 2 ? 'bg-slate-100 text-slate-500' :
-                                  row.rank === 3 ? 'bg-orange-100 text-orange-600' : 'text-gray-400'}`}>
-                              {row.rank}
-                            </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50/50 text-[8px] font-bold text-gray-400 uppercase tracking-widest">
+                        <th className="px-3 py-1.5">Rank</th>
+                        <th className="px-3 py-1.5">Student</th>
+                        <th className="px-3 py-1.5">Marks</th>
+                        <th className="px-3 py-1.5">Time</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-[11px]">
+                      {fetchingLeaderboard ? (
+                        <tr>
+                          <td colSpan={4} className="px-3 py-6 text-center">
+                            <span className="material-symbols-rounded animate-spin text-xl text-gray-300">progress_activity</span>
                           </td>
-                          <td className="px-3 py-1.5">
-                            <span className={`font-bold ${isMe ? 'text-[#1A237E]' : 'text-gray-700'}`}>
-                              {row.studentName || 'Unknown'}
-                            </span>
-                          </td>
-                          <td className="px-3 py-1.5 font-black text-gray-800">{row.obtainedMarks}</td>
-                          <td className="px-3 py-1.5 text-gray-500 font-medium">{formatTime(row.timeTaken)}</td>
                         </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={4} className="px-3 py-6 text-center text-gray-400 font-medium">Leaderboard not available</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* Current Rank if not in Top 10 */}
-          {result.rank > 10 && (
-            <div className="bg-[#1A237E] rounded-2xl p-4 flex items-center justify-between text-white shadow-lg shadow-blue-900/20">
-              <div className="flex items-center gap-3">
-                <span className="material-symbols-rounded text-sm">info</span>
-                <span className="text-xs font-bold">Your Position: <span className="text-amber-400">#{result.rank}</span></span>
+                      ) : leaderboard.length > 0 ? (
+                        leaderboard.map((row, idx) => {
+                          const isMe = String(row.studentId) === String(student?.id);
+                          return (
+                            <tr key={idx} className={`border-b border-gray-50 transition-colors ${isMe ? 'bg-blue-50/50' : 'hover:bg-gray-50/30'}`}>
+                              <td className="px-3 py-1.5">
+                                <div className={`w-6 h-6 rounded-lg flex items-center justify-center font-black text-[9px]
+                                                ${row.rank === 1 ? 'bg-amber-100 text-amber-600' :
+                                    row.rank === 2 ? 'bg-slate-100 text-slate-500' :
+                                      row.rank === 3 ? 'bg-orange-100 text-orange-600' : 'text-gray-400'}`}>
+                                  {row.rank}
+                                </div>
+                              </td>
+                              <td className="px-3 py-1.5">
+                                <span className={`font-bold ${isMe ? 'text-[#1A237E]' : 'text-gray-700'}`}>
+                                  {row.studentName || 'Unknown'}
+                                </span>
+                              </td>
+                              <td className="px-3 py-1.5 font-black text-gray-800">{row.obtainedMarks}</td>
+                              <td className="px-3 py-1.5 text-gray-500 font-medium">{formatTime(row.timeTaken)}</td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={4} className="px-3 py-6 text-center text-gray-400 font-medium">Leaderboard not available</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          )}
+
+              {/* Current Rank if not in Top 10 */}
+              {result.rank > 10 && (
+                <div className="bg-[#1A237E] rounded-2xl p-4 flex items-center justify-between text-white shadow-lg shadow-blue-900/20">
+                  <div className="flex items-center gap-3">
+                    <span className="material-symbols-rounded text-sm">info</span>
+                    <span className="text-xs font-bold">Your Position: <span className="text-amber-400">#{result.rank}</span></span>
+                  </div>
+                </div>
+              )}
             </>
           )}
 
           {viewMode === 'solutions' && (
             <div className="space-y-4 pb-4">
-              <button 
+              <button
                 onClick={() => setViewMode('summary')}
                 className="flex items-center gap-2 text-[#1A237E] font-bold text-sm bg-white px-4 py-2.5 rounded-xl shadow-sm border border-blue-50 hover:bg-blue-100 transition-all active:scale-[0.98]"
               >
@@ -581,61 +612,59 @@ const TestTaking: React.FC = () => {
               </button>
 
               {questions.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
-              <h3 className="font-bold text-sm mb-3 text-gray-700">Answer Review</h3>
-              <div className="space-y-3">
-                {questions.map((q, idx) => {
-                  const studentAns = answers[q.id];
-                  const isCorrect = studentAns === q.correctAnswer;
-                  return (
-                    <div key={q.id} className={`p-3 rounded-lg border ${studentAns ? (isCorrect ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50') : 'border-gray-200 bg-gray-50'}`}>
-                      <div className="text-xs font-semibold text-gray-700">
-                        Q{idx + 1}. {renderQuestionText(q.questionEn || q.question || q.text)}
-                        {q.questionHi && (
-                          <div className="mt-1 text-gray-500 font-medium">
-                            {renderQuestionText(q.questionHi)}
+                <div className="bg-white rounded-xl shadow-sm p-4 mb-4">
+                  <h3 className="font-bold text-sm mb-3 text-gray-700">Answer Review</h3>
+                  <div className="space-y-3">
+                    {questions.map((q, idx) => {
+                      const studentAns = answers[q.id];
+                      const isCorrect = studentAns === q.correctAnswer;
+                      return (
+                        <div key={q.id} className={`p-3 rounded-lg border ${studentAns ? (isCorrect ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50') : 'border-gray-200 bg-gray-50'}`}>
+                          <div className="text-xs font-semibold text-gray-700">
+                            Q{idx + 1}. {renderQuestionText(q.questionEn || q.question || q.text)}
+                            {q.questionHi && (
+                              <div className="mt-1 text-gray-500 font-medium">
+                                {renderQuestionText(q.questionHi)}
+                              </div>
+                            )}
                           </div>
-                        )}
-                      </div>
-                      <div className="mt-1 text-[10px]">
-                        {studentAns ? (
-                          <span className={isCorrect ? 'text-green-600' : 'text-[#D32F2F]'}>
-                            Your answer: {studentAns} {isCorrect ? '✓' : `✗ (Correct: ${q.correctAnswer})`}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400">Not answered (Correct: {q.correctAnswer})</span>
-                        )}
-                      </div>
-                      {q.explanation && (
-                        <p className="text-[10px] text-gray-500 mt-1 italic">{q.explanation}</p>
-                      )}
-                      <button
-                        onClick={() => setReportModal({ isOpen: true, question: q })}
-                        className="mt-2 flex items-center gap-1 text-[10px] text-amber-600 font-bold hover:bg-amber-50 p-1 rounded transition-colors"
-                      >
-                        <span className="material-symbols-rounded text-[14px]">report</span>
-                        Report Issue
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
+                          <div className="mt-1 text-[10px]">
+                            {studentAns ? (
+                              <span className={isCorrect ? 'text-green-600' : 'text-[#D32F2F]'}>
+                                Your answer: {studentAns} {isCorrect ? '✓' : `✗ (Correct: ${q.correctAnswer})`}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">Not answered (Correct: {q.correctAnswer})</span>
+                            )}
+                          </div>
+                          {q.explanation && (
+                            <p className="text-[10px] text-gray-500 mt-1 italic">{q.explanation}</p>
+                          )}
+                          <button
+                            onClick={() => setReportModal({ isOpen: true, question: q })}
+                            className="mt-2 flex items-center gap-1 text-[10px] text-amber-600 font-bold hover:bg-amber-50 p-1 rounded transition-colors"
+                          >
+                            <span className="material-symbols-rounded text-[14px]">report</span>
+                            Report Issue
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
-        </div>
-      )}
 
-      {viewMode === 'summary' && (
-        <button
-          onClick={() => {
-            navigate('/mock-tests', { replace: true });
-          }}
-          className="w-full bg-[#1A237E] text-white py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
-        >
-          <span className="material-symbols-rounded text-[18px]">arrow_back</span>
-          Back to Mock Tests
-        </button>
-      )}
+          {viewMode === 'summary' && (
+            <button
+              onClick={() => navigate(-1)}
+              className="w-full bg-[#1A237E] text-white py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
+            >
+              <span className="material-symbols-rounded text-[18px]">arrow_back</span>
+              Back to Mock Tests
+            </button>
+          )}
 
           {/* Report Question Modal (inside results view) */}
           {reportModal && (
@@ -732,7 +761,7 @@ const TestTaking: React.FC = () => {
         <header className="bg-[#1A237E] text-white py-3 px-4 sticky top-0 z-30 shadow-md">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate('/mock-tests', { replace: true })}
+              onClick={() => navigate(-1)}
               className="p-1.5 rounded-full hover:bg-white/20 transition-colors"
               title="Back to Tests"
             >
@@ -773,7 +802,7 @@ const TestTaking: React.FC = () => {
                 <span className="material-symbols-rounded text-[20px]">arrow_forward</span>
               </button>
               <button
-                onClick={() => navigate('/mock-tests', { replace: true })}
+                onClick={() => navigate(-1)}
                 className="w-full py-3 bg-white text-gray-600 rounded-xl text-[13px] font-bold border border-gray-200 hover:bg-gray-50 transition-all"
               >
                 Cancel
@@ -791,7 +820,7 @@ const TestTaking: React.FC = () => {
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <button
             onClick={() => {
-              navigate('/mock-tests', { replace: true });
+              setShowBackModal(true);
             }}
             className="p-1.5 rounded-full hover:bg-white/20"
           >
@@ -821,8 +850,8 @@ const TestTaking: React.FC = () => {
                   setShowPalette(false);
                 }}
                 className={`whitespace-nowrap px-4 py-2 text-[13px] font-bold rounded-lg transition-all mx-1 ${activeSectionId === sec.id.toString()
-                    ? 'bg-[#1A237E]/10 text-[#1A237E]'
-                    : 'text-gray-500 hover:bg-gray-50'
+                  ? 'bg-[#1A237E]/10 text-[#1A237E]'
+                  : 'text-gray-500 hover:bg-gray-50'
                   }`}
               >
                 {sec.partTitle || sec.section || 'Section'}
@@ -1044,6 +1073,39 @@ const TestTaking: React.FC = () => {
           </button>
         )}
       </div>
+
+      {showBackModal && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
+            <div className="text-center mb-5">
+              <div className="w-14 h-14 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-3">
+                <span className="material-symbols-rounded text-[#1A237E] text-3xl">quiz</span>
+              </div>
+              {/* <h3 className="font-bold text-lg text-gray-800">Test chhod rahe ho?</h3> */}
+            </div>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => setShowBackModal(false)}
+                className="w-full py-3 rounded-xl bg-green-600 text-white text-sm font-bold"
+              >
+                Resume Test
+              </button>
+              <button
+                onClick={async () => {
+                  setShowBackModal(false);
+                  await handleSubmit(false);
+                }}
+                disabled={submitting}
+                className="w-full py-3 rounded-xl bg-red-600 text-white text-sm font-bold flex items-center justify-center gap-2"
+              >
+                {submitting ? (
+                  <span className="material-symbols-rounded animate-spin text-[16px]">progress_activity</span>
+                ) : 'Submit & Exit'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {confirmSubmit && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
