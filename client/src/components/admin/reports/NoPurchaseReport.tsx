@@ -23,6 +23,7 @@ interface Props {
 const NoPurchaseReport: React.FC<Props> = ({ showToast }) => {
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
   
   // Drawer/Modal State
@@ -52,7 +53,7 @@ const NoPurchaseReport: React.FC<Props> = ({ showToast }) => {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
-  const itemsPerPage = 15;
+  const [pageSize, setPageSize] = useState(15);
 
   // Debounce search effect (500ms)
   useEffect(() => {
@@ -78,7 +79,7 @@ const NoPurchaseReport: React.FC<Props> = ({ showToast }) => {
       if (endDate) query.append('endDate', endDate);
       if (debouncedSearch) query.append('search', debouncedSearch);
       query.append('page', currentPage.toString());
-      query.append('limit', itemsPerPage.toString());
+      query.append('limit', pageSize.toString());
 
       const res = await fetch(`/api/admin/reports/no-purchase?${query.toString()}`, {
           headers: getAdminHeaders()
@@ -92,35 +93,102 @@ const NoPurchaseReport: React.FC<Props> = ({ showToast }) => {
     } finally {
       setLoading(false);
     }
-  }, [startDate, endDate, debouncedSearch, currentPage, showToast]);
+  }, [startDate, endDate, debouncedSearch, currentPage, pageSize, showToast]);
 
   useEffect(() => {
     fetchUsers();
   }, [fetchUsers]);
 
-  const handleExportCSV = () => {
-    if (users.length === 0) {
+  const handleExportCSV = async () => {
+    if (totalCount === 0) {
       showToast('No data to export', 'error');
       return;
     }
 
-    const exportData = users.map((u, idx) => ({
-      'S.No': (currentPage - 1) * itemsPerPage + idx + 1,
-      'Name': u.name,
-      'Email': u.email,
-      'Phone': u.phone,
-      'Registration Date': u.registrationDate ? new Date(u.registrationDate).toLocaleString('en-IN') : '-',
-      'Registration Type': u.registrationType,
-      'Device ID': u.deviceId,
-      'App Registered': u.appRegistered ? 'Yes' : 'No',
-      'Last Interaction': u.lastLogin ? new Date(u.lastLogin).toLocaleString('en-IN') : '-'
-    }));
+    setExporting(true);
+    showToast('Preparing professional report...', 'success');
 
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Registered No Purchase');
-    XLSX.writeFile(wb, `Registered_No_Purchase_${new Date().toISOString().split('T')[0]}.xlsx`);
-    showToast('Report exported successfully', 'success');
+    try {
+      const query = new URLSearchParams();
+      if (startDate) query.append('startDate', startDate);
+      if (endDate) query.append('endDate', endDate);
+      if (debouncedSearch) query.append('search', debouncedSearch);
+      query.append('export', 'true');
+
+      const res = await fetch(`/api/admin/reports/no-purchase?${query.toString()}`, {
+          headers: getAdminHeaders()
+      });
+      const data = await res.json();
+      
+      // Use response users or data.users as fallback
+      const exportRawData = data.users || data.data?.users || [];
+      
+      console.log(`[No Purchase Export] Received ${exportRawData.length} records. Total Expected: ${data.totalCount}`);
+
+      if (exportRawData.length === 0) {
+        showToast('No records found for export', 'error');
+        return;
+      }
+
+      // 1. Prepare Table Data
+      const tableData = exportRawData.map((u: any, idx: number) => ({
+        'S. No.': idx + 1,
+        'Student Name': u.name || '-',
+        'Email Address': u.email || '-',
+        'Phone Number': u.phone || '-',
+        'Student ID': u.id || '-',
+        'Registration Date': u.registrationDate ? new Date(u.registrationDate).toLocaleDateString('en-IN') : '-',
+        'Registration Time': u.registrationDate ? new Date(u.registrationDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true }) : '-',
+        'Platform': (u.registrationType || 'web').toUpperCase(),
+        'Status': (u.status || 'active').toUpperCase()
+      }));
+
+      // 2. Create Worksheet starting from A6
+      const ws = XLSX.utils.aoa_to_sheet([]);
+      XLSX.utils.sheet_add_json(ws, tableData, { origin: 'A6' });
+
+      // 3. Add Metadata Rows
+      XLSX.utils.sheet_add_aoa(ws, [
+        ['A ONE TARGET - REGISTERED USERS NO PURCHASE REPORT'],
+        [`Generated At: ${new Date().toLocaleString('en-IN')}`],
+        [`Total Records: ${data.totalCount}`],
+        [`Filters Applied: Search: ${debouncedSearch || 'None'} | Period: ${startDate || 'All Time'} to ${endDate || 'Present'}`]
+      ], { origin: 'A1' });
+
+      // 4. Formatting - Merges
+      ws['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }, // Title
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 8 } }, // Timestamp
+        { s: { r: 2, c: 0 }, e: { r: 2, c: 8 } }, // Stats
+        { s: { r: 3, c: 0 }, e: { r: 3, c: 8 } }, // Filters
+      ];
+
+      // Column Widths
+      ws['!cols'] = [
+        { wch: 8 },  // S.No
+        { wch: 25 }, // Name
+        { wch: 30 }, // Email
+        { wch: 15 }, // Phone
+        { wch: 25 }, // Student ID
+        { wch: 15 }, // Reg Date
+        { wch: 15 }, // Reg Time
+        { wch: 12 }, // Platform
+        { wch: 12 }, // Status
+      ];
+
+      // Auto-filter from row 6
+      ws['!autofilter'] = { ref: `A6:I${tableData.length + 6}` };
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'No Purchase Users');
+      XLSX.writeFile(wb, `Registered_No_Purchase_${new Date().toISOString().split('T')[0]}.xlsx`);
+      showToast('Report exported successfully', 'success');
+    } catch (error) {
+      console.error('Export error:', error);
+      showToast('Export failed', 'error');
+    } finally {
+      setExporting(false);
+    }
   };
 
   const openDetails = (user: UserRecord) => {
@@ -264,10 +332,13 @@ const NoPurchaseReport: React.FC<Props> = ({ showToast }) => {
             <div className="flex items-center gap-2">
                 <button
                     onClick={handleExportCSV}
-                    className="h-10 px-5 bg-[#00A86B] text-white rounded-xl text-[12.5px] font-black hover:bg-[#008f5b] transition-all active:scale-95 flex items-center gap-2 shadow-sm shadow-emerald-500/5 uppercase tracking-wide"
+                    disabled={exporting}
+                    className={`h-10 px-5 rounded-xl text-[12.5px] font-black transition-all active:scale-95 flex items-center gap-2 shadow-sm uppercase tracking-wide ${exporting ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-[#00A86B] text-white hover:bg-[#008f5b] shadow-emerald-500/5'}`}
                 >
-                    <span className="material-symbols-outlined text-xl">download_for_offline</span>
-                    Export Excel
+                    <span className={`material-symbols-outlined text-xl ${exporting ? 'animate-spin' : ''}`}>
+                        {exporting ? 'sync' : 'download_for_offline'}
+                    </span>
+                    {exporting ? 'Preparing...' : 'Export Excel'}
                 </button>
             </div>
           </div>
@@ -307,7 +378,7 @@ const NoPurchaseReport: React.FC<Props> = ({ showToast }) => {
                   const isLastFew = idx >= users.length - 2 && users.length > 3;
                   return (
                     <tr key={u.id} className="hover:bg-gray-50/30 transition-colors group overflow-visible">
-                      <td className="pl-6 pr-2 py-4 text-[13px] font-bold text-gray-200 group-hover:text-gray-400 transition-colors">{(currentPage - 1) * itemsPerPage + idx + 1}</td>
+                      <td className="pl-6 pr-2 py-4 text-[13px] font-bold text-gray-200 group-hover:text-gray-400 transition-colors">{(currentPage - 1) * pageSize + idx + 1}</td>
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-4">
                             <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400 group-hover:bg-[#1a237e] group-hover:text-white transition-all font-black text-base uppercase rotate-3 group-hover:rotate-0">
@@ -374,12 +445,33 @@ const NoPurchaseReport: React.FC<Props> = ({ showToast }) => {
           </table>
         </div>
 
-        {/* Pagination Footer */}
+        {/* Professional Pagination Footer */}
         {!loading && totalCount > 0 && (
           <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-white">
-            <span className="text-[13px] font-medium text-gray-400 italic">
-               Showing Page {currentPage} of {totalPages} <span className="mx-2 opacity-30">|</span> {totalCount} total leads
-            </span>
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-3">
+                <div className="relative flex items-center group">
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="appearance-none bg-white border border-gray-200 rounded-xl px-4 py-2 pr-10 text-[13px] font-bold text-gray-700 outline-none focus:border-gray-500 transition-all cursor-pointer shadow-sm hover:bg-gray-50"
+                  >
+                    <option value={10}>10</option>
+                    <option value={15}>15</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                  <span className="material-symbols-outlined absolute right-3 pointer-events-none text-[20px] text-gray-400 flex items-center justify-center h-full top-0 group-focus-within:text-black">expand_more</span>
+                </div>
+                <span className="text-[13px] font-medium text-gray-400 italic">
+                  Showing {totalCount === 0 ? 0 : (currentPage - 1) * pageSize + 1} to {Math.min(currentPage * pageSize, totalCount)} of {totalCount} entries
+                </span>
+              </div>
+            </div>
 
             <div className="flex items-center p-1.5 bg-white border border-gray-200 rounded-2xl shadow-sm">
               <button

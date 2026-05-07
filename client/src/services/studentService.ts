@@ -24,8 +24,16 @@ export const usersAPI = {
 
 // Students API
 export const studentsAPI = {
-  getAll: async () => {
-    return apiRequest(`${API_BASE_URL}/students`, { headers: getAdminHeaders() });
+  getAll: async (params: any = {}) => {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        query.append(key, String(value));
+      }
+    });
+    const queryString = query.toString();
+    const url = `${API_BASE_URL}/students${queryString ? `?${queryString}` : ''}`;
+    return apiRequest(url, { headers: getAdminHeaders() });
   },
 
   getById: async (id: string) => {

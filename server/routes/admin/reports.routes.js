@@ -63,11 +63,13 @@ router.get('/sales', adminAuth, async (req, res) => {
             query.batchId = batchId; 
         }
 
+        const isExport = String(req.query.export).toLowerCase() === 'true';
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 15;
-        const skip = (page - 1) * limit;
+        const exportLimit = 5000;
+        const limit = isExport ? exportLimit : (parseInt(req.query.limit) || 15);
+        const skip = isExport ? 0 : (page - 1) * limit;
 
-        const [results, countData] = await Promise.all([
+        const [results, summaryData] = await Promise.all([
             db.collection('purchases').aggregate([
                 { $match: query },
                 {
@@ -80,17 +82,23 @@ router.get('/sales', adminAuth, async (req, res) => {
                 },
                 { $unwind: { path: '$studentInfo', preserveNullAndEmptyArrays: true } },
                 { $sort: { createdAt: -1 } },
-                { $skip: skip },
-                { $limit: limit }
+                ...(isExport ? [{ $limit: limit }] : [{ $skip: skip }, { $limit: limit }])
             ]).toArray(),
             db.collection('purchases').aggregate([
                 { $match: query },
-                { $count: 'total' }
+                { 
+                    $group: { 
+                        _id: null, 
+                        totalCount: { $sum: 1 }, 
+                        totalRevenue: { $sum: '$amount' } 
+                    } 
+                }
             ]).toArray()
         ]);
 
-        const totalCount = countData[0]?.total || 0;
-        const totalPages = Math.ceil(totalCount / limit);
+        const totalCount = summaryData[0]?.totalCount || 0;
+        const totalRevenue = summaryData[0]?.totalRevenue || 0;
+        const totalPages = Math.ceil(totalCount / (isExport ? 15 : limit)); // Keep UI totalPages consistent
 
         // Format sales for the frontend table
         const formattedSales = results.map(s => ({
@@ -105,8 +113,6 @@ router.get('/sales', adminAuth, async (req, res) => {
             paymentMethod: s.paymentMethod || 'razorpay',
             transactionId: s.razorpayPaymentId || s.id
         }));
-
-        const totalRevenue = formattedSales.reduce((sum, s) => sum + (Number(s.amountPaid) || 0), 0);
 
         res.json({
             sales: formattedSales,
@@ -127,9 +133,11 @@ router.get('/no-purchase', adminAuth, async (req, res) => {
         const { startDate, endDate, search } = req.query;
         const db = mongoose.connection.db;
 
+        const isExport = String(req.query.export).toLowerCase() === 'true';
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 15;
-        const skip = (page - 1) * limit;
+        const exportLimit = 5000;
+        const limit = isExport ? exportLimit : (parseInt(req.query.limit) || 15);
+        const skip = isExport ? 0 : (page - 1) * limit;
 
         // Initialize student query
         const studentQuery = {};
@@ -169,8 +177,7 @@ router.get('/no-purchase', adminAuth, async (req, res) => {
             { $facet: {
                 data: [
                     { $sort: { createdAt: -1 } },
-                    { $skip: skip },
-                    { $limit: limit }
+                    ...(isExport ? [{ $limit: limit }] : [{ $skip: skip }, { $limit: limit }])
                 ],
                 metadata: [
                     { $count: 'total' }
