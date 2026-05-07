@@ -47,7 +47,7 @@ router.put('/chats/:chatId/messages/:messageId', authMiddleware, editChatMessage
 router.put('/chats/:chatId/read', authMiddleware, markChatAsRead);
 
 // Live Chat (Phase 19D)
-router.get('/live-chat/:videoId/messages', getLiveChatMessages);
+router.get('/live-chat/:videoId/messages', authMiddleware, getLiveChatMessages);
 router.post('/live-chat/:videoId/messages', authMiddleware, sendLiveChatMessage);
 
 // Dynamic routes after static
