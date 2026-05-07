@@ -78,6 +78,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const [showChat, setShowChat] = useState(false);
   const [autoNextEnabled, setAutoNextEnabled] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
+  const [liveChatInput, setLiveChatInput] = useState('');
   const [viewport, setViewport] = useState({ 
     width: typeof window !== 'undefined' ? window.innerWidth : 0, 
     height: typeof window !== 'undefined' ? window.innerHeight : 0 
@@ -903,23 +904,33 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
               </div>
 
               <div className="p-4 bg-black/40 border-t border-white/10">
-                 <form 
-                    onSubmit={(e) => {
-                       e.preventDefault();
-                       const input = e.currentTarget.querySelector('input');
-                       if (input && input.value.trim() && onSendMessage) {
-                          onSendMessage(input.value.trim());
-                           input.value = '';
-                       }
-                    }}
-                    className="flex gap-2"
-                 >
-                    <input 
-                      type="text" placeholder="Send a message..." 
-                      className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-white/30 transition-all font-medium" 
+                 <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={liveChatInput}
+                      onChange={(e) => setLiveChatInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && liveChatInput.trim() && onSendMessage) {
+                          onSendMessage(liveChatInput.trim());
+                          setLiveChatInput('');
+                          e.preventDefault();
+                        }
+                      }}
+                      placeholder="Ask your doubt..."
+                      className="flex-1 bg-white/10 text-white text-xs px-3 py-2 rounded-full outline-none placeholder-white/40 border border-white/10 focus:border-white/30"
                     />
-                    <button type="submit" className="w-11 h-11 bg-white text-black rounded-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg"><span className="material-symbols-rounded text-xl font-bold">send</span></button>
-                 </form>
+                    <button 
+                      onClick={() => {
+                        if (liveChatInput.trim() && onSendMessage) {
+                          onSendMessage(liveChatInput.trim());
+                          setLiveChatInput('');
+                        }
+                      }}
+                      className="w-11 h-11 bg-white text-black rounded-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg"
+                    >
+                      <span className="material-symbols-rounded text-xl font-bold">send</span>
+                    </button>
+                 </div>
               </div>
            </div>
         )}

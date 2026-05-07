@@ -23,14 +23,8 @@ const WatchPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const searchParams = new URLSearchParams(location.search);
-  
-  // Context-only detection for navigation/UI context
-  const isAdminPreview = 
-    (location.state as any)?.fromAdmin || 
-    (location.state as any)?.adminPreview ||
-    searchParams.get('admin') === 'true' || 
-    searchParams.get('adminPreview') === '1';
+  const searchParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
+  const isAdminPreview = searchParams.get('adminPreview') === '1';
 
   // Role detection for internal features (e.g. disabling auto-rotation)
   const isUserAdmin = localStorage.getItem('isAdminAuthenticated') === 'true';
@@ -86,7 +80,7 @@ const WatchPage: React.FC = () => {
       
       // Start polling only if chat is visible
       if (isChatVisible) {
-        pollRef.current = setInterval(() => fetchLiveMessages(vid), 5000);
+        pollRef.current = setInterval(() => fetchLiveMessages(vid), 3000);
       }
     } else {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -96,21 +90,36 @@ const WatchPage: React.FC = () => {
   }, [currentVideo, isChatVisible]);
 
   const handleSendLiveMessage = async (msg: string) => {
-    if (!msg.trim() || !currentVideo || !student) return;
+    if (!msg.trim() || !currentVideo) return;
     try {
       const vid = currentVideo.id || currentVideo._id;
+      
+      const adminToken = localStorage.getItem('adminToken');
+      const studentToken = localStorage.getItem('studentToken') || localStorage.getItem('token');
+      
+      const usingAdmin = isAdminPreview && !!adminToken;
+      const token = usingAdmin ? adminToken : studentToken;
+      const senderName = usingAdmin
+        ? (localStorage.getItem('adminName') || localStorage.getItem('adminUser') || 'Teacher')
+        : (student?.name || student?.phone || 'Student');
+      const senderId = usingAdmin ? 'admin' : (student?.id || student?._id || 'student');
+      const role = usingAdmin ? 'admin' : 'student';
+
       const res = await fetch(`/api/live-chat/${vid}/messages`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
-          senderId: student.id || student._id,
-          senderName: student.name || 'Student',
+          senderId,
+          senderName,
           message: msg.trim(),
-          role: 'student'
+          role
         })
       });
       if (res.ok) fetchLiveMessages(vid);
-    } catch (e) { }
+    } catch (e) {}
   };
 
   // Orientation handling

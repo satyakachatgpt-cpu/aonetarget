@@ -9,6 +9,7 @@ import {
     FormSelect
 } from './DrawerSystem';
 import { LiveStreamDrawer } from './FeatureDrawers';
+import AdminLiveChatPanel from './AdminLiveChatPanel';
 
 interface LiveSessionReal {
     id: string;
@@ -46,6 +47,8 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true, courseId, showToast 
     const [editingSession, setEditingSession] = useState<LiveSessionReal | null>(null);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+    const [chatPanelVideoId, setChatPanelVideoId] = useState<string | null>(null);
+    const [showChatPanel, setShowChatPanel] = useState(false);
 
     const tabs = ['Courses', 'Live & Upcoming', 'Forum', 'Content'];
 
@@ -501,6 +504,14 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true, courseId, showToast 
                                                         : (session as any).streamStatus === 'ended' ? 'Ended'
                                                         : 'Upcoming'}
                                                 </div>
+                                                {(session as any).streamStatus === 'live' && (
+                                                    <button
+                                                        onClick={() => { setChatPanelVideoId(session.id); setShowChatPanel(true); }}
+                                                        className="flex items-center gap-1 px-3 py-1 mt-2 text-[10px] bg-blue-600 hover:bg-blue-700 text-white rounded-full font-bold transition-all shadow-sm"
+                                                    >
+                                                        <span>💬</span> Live Chat
+                                                    </button>
+                                                )}
                                             </td>
                                             <td className="px-6 py-5 relative">
                                                 {/* Single Actions dropdown button */}
@@ -823,6 +834,14 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true, courseId, showToast 
             />
 
             <style>{`.material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 600, 'GRAD' 0, 'opsz' 24; }`}</style>
+            
+            {showChatPanel && chatPanelVideoId && (
+                <AdminLiveChatPanel
+                    videoId={chatPanelVideoId}
+                    isVisible={showChatPanel}
+                    onClose={() => setShowChatPanel(false)}
+                />
+            )}
         </div>
     );
 };

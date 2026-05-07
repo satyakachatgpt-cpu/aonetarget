@@ -247,6 +247,7 @@ export const startLiveStream = async (req, res) => {
       status: 'live',
       streamStatus: 'live',
       isLive: true,
+      contentType: 'live_stream',
       startedAt: new Date().toISOString()
     };
 
