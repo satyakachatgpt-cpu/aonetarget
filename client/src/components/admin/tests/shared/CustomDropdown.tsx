@@ -11,6 +11,7 @@ interface CustomDropdownProps {
   selectAllVariant?: "inline" | "buttons";
   dropup?: boolean;
   hideSearch?: boolean;
+  disabled?: boolean;
 }
 
 const CustomDropdown = ({
@@ -24,6 +25,7 @@ const CustomDropdown = ({
   selectAllVariant = "inline",
   dropup = false,
   hideSearch = false,
+  disabled = false,
 }: CustomDropdownProps) => {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -69,12 +71,12 @@ const CustomDropdown = ({
   const handleClear = () => onChange(isMulti ? [] : "");
 
   return (
-    <div className={`relative ${isOpen ? "z-[100]" : "z-10"}`} ref={wrapperRef}>
+    <div className={`relative ${isOpen ? "z-[100]" : "z-10"} ${disabled ? "pointer-events-none" : ""}`} ref={wrapperRef}>
       <div
-        className="w-full h-11 bg-white border border-gray-200 rounded-xl text-[12px] font-medium text-gray-700 outline-none flex items-center justify-between cursor-pointer focus-within:border-gray-400 group"
+        className={`w-full h-11 bg-white border border-gray-200 rounded-xl text-[12px] font-medium text-gray-700 outline-none flex items-center justify-between focus-within:border-gray-400 group ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
       >
         <div 
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => !disabled && setIsOpen(!isOpen)}
           className="flex-1 h-full px-4 flex items-center min-w-0"
         >
           <span className="truncate text-left flex-1">
@@ -94,6 +96,7 @@ const CustomDropdown = ({
           {value && !isMulti && (
             <button
               onClick={(e) => {
+                if (disabled) return;
                 e.stopPropagation();
                 handleClear();
               }}
@@ -103,7 +106,7 @@ const CustomDropdown = ({
             </button>
           )}
           <span
-            onClick={() => setIsOpen(!isOpen)}
+            onClick={() => !disabled && setIsOpen(!isOpen)}
             className={`material-symbols-outlined text-gray-400 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`}
           >
             expand_more

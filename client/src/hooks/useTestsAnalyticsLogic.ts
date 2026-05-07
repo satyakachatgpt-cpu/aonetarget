@@ -18,6 +18,7 @@ export const useTestsAnalyticsLogic = ({ showToast, tests, activeTab }: Props) =
   });
   const [resultsPageSize, setResultsPageSize] = useState(10);
   const [resultsCurrentPage, setResultsCurrentPage] = useState(1);
+  const [latestFilter, setLatestFilter] = useState("all");
   const [viewingStudentAnalysis, setViewingStudentAnalysis] = useState<any | null>(null);
 
   // Reported Questions Tab States
@@ -32,6 +33,8 @@ export const useTestsAnalyticsLogic = ({ showToast, tests, activeTab }: Props) =
   const [reportedPageSize, setReportedPageSize] = useState(10);
   const [reportedCurrentPage, setReportedCurrentPage] = useState(1);
   const [selectedReportedIds, setSelectedReportedIds] = useState<string[]>([]);
+
+  const [selectedResultIds, setSelectedResultIds] = useState<string[]>([]);
 
   const loadResults = useCallback(async () => {
     try {
@@ -142,6 +145,8 @@ export const useTestsAnalyticsLogic = ({ showToast, tests, activeTab }: Props) =
     setResultsPageSize,
     resultsCurrentPage,
     setResultsCurrentPage,
+    latestFilter,
+    setLatestFilter,
     viewingStudentAnalysis,
     setViewingStudentAnalysis,
     reportedQuestions,
@@ -158,6 +163,8 @@ export const useTestsAnalyticsLogic = ({ showToast, tests, activeTab }: Props) =
     setReportedCurrentPage,
     selectedReportedIds,
     setSelectedReportedIds,
+    selectedResultIds,
+    setSelectedResultIds,
     loadResults,
     loadReportedQuestions,
     handleQuickResolve,
