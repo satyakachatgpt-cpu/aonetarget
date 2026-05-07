@@ -191,7 +191,9 @@ const TestTaking: React.FC = () => {
   }, [questions.length, submitted, hasAcceptedTerms, timeLeft > 0, test?.termsAndConditions]);
 
   useEffect(() => {
-    if (submitted || loading) return;
+    // Only trap back button DURING the active test (after terms accepted and before submission)
+    if (submitted || loading || !hasAcceptedTerms) return;
+    
     window.history.pushState(null, '', window.location.href);
     const handlePopState = () => {
       setShowBackModal(true);
@@ -199,7 +201,7 @@ const TestTaking: React.FC = () => {
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [submitted, loading]);
+  }, [submitted, loading, hasAcceptedTerms]);
 
   // Handle browser back button on Result Page
   useEffect(() => {
@@ -385,7 +387,7 @@ const TestTaking: React.FC = () => {
         <div className="text-center bg-white rounded-xl p-8 shadow-sm max-w-sm w-full">
           <span className="material-symbols-rounded text-5xl text-[#D32F2F]">error</span>
           <p className="text-sm text-gray-600 mt-3">{error}</p>
-          <button onClick={() => launchedSeriesId ? navigate(`/mock-tests/${launchedSeriesId}`, { replace: true }) : navigate('/mock-tests', { replace: true })} className="mt-4 bg-[#1A237E] text-white px-6 py-2 rounded-lg text-sm font-bold">
+          <button onClick={() => navigate(-1)} className="mt-4 bg-[#1A237E] text-white px-6 py-2 rounded-lg text-sm font-bold">
             Back to Tests
           </button>
         </div>
@@ -400,9 +402,7 @@ const TestTaking: React.FC = () => {
         <header className="bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white py-4 px-4">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => {
-                launchedSeriesId ? navigate(`/mock-tests/${launchedSeriesId}`, { replace: true }) : navigate('/mock-tests', { replace: true });
-              }}
+              onClick={() => navigate(-1)}
               className="p-2 rounded-full hover:bg-white/20"
             >
               <span className="material-symbols-rounded">arrow_back</span>
@@ -658,9 +658,7 @@ const TestTaking: React.FC = () => {
 
           {viewMode === 'summary' && (
             <button
-              onClick={() => {
-                launchedSeriesId ? navigate(`/mock-tests/${launchedSeriesId}`, { replace: true }) : navigate('/mock-tests', { replace: true });
-              }}
+              onClick={() => navigate(-1)}
               className="w-full bg-[#1A237E] text-white py-3 rounded-xl text-sm font-bold flex items-center justify-center gap-2"
             >
               <span className="material-symbols-rounded text-[18px]">arrow_back</span>
@@ -763,7 +761,7 @@ const TestTaking: React.FC = () => {
         <header className="bg-[#1A237E] text-white py-3 px-4 sticky top-0 z-30 shadow-md">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => launchedSeriesId ? navigate(`/mock-tests/${launchedSeriesId}`, { replace: true }) : navigate('/mock-tests', { replace: true })}
+              onClick={() => navigate(-1)}
               className="p-1.5 rounded-full hover:bg-white/20 transition-colors"
               title="Back to Tests"
             >
@@ -804,7 +802,7 @@ const TestTaking: React.FC = () => {
                 <span className="material-symbols-rounded text-[20px]">arrow_forward</span>
               </button>
               <button
-                onClick={() => launchedSeriesId ? navigate(`/mock-tests/${launchedSeriesId}`, { replace: true }) : navigate('/mock-tests', { replace: true })}
+                onClick={() => navigate(-1)}
                 className="w-full py-3 bg-white text-gray-600 rounded-xl text-[13px] font-bold border border-gray-200 hover:bg-gray-50 transition-all"
               >
                 Cancel
