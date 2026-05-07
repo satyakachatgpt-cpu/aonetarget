@@ -58,7 +58,11 @@ export const enrichResult = async (r, db) => {
   if (!r.studentName && r.studentId) {
     try {
       const s = await db.collection('students').findOne({ id: r.studentId });
-      if (s) r.studentName = s.name || '';
+      if (s) {
+        r.studentName = s.name || '';
+        r.studentPhone = s.phone || '';
+        r.studentEmail = s.email || '';
+      }
     } catch (e) { }
   }
   if (!r.courseName && r.courseId) {
@@ -397,22 +401,13 @@ export const getAdminTestResults = async (req, res) => {
       {
         $lookup: {
           from: 'students',
-          let: { sid: '$studentId', hasName: { $gt: ['$studentName', ''] } },
+          localField: 'studentId',
+          foreignField: 'id',
           pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    { $not: ['$$hasName'] },
-                    { $eq: ['$id', '$$sid'] }
-                  ]
-                }
-              }
-            },
             { $limit: 1 },
-            { $project: { _id: 0, name: 1 } }
+            { $project: { _id: 0, name: 1, phone: 1, email: 1 } }
           ],
-          as: '_studentLookup'
+          as: "_studentLookup",
         }
       },
       {
@@ -426,10 +421,26 @@ export const getAdminTestResults = async (req, res) => {
           },
           studentName: {
             $cond: {
-              if: { $gt: ['$studentName', ''] },
-              then: '$studentName',
-              else: { $ifNull: [{ $arrayElemAt: ['$_studentLookup.name', 0] }, ''] }
-            }
+              if: { $gt: ["$studentName", ""] },
+              then: "$studentName",
+              else: {
+                $ifNull: [{ $arrayElemAt: ["$_studentLookup.name", 0] }, ""],
+              },
+            },
+          },
+          studentPhone: {
+            $ifNull: [
+              "$studentPhone",
+              { $arrayElemAt: ["$_studentLookup.phone", 0] },
+              "",
+            ],
+          },
+          studentEmail: {
+            $ifNull: [
+              "$studentEmail",
+              { $arrayElemAt: ["$_studentLookup.email", 0] },
+              "",
+            ],
           },
           courseId: {
             $cond: {

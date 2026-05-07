@@ -151,6 +151,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     setResultsPageSize,
     resultsCurrentPage,
     setResultsCurrentPage,
+    latestFilter,
+    setLatestFilter,
     viewingStudentAnalysis,
     setViewingStudentAnalysis,
     reportedQuestions,
@@ -167,6 +169,8 @@ const Tests: React.FC<Props> = ({ showToast }) => {
     setReportedCurrentPage,
     selectedReportedIds,
     setSelectedReportedIds,
+    selectedResultIds,
+    setSelectedResultIds,
     loadResults,
     loadReportedQuestions,
     handleQuickResolve,
@@ -648,6 +652,10 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           showToast={showToast}
           setViewingStudentAnalysis={setViewingStudentAnalysis}
           loading={loading}
+          selectedResultIds={selectedResultIds}
+          setSelectedResultIds={setSelectedResultIds}
+          latestFilter={latestFilter}
+          setLatestFilter={setLatestFilter}
         />
       ) : activeTab === "Bulk Uploader" ? (
         <TestsBulkUploaderWrapper

@@ -13,11 +13,17 @@ interface Props {
   showToast: (m: string, type?: "success" | "error") => void;
   setViewingStudentAnalysis: (val: any) => void;
   loading: boolean;
+  selectedResultIds: string[];
+  setSelectedResultIds: (val: string[] | ((prev: string[]) => string[])) => void;
+  latestFilter: string;
+  setLatestFilter: (val: string) => void;
 }
 
 const TestsResultsView: React.FC<Props> = (props) => {
   return (
-    <TestsResultsTab {...props} />
+    <TestsResultsTab
+      {...props}
+    />
   );
 };
 

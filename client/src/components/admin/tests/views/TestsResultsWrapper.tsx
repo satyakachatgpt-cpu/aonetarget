@@ -13,10 +13,20 @@ interface TestsResultsWrapperProps {
   showToast: (m: string, type?: "success" | "error") => void;
   setViewingStudentAnalysis: (val: any) => void;
   loading: boolean;
+  selectedResultIds: string[];
+  setSelectedResultIds: (val: string[] | ((prev: string[]) => string[])) => void;
+  latestFilter: string;
+  setLatestFilter: (val: string) => void;
 }
 
 const TestsResultsWrapper: React.FC<TestsResultsWrapperProps> = (props) => {
-  return <TestsResultsView {...props} />;
+  return (
+    <div className="p-4 md:p-8 space-y-8">
+      <TestsResultsView 
+        {...props} 
+      />
+    </div>
+  );
 };
 
 export default TestsResultsWrapper;
