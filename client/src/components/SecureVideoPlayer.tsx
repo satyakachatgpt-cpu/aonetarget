@@ -47,7 +47,7 @@ const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
 
   useEffect(() => {
     updateWatermark();
-    const interval = setInterval(updateWatermark, 60000);
+    const interval = setInterval(updateWatermark, 5000); // Update every 5 seconds
     return () => clearInterval(interval);
   }, [updateWatermark]);
 
@@ -113,7 +113,7 @@ const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
     if (!video || !video.duration) return;
     const pct = Math.round((video.currentTime / video.duration) * 100);
     latestPctRef.current = pct;
-    
+
     // Save every 10% increment
     if (pct - progressSavedRef.current >= 10) {
       progressSavedRef.current = pct;
@@ -147,7 +147,7 @@ const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
       if (student && videoId) {
         saveProgress(0);
       }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     return (
@@ -192,8 +192,8 @@ const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
           setIsPlaying(false);
           const video = videoRef.current;
           if (video && video.duration) {
-             const pct = Math.round((video.currentTime / video.duration) * 100);
-             saveProgress(pct);
+            const pct = Math.round((video.currentTime / video.duration) * 100);
+            saveProgress(pct);
           }
         }}
         onEnded={handleEnded}

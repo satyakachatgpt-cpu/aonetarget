@@ -1,6 +1,6 @@
 import { getDb } from '../config/db.js';
 
-const OTP_EXPIRY_MS = 5 * 60 * 1000;
+const OTP_EXPIRY_MS = 10 * 60 * 1000;
 
 /**
  * State Management Service for Authentication & OTPs - Phase 18A -> Hardened
