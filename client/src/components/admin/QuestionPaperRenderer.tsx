@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import DOMPurify from 'dompurify';
 import { InlineMath, BlockMath } from 'react-katex';
 import 'katex/dist/katex.min.css';
 
@@ -50,7 +51,7 @@ const QuestionPaperRenderer: React.FC<Props> = ({ questions, onClose, initialFor
                     return <span key={i} className="text-red-500 font-mono text-[10px]">{part}</span>;
                 }
             }
-            return <span key={i} dangerouslySetInnerHTML={{ __html: part }} />;
+            return <span key={i} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(part) }} />;
         });
     };
 

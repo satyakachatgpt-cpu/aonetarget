@@ -617,6 +617,11 @@ export const verifyOtp = async (req, res) => {
     }
 
     if (String(stored.otp) !== String(otp)) {
+      const updatedAttempts = (stored.attempts || 0) + 1;
+      if (updatedAttempts >= 5) {
+        await db.collection('otps').deleteOne({ _id: stored._id });
+        return res.status(429).json({ error: 'Too many wrong attempts. Please request a new OTP.' });
+      }
       await db.collection('otps').updateOne({ _id: stored._id }, { $inc: { attempts: 1 } });
       return res.status(400).json({ error: 'Invalid OTP' });
     }

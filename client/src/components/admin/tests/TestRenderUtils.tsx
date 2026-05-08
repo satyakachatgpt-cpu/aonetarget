@@ -1,4 +1,5 @@
 import React from "react";
+import DOMPurify from 'dompurify';
 import { InlineMath } from "react-katex";
 
 /**
@@ -22,7 +23,7 @@ export const renderQuestionText = (text: any) => {
       }
     }
     return (
-      <span key={i} dangerouslySetInnerHTML={{ __html: String(part) }} />
+      <span key={i} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(String(part)) }} />
     );
   });
 };

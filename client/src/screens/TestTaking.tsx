@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import DOMPurify from 'dompurify';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getImageUrl } from '@/lib/utils';
 import { getAuthHeaders, getAdminHeaders, reportedQuestionsAPI } from '../services/apiClient';
@@ -802,7 +803,7 @@ const TestTaking: React.FC = () => {
               </div>
             </div>
 
-            <div className="p-5 md:p-8 flex-1 overflow-y-auto prose max-w-none text-[14.5px] leading-relaxed text-gray-700 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li]:mb-2 [&>ol]:list-decimal [&>ol]:pl-5 [&>ol>li]:mb-2 [&>p]:mb-4" dangerouslySetInnerHTML={{ __html: test.termsAndConditions }} />
+            <div className="p-5 md:p-8 flex-1 overflow-y-auto prose max-w-none text-[14.5px] leading-relaxed text-gray-700 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li]:mb-2 [&>ol]:list-decimal [&>ol]:pl-5 [&>ol>li]:mb-2 [&>p]:mb-4" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(test.termsAndConditions || '') }} />
 
             <div className="p-5 md:p-6 border-t border-gray-100 bg-gray-50 flex flex-col gap-3">
               <div className="text-xs text-center text-gray-500 mb-1">

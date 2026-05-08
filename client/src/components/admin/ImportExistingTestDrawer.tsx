@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import DOMPurify from 'dompurify';
 import { 
     RightSideDrawer, 
     DrawerHeader, 
@@ -158,7 +159,7 @@ const ImportExistingTestDrawer: React.FC<ImportExistingTestDrawerProps> = ({
                                                         <span className="px-3 py-1 bg-[#E8F5E9] text-[#2E7D32] rounded-lg text-[10px] font-black uppercase tracking-wider">{q.marks} Marks</span>
                                                     </div>
                                                 </div>
-                                                <p className="text-[15px] font-bold text-gray-700 leading-relaxed font-sans" dangerouslySetInnerHTML={{ __html: q.textEn }} />
+                                                <p className="text-[15px] font-bold text-gray-700 leading-relaxed font-sans" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(q.textEn || '') }} />
                                             </div>
                                         </div>
                                     </div>

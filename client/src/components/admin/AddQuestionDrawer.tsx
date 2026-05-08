@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import DOMPurify from 'dompurify';
 import { 
   RightSideDrawer, 
   DrawerHeader, 
@@ -608,7 +609,7 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
                   className="w-full h-[54px] bg-white border border-gray-200 rounded-xl px-4 text-[15px] font-medium text-gray-400 cursor-text hover:border-gray-300 transition-all shadow-sm flex items-center overflow-hidden"
                 >
                   {form.questionHeading ? (
-                    <div className="text-gray-700 truncate" dangerouslySetInnerHTML={{ __html: form.questionHeading }} />
+                    <div className="text-gray-700 truncate" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(form.questionHeading || '') }} />
                   ) : (
                     "Type question heading here..."
                   )}
@@ -631,7 +632,7 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
                   className={`w-full min-h-[100px] bg-white border border-gray-200 rounded-xl p-4 text-[15px] font-medium text-gray-400 cursor-text hover:border-gray-300 transition-all shadow-sm ${errors.questionText ? 'border-red-500' : ''}`}
                 >
                   {form.questionText ? (
-                    <div className="text-gray-700 editor-preview" dangerouslySetInnerHTML={{ __html: form.questionText }} />
+                    <div className="text-gray-700 editor-preview" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(form.questionText || '') }} />
                   ) : (
                     "Type your question here..."
                   )}
@@ -731,7 +732,7 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
                   className="w-full min-h-[100px] bg-white border border-gray-200 rounded-xl p-4 text-[15px] font-medium text-gray-400 cursor-text hover:border-gray-300 transition-all shadow-sm"
                 >
                   {form.solution.text ? (
-                    <div className="text-gray-700" dangerouslySetInnerHTML={{ __html: form.solution.text }} />
+                    <div className="text-gray-700" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(form.solution.text || '') }} />
                   ) : (
                     "Type solution text here..."
                   )}
