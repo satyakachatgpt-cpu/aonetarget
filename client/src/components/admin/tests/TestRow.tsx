@@ -51,6 +51,31 @@ const TestRow: React.FC<TestRowProps> = ({
     opacity: isDragging ? 0.8 : 1,
   };
 
+  const getExpiryStatus = (series: any) => {
+    const mode = series.expiryMode;
+    const val = series.validity;
+
+    if (!mode || mode === 'Lifetime Access' || mode === 'lifetime') {
+      return 'lifetime';
+    }
+
+    if (mode === 'End Date' && val) {
+      const parts = val.split('-');
+      let dateStr = val;
+      if (parts.length === 3 && parts[2].length === 4) {
+        dateStr = `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+      const expiry = new Date(dateStr);
+      return new Date() > expiry ? 'expired' : 'active';
+    }
+
+    if (mode === 'Validity' && val) {
+      return 'months';
+    }
+
+    return 'lifetime';
+  };
+
   return (
     <tr
       ref={setNodeRef}
@@ -99,9 +124,26 @@ const TestRow: React.FC<TestRowProps> = ({
       <td className="px-6 py-5 text-[14px] font-medium text-[#1a202c]">
         <button
           onClick={() => onView(test)}
-          className="hover:text-blue-600 transition-all text-left leading-snug"
+          className="hover:text-blue-600 transition-all text-left leading-snug flex items-center gap-2"
         >
           {test.name || test.title}
+          {test.isSeries && (
+            (() => {
+              const status = getExpiryStatus(test);
+              switch (status) {
+                case 'expired':
+                  return <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded text-[10px] font-bold border border-red-100 uppercase tracking-tighter">Expired</span>;
+                case 'active':
+                  return <span className="bg-green-50 text-green-600 px-2 py-0.5 rounded text-[10px] font-bold border border-green-100 uppercase tracking-tighter">Active</span>;
+                case 'lifetime':
+                  return <span className="bg-gray-50 text-gray-500 px-2 py-0.5 rounded text-[10px] font-bold border border-gray-100 uppercase tracking-tighter">Lifetime</span>;
+                case 'months':
+                  return <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded text-[10px] font-bold border border-blue-100 uppercase tracking-tighter">{test.validity} Months</span>;
+                default:
+                  return null;
+              }
+            })()
+          )}
         </button>
       </td>
       <td className="px-6 py-5 font-medium text-gray-700 text-[14px]">
@@ -127,7 +169,7 @@ const TestRow: React.FC<TestRowProps> = ({
           </button>
 
           {activeMenu === test.id && (
-            <div className={`absolute right-0 ${totalTests > 3 ? (index >= totalTests - 2 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right") : index >= totalTests - 1 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right"} w-[180px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[9999] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200 origin-top-right`}>
+            <div className={`absolute right-0 ${totalTests > 3 ? (index >= totalTests - 2 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right") : index >= totalTests - 1 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right"} w-[180px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[9999] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200`}>
               {[
                 { id: "view", label: "View Tests", icon: "folder_open", onClick: () => { onView(test); setActiveMenu(null); } },
                 { id: "edit", label: "Edit", icon: "edit", onClick: () => { onEdit(test); setActiveMenu(null); } },

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { toast } from 'sonner';
 import StudentSidebar from '../components/StudentSidebar';
 import { testsAPI, testSeriesAPI, coursesAPI, getAuthHeaders } from '../services/apiClient';
 
@@ -161,6 +162,10 @@ const MockTests: React.FC = () => {
   };
 
   const handleSeriesClick = async (series: any) => {
+    if (series.isExpired) {
+      toast.error('This test series has expired');
+      return;
+    }
     setActiveSeries(series);
     const seriesId = String(series.id || series._id);
     const preEnrolled = enrolledSeriesIds.has(seriesId);
@@ -284,7 +289,7 @@ const MockTests: React.FC = () => {
               <div
                 key={series.id || series._id || idx}
                 onClick={() => handleSeriesClick(series)}
-                className="card-premium p-4 rounded-3xl border border-gray-100 cursor-pointer hover:-translate-y-1 transition-all duration-300 group"
+                className={`card-premium p-4 rounded-3xl border border-gray-100 cursor-pointer hover:-translate-y-1 transition-all duration-300 group ${series.isExpired ? 'opacity-50 grayscale-[0.5]' : ''}`}
               >
                 <div className="w-12 h-12 bg-primary-50 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-primary-100 transition-colors">
                   <span className="material-symbols-rounded text-primary text-2xl">style</span>
@@ -298,7 +303,12 @@ const MockTests: React.FC = () => {
                 </div>
                 <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between">
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{series.category || 'General'}</span>
-                  {series.isDirect ? (
+                  {series.isExpired ? (
+                    <span className="text-[11px] font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                      <span className="material-symbols-rounded text-[12px]">lock_clock</span>
+                      Expired
+                    </span>
+                  ) : series.isDirect ? (
                     <span className="text-[11px] font-black text-green-600 bg-green-50 px-2 py-0.5 rounded-lg">✓ Open</span>
                   ) : series.isIncluded ? (
                     <span className="text-[11px] font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg">✓ Included</span>

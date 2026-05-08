@@ -181,10 +181,8 @@ export const getStudentCourses = async (req, res) => {
       };
     }));
 
-    // Return active content only
-    const activeContent = mappedContent.filter(c => !c.expired);
-    console.log(`[getStudentCourses] Success: ${activeContent.length} active courses for ${studentId}`);
-    res.json(activeContent);
+    console.log(`[getStudentCourses] Success: ${mappedContent.length} courses for ${studentId}`);
+    res.json(mappedContent);
   } catch (error) {
     console.error('Error in getStudentCourses:', error);
     res.status(500).json({ error: 'Internal server error while fetching courses' });

@@ -16,15 +16,24 @@ export const getAllTestSeries = async (req, res) => {
 
     // 1. Fetch student enrollment if studentId is provided
     let enrolledCourseIds = [];
+    let studentPurchases = [];
     if (studentId) {
       const student = await db.collection('students').findOne({
         $or: [
           { id: studentId },
+          { userId: studentId },
           { _id: mongoose.Types.ObjectId.isValid(studentId) ? new mongoose.Types.ObjectId(studentId) : null }
         ]
       });
       if (student) {
         enrolledCourseIds = (student.enrolledCourses || []).map(id => String(id));
+        
+        // Fetch all successful purchases for this student for expiry calculation
+        const studentIdVariants = [String(student._id), student.id, student.userId].filter(Boolean);
+        studentPurchases = await db.collection('purchases').find({
+          studentId: { $in: studentIdVariants },
+          status: { $in: ['completed', 'success', 'captured', 'paid'] }
+        }).toArray();
       }
     }
 
@@ -141,23 +150,63 @@ export const getAllTestSeries = async (req, res) => {
         // Determine enrollment
         if (studentId) {
             const isDirect = enrolledCourseIds.includes(seriesIdStr);
-            let isIncluded = false;
             
             // Check if series links to a batch the student has
             const linkedBatchIds = (series.courseIds || []).concat(series.courseId ? [series.courseId] : []);
             // Check if a batch links to this series
             const batchIdsThatIncludeThis = parentMap.get(seriesIdStr) || new Set();
-            const allPossibleParents = [...new Set([...linkedBatchIds, ...Array.from(batchIdsThatIncludeThis)])];
+            const allPossibleParents = [...new Set([...linkedBatchIds, ...Array.from(batchIdsThatIncludeThis)])].map(String);
             
-            isIncluded = allPossibleParents.some(pid => enrolledCourseIds.includes(String(pid)));
+            const isIncluded = allPossibleParents.some(pid => enrolledCourseIds.includes(String(pid)));
             
             series.isEnrolled = isDirect || isIncluded;
             series.isDirect = isDirect;
-            series.isIncluded = isIncluded && !isDirect; // Only mark as included if not directly bought
+            series.isIncluded = isIncluded && !isDirect;
+
+            // Calculate Expiry
+            if (series.isEnrolled) {
+              // Find purchase for this specific series or its parent batch/package
+              const relevantIds = [seriesIdStr, ...allPossibleParents];
+              const purchase = studentPurchases.find(p => relevantIds.includes(String(p.courseId)));
+              const getSeriesExpired = (series) => {
+                const mode = series.expiryMode;
+                const val = series.validity;
+
+                if (!mode || mode === 'Lifetime Access' || mode === 'lifetime') {
+                  return false;
+                }
+
+                if (mode === 'End Date' && val) {
+                  let dateStr = val;
+                  const parts = val.split('-');
+                  if (parts.length === 3 && parts[2].length === 4) {
+                    dateStr = `${parts[2]}-${parts[1]}-${parts[0]}`;
+                  }
+                  const expiryDate = new Date(dateStr);
+                  expiryDate.setHours(23, 59, 59, 999);
+                  return new Date() > expiryDate;
+                }
+
+                if (mode === 'Validity' && val) {
+                  if (!purchase) return false;
+                  const months = parseInt(val);
+                  const createdAt = new Date(purchase.createdAt);
+                  createdAt.setMonth(createdAt.getMonth() + months);
+                  return new Date() > createdAt;
+                }
+
+                return false;
+              };
+
+              series.isExpired = getSeriesExpired(series);
+            } else {
+              series.isExpired = false;
+            }
         } else {
             series.isEnrolled = false;
             series.isDirect = false;
             series.isIncluded = false;
+            series.isExpired = false;
         }
       }
     } catch (countError) {

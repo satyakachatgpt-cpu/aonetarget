@@ -92,9 +92,16 @@ const MyCourses: React.FC = () => {
             return (
               <div
                 key={courseId || idx}
-                className="bg-white rounded-xl p-4 shadow-sm flex gap-4 cursor-pointer hover:shadow-md transition-all"
-                onClick={() => navigate(`/course/${courseId}`)}
+                className={`bg-white rounded-xl p-4 shadow-sm flex gap-4 transition-all relative ${
+                  course.expired ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'
+                }`}
+                onClick={() => !course.expired && navigate(`/course/${courseId}`)}
               >
+                {course.expired && (
+                  <div className="absolute top-0 right-0 bg-red-500 text-white text-[9px] font-bold px-3 py-1 rounded-tr-xl rounded-bl-xl shadow-sm z-10">
+                    EXPIRED
+                  </div>
+                )}
                 <div className="w-20 h-20 bg-gradient-to-br from-brandBlue to-[#1A237E] rounded-xl flex items-center justify-center shrink-0 overflow-hidden">
                   {course.thumbnail || course.image ? (
                     <img src={course.thumbnail || course.image} alt={course.name || course.title} className="w-full h-full object-cover" />
@@ -103,6 +110,9 @@ const MyCourses: React.FC = () => {
                   )}
                 </div>
                 <div className="flex-1">
+                  {course.expired && (
+                    <span className="text-red-600 text-[10px] font-bold uppercase block mb-1">Expired</span>
+                  )}
                   <h4 className="font-bold text-sm line-clamp-1">{course.name || course.title || 'Untitled Course'}</h4>
                   <p className="text-[10px] text-gray-400 mt-1">{course.subject || 'Enrolled Course'}</p>
                   <div className="mt-2 flex items-center gap-2">

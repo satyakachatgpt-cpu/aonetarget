@@ -351,13 +351,12 @@ const TestSeries: React.FC<Props> = ({ showToast }) => {
                       </div>
                     </td>
                     <td className="px-4 py-4">
-                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${
-                        item.status === 'active'
-                          ? 'bg-green-100 text-green-600'
-                          : item.status === 'draft'
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold ${item.status === 'active'
+                        ? 'bg-green-100 text-green-600'
+                        : item.status === 'draft'
                           ? 'bg-gray-100 text-gray-600'
                           : 'bg-red-100 text-red-600'
-                      }`}>
+                        }`}>
                         {item.status}
                       </span>
                     </td>

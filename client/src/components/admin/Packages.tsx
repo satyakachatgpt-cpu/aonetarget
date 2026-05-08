@@ -115,18 +115,18 @@ const BulkActionItem: React.FC<{ icon: string; label: string; onClick: () => voi
   );
 };
 
-const SortablePackageRow = ({ 
-  pkg, 
-  idx, 
-  startIndex, 
-  selectedIds, 
-  toggleSelectOne, 
-  onCourseSelect, 
-  openActionMenuId, 
-  setOpenActionMenuId, 
-  handleToggleStatus, 
-  openEditDrawer, 
-  handleDuplicate, 
+const SortablePackageRow = ({
+  pkg,
+  idx,
+  startIndex,
+  selectedIds,
+  toggleSelectOne,
+  onCourseSelect,
+  openActionMenuId,
+  setOpenActionMenuId,
+  handleToggleStatus,
+  openEditDrawer,
+  handleDuplicate,
   loadData,
   handleDelete,
   paginatedItems,
@@ -139,7 +139,7 @@ const SortablePackageRow = ({
     transform,
     transition,
     isDragging
-  } = useSortable({ 
+  } = useSortable({
     id: pkg.id,
     disabled: disabled
   });
@@ -155,17 +155,17 @@ const SortablePackageRow = ({
   };
 
   return (
-    <tr 
+    <tr
       ref={setNodeRef}
       style={style}
-      onClick={() => onCourseSelect(pkg)} 
+      onClick={() => onCourseSelect(pkg)}
       className={`hover:bg-gray-50/50 transition-colors group cursor-pointer ${selectedIds.includes(pkg.id) ? 'bg-blue-50/40' : ''} ${isDragging ? 'z-[1000]' : ''}`}
     >
       <td className="pl-8 py-6" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-4">
           {!disabled && (
-            <div 
-              {...attributes} 
+            <div
+              {...attributes}
               {...listeners}
               className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-600 transition-colors"
               onClick={(e) => e.stopPropagation()}
@@ -538,7 +538,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
       setIsReordering(true);
       // 1. Take full current list from packages state
       const currentList = [...packages];
-      
+
       // 2. Sort in current visible order to have a stable base for splice
       // This matches the loadData sorting logic
       const sortedList = [...currentList].sort((a, b) => {
@@ -565,7 +565,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
       // empty/null/invalid => last
       const enteredOrder = updatedItem.settings?.sortingOrder;
       let targetIndex: number;
-      
+
       if (enteredOrder === undefined || enteredOrder === null || isNaN(enteredOrder)) {
         targetIndex = filteredList.length; // Move to last
       } else if (enteredOrder <= 1) {
@@ -585,13 +585,13 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
 
       // 7. Call existing reorder endpoint
       await packagesAPI.reorder(orderedIds);
-      
+
       showToast('Order sequence updated successfully', 'success');
       loadData();
     } catch (error) {
       console.error("Manual reorder failed:", error);
       showToast("Failed to sync order sequence", "error");
-      loadData(); 
+      loadData();
     } finally {
       setIsReordering(false);
     }
@@ -613,7 +613,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
     if (oldIndex === -1 || newIndex === -1) return;
 
     const previousOrder = [...packages];
-    
+
     // Calculate new order and update settings.sortingOrder optimistically
     const newOrder = arrayMove(packages, oldIndex, newIndex).map((item, index) => ({
       ...item,
@@ -622,7 +622,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
         sortingOrder: index + 1
       }
     }));
-    
+
     setPackages(newOrder);
     setIsReordering(true);
 
@@ -691,7 +691,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
       showToast('Please select at least one batch', 'error');
       return;
     }
-    
+
     let successCount = 0;
     for (const batchId of selectedBatchIds) {
       try {
@@ -853,7 +853,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
             questions: test.questions || []
           };
           delete testData._id;
-          
+
           await apiRequest(`${API_BASE_URL}/courses/${batchId}/tests`, {
             method: 'POST',
             headers: { ...getAdminHeaders(), 'Content-Type': 'application/json' },
@@ -909,7 +909,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
       showToast('Please select at least one batch', 'error');
       return;
     }
-    
+
     let successCount = 0;
     for (const batchId of selectedBatchIds) {
       try {
@@ -1322,14 +1322,14 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                         </div>
                       </td>
                     </tr>
-                    ) : (
-                    <DndContext 
-                      sensors={sensors} 
-                      collisionDetection={closestCenter} 
+                  ) : (
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
                       onDragEnd={handleDragEnd}
                     >
-                      <SortableContext 
-                        items={paginatedItems.map(p => p.id)} 
+                      <SortableContext
+                        items={paginatedItems.map(p => p.id)}
                         strategy={verticalListSortingStrategy}
                       >
                         {paginatedItems.map((pkg, idx) => (
@@ -1369,26 +1369,26 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
                     <p className="text-sm font-black text-slate-400 uppercase tracking-widest">No batches found matching your criteria</p>
                   </div>
                 ) : (
-                    paginatedItems.map((pkg) => (
+                  paginatedItems.map((pkg) => (
+                    <div
+                      key={pkg.id}
+                      onClick={() => onCourseSelect(pkg)}
+                      className={`bg-white rounded-[1.5rem] border transition-all p-6 cursor-pointer group flex flex-col relative ${selectedIds.includes(pkg.id) ? 'border-blue-500 shadow-md ring-1 ring-blue-500/20' : 'border-gray-100 shadow-sm hover:shadow-md'}`}
+                    >
+                      {/* Checkbox Overlay for Grid */}
                       <div
-                        key={pkg.id}
-                        onClick={() => onCourseSelect(pkg)}
-                        className={`bg-white rounded-[1.5rem] border transition-all p-6 cursor-pointer group flex flex-col relative ${selectedIds.includes(pkg.id) ? 'border-blue-500 shadow-md ring-1 ring-blue-500/20' : 'border-gray-100 shadow-sm hover:shadow-md'}`}
+                        onClick={(e) => toggleSelectOne(e, pkg.id)}
+                        className={`absolute top-4 right-4 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all z-10 ${selectedIds.includes(pkg.id)
+                          ? 'bg-[#1a237e] border-[#1a237e] text-white shadow-lg scale-110'
+                          : 'bg-white/80 backdrop-blur-sm border-gray-200 opacity-0 group-hover:opacity-100 hover:border-gray-400'
+                          }`}
                       >
-                        {/* Checkbox Overlay for Grid */}
-                        <div
-                          onClick={(e) => toggleSelectOne(e, pkg.id)}
-                          className={`absolute top-4 right-4 w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all z-10 ${selectedIds.includes(pkg.id)
-                            ? 'bg-[#1a237e] border-[#1a237e] text-white shadow-lg scale-110'
-                            : 'bg-white/80 backdrop-blur-sm border-gray-200 opacity-0 group-hover:opacity-100 hover:border-gray-400'
-                            }`}
-                        >
-                          {selectedIds.includes(pkg.id) && (
-                            <span className="material-symbols-outlined text-[16px] font-bold">check</span>
-                          )}
-                        </div>
+                        {selectedIds.includes(pkg.id) && (
+                          <span className="material-symbols-outlined text-[16px] font-bold">check</span>
+                        )}
+                      </div>
 
-                        <div className="flex justify-between items-start mb-4">
+                      <div className="flex justify-between items-start mb-4">
                         <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center">
                           <span className="material-symbols-outlined text-blue-500">inventory_2</span>
                         </div>
