@@ -3,6 +3,7 @@ import React from 'react';
 interface TestsTabProps {
   tests: any[];
   isEnrolled: boolean;
+  isExpired?: boolean;
   coursePrice: number | undefined;
   enrolling: boolean;
   completedTests: string[];
@@ -14,6 +15,7 @@ interface TestsTabProps {
 const TestsTab: React.FC<TestsTabProps> = ({
   tests,
   isEnrolled,
+  isExpired = false,
   coursePrice,
   enrolling,
   completedTests,
@@ -25,7 +27,20 @@ const TestsTab: React.FC<TestsTabProps> = ({
 
   return (
     <div className="space-y-4">
-      {!isEnrolled ? (
+      {isExpired ? (
+        <div className="card-premium p-10 text-center animate-fade-in-up">
+          <div className="w-16 h-16 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-3">
+            <span className="material-symbols-rounded text-3xl text-orange-500">history</span>
+          </div>
+          <h4 className="font-bold text-gray-800">Your access has expired</h4>
+          <p className="text-gray-500 font-medium text-sm mt-1">This course validity period has ended</p>
+          {isPaidCourse && (
+            <button onClick={onBuyNow} className="mt-6 btn-accent px-8 py-3 text-sm">
+              Renew Access
+            </button>
+          )}
+        </div>
+      ) : !isEnrolled ? (
         <div className="card-premium p-10 text-center animate-fade-in-up">
           <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
             <span className="material-symbols-rounded text-3xl text-gray-300">lock</span>

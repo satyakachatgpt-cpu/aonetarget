@@ -23,6 +23,7 @@ const MockTests: React.FC = () => {
   const [currentView, setCurrentView] = useState<'series' | 'tests'>('series');
   const [activeSeries, setActiveSeries] = useState<any | null>(null);
   const [isEnrolled, setIsEnrolled] = useState(false);
+  const [enrollmentStatus, setEnrollmentStatus] = useState<string>('not_enrolled');
   const [enrolling, setEnrolling] = useState(false);
   const [enrolledSeriesIds, setEnrolledSeriesIds] = useState<Set<string>>(new Set());
 
@@ -141,6 +142,7 @@ const MockTests: React.FC = () => {
     // Free series - always enrolled
     if (!series.price || Number(series.price) === 0) {
       setIsEnrolled(true);
+      setEnrollmentStatus('active');
       return;
     }
     try {
@@ -151,6 +153,7 @@ const MockTests: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         setIsEnrolled(data.enrolled || false);
+        setEnrollmentStatus(data.status || (data.isExpired ? 'expired' : (data.enrolled ? 'active' : 'not_enrolled')));
         // Keep enrolledSeriesIds in sync
         if (data.enrolled) {
           setEnrolledSeriesIds(prev => new Set([...prev, String(seriesId)]));
@@ -158,14 +161,11 @@ const MockTests: React.FC = () => {
       }
     } catch (e) {
       setIsEnrolled(false);
+      setEnrollmentStatus('not_enrolled');
     }
   };
 
   const handleSeriesClick = async (series: any) => {
-    if (series.isExpired) {
-      toast.error('This test series has expired');
-      return;
-    }
     setActiveSeries(series);
     const seriesId = String(series.id || series._id);
     const preEnrolled = enrolledSeriesIds.has(seriesId);
@@ -173,8 +173,10 @@ const MockTests: React.FC = () => {
     // Free series - always give access
     if (!series.price || Number(series.price) === 0) {
       setIsEnrolled(true);
+      setEnrollmentStatus('active');
     } else {
       setIsEnrolled(preEnrolled);
+      setEnrollmentStatus(series.isExpired ? 'expired' : (preEnrolled ? 'active' : 'not_enrolled'));
     }
     setCurrentView('tests');
     
@@ -327,8 +329,28 @@ const MockTests: React.FC = () => {
         ) : (
           <>
             {/* Access/Buy Logic */}
-            {Number(activeSeries?.price) > 0 && !isEnrolled ? (
-              <div className="card-premium p-6 bg-gradient-to-br from-indigo-50 to-white border-indigo-100">
+            {enrollmentStatus === 'expired' ? (
+              <div className="card-premium p-6 bg-[#2D0D0D] border-red-500/20 mb-6">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-14 h-14 bg-red-600/20 rounded-2xl flex items-center justify-center shadow-lg shadow-red-500/10 text-red-500">
+                    <span className="material-symbols-rounded text-3xl">lock_clock</span>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Access Expired</h3>
+                    <p className="text-sm text-red-200/60">Your validity period for this series has ended.</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <button
+                    onClick={handleBuyNow}
+                    className="flex-1 bg-red-600 text-white py-4 rounded-2xl text-sm font-bold shadow-xl shadow-red-600/20 active:scale-95 transition-all"
+                  >
+                    Renew Access
+                  </button>
+                </div>
+              </div>
+            ) : Number(activeSeries?.price) > 0 && !isEnrolled ? (
+              <div className="card-premium p-6 bg-gradient-to-br from-indigo-50 to-white border-indigo-100 mb-6">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
                     <span className="material-symbols-rounded text-white text-3xl">shopping_cart</span>
@@ -351,7 +373,9 @@ const MockTests: React.FC = () => {
                   </button>
                 </div>
               </div>
-            ) : (
+            ) : null}
+
+            {enrollmentStatus !== 'expired' && (!Number(activeSeries?.price) || isEnrolled) ? (
               <div className="space-y-4">
                 {getSeriesTests(activeSeries).length > 0 ? (
                   getSeriesTests(activeSeries).map((test: any, tIdx: number) => {
@@ -395,7 +419,7 @@ const MockTests: React.FC = () => {
                   </div>
                 )}
               </div>
-            )}
+            ) : null}
           </>
         )}
       </div>
