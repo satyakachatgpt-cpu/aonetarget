@@ -11,6 +11,8 @@ import {
 } from './DrawerSystem';
 import { toYouTubeEmbed } from '../../lib/utils';
 
+import { useNavigate } from 'react-router-dom';
+
 const BigActionTile: React.FC<{ icon: string; label: string; desc?: string; onClick: () => void; color?: string }> = ({ icon, label, onClick, color = 'bg-blue-50 text-blue-600' }) => (
     <button
         onClick={onClick}
@@ -31,6 +33,8 @@ interface ContentItem {
     courseId: string;
     courseName?: string;
     type: string;
+    contentType?: string;
+    testId?: string;
     createdAt: string;
     duration?: string;
     raw?: any;
@@ -41,6 +45,7 @@ interface Props {
 }
 
 const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
+    const navigate = useNavigate();
     const [searchTerm, setSearchTerm] = useState('');
     const [typeFilter, setTypeFilter] = useState('all');
     const [courseFilter, setCourseFilter] = useState('all');
@@ -84,6 +89,37 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
             setShowTypeSelector(true);
         } else {
             setIsVideoDrawerOpen(true);
+        }
+    };
+
+    const handleView = (item: ContentItem) => {
+        const raw = item.raw || {};
+        const type = (item.type || '').toLowerCase();
+        
+        if (type === 'recorded' || type === 'video' || type === 'live') {
+            const videoId = raw._id || raw.id || item.id;
+            const batchId = raw.courseId || raw.course || 'free';
+            const returnPath = mode === 'free' ? '/admin/free-content' : '/admin/course-content';
+            const sourceParam = mode === 'free' ? 'free-content' : mode;
+
+            navigate(`/watch/${batchId}/${videoId}?adminPreview=1&source=${sourceParam}&returnTo=${encodeURIComponent(returnPath)}`, {
+                state: {
+                    returnTo: returnPath,
+                    source: sourceParam,
+                    video: raw
+                }
+            });
+        } else if (type === 'pdf') {
+            const fileUrl = raw.fileUrl || raw.url || raw.link;
+            if (fileUrl) {
+                const viewerUrl = `/#/pdf-viewer?url=${encodeURIComponent(fileUrl)}&title=${encodeURIComponent(item.title)}`;
+                window.open(viewerUrl, '_blank');
+            }
+        } else if (type === 'test') {
+            const testId = item.testId || raw.testId || raw._id || raw.id;
+            if (testId) {
+                navigate(`/admin/tests?testId=${testId}`);
+            }
         }
     };
 
@@ -761,85 +797,109 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
                                 <div className="w-12 h-12 border-4 border-gray-100 border-t-navy rounded-full animate-spin"></div>
                                 <p className="text-[12px] font-black text-gray-300 uppercase tracking-[0.2em]">Synchronizing Data...</p>
                             </div>
-                        ) : (
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-gray-50/10 border-b border-gray-100">
-                                        <th className="pl-8 pr-4 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.15em]">S. NO.</th>
-                                        <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.15em]">TITLE</th>
-                                        <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.15em]">PRODUCT</th>
-                                        <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.15em]">DATE</th>
-                                        <th className="px-6 py-5 text-[10px] font-black text-gray-400 uppercase tracking-[0.15em] text-center">ACTIONS</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredContent.length > 0 ? (
-                                        filteredContent.map((item, idx) => (
-                                            <tr
-                                                key={item.id}
-                                                className="hover:bg-blue-50/5 transition-colors group border-b border-gray-50 last:border-0"
-                                            >
-                                                <td className="pl-8 pr-4 py-8 text-[13px] font-bold text-gray-400">{filteredContent.length - idx}</td>
-                                                <td className="px-6 py-8">
-                                                    <div className="flex flex-col gap-1.5">
-                                                        <span className="text-[14px] font-bold text-gray-900 group-hover:text-black transition-colors uppercase tracking-tight">{item.title}</span>
-                                                        <div className="flex items-center gap-2">
-                                                            <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider border ${getTypeBadgeColor(item.type)}`}>
-                                                                {item.type}
-                                                            </span>
-                                                            {(() => {
-                                                                const itIsFree = item.raw?.status === 'Free' || item.raw?.isFree === true || item.raw?.isFree === 'true' || item.raw?.isFree === 1;
-                                                                const itIsDemo = item.raw?.isDemo === true || item.raw?.isDemo === 'true' || item.raw?.isDemo === 1;
+                        ) : filteredContent.length > 0 ? (
+                            <div className="space-y-4 p-6">
+                                {filteredContent.map((item) => (
+                                    <div
+                                        key={item.id || item._id}
+                                        onClick={() => handleView(item)}
+                                        className="group relative flex items-center gap-6 p-4 bg-white border border-gray-100 rounded-[2.5rem] hover:border-blue-200 hover:shadow-[0_30px_60px_rgba(0,0,0,0.06)] transition-all duration-500 cursor-pointer overflow-hidden active:scale-[0.99]"
+                                    >
+                                        {/* Left Icon Block */}
+                                        <div className={`w-24 h-24 rounded-[1.8rem] flex items-center justify-center shrink-0 transition-all duration-500 group-hover:scale-105 group-hover:rotate-3 shadow-sm ${
+                                            item.type === 'Recorded' ? 'bg-purple-50 text-purple-600' :
+                                            item.type === 'Live' ? 'bg-red-50 text-red-600' :
+                                            item.type === 'PDF' ? 'bg-teal-50 text-teal-600' :
+                                            'bg-orange-50 text-orange-600'
+                                        }`}>
+                                            <span className="material-symbols-outlined text-[42px] drop-shadow-sm">
+                                                {item.type === 'Recorded' ? 'play_circle' :
+                                                 item.type === 'Live' ? 'sensors' :
+                                                 item.type === 'PDF' ? 'description' :
+                                                 'quiz'}
+                                            </span>
+                                        </div>
 
-                                                                return (
-                                                                    <div className="flex gap-2">
-                                                                        {itIsDemo && (
-                                                                            <span className="text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-100">
-                                                                                DEMO
-                                                                            </span>
-                                                                        )}
-                                                                        {itIsFree && (
-                                                                            <span className="text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider bg-green-50 text-green-600 border border-green-100">
-                                                                                FREE
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                );
-                                                            })()}
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-8 text-[13px] font-semibold text-gray-500/80">{item.courseName}</td>
-                                                <td className="px-6 py-8 text-[13px] font-medium text-gray-400">{formatDate(item.createdAt)}</td>
-                                                <td className="px-6 py-8 text-center">
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setSelectedItemForAction(item);
-                                                            setShowActionDrawer(true);
-                                                        }}
-                                                        className="px-4 py-1.5 bg-white border border-gray-200 rounded-lg text-[12px] font-bold text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all inline-flex items-center gap-2 shadow-sm"
-                                                    >
-                                                        Actions
-                                                        <span className="material-symbols-outlined text-[18px] text-gray-400">expand_more</span>
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))
-                                    ) : (
-                                        <tr>
-                                            <td colSpan={5} className="py-32 text-center">
-                                                <div className="flex flex-col items-center gap-4">
-                                                    <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center">
-                                                        <span className="material-symbols-outlined text-gray-200 text-4xl">folder_off</span>
-                                                    </div>
-                                                    <p className="text-gray-400 font-bold uppercase tracking-widest text-[12px]">No matching content found</p>
+                                        {/* Center Content */}
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full border transition-colors ${
+                                                    item.type === 'Recorded' ? 'bg-purple-50/50 border-purple-100 text-purple-700' :
+                                                    item.type === 'Live' ? 'bg-red-50/50 border-red-100 text-red-700' :
+                                                    item.type === 'PDF' ? 'bg-teal-50/50 border-teal-100 text-teal-700' :
+                                                    'bg-orange-50/50 border-orange-100 text-orange-700'
+                                                }`}>
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                                                    <span className="text-[10px] font-black uppercase tracking-wider">{item.type === 'Recorded' ? 'Video' : item.type}</span>
                                                 </div>
-                                            </td>
-                                        </tr>
-                                    )}
-                                </tbody>
-                            </table>
+                                                
+                                                {(item.raw?.isFree || mode === 'free') && (
+                                                    <div className="flex items-center gap-1.5 px-3 py-1 bg-green-50/50 border border-green-100 text-green-700 rounded-full">
+                                                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                                                        <span className="text-[10px] font-black uppercase tracking-wider">Free</span>
+                                                    </div>
+                                                )}
+                                                
+                                                <span className="text-[11px] font-bold text-gray-300 ml-auto uppercase tracking-widest">{formatDate(item.createdAt)}</span>
+                                            </div>
+
+                                            <h3 className="text-[19px] font-bold text-gray-900 truncate group-hover:text-blue-600 transition-colors tracking-tight leading-tight mb-2">{item.title}</h3>
+                                            
+                                            <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[13px] font-medium text-gray-400">
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-5 h-5 rounded-md bg-gray-50 flex items-center justify-center border border-gray-100">
+                                                        <span className="material-symbols-outlined text-[15px] opacity-70">inventory_2</span>
+                                                    </div>
+                                                    <span className="truncate max-w-[200px]">{item.courseName || 'General Offering'}</span>
+                                                </div>
+                                                
+                                                {item.duration && (
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="w-5 h-5 rounded-md bg-gray-50 flex items-center justify-center border border-gray-100">
+                                                            <span className="material-symbols-outlined text-[15px] opacity-70">schedule</span>
+                                                        </div>
+                                                        <span>{item.duration} {item.type === 'PDF' ? 'Pages' : 'Mins'}</span>
+                                                    </div>
+                                                )}
+
+                                                <div className="flex items-center gap-2">
+                                                    <div className="w-5 h-5 rounded-md bg-gray-50 flex items-center justify-center border border-gray-100">
+                                                        <span className="material-symbols-outlined text-[15px] opacity-70">tag</span>
+                                                    </div>
+                                                    <span className="font-mono text-[11px] font-black uppercase">ID: {(item.id || item._id || '').slice(-6)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Right Actions */}
+                                        <div className="flex items-center gap-3 pr-4">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setSelectedItemForAction(item);
+                                                    setShowActionDrawer(true);
+                                                }}
+                                                className="w-14 h-14 rounded-2xl bg-gray-50 text-gray-400 hover:bg-navy hover:text-white transition-all flex items-center justify-center border border-gray-100/50 hover:border-navy group/btn shadow-sm active:scale-90"
+                                            >
+                                                <span className="material-symbols-outlined text-[24px] group-hover/btn:rotate-90 transition-transform duration-300">more_vert</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="py-40 text-center">
+                                <div className="flex flex-col items-center gap-6">
+                                    <div className="w-24 h-24 bg-gray-50 rounded-[2rem] flex items-center justify-center border border-gray-100 rotate-12">
+                                        <span className="material-symbols-outlined text-gray-200 text-5xl">folder_off</span>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <p className="text-gray-900 font-black uppercase tracking-[0.2em] text-[13px]">No matching content found</p>
+                                        <p className="text-gray-400 text-[12px] font-medium">Try adjusting your filters or search terms.</p>
+                                    </div>
+                                    <button onClick={() => { setSearchTerm(''); setTypeFilter('all'); setCourseFilter('all'); }} className="px-6 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-gray-200 transition-all">Clear All Filters</button>
+                                </div>
+                            </div>
                         )}
                     </div>
                 </div>
@@ -940,83 +1000,105 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
                                     />
                                 </div>
 
-                                {/* Source Material Section - Now shown for all types including Tests */}
+                                {/* Source Material Section - Context aware labels and visibility */}
                                 <div className="space-y-4">
-                                    <div className="flex items-center justify-between mb-1">
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Source Material</label>
-                                        <span className="text-[9px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md uppercase">Change Link or Upload File</span>
-                                    </div>
+                                    {(() => {
+                                        const isVideoLike = editingItem.type === 'Recorded' || editingItem.type === 'Video' || editingItem.type === 'Live';
+                                        const isLive = editingItem.type === 'Live';
+                                        const isPdf = editingItem.type === 'PDF';
 
-                                    <div className="space-y-3">
-                                        <div className="relative group">
-                                            <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">link</span>
+                                        return (
+                                            <>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">
+                                                        {isLive ? 'YOUTUBE URL / STREAM LINK' : isVideoLike ? 'YOUTUBE / VIDEO LINK' : 'Source Material'}
+                                                    </label>
+                                                    <span className="text-[9px] font-black text-blue-500 bg-blue-50 px-2 py-0.5 rounded-md uppercase">
+                                                        {isPdf ? 'Change Link or Upload File' : 'Update Link'}
+                                                    </span>
+                                                </div>
+
+                                                <div className="space-y-3">
+                                                    <div className="relative group">
+                                                        <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">
+                                                            {isVideoLike ? 'play_circle' : 'link'}
+                                                        </span>
+                                                        <input
+                                                            value={editLink}
+                                                            onChange={(e) => setEditLink(e.target.value)}
+                                                            placeholder={isLive ? "YouTube URL / Stream Link" : isVideoLike ? "YouTube Video URL" : "Existing URL / Cloud Link"}
+                                                            className="w-full bg-gray-50 border border-gray-100 pl-11 pr-4 py-4 rounded-2xl text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-gray-200 transition-all shadow-sm"
+                                                        />
+                                                    </div>
+
+                                                    {isPdf && (
+                                                        <div className="py-2">
+                                                            <div className="relative border-2 border-dashed border-gray-100 rounded-3xl p-6 bg-[#fafafa]/50 hover:bg-gray-50 hover:border-blue-200 transition-all cursor-pointer">
+                                                                {!selectedEditFile ? (
+                                                                    <UploadArea
+                                                                        title="Replace File"
+                                                                        subtitle={`Select new file (PDF/DOC/Table)`}
+                                                                        onFileSelect={(file) => setSelectedEditFile(file)}
+                                                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+                                                                        className="!h-[140px] border-none bg-transparent !p-0"
+                                                                    />
+                                                                ) : (
+                                                                    <div className="space-y-4">
+                                                                        <div className="flex items-center justify-between">
+                                                                            <span className="text-[10px] font-black text-blue-500 uppercase tracking-wider">File Selected</span>
+                                                                            <button onClick={() => setSelectedEditFile(null)} className="text-[10px] font-bold text-red-500 hover:underline">Remove</button>
+                                                                        </div>
+                                                                        <FilePreviewItem file={selectedEditFile} onRemove={() => setSelectedEditFile(null)} />
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
+                                </div>
+
+                                {mode !== 'free' && (
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Product</label>
+                                            <select
+                                                value={editCourseId}
+                                                onChange={(e) => setEditCourseId(e.target.value)}
+                                                className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-gray-200 transition-all shadow-sm appearance-none"
+                                            >
+                                                <option value="">Select Product</option>
+                                                {courses.map(c => <option key={c.id || c._id} value={c.id || c._id}>{c.name || c.title}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">{editingItem.type === 'PDF' ? 'Total Pages' : 'Duration (Mins)'}</label>
                                             <input
-                                                value={editLink}
-                                                onChange={(e) => setEditLink(e.target.value)}
-                                                placeholder="Existing URL / Cloud Link"
-                                                className="w-full bg-gray-50 border border-gray-100 pl-11 pr-4 py-4 rounded-2xl text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-gray-200 transition-all shadow-sm"
+                                                type="text"
+                                                value={editDuration}
+                                                onChange={(e) => setEditDuration(e.target.value)}
+                                                placeholder={editingItem.type === 'PDF' ? "e.g. 12" : "e.g. 45"}
+                                                className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-gray-200 transition-all shadow-sm"
                                             />
                                         </div>
-
-                                        <div className="py-2">
-                                            <div className="relative border-2 border-dashed border-gray-100 rounded-3xl p-6 bg-[#fafafa]/50 hover:bg-gray-50 hover:border-blue-200 transition-all cursor-pointer">
-                                                {!selectedEditFile ? (
-                                                    <UploadArea
-                                                        title="Replace File"
-                                                        subtitle={`Select new file (${editingItem.type === 'Recorded' || editingItem.type === 'Live' ? 'Video' : 'PDF/DOC/Table'})`}
-                                                        onFileSelect={(file) => setSelectedEditFile(file)}
-                                                        accept={editingItem.type === 'Recorded' || editingItem.type === 'Live' ? "video/*" : ".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"}
-                                                        className="!h-[140px] border-none bg-transparent !p-0"
-                                                    />
-                                                ) : (
-                                                    <div className="space-y-4">
-                                                        <div className="flex items-center justify-between">
-                                                            <span className="text-[10px] font-black text-blue-500 uppercase tracking-wider">File Selected</span>
-                                                            <button onClick={() => setSelectedEditFile(null)} className="text-[10px] font-bold text-red-500 hover:underline">Remove</button>
-                                                        </div>
-                                                        <FilePreviewItem file={selectedEditFile} onRemove={() => setSelectedEditFile(null)} />
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
                                     </div>
-                                </div>
+                                )}
 
-                                <div className="grid grid-cols-2 gap-4">
+                                {mode !== 'free' && (
                                     <div className="space-y-2">
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Product</label>
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Subject</label>
                                         <select
-                                            value={editCourseId}
-                                            onChange={(e) => setEditCourseId(e.target.value)}
+                                            value={editSubjectId}
+                                            onChange={(e) => setEditSubjectId(e.target.value)}
                                             className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-gray-200 transition-all shadow-sm appearance-none"
                                         >
-                                            <option value="">Select Product</option>
-                                            {courses.map(c => <option key={c.id || c._id} value={c.id || c._id}>{c.name || c.title}</option>)}
+                                            <option value="">Select Subject</option>
+                                            {subjects.map(s => <option key={s.id || s._id} value={s.id || s._id}>{s.name || s.title}</option>)}
                                         </select>
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">{editingItem.type === 'PDF' ? 'Total Pages' : 'Duration (Mins)'}</label>
-                                        <input
-                                            type="text"
-                                            value={editDuration}
-                                            onChange={(e) => setEditDuration(e.target.value)}
-                                            placeholder={editingItem.type === 'PDF' ? "e.g. 12" : "e.g. 45"}
-                                            className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-gray-200 transition-all shadow-sm"
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-1">Subject</label>
-                                    <select
-                                        value={editSubjectId}
-                                        onChange={(e) => setEditSubjectId(e.target.value)}
-                                        className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl text-sm font-bold text-gray-900 outline-none focus:bg-white focus:border-gray-200 transition-all shadow-sm appearance-none"
-                                    >
-                                        <option value="">Select Subject</option>
-                                        {subjects.map(s => <option key={s.id || s._id} value={s.id || s._id}>{s.name || s.title}</option>)}
-                                    </select>
-                                </div>
+                                )}
 
                                 <div className="pt-2">
                                     {mode === 'demo' ? (
@@ -1097,17 +1179,6 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
                                     color="bg-teal-50 text-teal-600"
                                     onClick={() => { setShowTypeSelector(false); setIsPDFDrawerOpen(true); }}
                                 />
-                                <BigActionTile
-                                    icon="quiz"
-                                    label="Test"
-                                    desc="Mock Practice"
-                                    color="bg-orange-50 text-orange-600"
-                                    onClick={() => {
-                                        setShowTypeSelector(false);
-                                        // For now just alert or open a simplified test drawer if available
-                                        alert('Please use the Test management section to create tests and mark them as free.');
-                                    }}
-                                />
                             </>
                         )}
                     </div>
@@ -1128,6 +1199,7 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
                 onSubmit={handleAddLive}
                 courses={courses}
                 subjects={subjects}
+                isFreeContentMode={mode === 'free'}
             />
         </div>
     );

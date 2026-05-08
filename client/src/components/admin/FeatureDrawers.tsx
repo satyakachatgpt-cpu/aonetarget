@@ -570,10 +570,12 @@ export const LiveStreamDrawer: React.FC<{
     selectedBatchIds?: string[];
     setSelectedBatchIds?: (ids: string[]) => void;
     availableCourses?: any[];
+    isFreeContentMode?: boolean;
 }> = ({ 
     isOpen, onClose, onSubmit, courses = [], subjects = [], 
     fixedCourseId, showToast, globalCreateMode = false, 
-    selectedBatchIds = [], setSelectedBatchIds, availableCourses = [] 
+    selectedBatchIds = [], setSelectedBatchIds, availableCourses = [],
+    isFreeContentMode = false
 }) => {
     const [formData, setFormData] = useState({
         title: '',
@@ -701,7 +703,7 @@ export const LiveStreamDrawer: React.FC<{
                         </div>
 
 
-                        {!fixedCourseId && !globalCreateMode && (
+                        {!fixedCourseId && !globalCreateMode && !isFreeContentMode && (
                             <div className="space-y-2">
                                 <FormLabel label="Select Batch" required />
                                 <FormSelect
