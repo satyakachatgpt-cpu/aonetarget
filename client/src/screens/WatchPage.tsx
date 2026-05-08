@@ -15,6 +15,16 @@ function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
 
   if (isExplicitlyEnded || isImplicitlyEnded || hasEndedLabel) return 'ended';
   if (raw === 'live' || lc.isLive === true) return 'live';
+
+  // Time-based auto-promotion: if scheduled time has passed and not ended, treat as live
+  const scheduledTime = lc.scheduledTime || lc.startTime || lc.scheduledAt || lc.scheduleTime;
+  if (scheduledTime) {
+    const scheduled = new Date(scheduledTime);
+    if (!isNaN(scheduled.getTime()) && Date.now() >= scheduled.getTime()) {
+      return 'live';
+    }
+  }
+
   return 'upcoming';
 }
 
@@ -259,7 +269,9 @@ const WatchPage: React.FC = () => {
     );
   }
 
-  const streamStatus = computeEffectiveStatus(currentVideo);
+  const streamStatus = (currentVideo?.effectiveStatus === 'live' || currentVideo?.streamStatus === 'live' || currentVideo?.status === 'live') 
+    ? 'live' 
+    : computeEffectiveStatus(currentVideo);
   const isUpcomingStream = currentVideo.contentType === 'live_stream' && streamStatus === 'upcoming';
   const isEndedStream = currentVideo.contentType === 'live_stream' && streamStatus === 'ended';
 
@@ -321,7 +333,7 @@ const WatchPage: React.FC = () => {
     );
   }
 
-  const isLive = currentVideo.contentType === 'live_stream' && computeEffectiveStatus(currentVideo) === 'live';
+  const isLive = currentVideo.contentType === 'live_stream' && streamStatus === 'live';
   
   // STABLE VIDEO ID FOR PROGRESS SYNC
   const stableVideoId = String(currentVideo.id || currentVideo._id || currentVideo.sourceVideoId || `v-${currentVideo.title}`);
