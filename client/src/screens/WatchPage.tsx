@@ -25,17 +25,38 @@ const WatchPage: React.FC = () => {
 
   const searchParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
   const isAdminPreview = searchParams.get('adminPreview') === '1';
+  const source = searchParams.get('source');
+  const queryReturnTo = searchParams.get('returnTo');
 
   // Role detection for internal features (e.g. disabling auto-rotation)
   const isUserAdmin = localStorage.getItem('isAdminAuthenticated') === 'true';
 
-  let returnTo = (location.state as any)?.returnTo;
+  let returnTo = queryReturnTo || (location.state as any)?.returnTo;
   
   // SANITIZE returnTo: Allow only internal routes starting with "/", reject HashRouter artifacts or full URLs
   if (typeof returnTo !== 'string' || !returnTo.startsWith('/') || returnTo.includes('#') || returnTo.includes('://')) {
-    // Fallback to Admin Panel only if explicitly in Preview mode
-    returnTo = isAdminPreview ? '/admin/course-content' : null;
+    // Fallback logic
+    if (isAdminPreview) {
+      returnTo = (source === 'free-content' || source === 'free') ? '/admin/free-content' : '/admin/course-content';
+    } else {
+      returnTo = null;
+    }
   }
+
+  const handleBack = useCallback(() => {
+    if (returnTo) {
+      navigate(returnTo);
+    } else {
+      const state = window.history.state;
+      if (state && state.idx > 0) {
+        navigate(-1);
+      } else if (isAdminPreview) {
+        navigate((source === 'free-content' || source === 'free') ? '/admin/free-content' : '/admin/course-content');
+      } else {
+        navigate('/live-classes', { replace: true });
+      }
+    }
+  }, [navigate, returnTo, isAdminPreview, source]);
 
   const [isLandscape, setIsLandscape] = useState(window.innerWidth > window.innerHeight);
   const [playlist, setPlaylist] = useState<any[]>([]);
@@ -224,7 +245,7 @@ const WatchPage: React.FC = () => {
   if (!currentVideo) {
     return (
       <div className="h-[100dvh] bg-[#000000] flex flex-col items-center justify-center overflow-hidden font-outfit relative">
-        <div onClick={() => navigate(-1)} className="fixed top-0 left-0 w-24 h-24 z-[9999999] cursor-pointer group flex items-start justify-start p-6 active:scale-90 transition-all">
+        <div onClick={handleBack} className="fixed top-0 left-0 w-24 h-24 z-[9999999] cursor-pointer group flex items-start justify-start p-6 active:scale-90 transition-all">
           <div className="w-10 h-10 bg-white/10 hover:bg-red-600/80 backdrop-blur-3xl border border-white/20 rounded-full text-white flex items-center justify-center shadow-2xl transition-all duration-200">
             <span className="material-symbols-rounded text-2xl font-bold">arrow_back</span>
           </div>
@@ -260,9 +281,7 @@ const WatchPage: React.FC = () => {
         <div
           onPointerDown={(e) => {
             e.preventDefault(); e.stopPropagation();
-            const state = window.history.state;
-            if (state && state.idx > 0) navigate(-1);
-            else navigate('/live-classes', { replace: true });
+            handleBack();
           }}
           className="fixed top-0 left-0 w-24 h-24 z-[9999999] cursor-pointer group flex items-start justify-start p-6 active:scale-90 transition-all"
         >
@@ -285,9 +304,7 @@ const WatchPage: React.FC = () => {
         <div
           onPointerDown={(e) => {
             e.preventDefault(); e.stopPropagation();
-            const state = window.history.state;
-            if (state && state.idx > 0) navigate(-1);
-            else navigate('/live-classes', { replace: true });
+            handleBack();
           }}
           className="fixed top-0 left-0 w-24 h-24 z-[9999999] cursor-pointer group flex items-start justify-start p-6 active:scale-90 transition-all"
         >
@@ -318,17 +335,7 @@ const WatchPage: React.FC = () => {
       chatMessages={liveMessages}
       onSendMessage={handleSendLiveMessage}
       onChatVisibilityChange={setIsChatVisible}
-      onClose={() => {
-        if (returnTo) {
-          navigate(returnTo);
-        } else if (isAdminPreview) {
-          navigate('/admin/course-content');
-        } else {
-          const state = window.history.state;
-          if (state && state.idx > 0) navigate(-1);
-          else navigate('/live-classes', { replace: true });
-        }
-      }}
+      onClose={handleBack}
       onMarkComplete={() => markVideoComplete(stableVideoId)}
       courseId={batchId || (location.state as any)?.courseId}
       courseTitle={currentVideo.courseTitle || (location.state as any)?.courseTitle}

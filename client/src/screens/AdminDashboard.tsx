@@ -168,7 +168,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
       icon: 'inventory_2',
       color: 'text-gray-700',
       submenu: [
-        { id: 'packages', label: 'Featured Batches', icon: 'category' },
+        { id: 'packages', label: 'Packages', icon: 'category' },
         { id: 'free-content', label: 'Free Content', icon: 'auto_awesome' },
         { id: 'quick-links', label: ' Quick Links', icon: 'public' },
         { id: 'pdfs', label: 'E-Books', icon: 'book' },
@@ -293,7 +293,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         <Route path="banners" element={<Banners {...props} />} />
         <Route path="referrals" element={<Referrals {...props} />} />
         <Route path="courses" element={<Courses {...props} />} />
-        <Route path="course-content" element={<CourseContentManager {...props} setActiveView={setActiveView} initialCourse={selectedCourseForContent} initialMainTab={initialContentTab} onClearInitialCourse={() => { setSelectedCourseForContent(null); localStorage.removeItem('admin_selected_course'); }} onBack={() => { navigate('/admin/packages'); localStorage.removeItem('admin_selected_course'); localStorage.removeItem('admin_content_tab'); }} />} />
+        <Route path="course-content" element={selectedCourseForContent ? <CourseContentManager {...props} setActiveView={setActiveView} initialCourse={selectedCourseForContent} initialMainTab={initialContentTab} onClearInitialCourse={() => { setSelectedCourseForContent(null); localStorage.removeItem('admin_selected_course'); }} onBack={() => { navigate('/admin/packages'); localStorage.removeItem('admin_selected_course'); localStorage.removeItem('admin_content_tab'); }} /> : <Navigate to="/admin/packages" replace />} />
         <Route path="live-class-scheduler" element={<LiveClassScheduler {...props} />} />
         <Route path="subcourses" element={<SubCourses {...props} />} />
         <Route path="subjects" element={<Subjects {...props} />} />
@@ -422,7 +422,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
             <div className="flex flex-col">
               <h1 className="text-[14px] font-black text-[#1e293b] tracking-widest uppercase">
                 {activeView === 'dashboard' ? 'Dashboard' :
-                  activeView === 'course-content' ? 'Featured Batches' :
+                  activeView === 'course-content' ? 'Packages' :
                     menuItems.find(m => m.id === activeView)?.label ||
                     menuItems.flatMap(m => m.submenu || []).find(s => s.id === activeView)?.label ||
                     'Admin'}
