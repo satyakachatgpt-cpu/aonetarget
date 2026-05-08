@@ -67,10 +67,8 @@ const UpcomingCountdown = ({ scheduledStr, onExpire }: { scheduledStr: string; o
   // No valid date → just show static badge
   if (secs === null) {
     return (
-      <div className="flex flex-col items-end gap-1 shrink-0">
-        <div className="bg-blue-50 text-blue-600 text-[9px] px-3 py-1.5 rounded-lg font-black uppercase tracking-widest border border-blue-100">
-          Scheduled
-        </div>
+      <div className="bg-blue-50 text-blue-600 text-[9px] px-3 py-1.5 rounded-lg font-black uppercase tracking-widest border border-blue-100">
+        Scheduled
       </div>
     );
   }
@@ -78,14 +76,12 @@ const UpcomingCountdown = ({ scheduledStr, onExpire }: { scheduledStr: string; o
   // Countdown expired → Live Now state
   if (secs <= 0) {
     return (
-      <div className="flex flex-col items-end gap-1 shrink-0">
-        <div className="flex items-center gap-1.5 bg-red-50 text-red-600 text-[9px] px-3 py-1.5 rounded-lg font-black uppercase tracking-widest border border-red-100">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
-          </span>
-          Live Now
-        </div>
+      <div className="flex items-center gap-1.5 bg-red-50 text-red-600 text-[9px] px-3 py-1.5 rounded-lg font-black uppercase tracking-widest border border-red-100">
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75"></span>
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+        </span>
+        Live Now
       </div>
     );
   }
@@ -95,25 +91,25 @@ const UpcomingCountdown = ({ scheduledStr, onExpire }: { scheduledStr: string; o
   if (secs < 60) {
     countdownLabel = 'Starting soon';
   } else if (secs < 3600) {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    countdownLabel = `Starts in ${m}m ${String(s).padStart(2, '0')}s`;
+    const mm = String(Math.floor(secs / 60)).padStart(2, '0');
+    const ss = String(secs % 60).padStart(2, '0');
+    countdownLabel = `Starts in 00h ${mm}m ${ss}s`;
   } else {
-    const h = Math.floor(secs / 3600);
-    const m = Math.floor((secs % 3600) / 60);
-    const s = secs % 60;
-    countdownLabel = `Starts in ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    const hh = String(Math.floor(secs / 3600)).padStart(2, '0');
+    const mm = String(Math.floor((secs % 3600) / 60)).padStart(2, '0');
+    const ss = String(secs % 60).padStart(2, '0');
+    countdownLabel = `Starts in ${hh}h ${mm}m ${ss}s`;
   }
 
   return (
-    <div className="flex flex-col items-end gap-1.5 shrink-0">
+    <>
       <div className="bg-blue-50 text-blue-600 text-[9px] px-3 py-1.5 rounded-lg font-black uppercase tracking-widest border border-blue-100">
         Scheduled
       </div>
       <span className={`text-xs font-medium ${secs < 60 ? 'text-orange-500 animate-pulse' : 'text-blue-600'}`}>
         {countdownLabel}
       </span>
-    </div>
+    </>
   );
 };
 
@@ -261,7 +257,7 @@ const LiveClasses: React.FC = () => {
                       </div>
 
                       {(lc.pdf1 || lc.pdf2 || lc.studyMaterial) && (
-                        <div className="flex flex-wrap gap-2 pt-4 mt-1 border-t border-red-100/50 relative z-10">
+                        <div className="flex flex-wrap gap-2 pt-4 mt-1 border-t border-red-100/50 relative z-10 px-3 pb-3">
                           {lc.pdf1 && (
                             <button
                               onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(lc.pdf1)}&title=${encodeURIComponent('PDF 1')}`, '_blank'); }}
@@ -311,12 +307,11 @@ const LiveClasses: React.FC = () => {
                     const rawScheduled = lc.scheduledAt || lc.scheduledTime || lc.startTime || lc.date || '';
                     const scheduledISO = rawScheduled ? rawScheduled.replace(' ', 'T') : '';
 
-                    const displayTime = (() => {
-                      if (!scheduledISO) return '';
-                      const d = new Date(scheduledISO);
-                      if (isNaN(d.getTime())) return '';
-                      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    })();
+                    const dateObj = scheduledISO ? new Date(scheduledISO) : null;
+                    const isValid = dateObj && !isNaN(dateObj.getTime());
+
+                    const formattedDate = isValid ? dateObj.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase() : '';
+                    const formattedTime = isValid ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }).toUpperCase() : '';
 
                     return (
                       <div key={lc._id || lc.id || i} className="group relative overflow-hidden p-[1px] rounded-2xl bg-gradient-to-br from-indigo-100/50 to-transparent shadow-sm transition-all duration-500 hover:shadow-indigo-500/10 hover:-translate-y-1">
@@ -329,11 +324,26 @@ const LiveClasses: React.FC = () => {
 
                           <div className="flex-1 min-w-0">
                             <h4 className="font-semibold text-base text-gray-800 truncate tracking-tight group-hover:text-indigo-600 transition-colors">{lc.title || lc.name}</h4>
-                            <div className="flex items-center gap-2 mt-1">
-                              <div className="flex items-center gap-1.5 bg-indigo-500/10 backdrop-blur-md text-indigo-600 text-[10px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider border border-indigo-200/50">
-                                <span className="material-symbols-rounded text-[14px]">schedule</span>
-                                {scheduledISO ? <UpcomingCountdown scheduledStr={scheduledISO} onExpire={() => setTick(t => t + 1)} /> : 'Scheduled'}
-                              </div>
+                            <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                              {isValid && (
+                                <>
+                                  <div className="flex items-center gap-1.5 bg-gray-100 text-gray-600 text-[10px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider border border-gray-200 shadow-sm">
+                                    <span className="material-symbols-rounded text-[14px]">calendar_month</span>
+                                    {formattedDate}
+                                  </div>
+                                  <div className="flex items-center gap-1.5 bg-indigo-500/10 backdrop-blur-md text-indigo-600 text-[10px] px-2.5 py-1 rounded-full font-black uppercase tracking-wider border border-indigo-200/50 shadow-sm">
+                                    <span className="material-symbols-rounded text-[14px]">schedule</span>
+                                    {formattedTime}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap mt-1">
+                                {scheduledISO ? <UpcomingCountdown scheduledStr={scheduledISO} onExpire={() => setTick(t => t + 1)} /> : (
+                                  <div className="bg-blue-50 text-blue-600 text-[9px] px-3 py-1.5 rounded-lg font-black uppercase tracking-widest border border-blue-100">
+                                    Scheduled
+                                  </div>
+                                )}
                             </div>
                           </div>
 
@@ -343,11 +353,11 @@ const LiveClasses: React.FC = () => {
                         </div>
 
                         {(lc.pdf1 || lc.pdf2 || lc.studyMaterial) && (
-                          <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-50">
+                          <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-50 px-3 pb-3">
                             {lc.pdf1 && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(lc.pdf1)}&title=${encodeURIComponent('PDF 1')}`, '_blank'); }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-[9px] font-black border border-red-100 hover:bg-red-100 transition-all uppercase tracking-widest"
+                                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white text-red-600 text-[10px] font-black border border-red-100 hover:bg-red-600 hover:text-white transition-all shadow-sm uppercase tracking-widest"
                               >
                                 <span className="material-symbols-rounded text-sm">picture_as_pdf</span>
                                 PDF 1
@@ -356,7 +366,7 @@ const LiveClasses: React.FC = () => {
                             {lc.studyMaterial && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(lc.studyMaterial)}&title=${encodeURIComponent('Study Material')}`, '_blank'); }}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-[9px] font-black border border-indigo-100 hover:bg-indigo-100 transition-all uppercase tracking-widest"
+                                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white text-indigo-600 text-[10px] font-black border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all shadow-sm uppercase tracking-widest"
                               >
                                 <span className="material-symbols-rounded text-sm">auto_stories</span>
                                 Material

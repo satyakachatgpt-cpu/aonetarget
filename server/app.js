@@ -213,19 +213,30 @@ app.get('/api/proxy-resource', optionalAuth, async (req, res) => {
         hasAccess = true;
       } else {
         // 2. Sensitive Asset (PDF, Video, etc.) -> Check Catalog & Enrollment
-        // Search across notes, pdfs, and videos collections for this URL
-        const query = { $or: [{ url: targetUrl }, { fileUrl: targetUrl }, { videoUrl: targetUrl }, { streamUrl: targetUrl }] };
-        const [note, pdf, video] = await Promise.all([
+        // Search across all content collections including live streams
+        const query = { 
+          $or: [
+            { url: targetUrl }, { fileUrl: targetUrl }, { videoUrl: targetUrl }, { streamUrl: targetUrl },
+            { pdf1: targetUrl }, { pdf2: targetUrl }, { studyMaterial: targetUrl }
+          ] 
+        };
+
+        const [note, pdf, video, liveVideo, liveClass] = await Promise.all([
           db.collection('notes').findOne(query),
           db.collection('pdfs').findOne(query),
-          db.collection('videos').findOne(query)
+          db.collection('videos').findOne(query),
+          db.collection('liveVideos').findOne(query),
+          db.collection('liveClasses').findOne(query)
         ]);
 
-        const item = note || pdf || video;
+        const item = note || pdf || video || liveVideo || liveClass;
         
         if (!item) {
           // If not in catalog, allow if it doesn't match sensitive patterns
           hasAccess = !/\.(pdf|mp4|m3u8|mov|avi)$/i.test(targetUrl.split('?')[0]);
+        } else if (liveVideo || liveClass) {
+          // Live stream attachments are accessible to both students and guests
+          hasAccess = true;
         } else {
           // Found in catalog! Check if item is free or user is enrolled
           if (item.isFree === true) {
