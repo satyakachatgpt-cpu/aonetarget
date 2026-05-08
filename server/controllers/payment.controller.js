@@ -240,6 +240,11 @@ export const verifyRazorpayPayment = async (req, res) => {
 
     const actualCourseId = course.id || courseId;
     const actualAmount = paymentData.amount / 100;
+    const expectedAmount = breakdown.totalAmount;
+    if (expectedAmount > 0 && Math.abs(actualAmount - expectedAmount) > 1) {
+      console.error(`[PAYMENT FRAUD] Amount mismatch: paid ₹${actualAmount}, expected ₹${expectedAmount}, orderId: ${razorpay_order_id}`);
+      return res.status(400).json({ error: 'Payment amount does not match course price' });
+    }
 
     const purchase = {
       id: `purchase_${Date.now()}`,
