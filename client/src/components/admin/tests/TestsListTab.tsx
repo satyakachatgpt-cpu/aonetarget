@@ -234,7 +234,7 @@ const TestsListTab: React.FC<TestsListTabProps> = ({
                 paginatedTests.map((test, index) => (
                   <tr
                     key={test.id || index}
-                    className="hover:bg-gray-50/30 transition-colors group"
+                    className={`hover:bg-gray-50/30 transition-colors group relative ${activeMenu === test.id ? "z-[50]" : "z-[1]"}`}
                   >
                     <td className="px-6 py-5 text-[13px] text-gray-700 font-medium">
                       {test.id
@@ -308,7 +308,7 @@ const TestsListTab: React.FC<TestsListTabProps> = ({
                         </button>
 
                         {activeMenu === test.id && (
-                          <div className={`absolute right-0 ${paginatedTests.length > 3 ? (index >= paginatedTests.length - 2 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right") : index >= paginatedTests.length - 1 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right"} w-[180px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[9999] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200`}>
+                          <div className={`absolute right-0 ${paginatedTests.length > 3 ? (index >= paginatedTests.length - 3 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right") : index >= paginatedTests.length - 1 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right"} w-[180px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[9999] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200`}>
                             {[
                               { id: "view", label: "View Tests", icon: "folder_open", onClick: () => { handleSetViewingTestSeries(test); setActiveMenu(null); } },
                               { id: "edit", label: "Edit", icon: "edit", onClick: () => { handleOpenModal(test); setActiveMenu(null); } },

@@ -32,7 +32,7 @@ const TestSeriesDetailHeader: React.FC<TestSeriesDetailHeaderProps> = ({
   onAddSubjective
 }) => {
   return (
-    <div className="bg-white px-8 py-3 border-b border-gray-100 flex items-center sticky top-0 z-30 shadow-sm">
+    <div className="bg-white px-8 py-3 border-b border-gray-100 flex items-center z-30 shadow-sm">
       <div className="flex items-center gap-5">
         <button
           onClick={onBack}

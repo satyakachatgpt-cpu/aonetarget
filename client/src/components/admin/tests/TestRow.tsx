@@ -46,8 +46,8 @@ const TestRow: React.FC<TestRowProps> = ({
   const style = {
     transform: CSS.Translate.toString(transform),
     transition,
-    zIndex: isDragging ? 50 : undefined,
-    position: (isDragging ? 'relative' : 'static') as any,
+    zIndex: isDragging ? 50 : (activeMenu === test.id ? 40 : undefined),
+    position: (isDragging || activeMenu === test.id ? 'relative' : 'static') as any,
     opacity: isDragging ? 0.8 : 1,
   };
 
@@ -169,7 +169,7 @@ const TestRow: React.FC<TestRowProps> = ({
           </button>
 
           {activeMenu === test.id && (
-            <div className={`absolute right-0 ${totalTests > 3 ? (index >= totalTests - 2 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right") : index >= totalTests - 1 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right"} w-[180px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[9999] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200`}>
+            <div className={`absolute right-0 ${totalTests > 3 ? (index >= totalTests - 3 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right") : index >= totalTests - 1 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right"} w-[180px] bg-white rounded-xl shadow-2xl border border-gray-100 z-[9999] py-2 overflow-hidden animate-in fade-in zoom-in-95 duration-200`}>
               {[
                 { id: "view", label: "View Tests", icon: "folder_open", onClick: () => { onView(test); setActiveMenu(null); } },
                 { id: "edit", label: "Edit", icon: "edit", onClick: () => { onEdit(test); setActiveMenu(null); } },
