@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import DOMPurify from 'dompurify';
 import { useDebounce } from '../hooks/useDebounce';
 import { useNavigate } from 'react-router-dom';
 import { coursesAPI, blogAPI, newsAPI, categoriesAPI, bannersAPI, testsAPI, testSeriesAPI, liveVideosAPI, quickLinksAPI } from '../services/apiClient';
@@ -1680,7 +1681,7 @@ const Home: React.FC = () => {
                 <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar min-h-[100px]">
                   <div 
                     className="text-[13px] text-gray-600 leading-relaxed news-content-html"
-                    dangerouslySetInnerHTML={{ __html: newsModal.message }}
+                    dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(newsModal.message || '') }}
                   />
                 </div>
 

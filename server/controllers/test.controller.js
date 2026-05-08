@@ -386,13 +386,20 @@ export const getTestById = async (req, res) => {
           } else {
             // 4. Check for expiry if enrolled
             const course = await findCourse(seriesId);
-            const purchase = await db.collection('purchases').findOne({
+            let purchase = await db.collection('purchases').findOne({
               studentId: studentId.toString(),
               courseId: seriesId.toString(),
               status: 'completed'
             }, { sort: { createdAt: -1 } });
 
-            if (course && purchase && isPurchaseExpired(purchase.createdAt, course.validity, course.expiryMode)) {
+            // Support Manual Enrollment: If no purchase record exists, use student admission date or creation date
+            if (!purchase && student) {
+              purchase = {
+                createdAt: student.admission?.admissionDate || student.createdAt || new Date()
+              };
+            }
+
+            if (course && purchase && isPurchaseExpired(purchase, course)) {
               console.warn(`[getTestById] Access Denied - Enrollment expired for student ${studentId}`);
               return res.status(403).json({ error: 'Your access to this test series has expired', code: 'EXPIRED' });
             }

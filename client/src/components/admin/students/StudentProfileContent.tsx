@@ -55,7 +55,9 @@ export const StudentProfileContent: React.FC<StudentProfileContentProps> = React
         testSeriesAPI.getAll().catch(() => [])
       ]);
 
-      const details = student.enrolledCourses.map(id => {
+      const details = (student.enrolledCourses || []).map((id: any) => {
+        const isExpired = (student as any).enrolledCoursesExpiry?.[String(id)] || false;
+
         const item = 
           allCourses.find((c: any) => (c.id || c._id) === id) ||
           allPkgs.find((p: any) => (p.id || p._id) === id) ||
@@ -67,10 +69,11 @@ export const StudentProfileContent: React.FC<StudentProfileContentProps> = React
             name: item.name || item.title || 'Unnamed Content',
             type: allCourses.some((c: any) => (c.id || c._id) === id) ? 'Batch' : 
                   allPkgs.some((p: any) => (p.id || p._id) === id) ? 'Package' : 'Test Series',
-            price: item.price || 0
+            price: item.price || 0,
+            isExpired: isExpired
           };
         }
-        return { id: id, name: 'Unknown/Deleted Content', type: 'Unknown', price: 0 };
+        return { id: id, name: 'Unknown/Deleted Content', type: 'Unknown', price: 0, isExpired: isExpired };
       });
       setEnrolledDetails(details);
     } catch (error) {
@@ -410,6 +413,7 @@ export const StudentProfileContent: React.FC<StudentProfileContentProps> = React
                         <th className="px-6 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">#</th>
                         <th className="px-6 py-3.5 text-left text-[10px] font-bold text-slate-400 uppercase tracking-widest">Package</th>
                         <th className="px-6 py-3.5 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Category</th>
+                        <th className="px-6 py-3.5 text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest">Status</th>
                         <th className="px-6 py-3.5 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Price</th>
                         <th className="px-6 py-3.5 text-right text-[10px] font-bold text-slate-400 uppercase tracking-widest">Action</th>
                       </tr>
@@ -417,14 +421,14 @@ export const StudentProfileContent: React.FC<StudentProfileContentProps> = React
                     <tbody className="divide-y divide-slate-50 bg-white">
                       {isLoadingEnrolled ? (
                         <tr>
-                          <td colSpan={5} className="py-20 text-center">
+                          <td colSpan={6} className="py-20 text-center">
                              <div className="w-8 h-8 border-3 border-indigo-50 border-t-indigo-600 rounded-full animate-spin mx-auto" />
                              <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest mt-3">Syncing Catalog...</p>
                           </td>
                         </tr>
                       ) : enrolledDetails.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="py-20 text-center">
+                          <td colSpan={6} className="py-20 text-center">
                              <span className="material-symbols-outlined text-[40px] text-slate-200">inventory_2</span>
                              <p className="text-[12px] font-bold text-slate-400 mt-2">No active packages assigned.</p>
                           </td>
@@ -438,6 +442,11 @@ export const StudentProfileContent: React.FC<StudentProfileContentProps> = React
                             </td>
                             <td className="px-6 py-4 text-center">
                               <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded-md text-[9px] font-bold uppercase tracking-wider">{pkg.type}</span>
+                            </td>
+                            <td className="px-6 py-4 text-center">
+                              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold uppercase tracking-wider border ${pkg.isExpired ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-emerald-50 text-emerald-600 border-emerald-100'}`}>
+                                {pkg.isExpired ? 'Expired' : 'Active'}
+                              </span>
                             </td>
                             <td className="px-6 py-4 text-right">
                               <p className="text-[14px] font-bold text-slate-900">₹{pkg.price}</p>

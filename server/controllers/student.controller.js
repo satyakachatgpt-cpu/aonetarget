@@ -4,6 +4,7 @@ import Student from '../models/Student.js';
 import bcrypt from 'bcrypt';
 import * as XLSX from 'xlsx';
 import { verifyAccessToken } from '../middleware/auth.js';
+import { isPurchaseExpired } from '../utils/helpers.js';
 
 const { ObjectId } = mongoose.Types;
 
@@ -172,10 +173,49 @@ export const getStudents = async (req, res) => {
 
     const students = await dbQuery;
 
-    // Map hasPassword
+    // --- ENROLLMENT EXPIRY LOGIC (Admin View) ---
+    const db = getDb();
+    const allEnrolledIds = [...new Set(students.flatMap(s => (s.enrolledCourses || []).map(id => String(id))))].filter(Boolean);
+    const studentIdVariants = [...new Set(students.flatMap(s => [String(s._id), s.id, s.userId].filter(Boolean)))];
+
+    // Fetch courses in bulk
+    const collections = ['courses', 'packages', 'testSeries', 'test-series'];
+    const courseMap = new Map();
+    for (const col of collections) {
+      const found = await db.collection(col).find({
+        $or: [
+          { id: { $in: allEnrolledIds } },
+          { _id: { $in: allEnrolledIds.filter(id => ObjectId.isValid(id)).map(id => new ObjectId(id)) } }
+        ]
+      }).toArray();
+      found.forEach(c => courseMap.set(String(c.id || c._id), c));
+    }
+
+    // Fetch purchases in bulk
+    const purchases = await db.collection('purchases').find({
+      studentId: { $in: studentIdVariants },
+      status: { $in: ['completed', 'success', 'captured', 'paid'] }
+    }).toArray();
+
+    // Map hasPassword and Enrolled Courses Expiry
     const safeStudents = students.map(s => {
       const { password, ...safeS } = s;
-      return { ...safeS, hasPassword: !!password };
+      const sVariants = [String(s._id), s.id, s.userId].filter(Boolean);
+
+      const enrolledExpiryMap = {};
+      (s.enrolledCourses || []).forEach(cId => {
+        const idStr = String(cId);
+        const course = courseMap.get(idStr);
+        const purchase = purchases.find(p => sVariants.includes(String(p.studentId)) && String(p.courseId) === idStr);
+        enrolledExpiryMap[idStr] = course ? isPurchaseExpired(purchase, course) : false;
+      });
+
+      return { 
+        ...safeS, 
+        hasPassword: !!password,
+        enrolledCourses: s.enrolledCourses,
+        enrolledCoursesExpiry: enrolledExpiryMap
+      };
     });
 
     if (!isExport) {
@@ -204,7 +244,42 @@ export const getStudentById = async (req, res) => {
       return res.status(404).json({ error: 'Student not found' });
     }
     const { password, ...safeStudent } = student;
-    res.json({ ...safeStudent, hasPassword: !!password });
+    const db = getDb();
+    
+    // Compute Expiry for this single student
+    const enrolledIds = (student.enrolledCourses || []).map(id => String(id));
+    const sVariants = [String(student._id), student.id, student.userId].filter(Boolean);
+    
+    const collections = ['courses', 'packages', 'testSeries', 'test-series'];
+    const courseMap = new Map();
+    for (const col of collections) {
+      const found = await db.collection(col).find({
+        $or: [
+          { id: { $in: enrolledIds } },
+          { _id: { $in: enrolledIds.filter(id => ObjectId.isValid(id)).map(id => new ObjectId(id)) } }
+        ]
+      }).toArray();
+      found.forEach(c => courseMap.set(String(c.id || c._id), c));
+    }
+
+    const purchases = await db.collection('purchases').find({
+      studentId: { $in: sVariants },
+      status: { $in: ['completed', 'success', 'captured', 'paid'] }
+    }).toArray();
+
+    const enrolledExpiryMap = {};
+    enrolledIds.forEach(id => {
+      const course = courseMap.get(id);
+      const purchase = purchases.find(p => sVariants.includes(String(p.studentId)) && String(p.courseId) === id);
+      enrolledExpiryMap[id] = course ? isPurchaseExpired(purchase, course) : false;
+    });
+
+    res.json({ 
+      ...safeStudent, 
+      hasPassword: !!password,
+      enrolledCourses: student.enrolledCourses,
+      enrolledCoursesExpiry: enrolledExpiryMap
+    });
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch student' });
   }

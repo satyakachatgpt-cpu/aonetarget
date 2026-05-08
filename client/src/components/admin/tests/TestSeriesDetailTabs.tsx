@@ -12,7 +12,7 @@ const TestSeriesDetailTabs: React.FC<TestSeriesDetailTabsProps> = ({
   setActiveTab
 }) => {
   return (
-    <div className="bg-white px-10 flex gap-8 border-b border-gray-100 sticky top-[73px] z-20 shadow-sm overflow-x-auto no-scrollbar">
+    <div className="bg-white px-10 flex gap-8 border-b border-gray-100 z-20 shadow-sm overflow-x-auto no-scrollbar">
       {tabs.map((tab) => (
         <button
           key={tab}

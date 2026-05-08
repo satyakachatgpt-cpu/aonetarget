@@ -1,4 +1,4 @@
-import { db } from '../config/db.js';
+import { getDb } from '../config/db.js';
 import mongoose from 'mongoose';
 import { syncLiveStream } from '../services/liveStream.service.js';
 import { findCourse, getRelatedCourseIds, getCourseIdVariants } from '../services/course.service.js';
@@ -51,6 +51,7 @@ const calculateStreamStatus = (item) => {
 // --- Live Video Admin Controllers ---
 
 export const getLiveVideos = async (req, res) => {
+  const db = getDb();
   try {
     const liveVideos = await db.collection('liveVideos').find({}).toArray();
     const courseLiveStreams = await db.collection('liveClasses').find({}).toArray();
@@ -109,6 +110,7 @@ export const deleteLiveVideo = async (req, res) => {
 // --- Live Class Admin Controllers ---
 
 export const getLiveClasses = async (req, res) => {
+  const db = getDb();
   try {
     const classes = await db.collection('liveClasses').find({}).toArray();
     res.json(classes);
@@ -119,6 +121,7 @@ export const getLiveClasses = async (req, res) => {
 };
 
 export const createLiveClass = async (req, res) => {
+  const db = getDb();
   try {
     const result = await db.collection('liveClasses').insertOne(req.body);
     res.status(201).json({ _id: result.insertedId, ...req.body });
@@ -129,6 +132,7 @@ export const createLiveClass = async (req, res) => {
 };
 
 export const updateLiveClass = async (req, res) => {
+  const db = getDb();
   try {
     const { _id, ...updateData } = req.body;
     const result = await db.collection('liveClasses').updateOne(
@@ -144,6 +148,7 @@ export const updateLiveClass = async (req, res) => {
 };
 
 export const deleteLiveClass = async (req, res) => {
+  const db = getDb();
   try {
     const result = await db.collection('liveClasses').deleteOne({ id: req.params.id });
     if (result.deletedCount === 0) return res.status(404).json({ error: 'Live class not found' });
@@ -157,6 +162,7 @@ export const deleteLiveClass = async (req, res) => {
 // --- Course Specific Live Class Controllers ---
 
 export const getCourseLiveClasses = async (req, res) => {
+  const db = getDb();
   try {
     const course = await findCourse(req.params.courseId);
     if (!course) return res.json([]);
@@ -228,6 +234,7 @@ export const getCourseLiveClasses = async (req, res) => {
 };
 
 export const deleteCourseLiveClass = async (req, res) => {
+  const db = getDb();
   try {
     const result = await db.collection('liveClasses').deleteOne({ id: req.params.id, courseId: req.params.courseId });
     if (result.deletedCount === 0) return res.status(404).json({ error: 'Live class not found' });
@@ -281,6 +288,7 @@ export const endLiveStream = async (req, res) => {
 };
 
 export const syncLiveStreamsReconciliation = async (req, res) => {
+  const db = getDb();
   try {
     console.log('[MIGRATION] Starting safe live stream reconciliation...');
     const liveVideos = await db.collection('liveVideos').find({}).toArray();
@@ -304,6 +312,7 @@ export const syncLiveStreamsReconciliation = async (req, res) => {
   }
 };
 export const getStudentLiveClasses = async (req, res) => {
+  const db = getDb();
   try {
     let studentId = req.params.id;
     let studentQuery = { id: studentId };

@@ -30,11 +30,14 @@ const maskPhone = (phone) => {
 const sendSMS = async (phone, message, templateId) => {
   const startTime = performance.now();
   const masked = maskPhone(phone);
-  
+
   const url = 'http://sms.primeclick.in/api/mt/SendSMS?' +
-    'user=' + process.env.PRIMCLICK_USERNAME +
-    '&password=' + process.env.PRIMCLICK_PASSWORD +
-    '&senderid=' + process.env.DLT_HEADER +
+    // 'user=' + process.env.PRIMCLICK_USERNAME +
+    // '&password=' + process.env.PRIMCLICK_PASSWORD +
+    // '&senderid=' + process.env.DLT_HEADER +
+    'user=' + encodeURIComponent(process.env.PRIMCLICK_USERNAME) +
+    '&password=' + encodeURIComponent(process.env.PRIMCLICK_PASSWORD) +
+    '&senderid=' + encodeURIComponent(process.env.DLT_HEADER) +
     '&channel=TRANS' +
     '&DCS=0' +
     '&flashsms=0' +
@@ -52,7 +55,7 @@ const sendSMS = async (phone, message, templateId) => {
       if (!isProduction) {
         console.log(`[SMS] Attempt ${attempt}/${MAX_RETRIES} → phone: ${masked}`);
       }
-      
+
       const response = await smsClient.get(url);
       const data = response.data;
       const duration = (performance.now() - attemptStart).toFixed(2);
@@ -72,7 +75,7 @@ const sendSMS = async (phone, message, templateId) => {
     } catch (error) {
       const duration = (performance.now() - attemptStart).toFixed(2);
       const isRetryable = ['ECONNRESET', 'ECONNREFUSED', 'ETIMEDOUT', 'ENOTFOUND', 'ECONNABORTED'].includes(error.code) || error.message.includes('timeout');
-      
+
       console.error(`[SMS] Attempt ${attempt} failed (${duration}ms): ${error.code || 'TIMEOUT'} - ${error.message}`);
 
       if (isRetryable && attempt < MAX_RETRIES) {

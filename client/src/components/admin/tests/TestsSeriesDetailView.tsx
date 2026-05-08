@@ -88,7 +88,7 @@ const TestsSeriesDetailView: React.FC<Props> = ({
   // However, according to the plan, we will call TestsQuestionEditorView before this one.
 
   return (
-    <div className="flex flex-col h-full bg-[#fafafa] animate-in fade-in duration-500 min-h-screen">
+    <div className="flex flex-col h-full bg-[#fafafa] animate-in fade-in duration-500 min-h-screen overflow-y-auto">
       {/* Detail Header */}
       <TestSeriesDetailHeader
         title={
@@ -120,7 +120,7 @@ const TestsSeriesDetailView: React.FC<Props> = ({
       />
 
       {/* Tab Content */}
-      <div className="flex-1 overflow-y-auto px-10 py-8">
+      <div className="flex-1 px-10 py-8">
         {viewingTestSeriesTab === "Tests" && (
           <div className="p-0">
             <TestSeriesDetailList

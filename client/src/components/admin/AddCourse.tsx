@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, useContext } from 'react';
+import DOMPurify from 'dompurify';
 import { couponsAPI, coursesAPI, categoriesAPI, testSeriesAPI, pdfsAPI, packagesAPI, uploadAPI, subcategoriesAPI, subjectsAPI } from '../../services/apiClient';
 import RichTextEditor from '../shared/RichTextEditor';
 import { AdminUIContext } from '../../context/AdminUIContext';
@@ -1632,7 +1633,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
                                         <div className="mt-3 overflow-hidden border-l-2 border-gray-100 pl-3">
                                             <div 
                                                 className="text-[12px] text-gray-500 max-h-[80px] overflow-y-auto prose prose-sm max-w-none [&_p]:m-0 custom-scrollbar"
-                                                dangerouslySetInnerHTML={{ __html: description }}
+                                                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(description || '') }}
                                             />
                                         </div>
                                     )}
