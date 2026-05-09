@@ -525,7 +525,6 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
   const handleEditYoutubeZoom = (video: any) => {
     setEditingYoutubeZoom(video);
-    setActiveYoutubeZoomTab('basic');
     setYoutubeZoomForm({
       title: video.title || '',
       description: video.description || '',
@@ -595,12 +594,12 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
 
 
 
-  const [activeLiveStreamTab, setActiveLiveStreamTab] = useState<'basic' | 'advanced'>('basic');
-
-  const [activeYoutubeZoomTab, setActiveYoutubeZoomTab] = useState<'basic' | 'advanced'>('basic');
 
 
-  const [activeWebinarTab, setActiveWebinarTab] = useState<'basic' | 'advanced'>('basic');
+
+
+
+
 
   const [importSearch, setImportSearch] = useState('');
 
@@ -1052,13 +1051,13 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
         modalState={{ ...modalState, showBulkActionDrawer }}
         modalSetters={{ ...modalSetters, setShowBulkActionDrawer }}
         forms={{
-          liveStreamForm, activeLiveStreamTab, youtubeZoomForm, activeYoutubeZoomTab,
-          webinarForm, activeWebinarTab, importSource, importSearch,
+          liveStreamForm, youtubeZoomForm,
+          webinarForm, importSource, importSearch,
           selectedImportItems, subjectiveTestSearch
         }}
         formSetters={{
-          setLiveStreamForm, setActiveLiveStreamTab, setYoutubeZoomForm, setActiveYoutubeZoomTab,
-          setWebinarForm, setActiveWebinarTab, setImportSource, setImportSearch,
+          setLiveStreamForm, setYoutubeZoomForm,
+          setWebinarForm, setImportSource, setImportSearch,
           setSelectedImportItems, setSubjectiveTestSearch, setSelectedSubjectiveList
         }}
         refs={{

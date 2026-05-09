@@ -154,9 +154,6 @@ const LiveStreamDrawer: React.FC<LiveStreamDrawerProps> = ({
                   </button>
                 </div>
               </div>
-
-
-
             </div>
 
             {/* Additional Content Section */}

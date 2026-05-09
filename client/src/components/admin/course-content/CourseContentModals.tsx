@@ -11,8 +11,6 @@ import { OMRTestDrawer, TestDrawer, QuizDrawer, LinkDrawer, UploadDrawer } from 
 interface CourseContentModalsProps {
   showLiveStreamModal: boolean;
   setShowLiveStreamModal: (show: boolean) => void;
-  activeLiveStreamTab: 'basic' | 'advanced';
-  setActiveLiveStreamTab: (tab: 'basic' | 'advanced') => void;
   liveStreamForm: any;
   setLiveStreamForm: (form: any) => void;
   liveStreamImageRef: React.RefObject<HTMLInputElement>;
@@ -25,8 +23,6 @@ interface CourseContentModalsProps {
   showYoutubeZoomModal: boolean;
   setShowYoutubeZoomModal: (show: boolean) => void;
   editingYoutubeZoom: any;
-  activeYoutubeZoomTab: 'basic' | 'advanced';
-  setActiveYoutubeZoomTab: (tab: 'basic' | 'advanced') => void;
   youtubeZoomForm: any;
   setYoutubeZoomForm: (form: any | ((prev: any) => any)) => void;
   youtubeZoomImageRef: React.RefObject<HTMLInputElement>;
@@ -42,10 +38,8 @@ interface CourseContentModalsProps {
   showToast: (msg: string, type?: 'success' | 'error') => void;
   showWebinarModal: boolean;
   setShowWebinarModal: (show: boolean) => void;
-  activeWebinarTab: 'basic' | 'advanced';
-  setActiveWebinarTab: (tab: 'basic' | 'advanced') => void;
   webinarForm: any;
-  setWebinarForm: (form: any) => void;
+  setWebinarForm: (form: any | ((prev: any) => any)) => void;
   getImageUrl: (url: string) => string;
   webinarImageRef: React.RefObject<HTMLInputElement>;
   handleWebinarImageUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -133,8 +127,6 @@ const CourseContentModals: React.FC<CourseContentModalsProps> = (props) => {
   const {
     showLiveStreamModal,
     setShowLiveStreamModal,
-    activeLiveStreamTab,
-    setActiveLiveStreamTab,
     liveStreamForm,
     setLiveStreamForm,
     liveStreamImageRef,
@@ -147,8 +139,6 @@ const CourseContentModals: React.FC<CourseContentModalsProps> = (props) => {
     showYoutubeZoomModal,
     setShowYoutubeZoomModal,
     editingYoutubeZoom,
-    activeYoutubeZoomTab,
-    setActiveYoutubeZoomTab,
     youtubeZoomForm,
     setYoutubeZoomForm,
     youtubeZoomImageRef,
@@ -163,8 +153,6 @@ const CourseContentModals: React.FC<CourseContentModalsProps> = (props) => {
     showToast,
     showWebinarModal,
     setShowWebinarModal,
-    activeWebinarTab,
-    setActiveWebinarTab,
     webinarForm,
     setWebinarForm,
     getImageUrl,
@@ -256,8 +244,6 @@ const CourseContentModals: React.FC<CourseContentModalsProps> = (props) => {
       <LiveStreamDrawer
         showLiveStreamModal={showLiveStreamModal}
         setShowLiveStreamModal={setShowLiveStreamModal}
-        activeLiveStreamTab={activeLiveStreamTab}
-        setActiveLiveStreamTab={setActiveLiveStreamTab}
         liveStreamForm={liveStreamForm}
         setLiveStreamForm={setLiveStreamForm}
         liveStreamImageRef={liveStreamImageRef}
@@ -273,8 +259,6 @@ const CourseContentModals: React.FC<CourseContentModalsProps> = (props) => {
         showYoutubeZoomModal={showYoutubeZoomModal}
         setShowYoutubeZoomModal={setShowYoutubeZoomModal}
         editingYoutubeZoom={editingYoutubeZoom}
-        activeYoutubeZoomTab={activeYoutubeZoomTab}
-        setActiveYoutubeZoomTab={setActiveYoutubeZoomTab}
         youtubeZoomForm={youtubeZoomForm}
         setYoutubeZoomForm={setYoutubeZoomForm}
         youtubeZoomImageRef={youtubeZoomImageRef}
@@ -293,8 +277,6 @@ const CourseContentModals: React.FC<CourseContentModalsProps> = (props) => {
       <WebinarDrawer
         showWebinarModal={showWebinarModal}
         setShowWebinarModal={setShowWebinarModal}
-        activeWebinarTab={activeWebinarTab}
-        setActiveWebinarTab={setActiveWebinarTab}
         webinarForm={webinarForm}
         setWebinarForm={setWebinarForm}
         webinarImageRef={webinarImageRef}
