@@ -2,6 +2,7 @@ import { getDb } from '../config/db.js';
 import mongoose from 'mongoose';
 import { syncLiveStream } from '../services/liveStream.service.js';
 import { findCourse, getRelatedCourseIds, getCourseIdVariants } from '../services/course.service.js';
+import { isPurchaseExpired } from '../utils/helpers.js';
 import Student from '../models/Student.js';
 
 const { ObjectId } = mongoose.Types;
@@ -365,6 +366,19 @@ export const getStudentLiveClasses = async (req, res) => {
 
     const [foundCourses, foundPackages] = await Promise.all(dbQueries);
     const allFound = [...foundCourses, ...foundPackages];
+
+    // NEW: Fetch purchases in bulk for expiry check (Stabilization)
+    const studentIdVariants = [studentId, student._id?.toString(), student.id, student.userId].filter(Boolean);
+    const purchases = await db.collection('purchases').find({
+      studentId: { $in: studentIdVariants },
+      status: { $in: ['completed', 'success', 'captured', 'paid'] }
+    }).toArray();
+
+    // Create a map of courseId -> purchase for quick lookup
+    const purchaseMap = new Map();
+    purchases.forEach(p => {
+      if (p.courseId) purchaseMap.set(String(p.courseId), p);
+    });
     
     let allIdVariants = new Set(enrolledCourseIdsArray);
     const names = new Set();
@@ -424,6 +438,28 @@ export const getStudentLiveClasses = async (req, res) => {
       // If it doesn't have a batchId, it's course-wide.
       if (item.batchId && !studentBatchIds.has(String(item.batchId))) {
         return;
+      }
+
+      // EXPIRY FILTERING: (Stabilization)
+      // Check if the course associated with this stream has expired for the student.
+      const associatedCourse = allFound.find(c => {
+        const idStr = String(c.id || c._id);
+        const itemIdStr = String(item.courseId);
+        if (idStr === itemIdStr) return true;
+        // Also check if this course is part of a package the student is enrolled in
+        if (Array.isArray(c.courses) && c.courses.some(childId => String(childId) === itemIdStr)) return true;
+        return false;
+      });
+
+      if (associatedCourse) {
+        const purchase = purchaseMap.get(String(associatedCourse.id || associatedCourse._id));
+        // Fallback to student creation/admission date for manual enrollments
+        const effectivePurchase = purchase || {
+          createdAt: student.admission?.admissionDate || student.createdAt || new Date()
+        };
+        if (isPurchaseExpired(effectivePurchase, associatedCourse)) {
+          return;
+        }
       }
 
       // Step 6: Dynamic Status

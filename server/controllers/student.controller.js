@@ -399,8 +399,7 @@ export const updateStudent = async (req, res) => {
       'name', 'phone', 'email', 'dob', 'city', 'state', 'district', 'gender',
       'whatsAppNumber', 'alternateNumber', 'alternateWhatsAppNumber', 'class', 'target',
       'fatherName', 'motherName', 'fullAddress', 'address', 'password',
-      'previousClass', 'schoolName', 'marksPercentage', 'passingYear', 'profilePhoto',
-      'notes', 'tag'
+      'previousClass', 'schoolName', 'marksPercentage', 'passingYear', 'profilePhoto'
     ];
 
     // Block non-admins from updating sensitive fields
