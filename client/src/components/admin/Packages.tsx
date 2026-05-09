@@ -1080,7 +1080,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
     <div className="space-y-4 animate-fade-in pb-10">
       {/* Navigation Tabs Container */}
       <div className="bg-white px-8 py-1 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-10 overflow-x-auto scrollbar-hide">
-        {['Packages', 'Live & Upcoming', 'Forum', 'Content'].map((tab) => (
+        {['Batches', 'Live & Upcoming', 'Forum', 'Content'].map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
@@ -1105,7 +1105,7 @@ const Packages: React.FC<Props> = ({ showToast, onCourseSelect }) => {
           {/* Header Section */}
           <div className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gray-50 bg-white rounded-t-[2rem]">
             <div className="flex flex-col gap-1">
-              <h3 className="text-[20px] font-bold text-gray-900 tracking-tight">Packages</h3>
+              <h3 className="text-[20px] font-bold text-gray-900 tracking-tight">Batches</h3>
               {(searchQuery || statusFilter !== 'all') ? (
                 <p className="text-[10px] font-bold text-amber-500 uppercase tracking-widest flex items-center gap-1.5 animate-in fade-in slide-in-from-left-2">
                   <span className="material-symbols-outlined text-[14px]">info</span>

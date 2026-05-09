@@ -168,7 +168,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
       icon: 'inventory_2',
       color: 'text-gray-700',
       submenu: [
-        { id: 'packages', label: 'Packages', icon: 'category' },
+        { id: 'packages', label: 'Featured Batches', icon: 'category' },
         { id: 'free-content', label: 'Free Content', icon: 'auto_awesome' },
         { id: 'quick-links', label: ' Quick Links', icon: 'public' },
         { id: 'pdfs', label: 'E-Books', icon: 'book' },
