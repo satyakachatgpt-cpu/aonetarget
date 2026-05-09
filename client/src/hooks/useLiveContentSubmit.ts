@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+import { invalidateCache } from '../services/apiClient';
 
 interface UseLiveContentSubmitProps {
   selectedCourse: any;
@@ -145,6 +146,7 @@ export const useLiveContentSubmit = ({
         setShowYoutubeZoomModal(false);
         setEditingYoutubeZoom(null);
         resetYoutubeZoomForm();
+        invalidateCache('live-videos');
         loadCourseContent();
       } else {
         const err = await response.json().catch(() => ({}));
@@ -235,6 +237,7 @@ export const useLiveContentSubmit = ({
         showToast('Live stream added successfully!', 'success');
         setShowLiveStreamModal(false);
         resetLiveStreamForm();
+        invalidateCache('live-videos');
         loadCourseContent();
       } else {
         const err = await response.json().catch(() => ({}));
