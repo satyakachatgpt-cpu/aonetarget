@@ -853,15 +853,6 @@ const CourseDetails: React.FC = () => {
                   <span className="text-xl font-black text-white tracking-tight">EXPIRED</span>
                 </div>
               </div>
-
-              {isPaidCourse && (
-                <button
-                  onClick={handleBuyNow}
-                  className="px-6 py-3.5 bg-red-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.1em] shadow-xl active:scale-[0.98] transition-all"
-                >
-                  RENEW ACCESS
-                </button>
-              )}
             </div>
           </div>
         ) : !isEnrolled ? (

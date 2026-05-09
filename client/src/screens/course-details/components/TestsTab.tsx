@@ -34,11 +34,6 @@ const TestsTab: React.FC<TestsTabProps> = ({
           </div>
           <h4 className="font-bold text-gray-800">Your access has expired</h4>
           <p className="text-gray-500 font-medium text-sm mt-1">This course validity period has ended</p>
-          {isPaidCourse && (
-            <button onClick={onBuyNow} className="mt-6 btn-accent px-8 py-3 text-sm">
-              Renew Access
-            </button>
-          )}
         </div>
       ) : !isEnrolled ? (
         <div className="card-premium p-10 text-center animate-fade-in-up">
@@ -115,7 +110,13 @@ const TestsTab: React.FC<TestsTabProps> = ({
                               Done
                             </span>
                           )}
-                          {isLocked && (
+                          {test.isExpired && (
+                            <span className="bg-rose-50 text-rose-600 text-[10px] font-bold px-2 py-1 rounded-lg flex items-center gap-0.5">
+                              <span className="material-symbols-rounded text-[10px]">lock_clock</span>
+                              EXPIRED
+                            </span>
+                          )}
+                          {isLocked && !test.isExpired && (
                             <span className="bg-orange-50 text-orange-600 text-[10px] font-bold px-2 py-1 rounded-lg">
                               LOCKED
                             </span>
@@ -124,10 +125,11 @@ const TestsTab: React.FC<TestsTabProps> = ({
                       </div>
                       {canAccess ? (
                         <button
-                          onClick={() => onStartTest(testId)}
-                          className="w-full btn-primary py-3 text-sm active:scale-[0.97] transition-all duration-200"
+                          onClick={() => !test.isExpired && onStartTest(testId)}
+                          disabled={test.isExpired}
+                          className={`w-full py-3 text-sm rounded-2xl font-semibold transition-all duration-200 ${test.isExpired ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none' : 'btn-primary active:scale-[0.97]'}`}
                         >
-                          {isAttempted ? 'View Result / Retake' : 'Start Test'}
+                          {test.isExpired ? 'Test Expired' : isAttempted ? 'View Result / Retake' : 'Start Test'}
                         </button>
                       ) : (
                         <button

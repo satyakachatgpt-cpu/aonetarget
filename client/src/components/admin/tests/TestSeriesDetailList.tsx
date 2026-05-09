@@ -108,6 +108,9 @@ const SortableTestItem = ({
             }}
           >
             {test.name || (test as any).title}
+            {(test.isExpired || (test.closeDate && new Date() > new Date(test.closeDate))) && (
+              <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded text-[10px] font-bold border border-red-100 uppercase tracking-tighter ml-2">Expired</span>
+            )}
           </h3>
           <div className="flex items-center gap-4 mt-1 text-[12px] text-gray-500 font-medium">
             <span><span className="font-bold text-gray-700">{test.marks || 0}</span> Marks</span>

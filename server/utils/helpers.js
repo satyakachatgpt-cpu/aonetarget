@@ -190,3 +190,19 @@ export const isPurchaseExpired = (purchase, course) => {
   return false;
 };
 
+/**
+ * Check if an individual test has expired based on its closeDate
+ */
+export const isTestExpired = (test) => {
+  if (!test) return false;
+  
+  // Use closeDate or endDate or validity
+  const expiryDateStr = test.closeDate || test.endDate || test.validity;
+  if (!expiryDateStr) return false;
+  
+  const expiryDate = new Date(expiryDateStr);
+  if (isNaN(expiryDate.getTime())) return false;
+  
+  return new Date() > expiryDate;
+};
+

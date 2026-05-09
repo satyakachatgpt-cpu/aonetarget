@@ -166,6 +166,10 @@ const MockTests: React.FC = () => {
   };
 
   const handleSeriesClick = async (series: any) => {
+    if (series.isExpired) {
+      toast.error('This test series has expired.');
+      return;
+    }
     setActiveSeries(series);
     const seriesId = String(series.id || series._id);
     const preEnrolled = enrolledSeriesIds.has(seriesId);
@@ -219,7 +223,7 @@ const MockTests: React.FC = () => {
     const openDate = test.openDate ? new Date(test.openDate) : null;
     const closeDate = test.closeDate ? new Date(test.closeDate) : null;
     if (openDate && now < openDate) return 'upcoming';
-    if (closeDate && now > closeDate) return 'completed';
+    if (closeDate && now > closeDate) return 'expired';
     return 'live';
   };
 
@@ -227,6 +231,7 @@ const MockTests: React.FC = () => {
     switch (status) {
       case 'upcoming': return { label: 'Upcoming', bg: 'bg-amber-100', text: 'text-amber-700', icon: 'schedule' };
       case 'live': return { label: 'Live', bg: 'bg-green-100', text: 'text-green-700', icon: 'play_circle' };
+      case 'expired': return { label: 'Expired', bg: 'bg-rose-100', text: 'text-rose-700', icon: 'lock_clock' };
       case 'completed': return { label: 'Completed', bg: 'bg-gray-100', text: 'text-gray-500', icon: 'check_circle' };
       default: return { label: 'Available', bg: 'bg-blue-100', text: 'text-blue-700', icon: 'info' };
     }
@@ -402,12 +407,20 @@ const MockTests: React.FC = () => {
                           </span>
                         </div>
                         <button
-                          onClick={() => status !== 'upcoming' && navigate(`/test/${test.id || test._id}`, { state: { seriesId: activeSeries?.id || activeSeries?._id } })}
+                          onClick={() => {
+                            if (status === 'expired') {
+                              toast.error('This test has expired.');
+                              return;
+                            }
+                            if (status !== 'upcoming') {
+                              navigate(`/test/${test.id || test._id}`, { state: { seriesId: activeSeries?.id || activeSeries?._id } });
+                            }
+                          }}
                           disabled={status === 'upcoming'}
-                          className={`w-full mt-4 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 ${status === 'upcoming' ? 'bg-gray-100 text-gray-300' : 'bg-primary text-white shadow-primary/20'
+                          className={`w-full mt-4 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 ${status === 'upcoming' || status === 'expired' ? 'bg-gray-100 text-gray-300 shadow-none' : 'bg-primary text-white shadow-primary/20'
                             }`}
                         >
-                          {status === 'completed' ? 'Review Test' : status === 'upcoming' ? 'Locked' : 'Start Test'}
+                          {status === 'expired' ? 'Expired' : status === 'upcoming' ? 'Locked' : 'Start Test'}
                         </button>
                       </div>
                     );

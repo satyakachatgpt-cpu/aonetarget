@@ -127,14 +127,16 @@ const TestRow: React.FC<TestRowProps> = ({
           className="hover:text-blue-600 transition-all text-left leading-snug flex items-center gap-2"
         >
           {test.name || test.title}
-          {test.isSeries && (
+          {(test.isSeries || test.isExpired || (test.closeDate && new Date() > new Date(test.closeDate))) && (
             (() => {
-              const status = getExpiryStatus(test);
+              const isTestActuallyExpired = test.isExpired || (test.closeDate && new Date() > new Date(test.closeDate));
+              const status = test.isSeries ? getExpiryStatus(test) : (isTestActuallyExpired ? 'expired' : 'active');
               switch (status) {
                 case 'expired':
                   return <span className="bg-red-50 text-red-600 px-2 py-0.5 rounded text-[10px] font-bold border border-red-100 uppercase tracking-tighter">Expired</span>;
                 case 'active':
-                  return <span className="bg-green-50 text-green-600 px-2 py-0.5 rounded text-[10px] font-bold border border-green-100 uppercase tracking-tighter">Active</span>;
+                  // Only show 'Active' for series to avoid cluttering individual tests
+                  return test.isSeries ? <span className="bg-green-50 text-green-600 px-2 py-0.5 rounded text-[10px] font-bold border border-green-100 uppercase tracking-tighter">Active</span> : null;
                 case 'lifetime':
                   return <span className="bg-gray-50 text-gray-500 px-2 py-0.5 rounded text-[10px] font-bold border border-gray-100 uppercase tracking-tighter">Lifetime</span>;
                 case 'months':
