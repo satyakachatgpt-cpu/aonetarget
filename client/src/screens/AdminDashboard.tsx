@@ -23,7 +23,6 @@ const Videos = lazy(() => import('../components/admin/Videos'));
 const VideoSeries = lazy(() => import('../components/admin/VideoSeries'));
 const LiveVideos = lazy(() => import('../components/admin/LiveVideos'));
 const PDFs = lazy(() => import('../components/admin/PDFs'));
-const ExamDocuments = lazy(() => import('../components/admin/ExamDocuments'));
 const Messages = lazy(() => import('../components/admin/Messages'));
 const Blog = lazy(() => import('../components/admin/Blog'));
 const Settings = lazy(() => import('../components/admin/Settings'));
@@ -49,7 +48,7 @@ const ViewFormatPage = lazy(() => import('../components/admin/ViewFormatPage'));
 const SalesReport = lazy(() => import('../components/admin/reports/SalesReport'));
 const NoPurchaseReport = lazy(() => import('../components/admin/reports/NoPurchaseReport'));
 
-export type AdminView = 'dashboard' | 'students' | 'buyers' | 'tokens' | 'coupons' | 'store' | 'institute' | 'questions' | 'question-bank' | 'passages' | 'tests' | 'subjective-test' | 'test-series' | 'all-reports' | 'videos' | 'video-series' | 'live-videos' | 'live-sessions' | 'pdfs' | 'exam-documents' | 'packages' | 'messages' | 'blog' | 'settings' | 'banners' | 'courses' | 'course-content' | 'live-class-scheduler' | 'subcourses' | 'subjects' | 'topics' | 'instructions' | 'global-news' | 'quick-links' | 'push-notifications' | 'categories' | 'misc' | 'referrals' | 'chat-support' | 'free-content' | 'blocked-users' | 'security-center' | 'sales-report' | 'no-purchase-report';
+export type AdminView = 'dashboard' | 'students' | 'buyers' | 'tokens' | 'coupons' | 'store' | 'institute' | 'questions' | 'question-bank' | 'passages' | 'tests' | 'subjective-test' | 'test-series' | 'all-reports' | 'videos' | 'video-series' | 'live-videos' | 'live-sessions' | 'pdfs' | 'packages' | 'messages' | 'blog' | 'settings' | 'banners' | 'courses' | 'course-content' | 'live-class-scheduler' | 'subcourses' | 'subjects' | 'topics' | 'instructions' | 'global-news' | 'quick-links' | 'push-notifications' | 'categories' | 'misc' | 'referrals' | 'chat-support' | 'free-content' | 'blocked-users' | 'security-center' | 'sales-report' | 'no-purchase-report';
 
 interface Props {
   setAuth: (val: boolean) => void;
@@ -81,7 +80,6 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
           () => import('../components/admin/Videos'),
           () => import('../components/admin/LiveSessions'),
           () => import('../components/admin/PDFs'),
-          () => import('../components/admin/ExamDocuments'),
           () => import('../components/admin/CourseContentManager')
         ];
         // Low priority pre-fetching
@@ -171,8 +169,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         { id: 'packages', label: 'Featured Batches', icon: 'category' },
         { id: 'free-content', label: 'Free Content', icon: 'auto_awesome' },
         { id: 'quick-links', label: ' Quick Links', icon: 'public' },
-        { id: 'pdfs', label: 'E-Books', icon: 'book' },
-        { id: 'exam-documents', label: 'Exam Docs', icon: 'description' }
+        { id: 'pdfs', label: 'E-Books', icon: 'book' }
       ]
     },
     {
@@ -281,7 +278,6 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         <Route path="live-videos" element={<LiveVideos {...props} />} />
         <Route path="live-sessions" element={<LiveSessions />} />
         <Route path="pdfs" element={<PDFs {...props} />} />
-        <Route path="exam-documents" element={<ExamDocuments {...props} />} />
         <Route path="packages" element={<Packages {...props} onCourseSelect={handleSelectCourseForContent} />} />
         <Route path="free-content" element={<ContentManager mode="free" />} />
         <Route path="demo-content" element={<ContentManager mode="demo" />} />

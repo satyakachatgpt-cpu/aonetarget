@@ -4,8 +4,6 @@ import { createPortal } from 'react-dom';
 interface LiveStreamDrawerProps {
   showLiveStreamModal: boolean;
   setShowLiveStreamModal: (show: boolean) => void;
-  activeLiveStreamTab: 'basic' | 'advanced';
-  setActiveLiveStreamTab: (tab: 'basic' | 'advanced') => void;
   liveStreamForm: any;
   setLiveStreamForm: (form: any) => void;
   liveStreamImageRef: React.RefObject<HTMLInputElement>;
@@ -20,8 +18,6 @@ interface LiveStreamDrawerProps {
 const LiveStreamDrawer: React.FC<LiveStreamDrawerProps> = ({
   showLiveStreamModal,
   setShowLiveStreamModal,
-  activeLiveStreamTab,
-  setActiveLiveStreamTab,
   liveStreamForm,
   setLiveStreamForm,
   liveStreamImageRef,
@@ -52,265 +48,202 @@ const LiveStreamDrawer: React.FC<LiveStreamDrawerProps> = ({
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-gray-100 shrink-0">
-          <button
-            onClick={() => setActiveLiveStreamTab('basic')}
-            className={`flex-1 flex items-center justify-center py-5 text-[15px] font-bold transition-all relative ${activeLiveStreamTab === 'basic' ? 'text-blue-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
-          >
-            Basic
-          </button>
-          <div className="w-[1px] bg-gray-100 my-4" />
-          <button
-            onClick={() => setActiveLiveStreamTab('advanced')}
-            className={`flex-1 flex items-center justify-center py-5 text-[15px] font-bold transition-all relative ${activeLiveStreamTab === 'advanced' ? 'text-blue-600 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-[2px] after:bg-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
-          >
-            Advanced
-          </button>
-        </div>
-
         {/* Content Area - Scrollable */}
         <div className="flex-1 overflow-y-auto px-8 py-8 space-y-10 pb-40">
-          {activeLiveStreamTab === 'basic' && (
-            <div className="space-y-10">
-              {/* Live Stream Details Section */}
-              <div className="space-y-8">
-                <h4 className="text-[14px] font-bold text-[#1e1e1e] tracking-tight uppercase">Live Stream Details</h4>
+          <div className="space-y-10">
+            {/* Live Stream Details Section */}
+            <div className="space-y-8">
+              <h4 className="text-[14px] font-bold text-[#1e1e1e] tracking-tight uppercase">Live Stream Details</h4>
 
-                {/* Title */}
-                <div className="space-y-2">
-                  <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Title <span className="text-red-500">*</span></label>
-                  <input
-                    type="text"
-                    value={liveStreamForm.title}
-                    onChange={(e) => setLiveStreamForm({ ...liveStreamForm, title: e.target.value })}
-                    className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all placeholder:text-gray-300"
-                    placeholder=""
-                  />
-                </div>
-
-                {/* Description */}
-                <div className="space-y-2">
-                  <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Description</label>
-                  <textarea
-                    value={liveStreamForm.description}
-                    onChange={(e) => setLiveStreamForm({ ...liveStreamForm, description: e.target.value })}
-                    className="w-full px-5 py-4 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all min-h-[140px] resize-none"
-                    placeholder="Enter Live Stream Description"
-                  />
-                </div>
-
-                {/* Image Upload */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Image</label>
-                    <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">Recommended: 1280x720 px (16:9 Ratio)</span>
-                  </div>
-                  <div className="flex gap-4">
-                    <input type="file" ref={liveStreamImageRef} className="hidden" accept="image/*" onChange={handleLiveStreamImageUpload} />
-                    <div className="w-[170px] h-[130px] bg-[#f2f2f2] rounded-[18px] flex flex-col items-center justify-center gap-2 shrink-0 border border-gray-100 overflow-hidden relative group">
-                      {liveStreamForm.image ? (
-                        <img src={liveStreamForm.image} className="w-full h-full object-cover" alt="Preview" />
-                      ) : (
-                        <>
-                          <span className="material-symbols-outlined text-[40px] text-[#8e8e8e]">image</span>
-                          <span className="text-[14px] font-bold text-[#8e8e8e]">No Image</span>
-                        </>
-                      )}
-                    </div>
-                    <div
-                      onClick={() => liveStreamImageRef.current?.click()}
-                      className="flex-1 border-2 border-dashed border-[#e2e2e2] rounded-[18px] flex flex-col items-center justify-center p-4 hover:bg-gray-50 transition-all cursor-pointer bg-white group"
-                    >
-                      <h4 className="text-[16px] font-bold text-[#7a7a7a] mb-0.5">Upload Image</h4>
-                      <span className="text-[12px] font-medium text-[#c0c0c0] text-center leading-tight">Click or Drag & Drop your file here.</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Schedule Section */}
-                <div className="space-y-4 pt-4 border-t border-gray-50">
-                  <div className="flex items-center justify-between">
-                    <label className="block text-[13px] font-bold text-gray-600 tracking-tight uppercase">Schedule Live Stream</label>
-                    <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 italic">Optional</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Schedule Date</label>
-                      <input
-                        type="date"
-                        min={new Date().toISOString().split('T')[0]}
-                        value={liveStreamForm.scheduleDate || ''}
-                        onChange={(e) => setLiveStreamForm({ ...liveStreamForm, scheduleDate: e.target.value })}
-                        className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Schedule Time</label>
-                      <input
-                        type="time"
-                        value={liveStreamForm.scheduleTime || ''}
-                        onChange={(e) => setLiveStreamForm({ ...liveStreamForm, scheduleTime: e.target.value })}
-                        className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all"
-                      />
-                    </div>
-                  </div>
-                  <p className="text-[11px] text-gray-400 font-medium italic ml-1 leading-relaxed">Students will see a countdown until this time. If left blank, stream will be visible immediately.</p>
-                </div>
-
-                {/* Status Checkbox-style Toggle */}
-                <div className="space-y-2">
-                  <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Status</label>
-                  <div className="flex bg-[#f8f8f8] p-1.5 rounded-[12px] w-full border border-gray-100">
-                    <button
-                      onClick={() => setLiveStreamForm({ ...liveStreamForm, isFree: true })}
-                      className={`flex-1 py-3 text-[14px] font-bold rounded-[8px] transition-all ${liveStreamForm.isFree ? 'bg-white text-gray-900 shadow-sm border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                      Free
-                    </button>
-                    <button
-                      onClick={() => setLiveStreamForm({ ...liveStreamForm, isFree: false })}
-                      className={`flex-1 py-3 text-[14px] font-bold rounded-[8px] transition-all ${!liveStreamForm.isFree ? 'bg-white text-gray-900 shadow-sm border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}
-                    >
-                      Paid
-                    </button>
-                  </div>
-                </div>
-
-
-
-              </div>
-
-              {/* Additional Content Section */}
-              <div className="space-y-8 pt-6 border-t border-gray-50">
-                <h4 className="text-[14px] font-bold text-[#1e1e1e] tracking-tight uppercase">Additional Content</h4>
-
-                {/* Attach PDF 1 */}
-                <div className="space-y-2">
-                  <label className="block text-[13px] font-bold text-gray-600 tracking-tight uppercase">Attach PDF</label>
-                  <div className="flex gap-4">
-                    <input type="file" ref={liveStreamPdf1Ref} className="hidden" accept="application/pdf" onChange={(e) => handleLiveStreamFileUpload(e, 'pdf1')} />
-                    <div className="w-[170px] h-[130px] bg-[#f2f2f2] rounded-[18px] flex flex-col items-center justify-center gap-1.5 shrink-0 border border-gray-100 overflow-hidden text-center px-4">
-                      <span className="material-symbols-outlined text-[36px] text-[#8e8e8e]">help</span>
-                      <span className="text-[13px] font-bold text-[#8e8e8e] truncate w-full">
-                        No PDF
-                      </span>
-                    </div>
-                    <div
-                      onClick={() => liveStreamPdf1Ref.current?.click()}
-                      className="flex-1 border-2 border-dashed border-[#e2e2e2] rounded-[18px] flex flex-col items-center justify-center p-4 hover:bg-gray-50 transition-all cursor-pointer bg-white group"
-                    >
-                      <h4 className="text-[16px] font-bold text-[#7a7a7a] mb-0.5">Upload PDF</h4>
-                      <span className="text-[12px] font-medium text-[#c0c0c0] text-center leading-tight">Click or Drag & Drop your file here.</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Attach PDF 2 */}
-                <div className="space-y-2">
-                  <label className="block text-[13px] font-bold text-gray-600 tracking-tight uppercase">Attach PDF</label>
-                  <div className="flex gap-4">
-                    <input type="file" ref={liveStreamPdf2Ref} className="hidden" accept="application/pdf" onChange={(e) => handleLiveStreamFileUpload(e, 'pdf2')} />
-                    <div className="w-[170px] h-[130px] bg-[#f2f2f2] rounded-[18px] flex flex-col items-center justify-center gap-1.5 shrink-0 border border-gray-100 overflow-hidden text-center px-4">
-                      <span className="material-symbols-outlined text-[36px] text-[#8e8e8e]">help</span>
-                      <span className="text-[13px] font-bold text-[#8e8e8e] truncate w-full">
-                        No PDF
-                      </span>
-                    </div>
-                    <div
-                      onClick={() => liveStreamPdf2Ref.current?.click()}
-                      className="flex-1 border-2 border-dashed border-[#e2e2e2] rounded-[18px] flex flex-col items-center justify-center p-4 hover:bg-gray-50 transition-all cursor-pointer bg-white group"
-                    >
-                      <h4 className="text-[16px] font-bold text-[#7a7a7a] mb-0.5">Upload PDF</h4>
-                      <span className="text-[12px] font-medium text-[#c0c0c0] text-center leading-tight">Click or Drag & Drop your file here.</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Study Material */}
-                <div className="space-y-2">
-                  <label className="block text-[13px] font-bold text-gray-600 tracking-tight uppercase">Study Material</label>
-                  <div className="flex gap-4">
-                    <input type="file" ref={liveStreamStudyMaterialRef} className="hidden" accept="*" onChange={(e) => handleLiveStreamFileUpload(e, 'studyMaterial')} />
-                    <div className="w-[170px] h-[130px] bg-[#f2f2f2] rounded-[18px] flex flex-col items-center justify-center gap-1.5 shrink-0 border border-gray-100 overflow-hidden text-center px-4">
-                      <span className="material-symbols-outlined text-[36px] text-[#8e8e8e]">help</span>
-                      <span className="text-[13px] font-bold text-[#8e8e8e] truncate w-full">
-                        No File
-                      </span>
-                    </div>
-                    <div
-                      onClick={() => liveStreamStudyMaterialRef.current?.click()}
-                      className="flex-1 border-2 border-dashed border-[#e2e2e2] rounded-[18px] flex flex-col items-center justify-center p-4 hover:bg-gray-50 transition-all cursor-pointer bg-white group"
-                    >
-                      <h4 className="text-[16px] font-bold text-[#7a7a7a] mb-0.5">Upload File</h4>
-                      <span className="text-[12px] font-medium text-[#c0c0c0] text-center leading-tight">Click or Drag & Drop your file here.</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Allow PDF Export */}
-                <div className="space-y-2">
-                  <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Allow PDF Export</label>
-                  <div className="relative">
-                    <select
-                      value={liveStreamForm.allowPdfExport}
-                      onChange={(e) => setLiveStreamForm({ ...liveStreamForm, allowPdfExport: e.target.value })}
-                      className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all appearance-none"
-                    >
-                      <option value="No">No</option>
-                      <option value="Yes">Yes</option>
-                      <option value="Password">Save with password</option>
-                    </select>
-                    <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-[24px] pointer-events-none">expand_more</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeLiveStreamTab === 'advanced' && (
-            <div className="space-y-10">
-              <h4 className="text-[14px] font-bold text-[#1e1e1e] tracking-tight uppercase">Advanced Settings</h4>
-              <div className="flex items-start justify-between">
-                <div className="space-y-1 max-w-[320px]">
-                  <p className="text-[15px] font-bold text-gray-800 tracking-tight">In App download</p>
-                  <p className="text-[12px] text-gray-400 font-medium leading-relaxed font-bold tracking-tight">Switch ON if you want the users to be able to download the video</p>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer mt-1 mr-[-5px]">
-                  <input
-                    type="checkbox"
-                    className="sr-only peer"
-                    checked={liveStreamForm.allowDownload}
-                    onChange={(e) => setLiveStreamForm({ ...liveStreamForm, allowDownload: e.target.checked })}
-                  />
-                  <div className="w-[44px] h-[24px] bg-gray-200 rounded-full peer peer-checked:bg-black after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-[20px]"></div>
-                </label>
-              </div>
-
+              {/* Title */}
               <div className="space-y-2">
-                <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Live Chat Message Visibility</label>
-                <select
-                  value={liveStreamForm.chatVisibility}
-                  onChange={(e) => setLiveStreamForm({ ...liveStreamForm, chatVisibility: e.target.value })}
-                  className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all appearance-none"
-                >
-                  <option value="Everyone">Everyone</option>
-                  <option value="Only Host and Self">Only Host and Self</option>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Sorting Order</label>
+                <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Title <span className="text-red-500">*</span></label>
                 <input
                   type="text"
-                  value={liveStreamForm.order}
-                  onChange={(e) => setLiveStreamForm({ ...liveStreamForm, order: e.target.value })}
-                  className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all"
-                  placeholder="0.00"
+                  value={liveStreamForm.title}
+                  onChange={(e) => setLiveStreamForm({ ...liveStreamForm, title: e.target.value })}
+                  className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all placeholder:text-gray-300"
+                  placeholder=""
                 />
               </div>
+
+              {/* Description */}
+              <div className="space-y-2">
+                <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Description</label>
+                <textarea
+                  value={liveStreamForm.description}
+                  onChange={(e) => setLiveStreamForm({ ...liveStreamForm, description: e.target.value })}
+                  className="w-full px-5 py-4 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all min-h-[140px] resize-none"
+                  placeholder="Enter Live Stream Description"
+                />
+              </div>
+
+              {/* Image Upload */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Image</label>
+                  <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">Recommended: 1280x720 px (16:9 Ratio)</span>
+                </div>
+                <div className="flex gap-4">
+                  <input type="file" ref={liveStreamImageRef} className="hidden" accept="image/*" onChange={handleLiveStreamImageUpload} />
+                  <div className="w-[170px] h-[130px] bg-[#f2f2f2] rounded-[18px] flex flex-col items-center justify-center gap-2 shrink-0 border border-gray-100 overflow-hidden relative group">
+                    {liveStreamForm.image ? (
+                      <img src={liveStreamForm.image} className="w-full h-full object-cover" alt="Preview" />
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined text-[40px] text-[#8e8e8e]">image</span>
+                        <span className="text-[14px] font-bold text-[#8e8e8e]">No Image</span>
+                      </>
+                    )}
+                  </div>
+                  <div
+                    onClick={() => liveStreamImageRef.current?.click()}
+                    className="flex-1 border-2 border-dashed border-[#e2e2e2] rounded-[18px] flex flex-col items-center justify-center p-4 hover:bg-gray-50 transition-all cursor-pointer bg-white group"
+                  >
+                    <h4 className="text-[16px] font-bold text-[#7a7a7a] mb-0.5">Upload Image</h4>
+                    <span className="text-[12px] font-medium text-[#c0c0c0] text-center leading-tight">Click or Drag & Drop your file here.</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Schedule Section */}
+              <div className="space-y-4 pt-4 border-t border-gray-50">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[13px] font-bold text-gray-600 tracking-tight uppercase">Schedule Live Stream</label>
+                  <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100 italic">Optional</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Schedule Date</label>
+                    <input
+                      type="date"
+                      min={new Date().toISOString().split('T')[0]}
+                      value={liveStreamForm.scheduleDate || ''}
+                      onChange={(e) => setLiveStreamForm({ ...liveStreamForm, scheduleDate: e.target.value })}
+                      className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-[11px] font-bold text-gray-400 uppercase tracking-widest ml-1">Schedule Time</label>
+                    <input
+                      type="time"
+                      value={liveStreamForm.scheduleTime || ''}
+                      onChange={(e) => setLiveStreamForm({ ...liveStreamForm, scheduleTime: e.target.value })}
+                      className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-gray-400 font-medium italic ml-1 leading-relaxed">Students will see a countdown until this time. If left blank, stream will be visible immediately.</p>
+              </div>
+
+              {/* Status Checkbox-style Toggle */}
+              <div className="space-y-2">
+                <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Status</label>
+                <div className="flex bg-[#f8f8f8] p-1.5 rounded-[12px] w-full border border-gray-100">
+                  <button
+                    onClick={() => setLiveStreamForm({ ...liveStreamForm, isFree: true })}
+                    className={`flex-1 py-3 text-[14px] font-bold rounded-[8px] transition-all ${liveStreamForm.isFree ? 'bg-white text-gray-900 shadow-sm border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}
+                  >
+                    Free
+                  </button>
+                  <button
+                    onClick={() => setLiveStreamForm({ ...liveStreamForm, isFree: false })}
+                    className={`flex-1 py-3 text-[14px] font-bold rounded-[8px] transition-all ${!liveStreamForm.isFree ? 'bg-white text-gray-900 shadow-sm border border-gray-100' : 'text-gray-400 hover:text-gray-600'}`}
+                  >
+                    Paid
+                  </button>
+                </div>
+              </div>
+
+
+
             </div>
-          )}
+
+            {/* Additional Content Section */}
+            <div className="space-y-8 pt-6 border-t border-gray-50">
+              <h4 className="text-[14px] font-bold text-[#1e1e1e] tracking-tight uppercase">Additional Content</h4>
+
+              {/* Attach PDF 1 */}
+              <div className="space-y-2">
+                <label className="block text-[13px] font-bold text-gray-600 tracking-tight uppercase">Attach PDF</label>
+                <div className="flex gap-4">
+                  <input type="file" ref={liveStreamPdf1Ref} className="hidden" accept="application/pdf" onChange={(e) => handleLiveStreamFileUpload(e, 'pdf1')} />
+                  <div className="w-[170px] h-[130px] bg-[#f2f2f2] rounded-[18px] flex flex-col items-center justify-center gap-1.5 shrink-0 border border-gray-100 overflow-hidden text-center px-4">
+                    <span className="material-symbols-outlined text-[36px] text-[#8e8e8e]">help</span>
+                    <span className="text-[13px] font-bold text-[#8e8e8e] truncate w-full">
+                      No PDF
+                    </span>
+                  </div>
+                  <div
+                    onClick={() => liveStreamPdf1Ref.current?.click()}
+                    className="flex-1 border-2 border-dashed border-[#e2e2e2] rounded-[18px] flex flex-col items-center justify-center p-4 hover:bg-gray-50 transition-all cursor-pointer bg-white group"
+                  >
+                    <h4 className="text-[16px] font-bold text-[#7a7a7a] mb-0.5">Upload PDF</h4>
+                    <span className="text-[12px] font-medium text-[#c0c0c0] text-center leading-tight">Click or Drag & Drop your file here.</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Attach PDF 2 */}
+              <div className="space-y-2">
+                <label className="block text-[13px] font-bold text-gray-600 tracking-tight uppercase">Attach PDF</label>
+                <div className="flex gap-4">
+                  <input type="file" ref={liveStreamPdf2Ref} className="hidden" accept="application/pdf" onChange={(e) => handleLiveStreamFileUpload(e, 'pdf2')} />
+                  <div className="w-[170px] h-[130px] bg-[#f2f2f2] rounded-[18px] flex flex-col items-center justify-center gap-1.5 shrink-0 border border-gray-100 overflow-hidden text-center px-4">
+                    <span className="material-symbols-outlined text-[36px] text-[#8e8e8e]">help</span>
+                    <span className="text-[13px] font-bold text-[#8e8e8e] truncate w-full">
+                      No PDF
+                    </span>
+                  </div>
+                  <div
+                    onClick={() => liveStreamPdf2Ref.current?.click()}
+                    className="flex-1 border-2 border-dashed border-[#e2e2e2] rounded-[18px] flex flex-col items-center justify-center p-4 hover:bg-gray-50 transition-all cursor-pointer bg-white group"
+                  >
+                    <h4 className="text-[16px] font-bold text-[#7a7a7a] mb-0.5">Upload PDF</h4>
+                    <span className="text-[12px] font-medium text-[#c0c0c0] text-center leading-tight">Click or Drag & Drop your file here.</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Study Material */}
+              <div className="space-y-2">
+                <label className="block text-[13px] font-bold text-gray-600 tracking-tight uppercase">Study Material</label>
+                <div className="flex gap-4">
+                  <input type="file" ref={liveStreamStudyMaterialRef} className="hidden" accept="*" onChange={(e) => handleLiveStreamFileUpload(e, 'studyMaterial')} />
+                  <div className="w-[170px] h-[130px] bg-[#f2f2f2] rounded-[18px] flex flex-col items-center justify-center gap-1.5 shrink-0 border border-gray-100 overflow-hidden text-center px-4">
+                    <span className="material-symbols-outlined text-[36px] text-[#8e8e8e]">help</span>
+                    <span className="text-[13px] font-bold text-[#8e8e8e] truncate w-full">
+                      No File
+                    </span>
+                  </div>
+                  <div
+                    onClick={() => liveStreamStudyMaterialRef.current?.click()}
+                    className="flex-1 border-2 border-dashed border-[#e2e2e2] rounded-[18px] flex flex-col items-center justify-center p-4 hover:bg-gray-50 transition-all cursor-pointer bg-white group"
+                  >
+                    <h4 className="text-[16px] font-bold text-[#7a7a7a] mb-0.5">Upload File</h4>
+                    <span className="text-[12px] font-medium text-[#c0c0c0] text-center leading-tight">Click or Drag & Drop your file here.</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Allow PDF Export */}
+              <div className="space-y-2">
+                <label className="block text-[13px] font-bold text-gray-600 tracking-tight">Allow PDF Export</label>
+                <div className="relative">
+                  <select
+                    value={liveStreamForm.allowPdfExport}
+                    onChange={(e) => setLiveStreamForm({ ...liveStreamForm, allowPdfExport: e.target.value })}
+                    className="w-full h-[54px] px-5 bg-white border border-gray-200 rounded-[12px] text-[15px] font-medium outline-none focus:border-gray-400 transition-all appearance-none"
+                  >
+                    <option value="No">No</option>
+                    <option value="Yes">Yes</option>
+                    <option value="Password">Save with password</option>
+                  </select>
+                  <span className="material-symbols-outlined absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 text-[24px] pointer-events-none">expand_more</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Fixed Bottom Button */}
