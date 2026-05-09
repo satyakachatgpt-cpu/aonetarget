@@ -343,15 +343,66 @@ export const getStudentLiveClasses = async (req, res) => {
     const studentBatchIds = new Set(enrollmentRecords.map(e => e.batchId).filter(Boolean).map(String));
 
     // Get all variants (ID, _id, etc) for all enrolled courses to ensure matching
-    let allIdVariants = [];
-    for (const enrolledId of enrolledCourseIds) {
-      const variants = await getCourseIdVariants(enrolledId);
-      allIdVariants = [...allIdVariants, ...variants];
-    }
-    allIdVariants = [...new Set(allIdVariants)];
+    const enrolledCourseIdsArray = Array.from(enrolledCourseIds);
+    const enrolledBatchIdsArray = Array.from(studentBatchIds);
 
+    // OPTIMIZED VARIANT LOOKUP: Fetch all enrolled course/package objects in bulk
+    // to avoid the N+1 problem with getCourseIdVariants loop.
+    const dbQueries = [
+      db.collection('courses').find({ 
+        $or: [
+          { id: { $in: enrolledCourseIdsArray } },
+          { _id: { $in: enrolledCourseIdsArray.filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new ObjectId(id)) } }
+        ] 
+      }).project({ id: 1, _id: 1, name: 1, title: 1, courses: 1 }).toArray(),
+      db.collection('packages').find({ 
+        $or: [
+          { id: { $in: enrolledCourseIdsArray } },
+          { _id: { $in: enrolledCourseIdsArray.filter(id => mongoose.Types.ObjectId.isValid(id)).map(id => new ObjectId(id)) } }
+        ] 
+      }).project({ id: 1, _id: 1, name: 1, title: 1, courses: 1 }).toArray()
+    ];
+
+    const [foundCourses, foundPackages] = await Promise.all(dbQueries);
+    const allFound = [...foundCourses, ...foundPackages];
+    
+    let allIdVariants = new Set(enrolledCourseIdsArray);
+    const names = new Set();
+
+    allFound.forEach(c => {
+      if (c.id) allIdVariants.add(String(c.id));
+      if (c._id) allIdVariants.add(c._id.toString());
+      if (c.name) names.add(c.name);
+      if (c.title) names.add(c.title);
+      // Include children if it's a package
+      if (Array.isArray(c.courses)) {
+        c.courses.forEach(childId => allIdVariants.add(String(childId)));
+      }
+    });
+
+    // Bulk lookup by name for cross-collection linking (Matches getRelatedCourseIds behavior but in bulk)
+    if (names.size > 0) {
+      const nameList = Array.from(names);
+      const collections = ['courses', 'packages', 'subcourses'];
+      const nameLookups = collections.map(col => 
+        db.collection(col).find({
+          $or: [
+            { name: { $in: nameList } },
+            { title: { $in: nameList } }
+          ],
+          status: { $nin: ['inactive', 'deleted'] }
+        }).project({ id: 1, _id: 1 }).toArray()
+      );
+      const nameResults = await Promise.all(nameLookups);
+      nameResults.flat().forEach(item => {
+        if (item.id) allIdVariants.add(String(item.id));
+        if (item._id) allIdVariants.add(item._id.toString());
+      });
+    }
+
+    const finalIdVariants = Array.from(allIdVariants);
     const query = { 
-      courseId: { $in: allIdVariants }
+      courseId: { $in: finalIdVariants }
     };
 
     // Step 4: Fetch from 3 collections (liveVideos is source of truth)
@@ -377,6 +428,20 @@ export const getStudentLiveClasses = async (req, res) => {
 
       // Step 6: Dynamic Status
       item.status = calculateStreamStatus(item);
+      item.isLive = item.status === 'live';
+
+      // Ensure stable ID for client-side navigation
+      if (!item.id && item._id) {
+        item.id = item._id.toString();
+      }
+      
+      // FIX: Ensure contentType is set to 'live_stream' if not present to enable chat in UI
+      // This is critical for classes joined from Home Page
+      if (!item.contentType || item.contentType === 'video' || item.contentType === 'recorded') {
+        if (item.status === 'live' || item.status === 'upcoming') {
+           item.contentType = 'live_stream';
+        }
+      }
 
       // Step 7: Consolidate Attachments visibility
       if (!item.pdf1 && item.pdf1Url) item.pdf1 = item.pdf1Url;
@@ -392,13 +457,6 @@ export const getStudentLiveClasses = async (req, res) => {
 
     const finalStreams = Array.from(dedupeMap.values())
       .filter(item => {
-        // --- Strict Filtering Rule ---
-        // 1. If it's LIVE -> show it.
-        // 2. If it's UPCOMING (future scheduled) -> show it.
-        // 3. If it's PAST and NOT live and NOT explicitly ended -> hide it? 
-        // User said: "Past ended/completed/inactive sessions must be hidden/blocked from student side."
-        // "Past scheduled sessions should NOT show unless they are explicitly live."
-        
         const status = item.status;
         const isLive = status === 'live';
         const isUpcoming = status === 'upcoming';
@@ -406,12 +464,9 @@ export const getStudentLiveClasses = async (req, res) => {
         // Hide anything that is not Live and not Upcoming
         if (!isLive && !isUpcoming) return false;
 
-        // If it's technically 'live' but was scheduled long ago and never updated, 
-        // we might want a cutoff, but per instructions, we follow status.
         return true;
       })
       .sort((a, b) => {
-
         const timeA = new Date(a.scheduledTime || a.startTime || a.publishOn || a.date || 0).getTime();
         const timeB = new Date(b.scheduledTime || b.startTime || b.publishOn || b.date || 0).getTime();
         return timeA - timeB;

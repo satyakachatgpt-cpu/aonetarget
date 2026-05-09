@@ -218,7 +218,7 @@ const CourseDetails: React.FC = () => {
 
     const isFirstVideoInRoot = navigationHistory.length === 0 && filteredVideos[0] === video;
 
-    const canPlay = isEnrolled || video.isFree || video.isDemo || isFirstVideoInRoot;
+    const canPlay = (isEnrolled && !isCourseExpired) || video.isFree || video.isDemo || isFirstVideoInRoot;
 
     // Resolve raw URL first
     const rawUrl = video.youtubeUrl || video.videoUrl || video.url || video.meetingLink || (video as any).streamId || '';
@@ -233,7 +233,7 @@ const CourseDetails: React.FC = () => {
   };
 
   const handleViewNote = (note: any) => {
-    const canPlay = isEnrolled || note.isFree || (course?.price === 0);
+    const canPlay = (isEnrolled && !isCourseExpired) || note.isFree || (course?.price === 0 && !isCourseExpired);
     if (!canPlay) {
       alert('🔒 Please enroll in this course to view this document.');
       return;
@@ -751,6 +751,7 @@ const CourseDetails: React.FC = () => {
             filteredVideos={filteredVideos}
             navigationHistory={navigationHistory}
             isEnrolled={isEnrolled}
+            isExpired={isCourseExpired}
             uniqueCompletedVideos={uniqueCompletedVideos}
             failedImages={failedImages}
             onNavigateIntoFolder={navigateIntoFolder}
@@ -767,6 +768,7 @@ const CourseDetails: React.FC = () => {
           <NotesTab 
             notes={notes}
             isEnrolled={isEnrolled}
+            isExpired={isCourseExpired}
             isPaidCourse={isPaidCourse}
             coursePrice={course.price}
             enrolling={enrolling}
@@ -794,6 +796,7 @@ const CourseDetails: React.FC = () => {
           <LiveTab 
             liveStreams={liveStreams}
             isEnrolled={isEnrolled}
+            isExpired={isCourseExpired}
             isPaidCourse={isPaidCourse}
             coursePrice={course.price}
             enrolling={enrolling}

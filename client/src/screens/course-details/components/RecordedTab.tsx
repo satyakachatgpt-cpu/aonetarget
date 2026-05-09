@@ -8,6 +8,7 @@ interface RecordedTabProps {
   filteredVideos: Video[];
   navigationHistory: any[];
   isEnrolled: boolean;
+  isExpired?: boolean;
   uniqueCompletedVideos: Set<string>;
   failedImages: Set<string>;
   onNavigateIntoFolder: (folder: any) => void;
@@ -24,6 +25,7 @@ const RecordedTab: React.FC<RecordedTabProps> = ({
   filteredVideos,
   navigationHistory,
   isEnrolled,
+  isExpired,
   uniqueCompletedVideos,
   failedImages,
   onNavigateIntoFolder,
@@ -82,7 +84,7 @@ const RecordedTab: React.FC<RecordedTabProps> = ({
         filteredVideos.map((video, index) => {
           const videoId = getVideoId(video, index);
           const isCompleted = uniqueCompletedVideos.has(videoId);
-          const canPlay = isEnrolled || video.isFree || video.isDemo || (index === 0 && navigationHistory.length === 0);
+          const canPlay = ((isEnrolled && !isExpired) || video.isFree || video.isDemo || (index === 0 && navigationHistory.length === 0));
           const isLocked = !canPlay;
           return (
             <div
