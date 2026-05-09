@@ -162,7 +162,7 @@ const SortableTestItem = ({
             </button>
 
             {String(activeActionMenuId) === String(test.id || (test as any)._id) && (
-                <div className={`absolute right-0 ${totalTests > 3 ? (index >= totalTests - 3 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right") : index >= totalTests - 1 ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right"} w-[220px] bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-[999] animate-in fade-in zoom-in-95 duration-200`}>
+                <div className={`absolute right-0 ${index === 0 ? "top-full mt-2 origin-top-right" : (totalTests > 3 && index >= totalTests - 3) ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right"} w-[220px] bg-white rounded-2xl shadow-2xl border border-gray-100 py-2 z-[999] animate-in fade-in zoom-in-95 duration-200`}>
                   {[
                     {
                       id: "add_questions",
