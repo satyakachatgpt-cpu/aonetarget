@@ -904,7 +904,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
               </div>
 
               <div className="p-4 bg-black/40 border-t border-white/10">
-                 <div className="flex gap-2">
+                  <div className="flex gap-2 items-center">
                     <input
                       type="text"
                       value={liveChatInput}
@@ -917,7 +917,8 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                         }
                       }}
                       placeholder="Ask your doubt..."
-                      className="flex-1 bg-white/10 text-white text-xs px-3 py-2 rounded-full outline-none placeholder-white/40 border border-white/10 focus:border-white/30"
+                      className="flex-1 bg-white/10 text-white text-[16px] px-4 py-2.5 rounded-full outline-none placeholder-white/40 border border-white/10 focus:border-white/30 transition-all"
+                      style={{ touchAction: 'manipulation' }}
                     />
                     <button 
                       onClick={() => {
@@ -926,11 +927,11 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                           setLiveChatInput('');
                         }
                       }}
-                      className="w-11 h-11 bg-white text-black rounded-xl flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg"
+                      className="w-10 h-10 bg-white text-black rounded-full flex items-center justify-center hover:scale-105 active:scale-95 transition-all shadow-lg shrink-0"
                     >
                       <span className="material-symbols-rounded text-xl font-bold">send</span>
                     </button>
-                 </div>
+                  </div>
               </div>
            </div>
         )}
