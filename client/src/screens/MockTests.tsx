@@ -23,6 +23,7 @@ const MockTests: React.FC = () => {
   const [currentView, setCurrentView] = useState<'series' | 'tests'>('series');
   const [activeSeries, setActiveSeries] = useState<any | null>(null);
   const [isEnrolled, setIsEnrolled] = useState(false);
+  const [enrollmentStatus, setEnrollmentStatus] = useState<string>('not_enrolled');
   const [enrolling, setEnrolling] = useState(false);
   const [enrolledSeriesIds, setEnrolledSeriesIds] = useState<Set<string>>(new Set());
 
@@ -138,9 +139,10 @@ const MockTests: React.FC = () => {
 
   const checkEnrollment = async (series: any) => {
     if (!student) return;
-    // Free series - always enrolled
+    // Free series - always enrolled (but can be expired)
     if (!series.price || Number(series.price) === 0) {
       setIsEnrolled(true);
+      setEnrollmentStatus(series.isExpired ? 'expired' : 'active');
       return;
     }
     try {
@@ -151,6 +153,7 @@ const MockTests: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         setIsEnrolled(data.enrolled || false);
+        setEnrollmentStatus(data.status || (data.isExpired ? 'expired' : (data.enrolled ? 'active' : 'not_enrolled')));
         // Keep enrolledSeriesIds in sync
         if (data.enrolled) {
           setEnrolledSeriesIds(prev => new Set([...prev, String(seriesId)]));
@@ -158,23 +161,27 @@ const MockTests: React.FC = () => {
       }
     } catch (e) {
       setIsEnrolled(false);
+      setEnrollmentStatus('not_enrolled');
     }
   };
 
   const handleSeriesClick = async (series: any) => {
-    if (series.isExpired) {
-      toast.error('This test series has expired');
+    const isActuallyExpired = getSeriesExpiryStatus(series);
+    if (isActuallyExpired) {
+      toast.error('This test series has expired.');
       return;
     }
     setActiveSeries(series);
     const seriesId = String(series.id || series._id);
     const preEnrolled = enrolledSeriesIds.has(seriesId);
     
-    // Free series - always give access
+    // Free series - always give access (unless expired)
     if (!series.price || Number(series.price) === 0) {
       setIsEnrolled(true);
+      setEnrollmentStatus(series.isExpired ? 'expired' : 'active');
     } else {
       setIsEnrolled(preEnrolled);
+      setEnrollmentStatus(series.isExpired ? 'expired' : (preEnrolled ? 'active' : 'not_enrolled'));
     }
     setCurrentView('tests');
     
@@ -217,7 +224,7 @@ const MockTests: React.FC = () => {
     const openDate = test.openDate ? new Date(test.openDate) : null;
     const closeDate = test.closeDate ? new Date(test.closeDate) : null;
     if (openDate && now < openDate) return 'upcoming';
-    if (closeDate && now > closeDate) return 'completed';
+    if (closeDate && now > closeDate) return 'expired';
     return 'live';
   };
 
@@ -225,9 +232,27 @@ const MockTests: React.FC = () => {
     switch (status) {
       case 'upcoming': return { label: 'Upcoming', bg: 'bg-amber-100', text: 'text-amber-700', icon: 'schedule' };
       case 'live': return { label: 'Live', bg: 'bg-green-100', text: 'text-green-700', icon: 'play_circle' };
+      case 'expired': return { label: 'Expired', bg: 'bg-rose-100', text: 'text-rose-700', icon: 'lock_clock' };
       case 'completed': return { label: 'Completed', bg: 'bg-gray-100', text: 'text-gray-500', icon: 'check_circle' };
       default: return { label: 'Available', bg: 'bg-blue-100', text: 'text-blue-700', icon: 'info' };
     }
+  };
+
+  const getSeriesExpiryStatus = (series: any) => {
+    if (series.isExpired) return true;
+    const mode = series.expiryMode;
+    const val = series.validity;
+    if (mode === 'End Date' && val) {
+      const parts = val.split('-');
+      let dateStr = val;
+      if (parts.length === 3 && parts[2].length === 4) {
+        dateStr = `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+      const expiry = new Date(dateStr);
+      expiry.setHours(23, 59, 59, 999);
+      return new Date() > expiry;
+    }
+    return false;
   };
 
   const handleBack = () => {
@@ -289,7 +314,7 @@ const MockTests: React.FC = () => {
               <div
                 key={series.id || series._id || idx}
                 onClick={() => handleSeriesClick(series)}
-                className={`card-premium p-4 rounded-3xl border border-gray-100 cursor-pointer hover:-translate-y-1 transition-all duration-300 group ${series.isExpired ? 'opacity-50 grayscale-[0.5]' : ''}`}
+                className={`card-premium p-4 rounded-3xl border border-gray-100 cursor-pointer hover:-translate-y-1 transition-all duration-300 group ${getSeriesExpiryStatus(series) ? 'opacity-50 grayscale-[0.5]' : ''}`}
               >
                 <div className="w-12 h-12 bg-primary-50 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-primary-100 transition-colors">
                   <span className="material-symbols-rounded text-primary text-2xl">style</span>
@@ -303,7 +328,7 @@ const MockTests: React.FC = () => {
                 </div>
                 <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between">
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{series.category || 'General'}</span>
-                  {series.isExpired ? (
+                  {getSeriesExpiryStatus(series) ? (
                     <span className="text-[11px] font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-lg flex items-center gap-1">
                       <span className="material-symbols-rounded text-[12px]">lock_clock</span>
                       Expired
@@ -327,8 +352,28 @@ const MockTests: React.FC = () => {
         ) : (
           <>
             {/* Access/Buy Logic */}
-            {Number(activeSeries?.price) > 0 && !isEnrolled ? (
-              <div className="card-premium p-6 bg-gradient-to-br from-indigo-50 to-white border-indigo-100">
+            {enrollmentStatus === 'expired' ? (
+              <div className="card-premium p-6 bg-[#2D0D0D] border-red-500/20 mb-6">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="w-14 h-14 bg-red-600/20 rounded-2xl flex items-center justify-center shadow-lg shadow-red-500/10 text-red-500">
+                    <span className="material-symbols-rounded text-3xl">lock_clock</span>
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-white">Access Expired</h3>
+                    <p className="text-sm text-red-200/60">Your validity period for this series has ended.</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <button
+                    onClick={handleBuyNow}
+                    className="flex-1 bg-red-600 text-white py-4 rounded-2xl text-sm font-bold shadow-xl shadow-red-600/20 active:scale-95 transition-all"
+                  >
+                    Renew Access
+                  </button>
+                </div>
+              </div>
+            ) : Number(activeSeries?.price) > 0 && !isEnrolled ? (
+              <div className="card-premium p-6 bg-gradient-to-br from-indigo-50 to-white border-indigo-100 mb-6">
                 <div className="flex items-center gap-4 mb-6">
                   <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-200">
                     <span className="material-symbols-rounded text-white text-3xl">shopping_cart</span>
@@ -351,7 +396,9 @@ const MockTests: React.FC = () => {
                   </button>
                 </div>
               </div>
-            ) : (
+            ) : null}
+
+            {enrollmentStatus !== 'expired' && (!Number(activeSeries?.price) || isEnrolled) ? (
               <div className="space-y-4">
                 {getSeriesTests(activeSeries).length > 0 ? (
                   getSeriesTests(activeSeries).map((test: any, tIdx: number) => {
@@ -378,12 +425,20 @@ const MockTests: React.FC = () => {
                           </span>
                         </div>
                         <button
-                          onClick={() => status !== 'upcoming' && navigate(`/test/${test.id || test._id}`, { state: { seriesId: activeSeries?.id || activeSeries?._id } })}
+                          onClick={() => {
+                            if (status === 'expired') {
+                              toast.error('This test has expired.');
+                              return;
+                            }
+                            if (status !== 'upcoming') {
+                              navigate(`/test/${test.id || test._id}`, { state: { seriesId: activeSeries?.id || activeSeries?._id } });
+                            }
+                          }}
                           disabled={status === 'upcoming'}
-                          className={`w-full mt-4 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 ${status === 'upcoming' ? 'bg-gray-100 text-gray-300' : 'bg-primary text-white shadow-primary/20'
+                          className={`w-full mt-4 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 ${status === 'upcoming' || status === 'expired' ? 'bg-gray-100 text-gray-300 shadow-none' : 'bg-primary text-white shadow-primary/20'
                             }`}
                         >
-                          {status === 'completed' ? 'Review Test' : status === 'upcoming' ? 'Locked' : 'Start Test'}
+                          {status === 'expired' ? 'Expired' : status === 'upcoming' ? 'Locked' : 'Start Test'}
                         </button>
                       </div>
                     );
@@ -395,7 +450,7 @@ const MockTests: React.FC = () => {
                   </div>
                 )}
               </div>
-            )}
+            ) : null}
           </>
         )}
       </div>

@@ -32,9 +32,6 @@ const sendSMS = async (phone, message, templateId) => {
   const masked = maskPhone(phone);
 
   const url = 'http://sms.primeclick.in/api/mt/SendSMS?' +
-    // 'user=' + process.env.PRIMCLICK_USERNAME +
-    // '&password=' + process.env.PRIMCLICK_PASSWORD +
-    // '&senderid=' + process.env.DLT_HEADER +
     'user=' + encodeURIComponent(process.env.PRIMCLICK_USERNAME) +
     '&password=' + encodeURIComponent(process.env.PRIMCLICK_PASSWORD) +
     '&senderid=' + encodeURIComponent(process.env.DLT_HEADER) +

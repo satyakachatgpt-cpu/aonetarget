@@ -83,7 +83,7 @@ const StudyDashboard: React.FC = () => {
             const enrolledRes = await fetch(`/api/students/${sId}/enrolled/${id}`, { headers: getAuthHeaders() });
             if (enrolledRes.ok) {
               const enrolledData = await enrolledRes.json();
-              setIsEnrolled(enrolledData.enrolled || false);
+              setIsEnrolled(enrolledData.accessAllowed || false);
             }
           } catch (e) {
             console.error('Enrollment check failed:', e);

@@ -105,10 +105,43 @@ export const calculatePriceBreakdown = (course, coupon = null) => {
 };
 
 /**
+ * Normalize any date format (DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD, ISO) to YYYY-MM-DD
+ */
+export const normalizeDateStr = (dateStr) => {
+  if (!dateStr) return '';
+  const str = String(dateStr).trim();
+
+  // Handle DD-MM-YYYY or DD/MM/YYYY
+  const dmyMatch = str.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{4})/);
+  if (dmyMatch) {
+    return `${dmyMatch[3]}-${dmyMatch[2].padStart(2, '0')}-${dmyMatch[1].padStart(2, '0')}`;
+  }
+
+  // Handle YYYY-MM-DD or YYYY/MM/DD
+  const ymdMatch = str.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (ymdMatch) {
+    return `${ymdMatch[1]}-${ymdMatch[2].padStart(2, '0')}-${ymdMatch[3].padStart(2, '0')}`;
+  }
+
+  // Fallback for ISO or other formats
+  const date = new Date(str);
+  if (!isNaN(date.getTime())) {
+    return date.toISOString().split('T')[0];
+  }
+
+  return str;
+};
+
+/**
  * Check if a purchase has expired based on course validity settings
  */
 export const isPurchaseExpired = (purchase, course) => {
   if (!purchase || !course) return false;
+
+  // Early return for lifetime access or missing mode
+  if (!course.expiryMode || course.expiryMode === 'Lifetime Access' || course.expiryMode === 'lifetime') {
+    return false;
+  }
   
   const mode = course.expiryMode;
   const val = course.validity;
@@ -123,27 +156,23 @@ export const isPurchaseExpired = (purchase, course) => {
       validityValue = val.endDate;
     } else if (val.tab === 'set') {
       currentExpiryMode = 'Validity';
-      validityValue = val.value; // Assuming value is in months or matching unit
+      validityValue = val.value; 
     } else if (val.tab === 'lifetime') {
       currentExpiryMode = 'Lifetime Access';
     }
   }
 
+  // Secondary check after resolving validity object
+  if (currentExpiryMode === 'Lifetime Access' || currentExpiryMode === 'lifetime') {
+    return false;
+  }
+
   if (currentExpiryMode === 'End Date' && validityValue) {
-    // Expected format: DD-MM-YYYY or ISO
-    let dateStr = validityValue;
-    if (typeof dateStr === 'string' && dateStr.includes('-')) {
-      const parts = dateStr.split('-');
-      if (parts.length === 3) {
-        // If it's DD-MM-YYYY (last part is 4 digits), convert to YYYY-MM-DD
-        if (parts[2].length === 4) {
-          dateStr = `${parts[2]}-${parts[1]}-${parts[0]}`;
-        }
-        // If it's already YYYY-MM-DD (first part is 4 digits), keep it as is
-      }
-    }
-    const expiryDate = new Date(dateStr);
+    const normalizedDate = normalizeDateStr(validityValue);
+    const expiryDate = new Date(normalizedDate);
     if (!isNaN(expiryDate.getTime())) {
+      // Set to end of day to include the full last day
+      expiryDate.setHours(23, 59, 59, 999);
       return new Date() > expiryDate;
     }
   } else if (currentExpiryMode === 'Validity' && validityValue) {
@@ -152,9 +181,28 @@ export const isPurchaseExpired = (purchase, course) => {
       const createdAt = purchase.createdAt ? new Date(purchase.createdAt) : new Date();
       const expiryDate = new Date(createdAt);
       expiryDate.setMonth(expiryDate.getMonth() + months);
+      // Set to end of day to include the full last day
+      expiryDate.setHours(23, 59, 59, 999);
       return new Date() > expiryDate;
     }
   }
   
   return false;
 };
+
+/**
+ * Check if an individual test has expired based on its closeDate
+ */
+export const isTestExpired = (test) => {
+  if (!test) return false;
+  
+  // Use closeDate or endDate or validity
+  const expiryDateStr = test.closeDate || test.endDate || test.validity;
+  if (!expiryDateStr) return false;
+  
+  const expiryDate = new Date(expiryDateStr);
+  if (isNaN(expiryDate.getTime())) return false;
+  
+  return new Date() > expiryDate;
+};
+

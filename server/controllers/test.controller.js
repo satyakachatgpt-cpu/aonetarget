@@ -4,7 +4,7 @@ import { db } from '../config/db.js';
 import * as XLSX from 'xlsx';
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from 'docx';
 import { findCourse, getRelatedCourseIds } from '../services/course.service.js';
-import { isPurchaseExpired } from '../utils/helpers.js';
+import { isPurchaseExpired, isTestExpired } from '../utils/helpers.js';
 
 /**
  * MCQ Framework - Test Management Controller
@@ -287,7 +287,8 @@ export const getAllTests = async (req, res, next) => {
         return {
           ...test,
           id: testId || testObjectId,
-          questions: qCount || (Array.isArray(test.questions) ? test.questions.length : (test.questions || 0))
+          questions: qCount || (Array.isArray(test.questions) ? test.questions.length : (test.questions || 0)),
+          isExpired: isTestExpired(test)
         };
       });
     }
@@ -402,6 +403,12 @@ export const getTestById = async (req, res) => {
             if (course && purchase && isPurchaseExpired(purchase, course)) {
               console.warn(`[getTestById] Access Denied - Enrollment expired for student ${studentId}`);
               return res.status(403).json({ error: 'Your access to this test series has expired', code: 'EXPIRED' });
+            }
+
+            // 5. Check if individual test itself has expired
+            if (isTestExpired(test)) {
+              console.warn(`[getTestById] Access Denied - Individual test ${id} has expired`);
+              return res.status(403).json({ error: 'This test has expired and is no longer available.', code: 'TEST_EXPIRED' });
             }
           }
         } else if (!test.free && !test.isFree) {
@@ -524,7 +531,7 @@ export const getTestById = async (req, res) => {
     });
 
 
-    res.json({ ...test, questions: safeQuestions });
+    res.json({ ...test, questions: safeQuestions, isExpired: isTestExpired(test) });
   } catch (error) {
     console.error('Error fetching test:', error);
     res.status(500).json({ error: 'Failed to fetch test' });

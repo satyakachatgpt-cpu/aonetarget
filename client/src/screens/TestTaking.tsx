@@ -147,6 +147,12 @@ const TestTaking: React.FC = () => {
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
+        if (res.status === 403 && errData.code === 'EXPIRED') {
+          throw new Error('Your access to this test series has expired. Please renew your subscription to continue.');
+        }
+        if (res.status === 403 && errData.code === 'ENROLLMENT_REQUIRED') {
+          throw new Error('You need to enroll in this course to access this test.');
+        }
         throw new Error(errData.error || 'Test not found');
       }
       const testData = await res.json();

@@ -4,6 +4,7 @@ import Course from '../models/Course.js';
 import Video from '../models/Video.js';
 import { findCourse, getRelatedCourseIds, syncDemoVideoWithFreeContent } from '../services/course.service.js';
 import { db } from '../config/db.js';
+import { isTestExpired } from '../utils/helpers.js';
 
 /**
  * Get all courses with optional filters and pagination
@@ -416,8 +417,12 @@ export const getStudentCourseTests = async (req, res) => {
     }
 
     const tests = await db.collection('tests').find(query).toArray();
+    const testsWithExpiry = tests.map(t => ({
+      ...t,
+      isExpired: isTestExpired(t)
+    }));
 
-    res.json(tests);
+    res.json(testsWithExpiry);
   } catch (error) {
     console.error('Error fetching course tests:', error);
     res.status(500).json({ error: 'Failed to fetch course tests' });

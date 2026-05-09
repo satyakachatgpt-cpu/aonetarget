@@ -163,45 +163,40 @@ export const getAllTestSeries = async (req, res) => {
             series.isDirect = isDirect;
             series.isIncluded = isIncluded && !isDirect;
 
-            // Calculate Expiry
-            if (series.isEnrolled) {
-              // Find purchase for this specific series or its parent batch/package
-              const relevantIds = [seriesIdStr, ...allPossibleParents];
-              const purchase = studentPurchases.find(p => relevantIds.includes(String(p.courseId)));
-              const getSeriesExpired = (series) => {
-                const mode = series.expiryMode;
-                const val = series.validity;
+            // 4. Calculate Expiry (Always check End Date mode, Validity needs purchase)
+            const getSeriesExpired = (series) => {
+              const mode = series.expiryMode;
+              const val = series.validity;
 
-                if (!mode || mode === 'Lifetime Access' || mode === 'lifetime') {
-                  return false;
+              if (!mode || mode === 'Lifetime Access' || mode === 'lifetime') return false;
+
+              if (mode === 'End Date' && val) {
+                let dateStr = val;
+                const parts = val.split('-');
+                if (parts.length === 3 && parts[2].length === 4) {
+                  dateStr = `${parts[2]}-${parts[1]}-${parts[0]}`;
                 }
+                const expiryDate = new Date(dateStr);
+                expiryDate.setHours(23, 59, 59, 999);
+                return new Date() > expiryDate;
+              }
 
-                if (mode === 'End Date' && val) {
-                  let dateStr = val;
-                  const parts = val.split('-');
-                  if (parts.length === 3 && parts[2].length === 4) {
-                    dateStr = `${parts[2]}-${parts[1]}-${parts[0]}`;
-                  }
-                  const expiryDate = new Date(dateStr);
-                  expiryDate.setHours(23, 59, 59, 999);
-                  return new Date() > expiryDate;
-                }
+              if (mode === 'Validity' && val && series.isEnrolled) {
+                // Find purchase for this specific series or its parent batch/package
+                const relevantIds = [seriesIdStr, ...allPossibleParents];
+                const purchase = studentPurchases.find(p => relevantIds.includes(String(p.courseId)));
+                if (!purchase) return false;
+                
+                const months = parseInt(val);
+                const createdAt = new Date(purchase.createdAt);
+                createdAt.setMonth(createdAt.getMonth() + months);
+                return new Date() > createdAt;
+              }
 
-                if (mode === 'Validity' && val) {
-                  if (!purchase) return false;
-                  const months = parseInt(val);
-                  const createdAt = new Date(purchase.createdAt);
-                  createdAt.setMonth(createdAt.getMonth() + months);
-                  return new Date() > createdAt;
-                }
+              return false;
+            };
 
-                return false;
-              };
-
-              series.isExpired = getSeriesExpired(series);
-            } else {
-              series.isExpired = false;
-            }
+            series.isExpired = getSeriesExpired(series);
         } else {
             series.isEnrolled = false;
             series.isDirect = false;

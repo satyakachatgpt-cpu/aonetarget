@@ -72,6 +72,8 @@ const CourseDetails: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'videos' | 'notes' | 'tests' | 'live'>('videos');
   const [isEnrolled, setIsEnrolled] = useState(false);
+  const [isCourseExpired, setIsCourseExpired] = useState(false);
+  const [enrollmentStatus, setEnrollmentStatus] = useState<string>('not_enrolled');
   const [showVideoPlayer, setShowVideoPlayer] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
   const [liveMessages, setLiveMessages] = useState<any[]>([]);
@@ -348,6 +350,8 @@ const CourseDetails: React.FC = () => {
           if (enrolledRes.ok) {
             const enrolledData = await enrolledRes.json();
             setIsEnrolled(enrolledData.enrolled || false);
+            setIsCourseExpired(enrolledData.isExpired || false);
+            setEnrollmentStatus(enrolledData.status || (enrolledData.isExpired ? 'expired' : (enrolledData.enrolled ? 'active' : 'not_enrolled')));
 
             if (enrolledData.enrolled) {
               await fetchCourseProgress();
@@ -776,10 +780,11 @@ const CourseDetails: React.FC = () => {
           <TestsTab 
             tests={tests}
             isEnrolled={isEnrolled}
+            isExpired={isCourseExpired}
             coursePrice={course.price}
             enrolling={enrolling}
             completedTests={progress.completedTests || []}
-            onStartTest={(testId) => navigate(`/test/${testId}`)}
+            onStartTest={(testId) => { if (isCourseExpired) { alert('Your access to this course has expired. Please renew to continue.'); return; } navigate(`/test/${testId}`); }}
             onEnroll={handleEnroll}
             onBuyNow={handleBuyNow}
           />
@@ -839,7 +844,18 @@ const CourseDetails: React.FC = () => {
           </div>
         )}
 
-        {!isEnrolled ? (
+        {enrollmentStatus === 'expired' ? (
+          <div className="mt-8 mb-24 px-4 sticky bottom-4 z-40">
+            <div className="bg-[#2D0D0D] p-5 rounded-[2.2rem] shadow-[0_20px_50px_rgba(220,38,38,0.3)] flex items-center justify-between border border-red-500/20 mx-auto max-w-sm animate-fade-in-up">
+              <div className="flex flex-col gap-1 ml-1">
+                <span className="text-[9px] font-black text-red-400 uppercase tracking-[0.15em]">Subscription Ended</span>
+                <div className="flex items-center gap-2.5">
+                  <span className="text-xl font-black text-white tracking-tight">EXPIRED</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : !isEnrolled ? (
           <div className="mt-8 mb-24 px-4 sticky bottom-4 z-40">
             <div className="bg-[#0D1B2A] p-5 rounded-[2.2rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex items-center justify-between border border-white/10 mx-auto max-w-sm animate-fade-in-up">
               <div className="flex flex-col gap-1 ml-1">
