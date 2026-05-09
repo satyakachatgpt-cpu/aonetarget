@@ -215,9 +215,16 @@ const PDFViewerScreen: React.FC = () => {
                 </div>
               );
             }
+            // For Android/Desktop: Use Google Viewer for external/proxied URLs to avoid 'Open' prompt
+            const actualUrl = pdfIframeUrl.includes('url=') 
+              ? decodeURIComponent(pdfIframeUrl.split('url=')[1].split('&')[0]) 
+              : fullPdfUrl;
+              
+            const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(actualUrl)}&embedded=true`;
+
             return (
               <iframe 
-                src={pdfIframeUrl} 
+                src={googleViewerUrl} 
                 className="w-full h-full border-none block m-0 p-0"
                 title={title}
               />
