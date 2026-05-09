@@ -139,10 +139,10 @@ const MockTests: React.FC = () => {
 
   const checkEnrollment = async (series: any) => {
     if (!student) return;
-    // Free series - always enrolled
+    // Free series - always enrolled (but can be expired)
     if (!series.price || Number(series.price) === 0) {
       setIsEnrolled(true);
-      setEnrollmentStatus('active');
+      setEnrollmentStatus(series.isExpired ? 'expired' : 'active');
       return;
     }
     try {
@@ -166,7 +166,8 @@ const MockTests: React.FC = () => {
   };
 
   const handleSeriesClick = async (series: any) => {
-    if (series.isExpired) {
+    const isActuallyExpired = getSeriesExpiryStatus(series);
+    if (isActuallyExpired) {
       toast.error('This test series has expired.');
       return;
     }
@@ -174,10 +175,10 @@ const MockTests: React.FC = () => {
     const seriesId = String(series.id || series._id);
     const preEnrolled = enrolledSeriesIds.has(seriesId);
     
-    // Free series - always give access
+    // Free series - always give access (unless expired)
     if (!series.price || Number(series.price) === 0) {
       setIsEnrolled(true);
-      setEnrollmentStatus('active');
+      setEnrollmentStatus(series.isExpired ? 'expired' : 'active');
     } else {
       setIsEnrolled(preEnrolled);
       setEnrollmentStatus(series.isExpired ? 'expired' : (preEnrolled ? 'active' : 'not_enrolled'));
@@ -235,6 +236,23 @@ const MockTests: React.FC = () => {
       case 'completed': return { label: 'Completed', bg: 'bg-gray-100', text: 'text-gray-500', icon: 'check_circle' };
       default: return { label: 'Available', bg: 'bg-blue-100', text: 'text-blue-700', icon: 'info' };
     }
+  };
+
+  const getSeriesExpiryStatus = (series: any) => {
+    if (series.isExpired) return true;
+    const mode = series.expiryMode;
+    const val = series.validity;
+    if (mode === 'End Date' && val) {
+      const parts = val.split('-');
+      let dateStr = val;
+      if (parts.length === 3 && parts[2].length === 4) {
+        dateStr = `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+      const expiry = new Date(dateStr);
+      expiry.setHours(23, 59, 59, 999);
+      return new Date() > expiry;
+    }
+    return false;
   };
 
   const handleBack = () => {
@@ -296,7 +314,7 @@ const MockTests: React.FC = () => {
               <div
                 key={series.id || series._id || idx}
                 onClick={() => handleSeriesClick(series)}
-                className={`card-premium p-4 rounded-3xl border border-gray-100 cursor-pointer hover:-translate-y-1 transition-all duration-300 group ${series.isExpired ? 'opacity-50 grayscale-[0.5]' : ''}`}
+                className={`card-premium p-4 rounded-3xl border border-gray-100 cursor-pointer hover:-translate-y-1 transition-all duration-300 group ${getSeriesExpiryStatus(series) ? 'opacity-50 grayscale-[0.5]' : ''}`}
               >
                 <div className="w-12 h-12 bg-primary-50 rounded-2xl flex items-center justify-center mb-4 group-hover:bg-primary-100 transition-colors">
                   <span className="material-symbols-rounded text-primary text-2xl">style</span>
@@ -310,7 +328,7 @@ const MockTests: React.FC = () => {
                 </div>
                 <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between">
                   <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{series.category || 'General'}</span>
-                  {series.isExpired ? (
+                  {getSeriesExpiryStatus(series) ? (
                     <span className="text-[11px] font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-lg flex items-center gap-1">
                       <span className="material-symbols-rounded text-[12px]">lock_clock</span>
                       Expired
