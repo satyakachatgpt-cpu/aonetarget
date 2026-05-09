@@ -49,11 +49,8 @@ export interface CourseContentModalRegistryProps {
   };
   forms: {
     liveStreamForm: any;
-    activeLiveStreamTab: 'basic' | 'advanced';
     youtubeZoomForm: any;
-    activeYoutubeZoomTab: 'basic' | 'advanced';
     webinarForm: any;
-    activeWebinarTab: 'basic' | 'advanced';
     importSource: string;
     importSearch: string;
     selectedImportItems: any[];
@@ -61,11 +58,8 @@ export interface CourseContentModalRegistryProps {
   };
   formSetters: {
     setLiveStreamForm: (form: any) => void;
-    setActiveLiveStreamTab: (tab: 'basic' | 'advanced') => void;
     setYoutubeZoomForm: (form: any) => void;
-    setActiveYoutubeZoomTab: (tab: 'basic' | 'advanced') => void;
     setWebinarForm: (form: any) => void;
-    setActiveWebinarTab: (tab: 'basic' | 'advanced') => void;
     setImportSource: (source: string) => void;
     setImportSearch: (search: string) => void;
     setSelectedImportItems: (items: any[]) => void;
@@ -158,8 +152,6 @@ const CourseContentModalRegistry: React.FC<CourseContentModalRegistryProps> = ({
     <CourseContentModals
       showLiveStreamModal={modalState.showLiveStreamModal}
       setShowLiveStreamModal={modalSetters.setShowLiveStreamModal}
-      activeLiveStreamTab={forms.activeLiveStreamTab}
-      setActiveLiveStreamTab={formSetters.setActiveLiveStreamTab}
       liveStreamForm={forms.liveStreamForm}
       setLiveStreamForm={formSetters.setLiveStreamForm}
       liveStreamImageRef={refs.liveStreamImageRef}
@@ -172,8 +164,6 @@ const CourseContentModalRegistry: React.FC<CourseContentModalRegistryProps> = ({
       showYoutubeZoomModal={modalState.showYoutubeZoomModal}
       setShowYoutubeZoomModal={modalSetters.setShowYoutubeZoomModal}
       editingYoutubeZoom={editState.editingYoutubeZoom}
-      activeYoutubeZoomTab={forms.activeYoutubeZoomTab}
-      setActiveYoutubeZoomTab={formSetters.setActiveYoutubeZoomTab}
       youtubeZoomForm={forms.youtubeZoomForm}
       setYoutubeZoomForm={formSetters.setYoutubeZoomForm}
       youtubeZoomImageRef={refs.youtubeZoomImageRef}
@@ -189,8 +179,6 @@ const CourseContentModalRegistry: React.FC<CourseContentModalRegistryProps> = ({
       showToast={context.showToast}
       showWebinarModal={modalState.showWebinarModal}
       setShowWebinarModal={modalSetters.setShowWebinarModal}
-      activeWebinarTab={forms.activeWebinarTab}
-      setActiveWebinarTab={formSetters.setActiveWebinarTab}
       webinarForm={forms.webinarForm}
       setWebinarForm={formSetters.setWebinarForm}
       getImageUrl={context.getImageUrl}
