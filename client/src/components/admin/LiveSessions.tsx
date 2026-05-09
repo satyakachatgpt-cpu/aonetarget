@@ -97,12 +97,10 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true, courseId, showToast 
             const uniqueEnriched = enriched.reduce((acc: any[], current: any) => {
                 const x = acc.find(item => {
                     const identityMatch = 
-                        (item.streamId && current.streamId && item.streamId === current.streamId) ||
-                        (item.url && current.url && item.url === current.url) ||
                         (item._id && current._id && String(item._id) === String(current._id)) ||
                         (item.id && current.id && String(item.id) === String(current.id));
                     
-                    return identityMatch || (item.title && current.title && item.title === current.title);
+                    return identityMatch;
                 });
                 if (!x) return acc.concat([current]);
                 else return acc;
