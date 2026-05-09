@@ -125,27 +125,29 @@ const WatchPage: React.FC = () => {
     try {
       const vid = currentVideo.id || currentVideo._id;
       
+      const studentToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
       const adminToken = localStorage.getItem('adminToken');
-      const studentToken = localStorage.getItem('studentToken') || localStorage.getItem('token');
       
-      const usingAdmin = isAdminPreview && !!adminToken;
-      const token = usingAdmin ? adminToken : studentToken;
+      // Strict role selection: Only use Admin identity if explicitly in preview mode 
+      // or if there is no student session at all.
+      const useAdminRole = isAdminPreview || (!!adminToken && !studentToken);
+      const headers = useAdminRole ? getAdminHeaders() : getAuthHeaders();
       
       const adminNameFromStore = localStorage.getItem('adminName') || localStorage.getItem('adminUser');
       const studentNameFromStore = student?.name || student?.phone || 'Student';
 
-      const senderName = usingAdmin
+      const senderName = useAdminRole
         ? (adminNameFromStore || 'Instructor')
         : studentNameFromStore;
 
-      const senderId = usingAdmin ? 'admin' : (student?.id || student?._id || 'student');
-      const role = usingAdmin ? 'admin' : 'student';
+      const senderId = useAdminRole ? 'admin' : (student?.id || student?._id || 'student');
+      const role = useAdminRole ? 'admin' : 'student';
 
       const res = await fetch(`/api/live-chat/${vid}/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          ...headers
         },
         body: JSON.stringify({
           senderId,
@@ -155,7 +157,9 @@ const WatchPage: React.FC = () => {
         })
       });
       if (res.ok) fetchLiveMessages(vid);
-    } catch (e) {}
+    } catch (e) {
+      console.error('[WatchPage] Chat send error:', e);
+    }
   };
 
   // Orientation handling
