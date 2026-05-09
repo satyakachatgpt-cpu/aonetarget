@@ -5,6 +5,7 @@ import { Video } from '../../../types';
 interface LiveTabProps {
   liveStreams: Video[];
   isEnrolled: boolean;
+  isExpired?: boolean;
   isPaidCourse: boolean | null | undefined;
   coursePrice: number | undefined;
   enrolling: boolean;
@@ -79,6 +80,7 @@ const UpcomingCountdown = ({ scheduledStr, onExpire }: { scheduledStr: string; o
 const LiveTab: React.FC<LiveTabProps> = ({
   liveStreams,
   isEnrolled,
+  isExpired,
   isPaidCourse,
   coursePrice,
   enrolling,
@@ -96,17 +98,17 @@ const LiveTab: React.FC<LiveTabProps> = ({
 
   return (
     <div className="space-y-6">
-      {!isEnrolled ? (
+      {!isEnrolled || isExpired ? (
         <div className="card-premium p-10 text-center animate-fade-in-up">
           <div className="w-20 h-20 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="material-symbols-rounded text-4xl text-gray-300">lock</span>
+            <span className="material-symbols-rounded text-4xl text-gray-300">{isExpired ? 'lock_clock' : 'lock'}</span>
           </div>
-          <h3 className="text-xl font-black text-gray-800 mb-2 uppercase tracking-tight">Access Restricted</h3>
-          <p className="text-gray-500 font-medium text-sm mb-6">Please enroll in this course to join live interactive sessions and expert-led classes.</p>
+          <h3 className="text-xl font-black text-gray-800 mb-2 uppercase tracking-tight">{isExpired ? 'Access Expired' : 'Access Restricted'}</h3>
+          <p className="text-gray-500 font-medium text-sm mb-6">{isExpired ? 'Your access to this course has expired. Please renew to continue watching live sessions.' : 'Please enroll in this course to join live interactive sessions and expert-led classes.'}</p>
           {isPaidCourse ? (
-            <button onClick={onBuyNow} className="btn-accent px-10 py-4 text-sm rounded-2xl shadow-xl hover:scale-105 transition-all">Buy Course - ₹{coursePrice}</button>
+            <button onClick={onBuyNow} className="btn-accent px-10 py-4 text-sm rounded-2xl shadow-xl hover:scale-105 transition-all">{isExpired ? 'Renew Course' : 'Buy Course'} - ₹{coursePrice}</button>
           ) : (
-            <button onClick={onEnroll} disabled={enrolling} className="btn-primary px-10 py-4 text-sm rounded-2xl shadow-xl hover:scale-105 transition-all disabled:opacity-50">{enrolling ? 'Enrolling...' : 'Enroll Free'}</button>
+            <button onClick={onEnroll} disabled={enrolling || isExpired} className="btn-primary px-10 py-4 text-sm rounded-2xl shadow-xl hover:scale-105 transition-all disabled:opacity-50">{isExpired ? 'Expired' : (enrolling ? 'Enrolling...' : 'Enroll Free')}</button>
           )}
         </div>
       ) : (

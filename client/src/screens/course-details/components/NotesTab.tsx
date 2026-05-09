@@ -12,6 +12,7 @@ interface Note {
 interface NotesTabProps {
   notes: Note[];
   isEnrolled: boolean;
+  isExpired?: boolean;
   isPaidCourse: boolean | null | undefined;
   coursePrice: number | undefined;
   enrolling: boolean;
@@ -23,6 +24,7 @@ interface NotesTabProps {
 const NotesTab: React.FC<NotesTabProps> = ({
   notes,
   isEnrolled,
+  isExpired,
   isPaidCourse,
   coursePrice,
   enrolling,
@@ -32,23 +34,24 @@ const NotesTab: React.FC<NotesTabProps> = ({
 }) => {
   return (
     <div className="space-y-4">
-      {!isEnrolled ? (
+      {!isEnrolled || isExpired ? (
         <div className="card-premium p-10 text-center animate-fade-in-up">
           <div className="w-16 h-16 bg-surface-200 rounded-full flex items-center justify-center mx-auto mb-3">
-            <span className="material-symbols-rounded text-3xl text-gray-300">lock</span>
+            <span className="material-symbols-rounded text-3xl text-gray-300">{isExpired ? 'lock_clock' : 'lock'}</span>
           </div>
-          <p className="text-gray-500 font-medium text-sm">Enroll to access notes</p>
+          <h3 className="font-black text-gray-800 mb-1">{isExpired ? 'Access Expired' : 'Access Restricted'}</h3>
+          <p className="text-gray-500 font-medium text-sm">{isExpired ? 'Your access to this course has expired. Please renew to continue.' : 'Enroll to access notes'}</p>
           {isPaidCourse ? (
             <button onClick={onBuyNow} className="mt-4 btn-accent px-6 py-2.5 text-sm">
-              Buy Now - ₹{coursePrice}
+              {isExpired ? 'Renew Now' : 'Buy Now'} - ₹{coursePrice}
             </button>
           ) : (
             <button 
               onClick={onEnroll} 
-              disabled={enrolling} 
+              disabled={enrolling || isExpired} 
               className="mt-4 btn-primary px-6 py-2.5 text-sm disabled:opacity-50"
             >
-              {enrolling ? 'Enrolling...' : 'Enroll Free'}
+              {isExpired ? 'Expired' : (enrolling ? 'Enrolling...' : 'Enroll Free')}
             </button>
           )}
         </div>
