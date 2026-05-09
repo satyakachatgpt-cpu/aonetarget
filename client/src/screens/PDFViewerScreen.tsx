@@ -199,11 +199,30 @@ const PDFViewerScreen: React.FC = () => {
             `}} />
           </div>
         ) : pdfIframeUrl ? (
-          <iframe 
-            src={pdfIframeUrl} 
-            className="w-full h-full border-none block m-0 p-0"
-            title={title}
-          />
+          (() => {
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            if (isIOS) {
+              return (
+                <div className="w-full h-full bg-zinc-900 overflow-hidden">
+                   <object 
+                    data={pdfIframeUrl} 
+                    type="application/pdf" 
+                    className="w-full h-full border-none"
+                   >
+                     <embed src={pdfIframeUrl} type="application/pdf" className="w-full h-full" />
+                     <iframe src={pdfIframeUrl} className="w-full h-full border-none" title={title} />
+                   </object>
+                </div>
+              );
+            }
+            return (
+              <iframe 
+                src={pdfIframeUrl} 
+                className="w-full h-full border-none block m-0 p-0"
+                title={title}
+              />
+            );
+          })()
         ) : null}
       </div>
 
