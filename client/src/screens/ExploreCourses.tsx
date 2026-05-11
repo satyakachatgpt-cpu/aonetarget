@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { categoriesAPI } from '../services/apiClient';
 import StudentSidebar from '../components/StudentSidebar';
+import CounsellingModal from '../components/CounsellingModal';
 
 interface Category {
   _id?: string;
@@ -24,6 +25,13 @@ const ExploreCourses: React.FC = () => {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [student, setStudent] = useState<any>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   useEffect(() => {
     const storedStudent = localStorage.getItem('studentData');
@@ -221,7 +229,10 @@ const ExploreCourses: React.FC = () => {
               <div className="flex-1">
                 <p className="text-sm font-bold text-amber-800">Not sure which course to pick?</p>
                 <p className="text-xs text-amber-600/80 mt-1 leading-relaxed">Contact us for free career counselling and expert guidance!</p>
-                <button className="mt-3 text-xs font-bold text-amber-700 bg-amber-200/60 px-4 py-2 rounded-xl active:scale-[0.97] transition-all duration-200 flex items-center gap-1.5 hover:bg-amber-200">
+                <button 
+                  onClick={() => setIsModalOpen(true)}
+                  className="mt-3 text-xs font-bold text-amber-700 bg-amber-200/60 px-4 py-2 rounded-xl active:scale-[0.97] transition-all duration-200 flex items-center gap-1.5 hover:bg-amber-200"
+                >
                   <span className="material-symbols-rounded text-sm">support_agent</span>
                   Get Free Counselling
                 </button>
@@ -236,6 +247,21 @@ const ExploreCourses: React.FC = () => {
         onClose={() => setSidebarOpen(false)}
         student={student}
       />
+
+      <CounsellingModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        student={student}
+        showToast={showToast}
+        categories={categories}
+      />
+
+      {toast && (
+        <div className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[200] px-6 py-3 rounded-2xl shadow-2xl animate-slide-in-bottom flex items-center gap-3 border backdrop-blur-md ${toast.type === 'success' ? 'bg-green-500/90 border-green-400 text-white' : 'bg-red-500/90 border-red-400 text-white'}`}>
+          <span className="material-symbols-rounded text-xl">{toast.type === 'success' ? 'check_circle' : 'error'}</span>
+          <span className="text-xs font-bold whitespace-nowrap">{toast.msg}</span>
+        </div>
+      )}
     </div>
   );
 };
