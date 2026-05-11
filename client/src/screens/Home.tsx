@@ -1182,7 +1182,7 @@ const Home: React.FC = () => {
           </section>
         )}
 
-        {testSeries.length > 0 && (
+        {/* {testSeries.length > 0 && (
           <section className="animate-fade-in-up" style={{ animationDelay: '0.25s' }}>
             <div className="flex justify-between items-center mb-3">
               <div className="flex items-center gap-2.5">
@@ -1268,7 +1268,7 @@ const Home: React.FC = () => {
               ))}
             </div>
           </section>
-        )}
+        )} */}
 
         {allNews.length > 0 && !newsLoading && (
           <section className="animate-fade-in-up" style={{ animationDelay: '0.32s' }}>
