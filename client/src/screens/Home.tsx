@@ -845,8 +845,8 @@ const Home: React.FC = () => {
                     )}
                   </div>
                   <div className="relative z-10">
-                    <h3 className="font-semibold text-[16.8px] leading-tight line-clamp-2">{cat.title}</h3>
-                    <span className="text-[11.5px] opacity-80 font-medium">{cat.subtitle}</span>
+                    <h3 className="font-semibold text-[21px] leading-tight line-clamp-2">{cat.title}</h3>
+                    <span className="text-[16px] opacity-80 font-medium">{cat.subtitle}</span>
                   </div>
                   <div className="absolute bottom-3 right-3 h-8 w-8 glass bg-white/25 rounded-full flex items-center justify-center border border-white/30 z-10 group-hover:bg-white/40 group-hover:scale-110 transition-all duration-200">
                     <span className="material-symbols-rounded text-white text-base">arrow_forward</span>
