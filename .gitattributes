@@ -4,6 +4,8 @@
 # Force CRLF for all source code files on Windows
 *.tsx text eol=crlf
 *.ts text eol=crlf
+*.tsx text eol=crlf
+*.ts text eol=crlf
 *.js text eol=crlf
 *.jsx text eol=crlf
 *.css text eol=crlf

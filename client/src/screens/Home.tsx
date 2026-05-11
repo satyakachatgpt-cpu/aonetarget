@@ -845,8 +845,8 @@ const Home: React.FC = () => {
                     )}
                   </div>
                   <div className="relative z-10">
-                    <h3 className="font-semibold text-[16.8px] leading-tight line-clamp-2">{cat.title}</h3>
-                    <span className="text-[11.5px] opacity-80 font-medium">{cat.subtitle}</span>
+                    <h3 className="font-semibold text-[21px] leading-tight line-clamp-2">{cat.title}</h3>
+                    <span className="text-[16px] opacity-80 font-medium">{cat.subtitle}</span>
                   </div>
                   <div className="absolute bottom-3 right-3 h-8 w-8 glass bg-white/25 rounded-full flex items-center justify-center border border-white/30 z-10 group-hover:bg-white/40 group-hover:scale-110 transition-all duration-200">
                     <span className="material-symbols-rounded text-white text-base">arrow_forward</span>
@@ -1107,110 +1107,74 @@ const Home: React.FC = () => {
                   <div
                     key={course._id || course.id || i}
                     onClick={() => navigate(`/course/${course._id || course.id}`)}
-                    className="w-full aspect-[1.7/1] rounded-xl overflow-hidden cursor-pointer shadow-sm hover:shadow-md transition-all duration-300 relative group flex"
+                    className="relative h-[120px] min-h-[120x] rounded-[22px] overflow-hidden cursor-pointer shadow-[0_10px_28px_rgba(15,23,42,0.10)] border border-white/70 group"
                   >
+                    {/* Background Layer */}
                     {hasImage ? (
-                      <div className="w-full h-full relative">
-                        {course.settings?.markNewBatch && (
-                          <div className="absolute top-2 left-2 z-30 px-2.5 py-1 bg-red-600 text-white text-[8px] font-black uppercase tracking-[0.1em] rounded-full shadow-lg border border-white/20 animate-pulse">
-                            NEW BATCH
-                          </div>
-                        )}
-                        
-                        {testSeriesCount > 0 && (
-                           <div className="absolute top-2 right-2 z-30 px-2 py-0.5 bg-green-500 text-white text-[7px] font-black uppercase tracking-widest rounded-full shadow-md flex items-center gap-1 border border-white/20">
-                             <span className="material-symbols-rounded text-[10px]">verified</span>
-                             INCLUDES {testSeriesCount} TEST SERIES
-                           </div>
-                        )}
-
+                      <>
                         <img
                           src={getImageUrl(course.imageUrl || course.thumbnail)}
                           alt={course.title}
+                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                           loading="lazy"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                         />
-
-                        {/* Name Overlay Gradient */}
-                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-3 rounded-b-xl">
-                          <p className="text-white font-bold text-[13px] leading-tight line-clamp-1">
-                            {course.name || course.title || course.courseName}
-                          </p>
-                          {isEnrolled ? (
-                            <div className="flex items-center gap-1 mt-0.5">
-                               <span className="material-symbols-rounded text-yellow-400 text-[12px]">verified</span>
-                               <span className="text-[8px] font-black text-white uppercase tracking-widest">Enrolled</span>
-                            </div>
-                          ) : (
-                            <p className="text-yellow-400 font-black text-[11px] mt-0.5">
-                               {course.price === 0 ? 'FREE' : `₹${course.price}`}
-                            </p>
-                          )}
-                        </div>
-
-                        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-30">
-                          <button className="bg-white text-black text-[9px] font-black px-4 py-2 rounded-xl shadow-lg border border-white/20 uppercase tracking-widest active:scale-95 transition-all">
-                            {isEnrolled ? 'OPEN' : 'JOIN NOW'}
-                          </button>
-                        </div>
-                      </div>
+                        <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/15 to-black/65"></div>
+                      </>
                     ) : (
-                      <div className={`w-full h-full bg-gradient-to-br ${bgGrad} flex p-3.5 relative overflow-hidden group-hover:scale-105 transition-transform duration-500`}>
-                        {course.settings?.markNewBatch && (
-                          <div className="absolute top-3 left-3 z-30 px-2.5 py-1 bg-red-600 text-white text-[9px] font-black uppercase tracking-[0.1em] rounded-full shadow-lg border border-white/20 animate-pulse">
-                            NEW BATCH
-                          </div>
-                        )}
-
-                        {testSeriesCount > 0 && (
-                           <div className="absolute top-2 right-2 z-30 px-2 py-0.5 bg-green-500 text-white text-[7px] font-black uppercase tracking-widest rounded-full shadow-md flex items-center gap-1 border border-white/20">
-                             <span className="material-symbols-rounded text-[10px]">verified</span>
-                             {testSeriesCount} TEST SERIES
-                           </div>
-                        )}
-
-                        {/* Decorative circles to emulate a neat banner background */}
-                        <div className="absolute -top-6 -right-6 w-20 h-20 bg-white/10 rounded-full blur-xl"></div>
-                        <div className="absolute -bottom-6 -left-6 w-20 h-20 bg-black/10 rounded-full blur-xl"></div>
-
-                        <div className="flex-1 pr-1 flex flex-col justify-between z-10">
-                          <div>
-                            <span className="inline-block px-2 py-0.5 bg-white/20 rounded-[6px] text-[10px] text-white font-bold uppercase tracking-wider mb-1.5 backdrop-blur-sm shadow-sm border border-white/10">
-                              {course.category || 'BATCH'}
-                            </span>
-                            <h4 className="font-bold text-[14px] text-white leading-tight line-clamp-2 shadow-sm">{course.title || course.name}</h4>
-                          </div>
-
-                          <div className="flex items-center justify-between mt-1">
-                            {isEnrolled ? (
-                              <div className="flex items-center gap-1.5 py-1">
-                                <span className="material-symbols-rounded text-yellow-400 text-[14px]">verified</span>
-                                <span className="text-[10px] font-black text-white uppercase tracking-widest">Enrolled</span>
-                              </div>
-                            ) : (
-                              (course.price !== undefined && course.price !== null) && (
-                                <div className="flex flex-col pb-0.5">
-                                  <span className="text-[15px] font-black text-yellow-400 drop-shadow-md leading-none">
-                                    {course.price === 0 ? 'Free' : `₹${course.price}`}
-                                  </span>
-                                </div>
-                              )
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="w-[30%] relative z-10 flex flex-col items-end justify-between">
-                          <div className="w-6 h-6 bg-white/10 rounded-full flex items-center justify-center backdrop-blur-md border border-white/20">
-                            <span className="material-symbols-rounded text-white text-[14px]">school</span>
-                          </div>
-                          <button 
-                            className="bg-white text-black text-[11px] font-black px-4 py-2 rounded-xl hover:bg-white transition-all whitespace-nowrap shadow-lg uppercase tracking-widest active:scale-95 border border-white/20"
-                          >
-                            {isEnrolled ? 'OPEN' : 'JOIN NOW'}
-                          </button>
+                      <div className={`absolute inset-0 bg-gradient-to-br ${bgGrad} group-hover:scale-105 transition-transform duration-700`}>
+                        <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-transparent to-black/50"></div>
+                        <div className="absolute -right-6 -bottom-6 opacity-[0.08]">
+                          <span className="material-symbols-rounded text-[140px] text-white">school</span>
                         </div>
                       </div>
                     )}
+
+                    {/* Content Layer */}
+                    <div className="relative z-20 h-full flex flex-col justify-between p-3.5">
+                      {/* Top Chips Row */}
+                      <div className="flex flex-wrap gap-1.5 items-start">
+                        <span className="px-2.5 py-1 bg-white/20 backdrop-blur-md text-white border border-white/20 text-[9px] font-bold uppercase tracking-wider rounded-full shadow-sm">
+                          {course.category || 'BATCH'}
+                        </span>
+                        {course.settings?.markNewBatch && (
+                          <div className="px-2.5 py-1 bg-red-600 text-white text-[8px] font-black uppercase tracking-wider rounded-full shadow-lg border border-white/20 animate-pulse">
+                            NEW
+                          </div>
+                        )}
+                        {testSeriesCount > 0 && (
+                          <div className="px-2 py-1 bg-green-500/80 backdrop-blur-sm text-white text-[8px] font-black uppercase tracking-wider rounded-full shadow-md flex items-center gap-1 border border-white/10">
+                            <span className="material-symbols-rounded text-[10px]">verified</span>
+                            {testSeriesCount} TS
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Bottom Info Section */}
+                      <div className="space-y-2.5">
+                        <h3 className="text-white font-bold text-[14.5px] leading-[1.25] line-clamp-2 drop-shadow-md">
+                          {course.title || course.name}
+                        </h3>
+                        
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex flex-col">
+                            {isEnrolled ? (
+                              <div className="flex items-center gap-1">
+                                <span className="material-symbols-rounded text-yellow-400 text-[13px]">verified</span>
+                                <span className="text-[9px] font-black text-white uppercase tracking-widest opacity-90">Enrolled</span>
+                              </div>
+                            ) : (
+                              <span className="text-yellow-400 font-black text-[16px] drop-shadow-lg leading-none">
+                                {course.price === 0 ? 'FREE' : `₹${course.price}`}
+                              </span>
+                            )}
+                          </div>
+                          
+                          <button className="h-8 px-4 bg-white text-black text-[10px] font-black rounded-full shadow-xl active:scale-95 transition-all uppercase tracking-widest border border-white/50 shrink-0">
+                            {isEnrolled ? 'OPEN' : 'JOIN'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 );
               })}
@@ -1218,7 +1182,7 @@ const Home: React.FC = () => {
           </section>
         )}
 
-        {testSeries.length > 0 && (
+        {/* {testSeries.length > 0 && (
           <section className="animate-fade-in-up" style={{ animationDelay: '0.25s' }}>
             <div className="flex justify-between items-center mb-3">
               <div className="flex items-center gap-2.5">
@@ -1304,7 +1268,7 @@ const Home: React.FC = () => {
               ))}
             </div>
           </section>
-        )}
+        )} */}
 
         {allNews.length > 0 && !newsLoading && (
           <section className="animate-fade-in-up" style={{ animationDelay: '0.32s' }}>
