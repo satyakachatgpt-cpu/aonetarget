@@ -223,11 +223,22 @@ const PDFViewerScreen: React.FC = () => {
             const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(actualUrl)}&embedded=true`;
 
             return (
-              <iframe 
-                src={googleViewerUrl} 
-                className="w-full h-full border-none block m-0 p-0"
-                title={title}
-              />
+              <div className="relative w-full h-full overflow-hidden bg-white">
+                {/* Security Shield: Blocks the "Pop-out" button in the top-right corner of Google Viewer */}
+                <div 
+                  className="absolute top-0 right-0 w-[180px] h-[60px] z-[110] bg-transparent cursor-default select-none pointer-events-auto"
+                  title="Secure View: Download Disabled"
+                  onContextMenu={(e) => e.preventDefault()}
+                />
+                
+                <iframe 
+                  src={googleViewerUrl} 
+                  className="w-full h-full border-none block m-0 p-0"
+                  title={title}
+                  // sandbox prevents popups/new tabs from opening even if the button is clicked
+                  sandbox="allow-scripts allow-same-origin"
+                />
+              </div>
             );
           })()
         ) : null}
