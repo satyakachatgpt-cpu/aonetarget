@@ -42,13 +42,14 @@ const GlobalNews = lazy(() => import('../components/admin/misc/GlobalNews'));
 const PushNotifications = lazy(() => import('../components/admin/misc/PushNotifications'));
 const Referrals = lazy(() => import('../components/admin/Referrals'));
 const ChatSupport = lazy(() => import('../components/admin/ChatSupport'));
+const CounsellingLeads = lazy(() => import('../components/admin/CounsellingLeads'));
 const LiveSessions = lazy(() => import('../components/admin/LiveSessions'));
 const ContentManager = lazy(() => import('../components/admin/ContentManager'));
 const ViewFormatPage = lazy(() => import('../components/admin/ViewFormatPage'));
 const SalesReport = lazy(() => import('../components/admin/reports/SalesReport'));
 const NoPurchaseReport = lazy(() => import('../components/admin/reports/NoPurchaseReport'));
 
-export type AdminView = 'dashboard' | 'students' | 'buyers' | 'tokens' | 'coupons' | 'store' | 'institute' | 'questions' | 'question-bank' | 'passages' | 'tests' | 'subjective-test' | 'test-series' | 'all-reports' | 'videos' | 'video-series' | 'live-videos' | 'live-sessions' | 'pdfs' | 'packages' | 'messages' | 'blog' | 'settings' | 'banners' | 'courses' | 'course-content' | 'live-class-scheduler' | 'subcourses' | 'subjects' | 'topics' | 'instructions' | 'global-news' | 'quick-links' | 'push-notifications' | 'categories' | 'misc' | 'referrals' | 'chat-support' | 'free-content' | 'blocked-users' | 'security-center' | 'sales-report' | 'no-purchase-report';
+export type AdminView = 'dashboard' | 'students' | 'buyers' | 'tokens' | 'coupons' | 'store' | 'institute' | 'questions' | 'question-bank' | 'passages' | 'tests' | 'subjective-test' | 'test-series' | 'all-reports' | 'videos' | 'video-series' | 'live-videos' | 'live-sessions' | 'pdfs' | 'packages' | 'messages' | 'blog' | 'settings' | 'banners' | 'courses' | 'course-content' | 'live-class-scheduler' | 'subcourses' | 'subjects' | 'topics' | 'instructions' | 'global-news' | 'quick-links' | 'push-notifications' | 'categories' | 'misc' | 'referrals' | 'chat-support' | 'counselling' | 'free-content' | 'blocked-users' | 'security-center' | 'sales-report' | 'no-purchase-report';
 
 interface Props {
   setAuth: (val: boolean) => void;
@@ -200,7 +201,8 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
       icon: 'help_outline',
       color: 'text-gray-700',
       submenu: [
-        { id: 'chat-support', label: 'Chat', icon: 'forum' }
+        { id: 'chat-support', label: 'Chat', icon: 'forum' },
+        { id: 'counselling', label: 'Counselling', icon: 'support_agent' }
       ]
     },
     {
@@ -282,6 +284,7 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
         <Route path="free-content" element={<ContentManager mode="free" />} />
         <Route path="demo-content" element={<ContentManager mode="demo" />} />
         <Route path="chat-support" element={<ChatSupport {...props} />} />
+        <Route path="counselling" element={<CounsellingLeads {...props} />} />
         <Route path="messages" element={<Messages {...props} />} />
         <Route path="blog" element={<Blog {...props} />} />
         <Route path="settings" element={<Settings {...props} />} />

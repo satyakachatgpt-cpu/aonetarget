@@ -48,6 +48,7 @@ import resultRoutes from './routes/result.routes.js';
 import adminRoutes from './routes/admin.routes.js';
 import leaderboardRoutes from './routes/leaderboard.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
+import counsellingRoutes from './routes/counselling.routes.js';
 
 import { errorMiddleware } from './middleware/error.middleware.js';
 
@@ -410,6 +411,7 @@ app.use('/api', adminRoutes);
 app.use('/api', storeRoutes);
 app.use('/api', leaderboardRoutes);
 app.use('/api', analyticsRoutes);
+app.use('/api', counsellingRoutes);
 
 // Health and System routes handled via systemRoutes mount at line 165/166
 // app.get('/health', health);

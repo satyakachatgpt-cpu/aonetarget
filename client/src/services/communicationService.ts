@@ -1,4 +1,4 @@
-import { API_BASE_URL, cachedFetch, getAdminHeaders, getAuthHeaders, invalidateCache } from './baseService';
+import { API_BASE_URL, cachedFetch, getAdminHeaders, getAuthHeaders, invalidateCache, apiRequest } from './baseService';
 
 // Messages API
 export const messagesAPI = {
@@ -267,5 +267,37 @@ export const chatsAPI = {
       throw new Error(errorData.error || 'Failed to edit message');
     }
     return response.json();
+  }
+};
+
+// Counselling API
+export const counsellingAPI = {
+  submitLead: async (data: any) => {
+    return apiRequest(`${API_BASE_URL}/counselling-leads`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
+  getLeads: async () => {
+    return apiRequest(`${API_BASE_URL}/admin/counselling-leads`, {
+      headers: getAdminHeaders()
+    });
+  },
+  updateLeadStatus: async (id: string, status: string) => {
+    return apiRequest(`${API_BASE_URL}/admin/counselling-leads/${id}`, {
+      method: 'PUT',
+      headers: { 
+        'Content-Type': 'application/json',
+        ...getAdminHeaders()
+      },
+      body: JSON.stringify({ status }),
+    });
+  },
+  deleteLead: async (id: string) => {
+    return apiRequest(`${API_BASE_URL}/admin/counselling-leads/${id}`, {
+      method: 'DELETE',
+      headers: getAdminHeaders()
+    });
   }
 };
