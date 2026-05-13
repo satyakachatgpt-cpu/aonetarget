@@ -121,7 +121,7 @@ const App: React.FC = () => {
     checkAuth();
   }, [checkAuth]);
 
-  const [showSplash, setShowSplash] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
 
   // Proactive Admin Session Monitor
   useEffect(() => {
@@ -145,11 +145,6 @@ const App: React.FC = () => {
 
   const handleSplashComplete = useCallback(() => {
     setShowSplash(false);
-    try {
-      localStorage.setItem('splashShown', 'true');
-    } catch (e) {
-      // ignore
-    }
   }, []);
 
   if (isLoading) {

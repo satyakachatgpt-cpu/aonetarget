@@ -272,8 +272,8 @@ export const endLiveStream = async (req, res) => {
   try {
     const id = req.params.id;
     const update = {
-      status: 'ended',
-      streamStatus: 'ended',
+      status: 'recorded',
+      streamStatus: 'recorded',
       isLive: false,
       endedAt: new Date().toISOString(),
       endTime: new Date().toISOString()
@@ -494,11 +494,12 @@ export const getStudentLiveClasses = async (req, res) => {
     const finalStreams = Array.from(dedupeMap.values())
       .filter(item => {
         const status = item.status;
+        const streamStatus = item.streamStatus;
         const isLive = status === 'live';
         const isUpcoming = status === 'upcoming';
+        const isRecorded = status === 'recorded' || streamStatus === 'recorded';
         
-        // Hide anything that is not Live and not Upcoming
-        if (!isLive && !isUpcoming) return false;
+        if (!isLive && !isUpcoming && !isRecorded) return false;
 
         return true;
       })

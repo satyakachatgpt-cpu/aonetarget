@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { settingsAPI, splashScreenAPI } from '../../services/apiClient';
+import FileUploadButton from '../shared/FileUploadButton';
 
 interface Settings {
   paymentGateway: string;
@@ -156,6 +157,18 @@ const SettingsComponent: React.FC<Props> = ({ showToast }) => {
                       placeholder="https://content.cdn/splash.png"
                       className="w-full h-14 bg-slate-50/50 border border-slate-100 rounded-[1.2rem] px-5 font-bold text-sm outline-none focus:ring-4 focus:ring-slate-50 focus:border-slate-200 transition-all placeholder:text-slate-200 focus:bg-white"
                     />
+                    {!splash.imageUrl && (
+                      <div className="mt-4 flex flex-col gap-2 pt-2 animate-in fade-in zoom-in duration-300">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Or Upload From Device</span>
+                        <FileUploadButton 
+                          onUpload={(url) => setSplash({ ...splash, imageUrl: url })} 
+                          accept="image/*"
+                          label="Upload Splash Image"
+                          icon="cloud_upload"
+                          className="w-full h-14 bg-slate-100 text-slate-900 border border-slate-200 rounded-[1.2rem] font-black text-xs uppercase tracking-widest hover:bg-slate-200 transition-all shadow-sm flex items-center justify-center gap-3"
+                        />
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-4">
