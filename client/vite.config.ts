@@ -5,7 +5,7 @@ import react from "@vitejs/plugin-react";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
 
-  const backendUrl = 'http://127.0.0.1:5000';
+  const backendUrl = 'http://127.0.0.1:5001';
 
   return {
     plugins: [react()],
