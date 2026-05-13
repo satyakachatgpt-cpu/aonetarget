@@ -212,6 +212,7 @@ const Home: React.FC = () => {
   const [isInstalling, setIsInstalling] = useState(false);
   const [installSuccess, setInstallSuccess] = useState(false);
   const [showIOSSteps, setShowIOSSteps] = useState(false);
+  const [showAndroidSteps, setShowAndroidSteps] = useState(false);
 
   useEffect(() => {
     const handler = (e: any) => {
@@ -493,37 +494,29 @@ const Home: React.FC = () => {
   };
 
   const handleInstallAndroid = async () => {
-    setIsInstalling(true);
+    // If PWA install prompt is available (HTTPS + Chrome + not yet installed)
     if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const choiceResult = await deferredPrompt.userChoice;
-      if (choiceResult.outcome === 'accepted') {
-        setInstallSuccess(true);
-        setDeferredPrompt(null);
+      setIsInstalling(true);
+      try {
+        await deferredPrompt.prompt();
+        const choiceResult = await deferredPrompt.userChoice;
+        if (choiceResult.outcome === 'accepted') {
+          setInstallSuccess(true);
+          setDeferredPrompt(null);
+        }
+      } catch (err) {
+        console.error('Install prompt failed:', err);
       }
       setIsInstalling(false);
     } else {
-      try {
-        const response = await fetch('/api/download/apk', { method: 'HEAD' });
-        if (response.ok) {
-          const link = document.createElement('a');
-          link.href = '/api/download/apk';
-          link.setAttribute('download', 'AoneTarget_Latest.apk');
-          document.body.appendChild(link);
-          link.click();
-          link.parentNode?.removeChild(link);
-          setInstallSuccess(true);
-        } else {
-          alert('Please use "Add to Home Screen" from your browser menu to install the app.');
-        }
-      } catch {
-        alert('Please use "Add to Home Screen" from your browser menu to install the app.');
-      }
-      setIsInstalling(false);
+      // No native prompt available — show Android manual steps
+      setShowIOSSteps(false);
+      setShowAndroidSteps(true);
     }
   };
 
   const handleInstallIOS = () => {
+    setShowAndroidSteps(false);
     setShowIOSSteps(true);
   };
 
@@ -1549,20 +1542,48 @@ const Home: React.FC = () => {
                     </div>
                   </button>
 
+                  {showAndroidSteps && (
+                    <div className="bg-green-50 rounded-2xl p-4 border border-green-100">
+                      <h5 className="text-sm font-semibold text-green-900 mb-2 flex items-center gap-2">
+                        <span className="material-symbols-rounded text-lg">android</span>
+                        Android Installation Steps
+                      </h5>
+                      <ol className="text-xs text-green-800 space-y-1.5 ml-1">
+                        <li className="flex items-start gap-2">
+                          <span className="font-bold text-green-600 shrink-0">1.</span>
+                          <span>Make sure you are using <strong>Chrome</strong> browser</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="font-bold text-green-600 shrink-0">2.</span>
+                          <span>Tap the <strong>menu (⋮)</strong> in the top right corner of Chrome</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="font-bold text-green-600 shrink-0">3.</span>
+                          <span>Tap <strong>"Add to Home Screen"</strong> or <strong>"Install App"</strong></span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="font-bold text-green-600 shrink-0">4.</span>
+                          <span>Tap <strong>"Add"</strong> to confirm</span>
+                        </li>
+                      </ol>
+                      <p className="text-xs text-green-600 mt-3 font-medium">App will open without browser URL bar, just like a native app!</p>
+                    </div>
+                  )}
+
                   {showIOSSteps && (
                     <div className="bg-blue-50 rounded-2xl p-4 border border-blue-100">
                       <h5 className="text-sm font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                        <span className="material-symbols-rounded text-lg">info</span>
+                        <span className="material-symbols-rounded text-lg">apple</span>
                         iPhone Installation Steps
                       </h5>
                       <ol className="text-xs text-blue-800 space-y-1.5 ml-1">
                         <li className="flex items-start gap-2">
                           <span className="font-bold text-blue-600 shrink-0">1.</span>
-                          <span>Open this website in <strong>Safari</strong> browser</span>
+                          <span>Open <strong>aonetarget.in</strong> in <strong>Safari</strong> browser</span>
                         </li>
                         <li className="flex items-start gap-2">
                           <span className="font-bold text-blue-600 shrink-0">2.</span>
-                          <span>Tap the <span className="inline-flex items-center"><span className="material-symbols-rounded text-sm align-middle">ios_share</span></span> <strong>Share</strong> button at the bottom of Safari</span>
+                          <span>Tap the <strong>Share</strong> button <span className="material-symbols-rounded text-sm align-middle">ios_share</span> at the bottom</span>
                         </li>
                         <li className="flex items-start gap-2">
                           <span className="font-bold text-blue-600 shrink-0">3.</span>
@@ -1573,18 +1594,18 @@ const Home: React.FC = () => {
                           <span>Tap <strong>"Add"</strong> in the top right corner</span>
                         </li>
                       </ol>
-                      <p className="text-xs text-blue-600 mt-3 font-medium">The app will appear on your home screen like a native app!</p>
+                      <p className="text-xs text-blue-600 mt-3 font-medium">App will open without browser URL bar, just like a native app!</p>
                     </div>
                   )}
 
-                  {!showIOSSteps && !deferredPrompt && (
+                  {!showAndroidSteps && !showIOSSteps && !deferredPrompt && (
                     <div className="bg-amber-50 rounded-2xl p-4 border border-amber-100">
                       <h5 className="text-sm font-semibold text-amber-900 mb-2 flex items-center gap-2">
                         <span className="material-symbols-rounded text-lg">lightbulb</span>
                         Quick Install Tip
                       </h5>
                       <p className="text-xs text-amber-800">
-                        Open this website in <strong>Chrome</strong> or <strong>Safari</strong>, then tap the menu (⋮) and select <strong>"Add to Home Screen"</strong> or <strong>"Install App"</strong>.
+                        Open this website in <strong>Chrome</strong> (Android) or <strong>Safari</strong> (iPhone), then tap the menu and select <strong>"Add to Home Screen"</strong>.
                       </p>
                     </div>
                   )}
@@ -1594,7 +1615,7 @@ const Home: React.FC = () => {
 
             <div className="px-5 pb-5">
               <button
-                onClick={() => { setShowDownloadModal(false); setIsInstalling(false); setInstallSuccess(false); setShowIOSSteps(false); }}
+                onClick={() => { setShowDownloadModal(false); setIsInstalling(false); setInstallSuccess(false); setShowIOSSteps(false); setShowAndroidSteps(false); }}
                 className="w-full py-3.5 rounded-2xl font-semibold text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 active:scale-[0.97] transition-all duration-200 flex items-center justify-center gap-2"
               >
                 <span className="material-symbols-rounded text-lg">close</span>

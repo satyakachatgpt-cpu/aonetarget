@@ -90,11 +90,13 @@ function resolveStreamUrl(cls: any): string {
 
 
 function handleSmartJoin(cls: any, onJoinLive?: (cls: any) => void, navigate?: any) {
-  if (computeStatus(cls) !== 'live') return;
+  const currentStatus = computeStatus(cls);
+  if (currentStatus !== 'live' && currentStatus !== 'recorded') return;
   const url = resolveStreamUrl(cls);
   if (!url) return;
 
   const isYT = url.includes('youtube.com') || url.includes('youtu.be');
+  const isRecordedNow = currentStatus === 'recorded';
 
   if (isYT && navigate) {
     const videoId = cls.id || cls._id || 'live';
@@ -104,7 +106,7 @@ function handleSmartJoin(cls: any, onJoinLive?: (cls: any) => void, navigate?: a
         title: cls.title,
         id: videoId,
         platform: 'youtube',
-        isLive: true
+        isLive: !isRecordedNow
       }
     });
   } else if (onJoinLive) {
@@ -127,12 +129,13 @@ function getScheduledISO(cls: any): string {
 function computeStatus(cls: any): 'live' | 'upcoming' | 'ended' | 'scheduled' | 'recorded' {
   const raw = (cls.streamStatus || cls.status || cls.liveStatus || cls.eventStatus || 'upcoming').toLowerCase();
   
-  const isExplicitlyEnded = ['ended', 'completed', 'inactive', 'recorded', 'disable', 'finished'].includes(raw);
-  const isImplicitlyEnded = (cls.isLive === false && (cls.endedAt || cls.endTime)) || 
-                           (cls.type === 'recorded' || cls.contentType === 'recorded' || cls.contentType === 'video');
+  const isExplicitlyEnded = ['ended', 'completed', 'inactive', 'disable', 'finished'].includes(raw);
+  const isImplicitlyEnded = (cls.isLive === false && (cls.endedAt || cls.endTime) && raw !== 'recorded') || 
+                           (cls.contentType === 'video');
   const hasEndedLabel = cls.statusLabel === 'EVENT ENDED' || cls.label === 'EVENT ENDED';
 
   if (isExplicitlyEnded || isImplicitlyEnded || hasEndedLabel) return 'ended';
+  if (raw === 'recorded') return 'recorded';
   if (raw === 'live' || cls.isLive === true) return 'live';
 
   // --- Schedule-Aware logic ---
@@ -241,8 +244,8 @@ const LiveClassesCalendar: React.FC<Props> = ({ studentId, courseId, batchId, on
       })
       .filter(c => {
         const effectiveStatus = computeStatus(c);
-        // Only show Live or Upcoming (future scheduled)
-        return effectiveStatus === 'live' || effectiveStatus === 'upcoming';
+        // Only show Live, Upcoming or Recorded
+        return effectiveStatus === 'live' || effectiveStatus === 'upcoming' || effectiveStatus === 'recorded';
       })
       .sort((a, b) => {
         const timeA = new Date(getScheduledISO(a) || a.date || 0).getTime();

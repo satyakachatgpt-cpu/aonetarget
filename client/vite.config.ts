@@ -1,6 +1,7 @@
 import path from "path";
 import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
+import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
@@ -8,7 +9,66 @@ export default defineConfig(({ mode }) => {
   const backendUrl = 'http://127.0.0.1:5001';
 
   return {
-    plugins: [react()],
+    plugins: [
+      react(),
+      // NOTE: PWA standalone mode (URL bar hidden) only works on HTTPS with real domain.
+      // Test on https://aonetarget.in after deployment, not on local IP.
+      VitePWA({
+        registerType: 'autoUpdate',
+        injectRegister: 'script',
+        workbox: {
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          navigateFallback: '/index.html',
+          navigateFallbackDenylist: [/^\/api\//],
+          runtimeCaching: [
+            {
+              urlPattern: /^https:\/\/aonetarget\.in\/api\/.*/i,
+              handler: 'NetworkFirst',
+              options: {
+                cacheName: 'api-cache',
+                networkTimeoutSeconds: 10
+              }
+            }
+          ]
+        },
+        manifest: {
+          short_name: "AONE Target",
+          name: "AONE TARGET INSTITUTE",
+          description: "Aone Target Institute - Premium Educational Platform for NEET, IIT, JEE, NDA Preparation",
+          categories: ["education"],
+          lang: "en",
+          start_url: "/",
+          scope: "/",
+          display: "standalone",
+          orientation: "portrait",
+          theme_color: "#1A237E",
+          background_color: "#1A237E",
+          prefer_related_applications: false,
+          icons: [
+            { src: "/pwa-192x192.png", type: "image/png", sizes: "192x192", purpose: "any" },
+            { src: "/pwa-512x512.png", type: "image/png", sizes: "512x512", purpose: "any" },
+            { src: "/pwa-512x512.png", type: "image/png", sizes: "512x512", purpose: "maskable" }
+          ],
+          screenshots: [
+            {
+              src: "/screenshot-mobile.png",
+              sizes: "720x1280",
+              type: "image/png",
+              form_factor: "narrow",
+              label: "AONE Target Home"
+            },
+            {
+              src: "/screenshot-desktop.png",
+              sizes: "1280x720",
+              type: "image/png",
+              form_factor: "wide",
+              label: "AONE Target Dashboard"
+            }
+          ]
+        },
+        devOptions: { enabled: true }
+      })
+    ],
 
     server: {
       host: "0.0.0.0",

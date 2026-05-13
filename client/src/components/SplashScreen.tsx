@@ -54,7 +54,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
           <img
             src={imageUrl}
             alt="Splash"
-            className="w-full h-full object-cover"
+            className="w-full h-full object-fill"
             onError={(e) => {
               console.error('Splash image failed to load:', imageUrl);
               setImageError(true);
