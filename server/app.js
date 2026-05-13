@@ -17,7 +17,7 @@ import { db } from './config/db.js';
 
 // Middleware
 import { optionalAuth } from './middleware/auth.js';
-import { securityHeaders, sanitizeInput } from './middleware/security.js';
+import { sanitizeInput } from './middleware/security.js';
 import { requestIdMiddleware } from './middleware/requestId.middleware.js';
 
 // Routes
@@ -58,16 +58,30 @@ const { ObjectId } = mongoose.Types;
 
 const app = express();
 
+// Security Headers (Helmet) - Added as FIRST middleware
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com", "https://www.youtube.com"],
+        styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "https://img.youtube.com"],
+        frameSrc: ["https://www.youtube.com", "https://checkout.razorpay.com"],
+        connectSrc: ["'self'", "https://api.razorpay.com"],
+        fontSrc: ["'self'", "https://fonts.gstatic.com"],
+      },
+    },
+    crossOriginEmbedderPolicy: false, // Keeping this false to prevent blocking cross-origin resources like Cloudinary/YouTube
+  })
+);
+
 app.use(requestIdMiddleware);
 
 // --- Configuration ---
 app.use(compression());
 app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
-app.use(securityHeaders);
-app.use(helmet({
-  contentSecurityPolicy: false,
-  crossOriginEmbedderPolicy: false
-}));
+
 app.use(mongoSanitize());
 
 app.use(cors({
