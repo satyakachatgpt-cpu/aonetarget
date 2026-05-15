@@ -139,8 +139,14 @@ const MockTests: React.FC = () => {
 
   const checkEnrollment = async (series: any) => {
     if (!student) return;
-    // Free series - always enrolled (but can be expired)
-    if (!series.price || Number(series.price) === 0) {
+    // --- Robust Free Series Detection ---
+    const isFree = !series.price || 
+                   Number(series.price) === 0 || 
+                   series.isFree === true || 
+                   series.free === true || 
+                   String(series.price).toLowerCase() === 'free';
+
+    if (isFree) {
       setIsEnrolled(true);
       setEnrollmentStatus(series.isExpired ? 'expired' : 'active');
       return;
@@ -175,8 +181,14 @@ const MockTests: React.FC = () => {
     const seriesId = String(series.id || series._id);
     const preEnrolled = enrolledSeriesIds.has(seriesId);
     
-    // Free series - always give access (unless expired)
-    if (!series.price || Number(series.price) === 0) {
+    // --- Robust Free Series Detection ---
+    const isFree = !series.price || 
+                   Number(series.price) === 0 || 
+                   series.isFree === true || 
+                   series.free === true || 
+                   String(series.price).toLowerCase() === 'free';
+
+    if (isFree) {
       setIsEnrolled(true);
       setEnrollmentStatus(series.isExpired ? 'expired' : 'active');
     } else {
