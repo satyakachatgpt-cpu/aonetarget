@@ -640,7 +640,7 @@ const Home: React.FC = () => {
     <div className="flex flex-col bg-surface-100 min-h-screen pb-4 overflow-x-hidden">
       <div className="animate-fade-in">
         <header className="sticky top-0 z-40 shadow-lg" style={{ background: '#283593' }}>
-        <div className="px-4 py-2 flex items-center justify-between gap-3 min-h-[68px]">
+        <div className="px-4 py-2 flex items-center justify-between gap-3 min-h-[64px]">
           {isSearching ? (
             <div className="flex-1 flex items-center gap-3 animate-slide-in-left">
               <div className="flex-1 relative">

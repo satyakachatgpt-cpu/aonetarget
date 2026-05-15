@@ -29,6 +29,32 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior-y: none;
+  background-color: #f9fafb;
+}
+
+/* Global iOS PWA Fixes - ONLY active in standalone mode */
+@media (display-mode: standalone) {
+  .pwa-status-bar {
+    /* Hard fallback: ensure space is ALWAYS reserved on launch */
+    height: 44px;
+    height: env(safe-area-inset-top, 44px);
+    min-height: 44px; /* Force minimum height for notched iPhones */
+    display: block !important;
+  }
+  
+  .sidebar-header-ios {
+    padding-top: env(safe-area-inset-top) !important;
+  }
+
+  .bottom-nav-ios {
+    padding-bottom: env(safe-area-inset-bottom) !important;
+    background-color: white !important;
+  }
+}
+
+/* Hide PWA status bar by default (in browser) */
+.pwa-status-bar {
+  display: none;
 }
 
 /* Prevent iOS Auto-Zoom on inputs */

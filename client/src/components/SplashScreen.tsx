@@ -47,22 +47,22 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
 
   return (
     <div
-      className={`fixed inset-0 z-[9999] transition-opacity duration-300 ${fadeOut ? 'opacity-0' : 'opacity-100'} bg-white flex justify-center items-center`}
+      className={`fixed inset-0 z-[9999] transition-opacity duration-300 ${fadeOut ? 'opacity-0' : 'opacity-100'} bg-white flex flex-col overflow-hidden font-outfit`}
     >
-      <div className="w-full max-w-md h-screen relative overflow-hidden bg-white shadow-2xl">
+      {/* Splash-specific Status Bar to match the brand color */}
+      <div className="pwa-status-bar bg-[#283593] shrink-0" />
+      
+      <div className="flex-1 w-full relative bg-white">
         {imageUrl && (
           <img
             src={imageUrl}
             alt="Splash"
-            className="w-full h-full object-fill"
+            className="w-full h-full object-cover"
             onError={(e) => {
               console.error('Splash image failed to load:', imageUrl);
               setImageError(true);
               setFadeOut(true);
               setTimeout(onComplete, 300);
-            }}
-            onLoad={() => {
-              console.log('Splash image loaded successfully:', imageUrl);
             }}
           />
         )}
