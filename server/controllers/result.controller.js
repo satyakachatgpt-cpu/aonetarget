@@ -116,8 +116,19 @@ export const getResultById = async (req, res) => {
 
     // --- Optimized Live Ranking Logic ---
     try {
-      const tid = enriched.testId;
-      const lb = await getLeaderboard(db, tid);
+      const tid = String(enriched.testId);
+      // Fetch leaderboard results with flexible testId matching
+      const lb = await db.collection('testResults').aggregate([
+        { $match: { $or: [{ testId: tid }, { testId: !isNaN(tid) ? Number(tid) : tid }] } },
+        {
+          $group: {
+            _id: "$studentId",
+            score: { $max: "$obtainedMarks" },
+            time: { $min: "$timeTaken" } // Simple min time for now
+          }
+        },
+        { $sort: { score: -1, time: 1 } }
+      ]).toArray();
       
       const currentScore = Number(enriched.obtainedMarks) || 0;
       const currentTime = Number(enriched.timeTaken) || 999999;
