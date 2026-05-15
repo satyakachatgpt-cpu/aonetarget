@@ -34,6 +34,19 @@ body {
 
 /* Global iOS PWA Fixes - ONLY active in standalone mode */
 @media (display-mode: standalone) {
+  html, body, #root {
+    height: 100vh !important;
+    min-height: 100vh !important;
+    max-height: 100vh !important;
+    overflow: hidden !important; /* Prevent iOS bounce that causes viewport bugs */
+  }
+
+  /* Override tailwind 100dvh for PWA to avoid cold-start gap */
+  .h-\[100dvh\] { height: 100vh !important; }
+  .min-h-\[100dvh\] { min-height: 100vh !important; }
+  .h-screen { height: 100vh !important; }
+  .min-h-screen { min-height: 100vh !important; }
+
   .pwa-status-bar {
     /* Hard fallback: ensure space is ALWAYS reserved on launch */
     height: 44px;

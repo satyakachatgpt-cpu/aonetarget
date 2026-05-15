@@ -47,7 +47,7 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
 
   return (
     <div
-      className={`fixed inset-0 z-[9999] transition-opacity duration-300 ${fadeOut ? 'opacity-0' : 'opacity-100'} bg-white flex flex-col overflow-hidden font-outfit`}
+      className={`fixed top-0 left-0 w-full h-[100vh] z-[9999] transition-opacity duration-300 ${fadeOut ? 'opacity-0' : 'opacity-100'} bg-white flex flex-col overflow-hidden font-outfit`}
     >
       {/* Splash-specific Status Bar to match the brand color */}
       <div className="pwa-status-bar bg-[#283593] shrink-0" />

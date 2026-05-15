@@ -84,7 +84,10 @@ const MainLayout: React.FC<{ isLoggedIn: boolean; children: React.ReactNode }> =
       <div className="pwa-status-bar bg-[#283593] shrink-0" />
       <div id="sidebar-root" />
       <div ref={scrollRef} className="flex-1 overflow-y-auto hide-scrollbar relative smooth-scroll">
-        <div className={`${shouldHide ? '' : 'pb-16'} font-outfit`}>
+        <div 
+          className="font-outfit"
+          style={{ paddingBottom: shouldHide ? '0px' : 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}
+        >
           {children}
         </div>
       </div>
