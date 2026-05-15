@@ -164,9 +164,32 @@ const TestTaking: React.FC = () => {
         correctAnswer: (qn.correctAnswer || qn.correct_answer || qn.answer || qn['Correct Answer'] || qn.correctOption || 'A').toString().toUpperCase()
       }));
       setQuestions(q);
+
+      // --- CRITICAL: Hard Expiry vs Personal Duration Calculation ---
       const durationSecs = (testData.duration || 60) * 60;
-      setTimeLeft(durationSecs);
+      let finalTimeLeft = durationSecs;
+
+      // Check if test has a scheduled end time (Hard Expiry)
+      const hardExpiryStr = testData.closeDate || testData.endDate || testData.validity;
+      if (hardExpiryStr) {
+        const hardExpiryDate = new Date(hardExpiryStr);
+        if (!isNaN(hardExpiryDate.getTime())) {
+          const secsToHardExpiry = Math.floor((hardExpiryDate.getTime() - Date.now()) / 1000);
+          
+          // Use the smaller of the two: Personal Duration OR Time until Hard Expiry
+          if (secsToHardExpiry > 0) {
+            finalTimeLeft = Math.min(durationSecs, secsToHardExpiry);
+            console.log(`[Timer] Hard expiry in ${secsToHardExpiry}s, Duration in ${durationSecs}s. Final: ${finalTimeLeft}s`);
+          } else {
+            // Already past hard expiry
+            finalTimeLeft = 0;
+          }
+        }
+      }
+
+      setTimeLeft(finalTimeLeft);
       startTimeRef.current = Date.now();
+
       if (testData?.enableSectionSelector && Array.isArray(testData?.sections) && testData.sections.length > 0) {
         setActiveSectionId(testData.sections[0].id.toString());
       }
@@ -176,103 +199,6 @@ const TestTaking: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    const needsTerms = test?.termsAndConditions && test?.termsAndConditions.trim() !== '' && test?.termsAndConditions !== '<p><br></p>';
-    if (questions.length > 0 && !submitted && timeLeft > 0 && (!needsTerms || hasAcceptedTerms)) {
-      timerRef.current = setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            if (timerRef.current) clearInterval(timerRef.current);
-            handleSubmit(true);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [questions.length, submitted, hasAcceptedTerms, timeLeft > 0, test?.termsAndConditions]);
-
-  useEffect(() => {
-    // Only trap back button DURING the active test (after terms accepted and before submission)
-    if (submitted || loading || !hasAcceptedTerms) return;
-    
-    window.history.pushState(null, '', window.location.href);
-    const handlePopState = () => {
-      setShowBackModal(true);
-      window.history.pushState(null, '', window.location.href);
-    };
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [submitted, loading, hasAcceptedTerms]);
-
-  // Handle browser back button on Result Page
-  useEffect(() => {
-    if (!submitted) return;
-
-    // Push a state so popstate fires
-    window.history.pushState(null, '', window.location.href);
-
-    const handlePopState = () => {
-      if (launchedSeriesId) {
-        navigate(`/mock-tests/${launchedSeriesId}`, { replace: true });
-      } else {
-        navigate('/mock-tests', { replace: true });
-      }
-    };
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [submitted, launchedSeriesId, navigate]);
-
-  const formatTime = (secs: number) => {
-    const h = Math.floor(secs / 3600);
-    const m = Math.floor((secs % 3600) / 60);
-    const s = secs % 60;
-    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
-  };
-
-  const getTimerColor = () => {
-    const totalDuration = (test?.duration || 60) * 60;
-    const pct = timeLeft / totalDuration;
-    if (pct <= 0.1) return 'text-[#D32F2F] bg-red-50';
-    if (pct <= 0.25) return 'text-amber-600 bg-amber-50';
-    return 'text-[#1A237E] bg-blue-50';
-  };
-
-  const selectAnswer = (questionId: string, option: string) => {
-    setAnswers(prev => ({ ...prev, [questionId]: option }));
-  };
-
-  const toggleFlag = (questionId: string) => {
-    setFlagged(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(questionId)) newSet.delete(questionId);
-      else newSet.add(questionId);
-      return newSet;
-    });
-  };
-
-  const clearAnswer = (questionId: string) => {
-    setAnswers(prev => {
-      const newAnswers = { ...prev };
-      delete newAnswers[questionId];
-      return newAnswers;
-    });
-  };
-
-  const getQuestionStatus = (questionId: string): QuestionStatus => {
-    const isAnswered = answers[questionId] !== undefined;
-    const isFlagged = flagged.has(questionId);
-    if (isAnswered && isFlagged) return 'flagged-answered';
-    if (isAnswered) return 'answered';
-    if (isFlagged) return 'flagged';
-    return 'unanswered';
   };
 
   const handleSubmit = useCallback(async (autoSubmit = false) => {
@@ -352,7 +278,117 @@ const TestTaking: React.FC = () => {
       setSubmitting(false);
       setConfirmSubmit(false);
     }
-  }, [submitted, submitting, testId, student, answers, questions]);
+  }, [submitted, submitting, testId, student, answers, questions, test, launchedSeriesId]);
+
+  useEffect(() => {
+    const needsTerms = test?.termsAndConditions && test?.termsAndConditions.trim() !== '' && test?.termsAndConditions !== '<p><br></p>';
+    if (questions.length > 0 && !submitted && timeLeft > 0 && (!needsTerms || hasAcceptedTerms)) {
+      timerRef.current = setInterval(() => {
+        setTimeLeft(prev => {
+          // Hard Expiry Real-time Protection
+          const hardExpiryStr = test?.closeDate || test?.endDate || test?.validity;
+          if (hardExpiryStr) {
+            const hardExpiryDate = new Date(hardExpiryStr);
+            if (!isNaN(hardExpiryDate.getTime()) && new Date() > hardExpiryDate) {
+              console.log('[Timer] Hard expiry reached! Auto-submitting...');
+              if (timerRef.current) clearInterval(timerRef.current);
+              handleSubmit(true);
+              return 0;
+            }
+          }
+
+          if (prev <= 1) {
+            if (timerRef.current) clearInterval(timerRef.current);
+            handleSubmit(true);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [questions.length, submitted, hasAcceptedTerms, timeLeft > 0, test?.termsAndConditions, test?.closeDate, test?.endDate, handleSubmit]);
+
+  useEffect(() => {
+    // Only trap back button DURING the active test (after terms accepted and before submission)
+    if (submitted || loading || !hasAcceptedTerms) return;
+    
+    window.history.pushState(null, '', window.location.href);
+    const handlePopState = () => {
+      setShowBackModal(true);
+      window.history.pushState(null, '', window.location.href);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [submitted, loading, hasAcceptedTerms]);
+
+  // Handle browser back button on Result Page
+  useEffect(() => {
+    if (!submitted) return;
+
+    // Push a state so popstate fires
+    window.history.pushState(null, '', window.location.href);
+
+    const handlePopState = () => {
+      if (launchedSeriesId) {
+        navigate(`/mock-tests/${launchedSeriesId}`, { replace: true });
+      } else {
+        navigate('/mock-tests', { replace: true });
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [submitted, launchedSeriesId, navigate]);
+
+  const formatTime = (secs: number) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const getTimerColor = () => {
+    const totalDuration = (test?.duration || 60) * 60;
+    const pct = timeLeft / totalDuration;
+    if (pct <= 0.1) return 'text-[#D32F2F] bg-red-50';
+    if (pct <= 0.25) return 'text-amber-600 bg-amber-50';
+    return 'text-[#1A237E] bg-blue-50';
+  };
+
+  const selectAnswer = (questionId: string, option: string) => {
+    setAnswers(prev => ({ ...prev, [questionId]: option }));
+  };
+
+  const toggleFlag = (questionId: string) => {
+    setFlagged(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(questionId)) newSet.delete(questionId);
+      else newSet.add(questionId);
+      return newSet;
+    });
+  };
+
+  const clearAnswer = (questionId: string) => {
+    setAnswers(prev => {
+      const newAnswers = { ...prev };
+      delete newAnswers[questionId];
+      return newAnswers;
+    });
+  };
+
+  const getQuestionStatus = (questionId: string): QuestionStatus => {
+    const isAnswered = answers[questionId] !== undefined;
+    const isFlagged = flagged.has(questionId);
+    if (isAnswered && isFlagged) return 'flagged-answered';
+    if (isAnswered) return 'answered';
+    if (isFlagged) return 'flagged';
+    return 'unanswered';
+  };
+
 
   useEffect(() => {
     if (submitted && testId) {
