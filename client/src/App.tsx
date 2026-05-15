@@ -48,13 +48,13 @@ const WatchPage = lazy(() => import('./screens/WatchPage'));
 const MyTests = lazy(() => import('./screens/MyTests'));
 
 const PageLoader = () => (
-  <div className="flex items-center justify-center min-h-[60vh] w-full animate-in fade-in duration-300">
+  <div className="flex items-center justify-center h-[100dvh] w-full bg-[#283593] animate-in fade-in duration-300 overflow-hidden">
     <div className="flex flex-col items-center gap-3">
       <div className="relative w-12 h-12">
-        <div className="absolute w-full h-full border-4 border-gray-100 rounded-full"></div>
-        <div className="absolute w-full h-full border-4 border-[#283593] rounded-full border-t-transparent animate-spin"></div>
+        <div className="absolute w-full h-full border-4 border-white/20 rounded-full"></div>
+        <div className="absolute w-full h-full border-4 border-white rounded-full border-t-transparent animate-spin"></div>
       </div>
-      <p className="text-gray-400 font-medium text-sm animate-pulse">Loading content...</p>
+      <p className="text-white/80 font-medium text-sm animate-pulse">Loading...</p>
     </div>
   </div>
 );
@@ -80,9 +80,14 @@ const MainLayout: React.FC<{ isLoggedIn: boolean; children: React.ReactNode }> =
 
   return (
     <div className="max-w-md mx-auto h-[100dvh] bg-white shadow-xl relative overflow-hidden flex flex-col w-full">
+      {/* PWA Status Bar Background (Only visible in standalone mode) */}
+      <div className="pwa-status-bar bg-[#283593] shrink-0" />
       <div id="sidebar-root" />
       <div ref={scrollRef} className="flex-1 overflow-y-auto hide-scrollbar relative smooth-scroll">
-        <div className={`${shouldHide ? '' : 'pb-16'} font-outfit`}>
+        <div 
+          className="font-outfit"
+          style={{ paddingBottom: shouldHide ? '0px' : 'calc(4rem + env(safe-area-inset-bottom, 0px))' }}
+        >
           {children}
         </div>
       </div>
@@ -152,13 +157,14 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-surface-100">
+    <div className="min-h-screen bg-white">
       <Toaster position="top-center" richColors />
 
-
-      {showSplash && <div className="font-outfit"><SplashScreen onComplete={handleSplashComplete} /></div>}
-      <Router>
-        <Suspense fallback={<PageLoader />}>
+      {showSplash ? (
+        <SplashScreen onComplete={handleSplashComplete} />
+      ) : (
+        <Router>
+          <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/admin-login" element={isAdminLoggedIn ? <Navigate to="/admin" replace /> : <AdminLogin setAuth={setIsAdminLoggedIn} />} />
             <Route
@@ -249,6 +255,7 @@ const App: React.FC = () => {
           </Routes>
         </Suspense>
       </Router>
+      )}
     </div>
   );
 };

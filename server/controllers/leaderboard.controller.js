@@ -24,8 +24,25 @@ export const getLeaderboard = async (req, res) => {
 
     const pipeline = [
       { $match: { testId } },
+      // 1. Sort to get best results at the top for each student
+      { $sort: { studentId: 1, obtainedMarks: -1, timeTaken: 1 } },
+      // 2. Group by studentId and take the first (best) result
+      {
+        $group: {
+          _id: "$studentId",
+          studentId: { $first: "$studentId" },
+          studentName: { $first: "$studentName" },
+          obtainedMarks: { $first: "$obtainedMarks" },
+          totalMarks: { $first: "$totalMarks" },
+          percentage: { $first: "$percentage" },
+          timeTaken: { $first: "$timeTaken" },
+          submittedAt: { $first: "$submittedAt" }
+        }
+      },
+      // 3. Sort the unique best results to establish global ranks
       { $sort: { obtainedMarks: -1, timeTaken: 1 } },
       { $limit: limit },
+      // 4. Hydrate student names if missing
       {
         $lookup: {
           from: 'students',
@@ -36,7 +53,10 @@ export const getLeaderboard = async (req, res) => {
                 $expr: {
                   $and: [
                     { $not: ['$$hasName'] },
-                    { $eq: ['$id', '$$sid'] }
+                    { $or: [
+                        { id: '$$sid' },
+                        { userId: '$$sid' }
+                    ]}
                   ]
                 }
               }

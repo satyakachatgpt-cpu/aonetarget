@@ -330,96 +330,101 @@ export const getTestById = async (req, res) => {
     if (test) {
       // Security Check: Enrollment & Expiry Validation for Students
       const isAdmin = req.admin || req.user?.isAdmin || req.user?.role === 'admin';
-      const studentId = req.user?.studentId;
+      const seriesId = test.courseId || test.testSeriesId || test.seriesId || test.batchId || (Array.isArray(test.courseIds) ? test.courseIds[0] : null);
+      
+      // 1. RESOLVE FREE STATUS IMMEDIATELY
+      const isFreeTest = test.free || test.isFree;
+      let isSeriesFree = false;
+      let parentSeries = null;
+      if (seriesId) {
+        parentSeries = await findCourse(seriesId);
+        isSeriesFree = parentSeries && (!parentSeries.price || Number(parentSeries.price) === 0 || parentSeries.isFree || parentSeries.free);
+      }
 
-      if (!isAdmin) {
-        // 1. Resolve student and series IDs
-        const seriesId = test.courseId || test.testSeriesId || test.seriesId || test.batchId || (Array.isArray(test.courseIds) ? test.courseIds[0] : null);
+      // 2. GRANT ACCESS IF ADMIN OR FREE
+      if (isAdmin || isFreeTest || isSeriesFree) {
+        console.log(`[getTestById] Access granted to test ${id} (Admin: ${isAdmin}, Free: ${isFreeTest || isSeriesFree})`);
+        // We will skip enrollment check for free/admin
+      } else {
+        // 3. PAID CONTENT: MUST BE AUTHENTICATED AND ENROLLED
+        const studentId = req.user?.studentId;
         
-        if (seriesId && studentId) {
-          // 2. Fetch Student with all possible ID variants
-          const student = await db.collection('students').findOne({
+        if (!studentId || !seriesId) {
+          console.warn(`[getTestById] Access Denied - Missing studentId (${studentId}) or seriesId (${seriesId}) for paid content`);
+          return res.status(403).json({ error: 'Enrollment required to access this test', code: 'ENROLLMENT_REQUIRED' });
+        }
+
+        // Fetch Student with all possible ID variants
+        const student = await db.collection('students').findOne({
+          $or: [
+            { id: studentId.toString() },
+            { userId: studentId.toString() },
+            { _id: ObjectId.isValid(studentId) ? new ObjectId(studentId) : null }
+          ].filter(v => v.id || v.userId || v._id)
+        });
+
+        // Check multiple sources of truth for enrollment
+        let isEnrolled = false;
+        
+        // Source A: Student document's enrolledCourses array
+        if (student?.enrolledCourses?.some(sid => String(sid) === String(seriesId))) {
+          isEnrolled = true;
+        }
+
+        // Source B: Enrollments collection
+        if (!isEnrolled) {
+          const enrollmentRecord = await db.collection('enrollments').findOne({
+            studentId: studentId.toString(),
             $or: [
-              { id: studentId.toString() },
-              { userId: studentId.toString() },
-              { _id: ObjectId.isValid(studentId) ? new ObjectId(studentId) : null }
-            ].filter(v => v.id || v.userId || v._id)
+              { courseId: seriesId.toString() },
+              { testSeriesId: seriesId.toString() }
+            ]
           });
+          if (enrollmentRecord) isEnrolled = true;
+        }
 
-          // 3. Check multiple sources of truth for enrollment
-          let isEnrolled = false;
-          
-          // Source A: Student document's enrolledCourses array
-          if (student?.enrolledCourses?.some(id => String(id) === String(seriesId))) {
-            isEnrolled = true;
-          }
+        // Source C: Purchases collection
+        if (!isEnrolled) {
+          const purchase = await db.collection('purchases').findOne({
+            studentId: studentId.toString(),
+            courseId: seriesId.toString(),
+            status: 'completed'
+          });
+          if (purchase) isEnrolled = true;
+        }
 
-          // Source B: Enrollments collection (legacy/liveclass pattern)
-          if (!isEnrolled) {
-            const enrollmentRecord = await db.collection('enrollments').findOne({
-              studentId: studentId.toString(),
-              $or: [
-                { courseId: seriesId.toString() },
-                { testSeriesId: seriesId.toString() },
-                { seriesId: seriesId.toString() },
-                { batchId: seriesId.toString() }
-              ]
-            });
-            if (enrollmentRecord) isEnrolled = true;
-          }
+        if (!isEnrolled) {
+          console.warn(`[getTestById] Access Denied - No enrollment found for student ${studentId} in paid series ${seriesId}`);
+          return res.status(403).json({ error: 'Enrollment required to access this test', code: 'ENROLLMENT_REQUIRED' });
+        }
 
-          // Source C: Purchases collection (fallback)
-          if (!isEnrolled) {
-            const purchase = await db.collection('purchases').findOne({
-              studentId: studentId.toString(),
-              courseId: seriesId.toString(),
-              status: 'completed'
-            });
-            if (purchase) isEnrolled = true;
-          }
+        // 4. Check for expiry if enrolled in paid content
+        const course = parentSeries || await findCourse(seriesId);
+        let purchase = await db.collection('purchases').findOne({
+          studentId: studentId.toString(),
+          courseId: seriesId.toString(),
+          status: 'completed'
+        }, { sort: { createdAt: -1 } });
 
-          if (!isEnrolled) {
-            // Optional: Check if test is free
-            if (!test.free && !test.isFree) {
-              console.warn(`[getTestById] Access Denied - No enrollment found for student ${studentId} in series ${seriesId}`);
-              return res.status(403).json({ error: 'Enrollment required to access this test', code: 'ENROLLMENT_REQUIRED' });
-            }
-          } else {
-            // 4. Check for expiry if enrolled
-            const course = await findCourse(seriesId);
-            let purchase = await db.collection('purchases').findOne({
-              studentId: studentId.toString(),
-              courseId: seriesId.toString(),
-              status: 'completed'
-            }, { sort: { createdAt: -1 } });
+        // Support Manual Enrollment Expiry
+        if (!purchase && student) {
+          purchase = { createdAt: student.admission?.admissionDate || student.createdAt || new Date() };
+        }
 
-            // Support Manual Enrollment: If no purchase record exists, use student admission date or creation date
-            if (!purchase && student) {
-              purchase = {
-                createdAt: student.admission?.admissionDate || student.createdAt || new Date()
-              };
-            }
-
-            if (course && purchase && isPurchaseExpired(purchase, course)) {
-              console.warn(`[getTestById] Access Denied - Enrollment expired for student ${studentId}`);
-              return res.status(403).json({ error: 'Your access to this test series has expired', code: 'EXPIRED' });
-            }
-
-            // 5. Check if individual test itself has expired
-            if (isTestExpired(test)) {
-              console.warn(`[getTestById] Access Denied - Individual test ${id} has expired`);
-              return res.status(403).json({ error: 'This test has expired and is no longer available.', code: 'TEST_EXPIRED' });
-            }
-          }
-        } else if (!test.free && !test.isFree) {
-           // Not an admin, no seriesId/studentId found, and not free
-           console.warn(`[getTestById] Access Denied - No studentId (${studentId}) or seriesId (${seriesId}) found`);
-           return res.status(403).json({ error: 'Access denied', code: 'ACCESS_DENIED' });
+        if (course && purchase && isPurchaseExpired(purchase, course)) {
+          console.warn(`[getTestById] Access Denied - Enrollment expired for student ${studentId}`);
+          return res.status(403).json({ error: 'Your access to this test series has expired', code: 'EXPIRED' });
         }
       }
-    }
 
-    if (!test) {
+        // 5. Final check for test-specific timing (Shared by free and paid)
+        if (isTestExpired(test)) {
+          console.warn(`[getTestById] Access Denied - Individual test ${id} has expired`);
+          return res.status(403).json({ error: 'This test has expired and is no longer available.', code: 'TEST_EXPIRED' });
+        }
+      }
+
+      if (!test) {
       const questionCount = await db.collection('questions').countDocuments({
         $or: [{ testId: id }, { testId: !isNaN(id) ? Number(id) : id }]
       });

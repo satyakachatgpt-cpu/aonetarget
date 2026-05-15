@@ -80,14 +80,14 @@ export const getResultById = async (req, res) => {
     const db = getDb();
     const resultId = String(req.params.id || '').trim();
     console.log('DEBUG: getResultById looking for:', resultId);
-    
+
     // Support custom id (string/number) and MongoDB _id (ObjectId or string)
     const orFilters = [
       { id: resultId },
       { id: !isNaN(Number(resultId)) ? Number(resultId) : null },
       { _id: resultId }
     ].filter(v => (v.id !== null && v.id !== undefined) || (v._id !== null && v._id !== undefined));
-    
+
     if (ObjectId.isValid(resultId)) {
       orFilters.push({ _id: new ObjectId(resultId) });
     }
@@ -97,16 +97,16 @@ export const getResultById = async (req, res) => {
 
     const result = await db.collection('testResults').findOne(filter);
     if (!result) {
-        console.log('DEBUG: Result NOT found in DB for ID:', resultId);
-        return res.status(404).json({ error: 'Result record not found' });
+      console.log('DEBUG: Result NOT found in DB for ID:', resultId);
+      return res.status(404).json({ error: 'Result record not found' });
     }
     console.log('DEBUG: Result found! studentId:', result.studentId);
-    
+
     // Check ownership
     const isAdmin = req.user?.isAdmin || req.user?.role === 'admin';
     const sessionStudentId = req.user?.studentId || req.user?.id;
     console.log('DEBUG: Ownership check - result.studentId:', result.studentId, 'sessionStudentId:', sessionStudentId, 'isAdmin:', isAdmin);
-    
+
     if (!isAdmin && String(result.studentId) !== String(sessionStudentId)) {
       console.log('DEBUG: Ownership check FAILED');
       return res.status(403).json({ error: 'Forbidden' });
@@ -116,18 +116,29 @@ export const getResultById = async (req, res) => {
 
     // --- Optimized Live Ranking Logic ---
     try {
-      const tid = enriched.testId;
-      const lb = await getLeaderboard(db, tid);
-      
+      const tid = String(enriched.testId);
+      // Fetch leaderboard results with flexible testId matching
+      const lb = await db.collection('testResults').aggregate([
+        { $match: { $or: [{ testId: tid }, { testId: !isNaN(tid) ? Number(tid) : tid }] } },
+        {
+          $group: {
+            _id: "$studentId",
+            score: { $max: "$obtainedMarks" },
+            time: { $min: "$timeTaken" } // Simple min time for now
+          }
+        },
+        { $sort: { score: -1, time: 1 } }
+      ]).toArray();
+
       const currentScore = Number(enriched.obtainedMarks) || 0;
       const currentTime = Number(enriched.timeTaken) || 999999;
-      
+
       // Calculate rank: count students better than current result
-      enriched.rank = lb.filter(s => 
-        (Number(s.score) > currentScore) || 
+      enriched.rank = lb.filter(s =>
+        (Number(s.score) > currentScore) ||
         (Number(s.score) === currentScore && Number(s.time) < currentTime)
       ).length + 1;
-      
+
       enriched.totalStudents = lb.length;
     } catch (rankErr) {
       console.error('Live ranking failed in single fetch:', rankErr);
@@ -145,7 +156,7 @@ export const getStudentTestResults = async (req, res) => {
   try {
     const identifier = req.params.id;
     const db = getDb();
-    
+
     // First, find the actual student to get all possible IDs (legacy custom ID, userId, and MongoDB _id)
     const student = await db.collection('students').findOne({
       $or: [
@@ -335,12 +346,12 @@ export const getStudentTestResults = async (req, res) => {
         if (lb) {
           const currentScore = Number(r.obtainedMarks) || 0;
           const currentTime = Number(r.timeTaken) || 999999;
-          
-          r.rank = lb.filter(s => 
-            (Number(s.score) > currentScore) || 
+
+          r.rank = lb.filter(s =>
+            (Number(s.score) > currentScore) ||
             (Number(s.score) === currentScore && Number(s.time) < currentTime)
           ).length + 1;
-          
+
           r.totalStudents = lb.length;
         }
       });
@@ -485,12 +496,12 @@ export const getAdminTestResults = async (req, res) => {
         if (lb) {
           const currentScore = Number(r.obtainedMarks) || 0;
           const currentTime = Number(r.timeTaken) || 999999;
-          
-          r.rank = lb.filter(s => 
-            (Number(s.score) > currentScore) || 
+
+          r.rank = lb.filter(s =>
+            (Number(s.score) > currentScore) ||
             (Number(s.score) === currentScore && Number(s.time) < currentTime)
           ).length + 1;
-          
+
           r.totalStudents = lb.length;
         }
       });
@@ -691,7 +702,7 @@ export const submitTest = async (req, res) => {
       { id: !isNaN(tid) ? Number(tid) : null },
       { _id: tid }
     ].filter(v => v.id !== null && v.id !== undefined || v._id !== null && v._id !== undefined);
-    
+
     if (ObjectId.isValid(tid)) orConditions.push({ _id: new ObjectId(tid) });
 
     let test = await db.collection('tests').findOne({ $or: orConditions });
@@ -710,7 +721,7 @@ export const submitTest = async (req, res) => {
     if (!isNaN(tid)) questionFilter.$or.push({ testId: Number(tid) });
     const separateQuestions = await db.collection('questions').find(questionFilter).toArray();
     const questions = separateQuestions.length > 0 ? separateQuestions : (test.questions || []);
-    
+
     const evaluation = evaluateTest({ questions, answers, test });
 
     let studentName = '';
@@ -747,22 +758,22 @@ export const submitTest = async (req, res) => {
     try {
       const tid = req.params.testId;
       const lb = await getLeaderboard(db, tid);
-      
+
       const studentScore = Number(evaluation.obtainedMarks) || 0;
       const studentTime = Number(timeTaken) || 999999;
-      
+
       // Calculate rank among others' best attempts
       // lb already contains best attempts per student (including current student's past attempts if any)
       // To strictly rank among OTHERS, we could filter lb by studentId, but the leaderboard concept 
       // usually includes the current best too. The existing code filtered out current student.
       const otherStudentsBest = lb.filter(s => String(s._id) !== String(effectiveStudentId));
-      
+
       totalStudents = otherStudentsBest.length + 1;
-      rank = otherStudentsBest.filter(s => 
-        (Number(s.score) > studentScore) || 
+      rank = otherStudentsBest.filter(s =>
+        (Number(s.score) > studentScore) ||
         (Number(s.score) === studentScore && Number(s.time) < studentTime)
       ).length + 1;
-      
+
     } catch (rankErr) {
       console.error('Ranking calculation failed:', rankErr);
     }
