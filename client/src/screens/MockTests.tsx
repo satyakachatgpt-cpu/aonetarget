@@ -419,10 +419,17 @@ const MockTests: React.FC = () => {
                     return (
                       <div key={test.id || test._id || tIdx} className="card-premium p-4 animate-fade-in-up" style={{ animationDelay: `${tIdx * 0.05}s` }}>
                         <div className="flex items-center justify-between mb-2.5">
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 ${badge.bg} ${badge.text}`}>
-                            <span className="material-symbols-rounded text-[12px]">{badge.icon}</span>
-                            {badge.label}
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 w-fit ${badge.bg} ${badge.text}`}>
+                              <span className="material-symbols-rounded text-[12px]">{badge.icon}</span>
+                              {badge.label}
+                            </span>
+                            {status === 'upcoming' && test.openDate && (
+                              <span className="text-[10px] text-indigo-500 font-bold ml-1">
+                                Starts: {new Date(test.openDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}, {new Date(test.openDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[10px] text-gray-400 font-bold uppercase">{test.subject || 'Test'}</span>
                         </div>
                         <h4 className="font-bold text-[15px] text-gray-900 leading-snug">{test.title || test.name}</h4>
@@ -450,7 +457,7 @@ const MockTests: React.FC = () => {
                           className={`w-full mt-4 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 ${status === 'upcoming' || status === 'expired' ? 'bg-gray-100 text-gray-300 shadow-none' : 'bg-primary text-white shadow-primary/20'
                             }`}
                         >
-                          {status === 'expired' ? 'Expired' : status === 'upcoming' ? 'Locked' : 'Start Test'}
+                          {status === 'expired' ? 'Expired' : status === 'upcoming' ? `Starts at ${new Date(test.openDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}` : 'Start Test'}
                         </button>
                       </div>
                     );
