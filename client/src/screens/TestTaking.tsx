@@ -142,7 +142,7 @@ const TestTaking: React.FC = () => {
 
   const fetchTestData = async () => {
     try {
-      const res = await fetch(`/api/tests/${testId}`, {
+      const res = await fetch(`/api/tests/${testId}?t=${Date.now()}`, {
         headers: { ...getAuthHeaders(), ...getAdminHeaders() }
       });
       if (!res.ok) {

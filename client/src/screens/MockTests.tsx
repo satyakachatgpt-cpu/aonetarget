@@ -153,7 +153,7 @@ const MockTests: React.FC = () => {
     }
     try {
       const seriesId = series.id || series._id;
-      const res = await fetch(`/api/students/${student.id || student._id}/enrolled/${seriesId}`, {
+      const res = await fetch(`/api/students/${student.id || student._id}/enrolled/${seriesId}?t=${Date.now()}`, {
         headers: getAuthHeaders()
       });
       if (res.ok) {
