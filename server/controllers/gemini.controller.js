@@ -33,8 +33,8 @@ STRICT RULES:
   "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
   "correctAnswer": "A" | "B" | "C" | "D",
   "solution": "explanation or solution if provided in the PDF, otherwise empty string",
-  "questionImageBase64": "if the question has a diagram or figure, output it as a base64 encoded PNG/JPEG data URL like data:image/png;base64,... — otherwise empty string",
-  "optionImagesBase64": ["base64 data URL for option A image if option A is an image, else empty string", "same for B", "same for C", "same for D"]
+  "questionImageBase64": "always empty string",
+  "optionImagesBase64": ["", "", "", ""]
 }
 
 6. Option Labels: Do not include the primary option labels (A., B., (1), (2)) in the options text. However preserve internal statement labels like (a), (i), (I) if they appear inside the option text.
@@ -78,11 +78,10 @@ EXAMPLE for match-the-following — questionEn must look like:
 "Match the following. / सही मिलान कीजिए।<table style=\"border-collapse:collapse;width:100%;margin-top:8px;\"><thead><tr style=\"background:#f3f4f6;\"><th style=\"border:1px solid #d1d5db;padding:8px 12px;text-align:left;font-weight:600;\">Column I / कॉलम I</th><th style=\"border:1px solid #d1d5db;padding:8px 12px;text-align:left;font-weight:600;\">Item / विषय</th><th style=\"border:1px solid #d1d5db;padding:8px 12px;text-align:left;font-weight:600;\">Column II / कॉलम II</th><th style=\"border:1px solid #d1d5db;padding:8px 12px;text-align:left;font-weight:600;\">Description / विवरण</th></tr></thead><tbody><tr><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">A</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">Item text</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">I</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">Description text</td></tr></tbody></table>"
 Adjust rows and columns to match the actual table. Options A/B/C/D stay as plain text outside the table.
 
-9. IMAGE RULE — MANDATORY:
-- If a question has a diagram, figure, graph, or image embedded in the PDF next to or below the question text, extract it and put its base64 data URL in the "questionImageBase64" field.
-- If any option (A, B, C, or D) is itself an image/diagram instead of text, extract it and put its base64 data URL in the corresponding index of "optionImagesBase64" array. In this case set the text for that option in "options" array to "[Image Option]".
-- If there is no image for question or options, set "questionImageBase64" to empty string "" and "optionImagesBase64" to ["","","",""].
-- Always output base64 as a complete data URL starting with "data:image/png;base64," or "data:image/jpeg;base64,".
+9. IMAGE RULE:
+- DO NOT extract any images.
+- Always set "questionImageBase64" to an empty string "".
+- Always set "optionImagesBase64" to ["", "", "", ""].
 
 Combine multi-page questions logically. Ignore headers, footers, watermarks, and page numbers.
     `;
