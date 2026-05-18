@@ -126,7 +126,17 @@ const App: React.FC = () => {
     checkAuth();
   }, [checkAuth]);
 
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(() => {
+    // Do not show splash screen on admin routes
+    if (window.location.hash.startsWith('#/admin')) {
+      return false;
+    }
+    // Do not show splash screen on desktop/laptop
+    if (window.innerWidth >= 768) {
+      return false;
+    }
+    return true;
+  });
 
   // Proactive Admin Session Monitor
   useEffect(() => {
