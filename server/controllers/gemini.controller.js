@@ -112,7 +112,16 @@ Combine multi-page questions logically. Ignore headers, footers, watermarks, and
 
     const stripOptionMarkers = (text) => {
       if (!text) return "";
-      return text.trim().replace(/^[\(\[]?([a-zA-Z0-9])[\)\].:]\s*/, "").trim();
+      let cleaned = text.trim();
+      // Match (a), (A), (1) etc with or without space after it
+      if (/^[\(\[][a-zA-Z0-9][\)\]]/.test(cleaned)) {
+        cleaned = cleaned.replace(/^[\(\[][a-zA-Z0-9][\)\]]\s*/, "");
+      } 
+      // Match A., a., 1., a) etc MUST have a space after to avoid breaking decimal numbers like "0.5"
+      else if (/^[a-zA-Z0-9][\.\)\:]\s+/.test(cleaned)) {
+        cleaned = cleaned.replace(/^[a-zA-Z0-9][\.\)\:]\s+/, "");
+      }
+      return cleaned.trim();
     };
 
     // Helper — validate base64 data URL
