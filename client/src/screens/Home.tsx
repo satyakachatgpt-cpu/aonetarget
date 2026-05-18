@@ -1417,6 +1417,52 @@ const Home: React.FC = () => {
         </div>
 
         <button
+          onClick={async () => {
+            if (navigator.share) {
+              try {
+                await navigator.share({
+                  title: 'AoneTarget Institute',
+                  text: 'Join Aone Target Institute – Best coaching for competitive exams! 🎯',
+                  url: 'https://aonetarget.in'
+                });
+              } catch (err) {
+                // User cancelled – silent fail
+              }
+            } else {
+              // Fallback: copy to clipboard
+              try {
+                await navigator.clipboard.writeText('https://aonetarget.in');
+                alert('Link copied to clipboard!');
+              } catch {
+                alert('Share link: https://aonetarget.in');
+              }
+            }
+          }}
+          className="w-full bg-[#E8EAF6] rounded-[32px] p-6 flex items-center justify-between active:scale-[0.98] transition-all duration-300 border border-white group overflow-hidden relative shadow-sm mb-4"
+        >
+          <div className="absolute -right-4 -top-4 w-32 h-32 bg-[#283593]/10 rounded-full blur-2xl group-hover:bg-[#283593]/20 transition-all duration-500"></div>
+          <div className="absolute -left-4 -bottom-4 w-32 h-32 bg-[#283593]/5 rounded-full blur-2xl"></div>
+
+          <div className="flex items-center gap-5 relative z-10">
+            <div className="w-16 h-16 bg-white/80 backdrop-blur-md rounded-[24px] flex items-center justify-center shrink-0 shadow-sm border border-white/50 group-hover:scale-105 transition-transform duration-500">
+              <span className="material-symbols-rounded text-[#283593] text-[36px]">share</span>
+            </div>
+            <div className="text-left">
+              <h4 className="text-[19px] font-semibold text-gray-900 tracking-tight leading-none mb-1.5">
+                Share App
+              </h4>
+              <p className="text-[12px] text-gray-500 font-medium">Invite your friends & classmates</p>
+            </div>
+          </div>
+
+          <div className="relative z-10">
+            <div className="w-14 h-14 bg-[#283593] text-white rounded-[20px] flex items-center justify-center shadow-lg group-hover:bg-[#1A237E] group-hover:shadow-[#283593]/30 transition-all duration-500 group-hover:translate-x-1">
+              <span className="material-symbols-rounded text-[28px]">ios_share</span>
+            </div>
+          </div>
+        </button>
+
+        <button
           onClick={handleDownloadAPK}
           className="w-full bg-[#F3F6F3] rounded-[32px] p-6 flex items-center justify-between active:scale-[0.98] transition-all duration-300 border border-white group overflow-hidden relative shadow-sm"
         >
