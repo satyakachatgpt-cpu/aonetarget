@@ -24,7 +24,7 @@ const QuestionSortableRow: React.FC<QuestionSortableRowProps> = ({
     transform,
     transition,
     isDragging,
-  } = useSortable({ id: q.id || q._id });
+  } = useSortable({ id: q._id || q.id });
 
   const style = {
     transform: CSS.Transform.toString(transform),

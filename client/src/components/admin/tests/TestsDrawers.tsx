@@ -405,7 +405,7 @@ const TestsDrawers: React.FC<Props> = ({
           onSave={async (updatedQuestions) => {
             try {
               const individualUpdates = updatedQuestions.map(async (q: any) => {
-                const qId = q.id || q._id;
+                const qId = q._id || q.id;
                 if (qId && typeof qId === "string" && qId.length > 5) {
                   try {
                     return await fetch(`/api/questions/${qId}`, {
