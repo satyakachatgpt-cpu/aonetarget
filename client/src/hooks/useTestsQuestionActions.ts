@@ -23,7 +23,7 @@ export const useTestsQuestionActions = ({
     if (!payload) return;
     try {
       const editorId = viewingQuestionEditor?.id || viewingQuestionEditor?._id;
-      const questionId = String(payload.id || payload._id || "");
+      const questionId = String(payload._id || payload.id || "");
 
       if (questionId) {
         console.log(
@@ -37,7 +37,7 @@ export const useTestsQuestionActions = ({
 
         setEditorQuestions((prev: any[]) =>
           prev.map((q: any) => {
-            const qId = String(q.id || q._id || "");
+            const qId = String(q._id || q.id || "");
             if (qId === questionId) {
               return { ...q, ...payload };
             }

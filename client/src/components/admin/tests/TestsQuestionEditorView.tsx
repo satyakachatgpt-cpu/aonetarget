@@ -110,12 +110,12 @@ const TestsQuestionEditorView: React.FC<Props> = ({
                 </thead>
                 <tbody className="divide-y divide-gray-50">
                   <SortableContext
-                    items={editorQuestions.map((q: any) => q.id || q._id)}
+                    items={editorQuestions.map((q: any) => q._id || q.id)}
                     strategy={verticalListSortingStrategy}
                   >
                     {(editorQuestions || []).map((q: any, idx: number) => (
                       <SortableRow
-                        key={q.id || q._id}
+                        key={q._id || q.id}
                         q={q}
                         idx={idx}
                         setViewingAddQuestionForm={setViewingAddQuestionForm}

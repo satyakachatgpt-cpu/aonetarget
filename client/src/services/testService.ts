@@ -12,6 +12,7 @@ export const questionsAPI = {
       body: JSON.stringify(data),
     });
     invalidateCache('questions');
+    invalidateCache('tests');
     return res;
   },
   update: async (id: string, data: any) => {
@@ -21,6 +22,7 @@ export const questionsAPI = {
       body: JSON.stringify(data),
     });
     invalidateCache('questions');
+    invalidateCache('tests');
     return res;
   },
   delete: async (id: string, testId?: string) => {
@@ -31,6 +33,7 @@ export const questionsAPI = {
       headers: { ...getAdminHeaders() }
     });
     invalidateCache('questions');
+    invalidateCache('tests');
     return res;
   },
   bulkDelete: async (ids: string[], testId?: string) => {
@@ -48,6 +51,8 @@ export const questionsAPI = {
       const details = errorData.details ? `: ${errorData.details}` : '';
       throw new Error(`${msg}${details}`);
     }
+    invalidateCache('questions');
+    invalidateCache('tests');
     return response.json();
   },
   updateAll: async (updates: any[]) => {
@@ -63,6 +68,7 @@ export const questionsAPI = {
        const errorData = await response.json().catch(() => ({}));
        throw new Error(errorData.error || 'Failed to update questions order');
     }
+    invalidateCache('questions');
     invalidateCache('tests');
     return response.json();
   }
