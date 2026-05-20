@@ -29,7 +29,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
     }, [setSidebarHidden]);
 
     const [validityTab, setValidityTab] = useState<'set' | 'end' | 'lifetime'>('set');
-    const [isFeatured, setIsFeatured] = useState(!!courseData?.isFeatured);
+    const [isFeatured, setIsFeatured] = useState(!!(courseData?.settings?.isFeatured ?? courseData?.isFeatured));
     const [showCategories, setShowCategories] = useState(false);
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [validityUnit, setValidityUnit] = useState('Months');
@@ -114,7 +114,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
             setPrice(courseData.price?.toString() || '');
             setOriginalPrice(courseData.originalPrice?.toString() || '');
             setCoverImage(courseData.thumbnail || courseData.imageUrl || null);
-            setIsFeatured(!!courseData.isFeatured);
+            setIsFeatured(!!(courseData.settings?.isFeatured ?? courseData.isFeatured));
 
             if (courseData.categories) {
                 setSelectedCategories(Array.isArray(courseData.categories) ? courseData.categories : [courseData.categories]);
