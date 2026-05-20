@@ -195,18 +195,8 @@ const Home: React.FC = () => {
   };
 
   const featuredToDisplay = useMemo(() => {
-    // 1. Get explicitly featured courses
-    const featured = courses.filter((c: any) => c.settings?.isFeatured === true);
-    
-    // 2. If we have 4 or more featured, just show top 4
-    if (featured.length >= 4) return featured.slice(0, 4);
-    
-    // 3. Otherwise, fill up to 4 using other latest batches
-    const featuredIds = new Set(featured.map(c => c._id || c.id));
-    const others = courses.filter(c => !featuredIds.has(c._id || c.id));
-    
-    const combined = [...featured, ...others].slice(0, 4);
-    return combined;
+    // Get explicitly featured courses only
+    return courses.filter((c: any) => c.settings?.isFeatured === true);
   }, [courses]);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalling, setIsInstalling] = useState(false);
@@ -1072,7 +1062,7 @@ const Home: React.FC = () => {
           );
         })()}
 
-        {courses.length > 0 && (
+        {featuredToDisplay.length > 0 && (
           <section className="animate-fade-in-up" style={{ animationDelay: '0.22s' }}>
             <div className="flex justify-between items-center mb-3">
               <div className="flex items-center gap-2.5">
