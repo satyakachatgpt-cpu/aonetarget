@@ -669,6 +669,8 @@ const Home: React.FC = () => {
                     src={getImageUrl("/attach-assist/alonelogo_1770810181717.jpg")}
                     alt="Aone Target"
                     className="h-full w-full object-contain"
+                    loading="eager"
+                    decoding="async"
                   />
                 </div>
               </div>
@@ -751,6 +753,7 @@ const Home: React.FC = () => {
                       alt={banner.title || `Banner ${index + 1}`}
                       className="w-full h-full object-cover select-none pointer-events-none"
                       loading={index === 0 ? 'eager' : 'lazy'}
+                      decoding="async"
                     />
                   ) : (
                     <div className="w-full h-full bg-gradient-to-r from-primary-800 to-primary-600 flex items-center justify-center p-4 select-none">
@@ -814,7 +817,7 @@ const Home: React.FC = () => {
                   className={`relative p-3 rounded-3xl h-[140px] flex flex-col justify-between text-white bg-gradient-to-br ${cat.gradient || CATEGORY_GRADIENTS[i % CATEGORY_GRADIENTS.length]} overflow-hidden cursor-pointer active:scale-[0.97] transition-all duration-200 shadow-elevated hover:shadow-card-hover hover:-translate-y-0.5 group`}
                 >
                   {cat.imageUrl && (
-                    <img src={getImageUrl(cat.imageUrl)} alt={cat.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                    <img src={getImageUrl(cat.imageUrl)} alt={cat.title} loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
                   )}
                   {cat.imageUrl && <div className="absolute inset-0 bg-black/40"></div>}
                   <div className="relative z-10 flex justify-between items-start">
@@ -1100,6 +1103,7 @@ const Home: React.FC = () => {
                           alt={course.title}
                           className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                           loading="lazy"
+                          decoding="async"
                         />
                         <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/15 to-black/65"></div>
                       </>
@@ -1295,6 +1299,8 @@ const Home: React.FC = () => {
                         src={news.thumbnail}
                         alt="News"
                         className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+                        loading="lazy"
+                        decoding="async"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80';
                         }}
@@ -1329,7 +1335,7 @@ const Home: React.FC = () => {
       </main>
 
       <div className="px-4 mb-8 space-y-4">
-        <div className="bg-white/80 backdrop-blur-xl rounded-[40px] p-6 border border-white/50 shadow-[0_20px_50px_rgba(0,0,0,0.05)] flex flex-col items-center gap-6 relative overflow-hidden">
+        <div className="bg-white/80 backdrop-blur-xl rounded-[40px] py-6 px-3 sm:p-6 border border-white/50 shadow-[0_20px_50px_rgba(0,0,0,0.05)] flex flex-col items-center gap-6 relative overflow-hidden">
           {/* Subtle Background Glow */}
           <div className="absolute -top-24 -right-24 w-48 h-48 bg-[#3DDC84]/5 rounded-full blur-[80px]"></div>
           <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-blue-500/5 rounded-full blur-[80px]"></div>
@@ -1342,7 +1348,7 @@ const Home: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex flex-nowrap justify-center items-center gap-3 w-full relative z-10 overflow-x-auto no-scrollbar pb-1">
+          <div className="flex flex-nowrap justify-center items-center gap-2 sm:gap-3 w-full relative z-10 overflow-visible pb-1">
             {quickLinks.length > 0 ? (
               quickLinks
                 .filter(link => (link as any).type !== 'yt' && (link as any).status !== 'inactive')
@@ -1360,7 +1366,7 @@ const Home: React.FC = () => {
                   <button
                     key={link.id || i}
                     onClick={() => handleShare(link)}
-                    className="w-[52px] h-[52px] rounded-full flex items-center justify-center shadow-[0_8px_20px_-5px_rgba(0,0,0,0.1)] hover:shadow-[0_12px_25px_-5px_rgba(0,0,0,0.2)] active:scale-90 transition-all duration-500 hover:-translate-y-1 relative group bg-white border border-gray-50 overflow-hidden shrink-0"
+                    className="w-[46px] h-[46px] sm:w-[52px] sm:h-[52px] rounded-full flex items-center justify-center shadow-[0_8px_20px_-5px_rgba(0,0,0,0.1)] hover:shadow-[0_12px_25px_-5px_rgba(0,0,0,0.2)] active:scale-90 transition-all duration-500 hover:-translate-y-1 relative group bg-white border border-gray-50 overflow-hidden shrink-0"
                   >
                     {/* Soft Hover Overlay */}
                     <div
@@ -1371,8 +1377,11 @@ const Home: React.FC = () => {
                     {link.imageUrl ? (
                       <img
                         src={link.imageUrl}
-                        alt={link.title}
-                        className="w-7 h-7 object-contain relative z-10 group-hover:scale-110 transition-all duration-500"
+                        alt=""
+                        aria-hidden="true"
+                        className="w-6 h-6 sm:w-7 sm:h-7 block m-auto object-contain object-center shrink-0 relative z-10 group-hover:scale-110 transition-all duration-500"
+                        loading="lazy"
+                        decoding="async"
                         onError={(e) => (e.currentTarget.style.display = 'none')}
                       />
                     ) : (
@@ -1392,13 +1401,16 @@ const Home: React.FC = () => {
                 <button
                   key={i}
                   onClick={() => handleHardcodedShare(s.platform)}
-                  className="w-[52px] h-[52px] rounded-full flex items-center justify-center bg-white shadow-[0_8px_15px_rgba(0,0,0,0.05)] border border-gray-50 active:scale-90 transition-all duration-500 hover:-translate-y-1.5 hover:shadow-[0_12px_22px_rgba(0,0,0,0.1)] relative group shrink-0"
+                  className="w-[46px] h-[46px] sm:w-[52px] sm:h-[52px] rounded-full flex items-center justify-center bg-white shadow-[0_8px_15px_rgba(0,0,0,0.05)] border border-gray-50 active:scale-90 transition-all duration-500 hover:-translate-y-1.5 hover:shadow-[0_12px_22px_rgba(0,0,0,0.1)] relative group shrink-0"
                 >
                   <div className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-10 transition-opacity duration-500" style={{ background: s.bg }}></div>
                   <img
                     src={s.img}
-                    className="w-[26px] h-[26px] object-contain relative z-10 group-hover:scale-110 transition-all duration-500"
-                    alt={s.platform}
+                    className="w-[22px] h-[22px] sm:w-[26px] sm:h-[26px] block m-auto object-contain object-center shrink-0 relative z-10 group-hover:scale-110 transition-all duration-500"
+                    alt=""
+                    aria-hidden="true"
+                    loading="lazy"
+                    decoding="async"
                   />
                 </button>
               ))
@@ -1672,6 +1684,8 @@ const Home: React.FC = () => {
                     src={newsModal.imageUrl}
                     alt={newsModal.title}
                     className="w-full h-36 object-cover"
+                    loading="lazy"
+                    decoding="async"
                   />
                   {newsModal.priority === 'high' && (
                     <div className="absolute top-3 left-3 bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full flex items-center gap-1 shadow-lg border border-white/20 uppercase tracking-tighter">

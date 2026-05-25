@@ -582,7 +582,16 @@ const Tests: React.FC<Props> = ({ showToast }) => {
           setShowBulkDeleteModal={setShowBulkDeleteModal}
           setSelectedBulkDeleteQuestions={setSelectedBulkDeleteQuestions}
           setActiveActionMenuId={setActiveActionMenuId}
-          setViewingQuestionEditor={setViewingQuestionEditor}
+          setViewingQuestionEditor={(val) => {
+            setViewingQuestionEditor(val);
+            if (!val) {
+              if (viewingTestSeries) {
+                navigate(`/admin/tests/${viewingTestSeries.id || viewingTestSeries._id}`);
+              } else {
+                navigate(`/admin/tests`);
+              }
+            }
+          }}
         />
       );
     }
@@ -610,7 +619,16 @@ const Tests: React.FC<Props> = ({ showToast }) => {
         detailTests={visibleDetailTests}
         activeActionMenuId={activeActionMenuId}
         setActiveActionMenuId={setActiveActionMenuId}
-        setViewingQuestionEditor={setViewingQuestionEditor}
+        setViewingQuestionEditor={(val) => {
+          setViewingQuestionEditor(val);
+          if (!val) {
+            if (viewingTestSeries) {
+              navigate(`/admin/tests/${viewingTestSeries.id || viewingTestSeries._id}`);
+            } else {
+              navigate(`/admin/tests`);
+            }
+          }
+        }}
         navigate={navigate}
         handleViewResults={handleViewResults}
         handleDuplicateTest={handleDuplicateTest}

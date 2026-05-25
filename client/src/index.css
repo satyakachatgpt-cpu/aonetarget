@@ -47,21 +47,24 @@ body {
   .h-screen { height: 100vh !important; }
   .min-h-screen { min-height: 100vh !important; }
 
-  .pwa-status-bar {
-    /* Hard fallback: ensure space is ALWAYS reserved on launch */
-    height: 44px;
-    height: env(safe-area-inset-top, 44px);
-    min-height: 44px; /* Force minimum height for notched iPhones */
-    display: block !important;
-  }
-  
-  .sidebar-header-ios {
-    padding-top: env(safe-area-inset-top) !important;
-  }
+  /* Apply safe-area only to iOS to prevent unwanted padding on Android */
+  @supports (-webkit-touch-callout: none) {
+    .pwa-status-bar {
+      /* Hard fallback: ensure space is ALWAYS reserved on launch */
+      height: 44px;
+      height: env(safe-area-inset-top, 44px);
+      min-height: 44px; /* Force minimum height for notched iPhones */
+      display: block !important;
+    }
+    
+    .sidebar-header-ios {
+      padding-top: env(safe-area-inset-top) !important;
+    }
 
-  .bottom-nav-ios {
-    padding-bottom: env(safe-area-inset-bottom) !important;
-    background-color: white !important;
+    .bottom-nav-ios {
+      padding-bottom: env(safe-area-inset-bottom) !important;
+      background-color: white !important;
+    }
   }
 }
 
@@ -276,3 +279,14 @@ select {
 .news-content-html li {
     margin-bottom: 0.25rem;
 }
+
+/* Prevent Material Symbols raw text flash on slow networks */
+html:not(.material-symbols-ready) .material-symbols-rounded,
+html:not(.material-symbols-ready) .material-symbols-outlined {
+  visibility: hidden;
+}
+
+html.material-symbols-ready .material-symbols-rounded,
+html.material-symbols-ready .material-symbols-outlined {
+  visibility: visible;
+}

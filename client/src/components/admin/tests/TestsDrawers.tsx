@@ -192,7 +192,7 @@ const TestsDrawers: React.FC<Props> = ({
             setShowAddSingleTestDrawer(false);
             setEditingTest(null);
 
-            if (routeId) {
+            if (routeId && !viewingTestSeries) {
               navigate("/admin/tests", { replace: true });
             }
           } catch (err: any) {
