@@ -1335,7 +1335,7 @@ const Home: React.FC = () => {
       </main>
 
       <div className="px-4 mb-8 space-y-4">
-        <div className="bg-white/80 backdrop-blur-xl rounded-[40px] p-6 border border-white/50 shadow-[0_20px_50px_rgba(0,0,0,0.05)] flex flex-col items-center gap-6 relative overflow-hidden">
+        <div className="bg-white/80 backdrop-blur-xl rounded-[40px] py-6 px-3 sm:p-6 border border-white/50 shadow-[0_20px_50px_rgba(0,0,0,0.05)] flex flex-col items-center gap-6 relative overflow-hidden">
           {/* Subtle Background Glow */}
           <div className="absolute -top-24 -right-24 w-48 h-48 bg-[#3DDC84]/5 rounded-full blur-[80px]"></div>
           <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-blue-500/5 rounded-full blur-[80px]"></div>
@@ -1348,7 +1348,7 @@ const Home: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex flex-nowrap justify-center items-center gap-3 w-full relative z-10 overflow-x-auto no-scrollbar pb-1">
+          <div className="flex flex-nowrap justify-center items-center gap-2 sm:gap-3 w-full relative z-10 overflow-visible pb-1">
             {quickLinks.length > 0 ? (
               quickLinks
                 .filter(link => (link as any).type !== 'yt' && (link as any).status !== 'inactive')
@@ -1366,7 +1366,7 @@ const Home: React.FC = () => {
                   <button
                     key={link.id || i}
                     onClick={() => handleShare(link)}
-                    className="w-[52px] h-[52px] rounded-full flex items-center justify-center shadow-[0_8px_20px_-5px_rgba(0,0,0,0.1)] hover:shadow-[0_12px_25px_-5px_rgba(0,0,0,0.2)] active:scale-90 transition-all duration-500 hover:-translate-y-1 relative group bg-white border border-gray-50 overflow-hidden shrink-0"
+                    className="w-[46px] h-[46px] sm:w-[52px] sm:h-[52px] rounded-full flex items-center justify-center shadow-[0_8px_20px_-5px_rgba(0,0,0,0.1)] hover:shadow-[0_12px_25px_-5px_rgba(0,0,0,0.2)] active:scale-90 transition-all duration-500 hover:-translate-y-1 relative group bg-white border border-gray-50 overflow-hidden shrink-0"
                   >
                     {/* Soft Hover Overlay */}
                     <div
@@ -1379,7 +1379,7 @@ const Home: React.FC = () => {
                         src={link.imageUrl}
                         alt=""
                         aria-hidden="true"
-                        className="w-7 h-7 object-contain relative z-10 group-hover:scale-110 transition-all duration-500"
+                        className="w-6 h-6 sm:w-7 sm:h-7 block m-auto object-contain object-center shrink-0 relative z-10 group-hover:scale-110 transition-all duration-500"
                         loading="lazy"
                         decoding="async"
                         onError={(e) => (e.currentTarget.style.display = 'none')}
@@ -1401,12 +1401,12 @@ const Home: React.FC = () => {
                 <button
                   key={i}
                   onClick={() => handleHardcodedShare(s.platform)}
-                  className="w-[52px] h-[52px] rounded-full flex items-center justify-center bg-white shadow-[0_8px_15px_rgba(0,0,0,0.05)] border border-gray-50 active:scale-90 transition-all duration-500 hover:-translate-y-1.5 hover:shadow-[0_12px_22px_rgba(0,0,0,0.1)] relative group shrink-0"
+                  className="w-[46px] h-[46px] sm:w-[52px] sm:h-[52px] rounded-full flex items-center justify-center bg-white shadow-[0_8px_15px_rgba(0,0,0,0.05)] border border-gray-50 active:scale-90 transition-all duration-500 hover:-translate-y-1.5 hover:shadow-[0_12px_22px_rgba(0,0,0,0.1)] relative group shrink-0"
                 >
                   <div className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-10 transition-opacity duration-500" style={{ background: s.bg }}></div>
                   <img
                     src={s.img}
-                    className="w-[26px] h-[26px] object-contain relative z-10 group-hover:scale-110 transition-all duration-500"
+                    className="w-[22px] h-[22px] sm:w-[26px] sm:h-[26px] block m-auto object-contain object-center shrink-0 relative z-10 group-hover:scale-110 transition-all duration-500"
                     alt=""
                     aria-hidden="true"
                     loading="lazy"
