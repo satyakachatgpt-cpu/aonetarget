@@ -71,6 +71,8 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ isOpen, onClose, studen
               src="/attach-assist/alonelogo_1770810181717.jpg"
               alt="Aone Target"
               className="h-10 rounded"
+              loading="eager"
+              decoding="async"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.style.display = 'none';

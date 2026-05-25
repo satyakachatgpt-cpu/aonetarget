@@ -669,6 +669,8 @@ const Home: React.FC = () => {
                     src={getImageUrl("/attach-assist/alonelogo_1770810181717.jpg")}
                     alt="Aone Target"
                     className="h-full w-full object-contain"
+                    loading="eager"
+                    decoding="async"
                   />
                 </div>
               </div>
@@ -751,6 +753,7 @@ const Home: React.FC = () => {
                       alt={banner.title || `Banner ${index + 1}`}
                       className="w-full h-full object-cover select-none pointer-events-none"
                       loading={index === 0 ? 'eager' : 'lazy'}
+                      decoding="async"
                     />
                   ) : (
                     <div className="w-full h-full bg-gradient-to-r from-primary-800 to-primary-600 flex items-center justify-center p-4 select-none">
@@ -814,7 +817,7 @@ const Home: React.FC = () => {
                   className={`relative p-3 rounded-3xl h-[140px] flex flex-col justify-between text-white bg-gradient-to-br ${cat.gradient || CATEGORY_GRADIENTS[i % CATEGORY_GRADIENTS.length]} overflow-hidden cursor-pointer active:scale-[0.97] transition-all duration-200 shadow-elevated hover:shadow-card-hover hover:-translate-y-0.5 group`}
                 >
                   {cat.imageUrl && (
-                    <img src={getImageUrl(cat.imageUrl)} alt={cat.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                    <img src={getImageUrl(cat.imageUrl)} alt={cat.title} loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
                   )}
                   {cat.imageUrl && <div className="absolute inset-0 bg-black/40"></div>}
                   <div className="relative z-10 flex justify-between items-start">
@@ -1100,6 +1103,7 @@ const Home: React.FC = () => {
                           alt={course.title}
                           className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                           loading="lazy"
+                          decoding="async"
                         />
                         <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/15 to-black/65"></div>
                       </>
@@ -1295,6 +1299,8 @@ const Home: React.FC = () => {
                         src={news.thumbnail}
                         alt="News"
                         className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+                        loading="lazy"
+                        decoding="async"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80';
                         }}
@@ -1371,8 +1377,11 @@ const Home: React.FC = () => {
                     {link.imageUrl ? (
                       <img
                         src={link.imageUrl}
-                        alt={link.title}
+                        alt=""
+                        aria-hidden="true"
                         className="w-7 h-7 object-contain relative z-10 group-hover:scale-110 transition-all duration-500"
+                        loading="lazy"
+                        decoding="async"
                         onError={(e) => (e.currentTarget.style.display = 'none')}
                       />
                     ) : (
@@ -1398,7 +1407,10 @@ const Home: React.FC = () => {
                   <img
                     src={s.img}
                     className="w-[26px] h-[26px] object-contain relative z-10 group-hover:scale-110 transition-all duration-500"
-                    alt={s.platform}
+                    alt=""
+                    aria-hidden="true"
+                    loading="lazy"
+                    decoding="async"
                   />
                 </button>
               ))
@@ -1672,6 +1684,8 @@ const Home: React.FC = () => {
                     src={newsModal.imageUrl}
                     alt={newsModal.title}
                     className="w-full h-36 object-cover"
+                    loading="lazy"
+                    decoding="async"
                   />
                   {newsModal.priority === 'high' && (
                     <div className="absolute top-3 left-3 bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full flex items-center gap-1 shadow-lg border border-white/20 uppercase tracking-tighter">
