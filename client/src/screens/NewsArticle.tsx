@@ -36,7 +36,8 @@ const NewsArticle: React.FC = () => {
   }, [id]);
 
   useEffect(() => {
-    window.scrollTo(0, 0);
+    const container = document.getElementById('news-scroll-container');
+    if (container) container.scrollTo(0, 0);
   }, [id]);
 
   if (loading) {
@@ -50,8 +51,10 @@ const NewsArticle: React.FC = () => {
   if (!news) return null;
 
   return (
-    <div className="min-h-screen bg-white pb-20 font-outfit">
-      {/* Breadcrumbs - Ensuring it's exactly at the top */}
+    <div className="h-[100dvh] bg-white font-outfit flex flex-col w-full">
+      <div className="pwa-status-bar bg-[#f8f9fa] shrink-0 w-full z-50" />
+      <div id="news-scroll-container" className="flex-1 overflow-y-auto pb-20 relative">
+        {/* Breadcrumbs - Ensuring it's exactly at the top */}
       <div className="bg-[#f8f9fa] border-b border-gray-100 px-4 py-2.5 text-[11px] text-gray-500 font-medium">
         <div className="max-w-4xl mx-auto flex items-center gap-2 overflow-x-auto whitespace-nowrap hide-scrollbar uppercase tracking-wider">
           <span className="cursor-pointer hover:text-[#204a8e] transition-colors" onClick={() => navigate('/')}>AONE TARGET INSTITUTE</span>
@@ -63,6 +66,15 @@ const NewsArticle: React.FC = () => {
       </div>
 
       <main className="max-w-4xl mx-auto px-5 pt-8 animate-fade-in">
+        {/* Back Button */}
+        <button 
+          onClick={() => navigate(-1)} 
+          className="flex items-center gap-1 text-gray-500 hover:text-[#204a8e] transition-colors mb-4 font-medium text-[15px]"
+        >
+          <span className="material-symbols-rounded text-[20px]">arrow_back</span>
+          Back
+        </button>
+
         {/* Title */}
         <h1 className="text-[26px] font-bold text-[#204a8e] leading-[1.3] mb-5 tracking-tight">
           {news.title}
@@ -101,7 +113,8 @@ const NewsArticle: React.FC = () => {
           <button
             onClick={async () => {
               const newsId = news.id || news._id;
-              const shareUrl = `${window.location.origin}/api/share/news/${newsId}`;
+              // Adding ?v=2 to bypass WhatsApp's cache
+              const shareUrl = `${window.location.origin}/api/share/news/${newsId}?v=${Date.now()}`;
               
               const shareData = {
                 title: news.title,
@@ -131,12 +144,16 @@ const NewsArticle: React.FC = () => {
       {/* Floating Scroll to Top button exactly like screenshot */}
       <div className="fixed bottom-8 right-6 z-50">
         <button 
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          onClick={() => {
+            const container = document.getElementById('news-scroll-container');
+            if (container) container.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
           className="w-14 h-12 bg-[#f6ae2d] text-navy rounded-lg shadow-xl shadow-black/10 flex items-center justify-center active:scale-95 transition-all group"
           aria-label="Scroll to top"
         >
           <span className="material-symbols-rounded text-4xl font-black group-hover:-translate-y-1 transition-transform">keyboard_arrow_up</span>
         </button>
+      </div>
       </div>
     </div>
   );

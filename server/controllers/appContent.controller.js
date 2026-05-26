@@ -154,7 +154,10 @@ export const shareNews = async (req, res) => {
     
     // Clean up image url if it's relative
     let image = news.thumbnail || news.imageUrl || news.image || 'https://aonetarget.in/pwa-512x512.png';
-    if (image.startsWith('/')) {
+    if (!image.startsWith('http')) {
+      if (!image.startsWith('/')) {
+        image = '/' + image;
+      }
       image = 'https://aonetarget.in' + image;
     }
 
@@ -175,7 +178,6 @@ export const shareNews = async (req, res) => {
   <meta name="twitter:title" content="${title}">
   <meta name="twitter:description" content="${desc}">
   <meta name="twitter:image" content="${image}">
-  <meta http-equiv="refresh" content="0;url=${redirectUrl}">
 </head>
 <body>
   <p>Redirecting to article...</p>
