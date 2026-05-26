@@ -128,6 +128,71 @@ export const deleteNews = async (req, res) => {
   }
 };
 
+export const shareNews = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { ObjectId } = mongoose.Types;
+    
+    let query = { id: id };
+    if (ObjectId.isValid(id)) {
+      query = { $or: [{ id: id }, { _id: new ObjectId(id) }] };
+    }
+    
+    // Check both blog and news collections
+    let news = await db.collection('blog').findOne(query);
+    if (!news) {
+      news = await db.collection('news').findOne(query);
+    }
+    
+    if (!news) {
+      return res.redirect('/#/');
+    }
+
+    const title = news.title || 'Aone Target Institute News';
+    const rawDesc = news.excerpt || news.message || news.content || '';
+    const desc = rawDesc.replace(/<[^>]+>/g, '').substring(0, 150) || 'Check out this news on Aone Target Institute';
+    
+    // Clean up image url if it's relative
+    let image = news.thumbnail || news.imageUrl || news.image || 'https://aonetarget.in/pwa-512x512.png';
+    if (image.startsWith('/')) {
+      image = 'https://aonetarget.in' + image;
+    }
+
+    const redirectUrl = `/#/news/${id}`;
+
+    const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${title}</title>
+  <meta property="og:title" content="${title}">
+  <meta property="og:description" content="${desc}">
+  <meta property="og:image" content="${image}">
+  <meta property="og:url" content="https://aonetarget.in/api/share/news/${id}">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="${title}">
+  <meta name="twitter:description" content="${desc}">
+  <meta name="twitter:image" content="${image}">
+  <meta http-equiv="refresh" content="0;url=${redirectUrl}">
+</head>
+<body>
+  <p>Redirecting to article...</p>
+  <script>
+    // Ensure we preserve the domain when redirecting
+    window.location.replace(window.location.origin + '${redirectUrl}');
+  </script>
+</body>
+</html>
+    `;
+    res.send(html);
+  } catch (error) {
+    res.redirect('/#/');
+  }
+};
+
+
 // Quick Links Controllers
 export const getQuickLinks = async (req, res) => {
   try {

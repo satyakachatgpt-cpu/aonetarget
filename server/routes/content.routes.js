@@ -9,6 +9,7 @@ import {
   createNews,
   updateNews,
   deleteNews,
+  shareNews,
   getQuickLinks,
   createQuickLink,
   updateQuickLink,
@@ -73,6 +74,7 @@ router.get('/news', getNews);
 router.post('/news', adminMiddleware, createNews);
 router.put('/news/:id', adminMiddleware, updateNews);
 router.delete('/news/:id', adminMiddleware, deleteNews);
+router.get('/share/news/:id', shareNews);
 
 // Quick Links
 router.get('/quick-links', getQuickLinks);

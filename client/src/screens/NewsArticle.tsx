@@ -95,6 +95,37 @@ const NewsArticle: React.FC = () => {
             dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(news.content || '') }}
           />
         </div>
+
+        {/* Share Section */}
+        <div className="mt-12 pt-8 border-t border-gray-100 flex justify-center">
+          <button
+            onClick={async () => {
+              const newsId = news.id || news._id;
+              const shareUrl = `${window.location.origin}/api/share/news/${newsId}`;
+              
+              const shareData = {
+                title: news.title,
+                text: news.title,
+                url: shareUrl,
+              };
+              
+              if (typeof navigator !== 'undefined' && navigator.share) {
+                try {
+                  await navigator.share(shareData);
+                } catch (err) {
+                  console.log('Share failed:', err);
+                }
+              } else {
+                navigator.clipboard.writeText(shareUrl);
+                alert('Link copied to clipboard! You can now paste and share it anywhere.');
+              }
+            }}
+            className="flex items-center gap-2 px-8 py-3 bg-[#204a8e] text-white rounded-xl font-semibold shadow-md hover:bg-[#1a3c75] transition-all active:scale-95"
+          >
+            <span className="material-symbols-rounded text-[22px]">share</span>
+            Share Post
+          </button>
+        </div>
       </main>
 
       {/* Floating Scroll to Top button exactly like screenshot */}

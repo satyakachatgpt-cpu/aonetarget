@@ -1274,7 +1274,7 @@ const Home: React.FC = () => {
                   key={news.id || news._id || i}
                   onClick={() => {
                     const id = news.id || news._id || i;
-                    window.open(`/#/news/${id}`, '_blank');
+                    navigate(`/news/${id}`);
                   }}
                   className="bg-white rounded-[16px] p-3 border border-gray-100 flex items-center justify-between gap-4 cursor-pointer hover:shadow-md transition-all duration-300 group"
                 >
