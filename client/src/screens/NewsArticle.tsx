@@ -100,10 +100,13 @@ const NewsArticle: React.FC = () => {
         <div className="mt-12 pt-8 border-t border-gray-100 flex justify-center">
           <button
             onClick={async () => {
+              const newsId = news.id || news._id;
+              const shareUrl = `${window.location.origin}/api/share/news/${newsId}`;
+              
               const shareData = {
                 title: news.title,
                 text: news.title,
-                url: window.location.href,
+                url: shareUrl,
               };
               
               if (typeof navigator !== 'undefined' && navigator.share) {
@@ -113,7 +116,7 @@ const NewsArticle: React.FC = () => {
                   console.log('Share failed:', err);
                 }
               } else {
-                navigator.clipboard.writeText(window.location.href);
+                navigator.clipboard.writeText(shareUrl);
                 alert('Link copied to clipboard! You can now paste and share it anywhere.');
               }
             }}
