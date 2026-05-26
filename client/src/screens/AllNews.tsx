@@ -50,8 +50,10 @@ const AllNews: React.FC = () => {
   }, []);
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-surface-100 shadow-xl relative pb-20 font-outfit">
-      <header className="sticky top-0 z-40 shadow-sm bg-white border-b border-gray-100">
+    <div className="max-w-md mx-auto h-[100dvh] bg-surface-100 shadow-xl relative font-outfit flex flex-col w-full">
+      <div className="pwa-status-bar bg-white shrink-0 w-full z-50" />
+      <div className="flex-1 overflow-y-auto pb-20 relative">
+        <header className="sticky top-0 z-40 shadow-sm bg-white border-b border-gray-100">
         <div className="px-4 py-3 flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
@@ -114,6 +116,7 @@ const AllNews: React.FC = () => {
            <div className="text-center py-10 text-gray-500 font-medium">No news available</div>
         )}
       </main>
+      </div>
     </div>
   );
 };

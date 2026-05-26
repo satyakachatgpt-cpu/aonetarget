@@ -178,7 +178,6 @@ export const shareNews = async (req, res) => {
   <meta name="twitter:title" content="${title}">
   <meta name="twitter:description" content="${desc}">
   <meta name="twitter:image" content="${image}">
-  <meta http-equiv="refresh" content="0;url=${redirectUrl}">
 </head>
 <body>
   <p>Redirecting to article...</p>
