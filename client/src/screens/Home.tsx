@@ -143,6 +143,10 @@ const Home: React.FC = () => {
   const [allNews, setAllNews] = useState<any[]>([]);
   const [newsLoading, setNewsLoading] = useState(true);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
+  // Hide content initially if returning from a news article, to avoid top-flash
+  const [isRestoringScroll, setIsRestoringScroll] = useState(
+    () => !!sessionStorage.getItem('returnToNews')
+  );
   const bannerDragInfo = useRef({ startX: 0, startTime: 0 });
 
   const handleBannerClick = useCallback((banner: Banner) => {
@@ -212,6 +216,41 @@ const Home: React.FC = () => {
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
+
+  // Save and Restore Scroll Position
+  useEffect(() => {
+    const returnToNews = sessionStorage.getItem('returnToNews');
+    if (returnToNews && !newsLoading) {
+      let attempts = 0;
+      
+      const interval = setInterval(() => {
+        const el = document.getElementById('news-section');
+        if (el) {
+          el.scrollIntoView({ behavior: 'instant', block: 'center' });
+          attempts++;
+          
+          // After a few ticks, layout shifts should be done - reveal the page
+          if (attempts > 4) {
+            sessionStorage.removeItem('returnToNews');
+            setIsRestoringScroll(false);
+            clearInterval(interval);
+          }
+        } else {
+          attempts++;
+          // Safety: give up after 20 attempts (2s) even if element not found
+          if (attempts > 20) {
+            sessionStorage.removeItem('returnToNews');
+            setIsRestoringScroll(false);
+            clearInterval(interval);
+          }
+        }
+      }, 80);
+      
+      return () => clearInterval(interval);
+    }
+  }, [newsLoading]);
+
+
 
   useEffect(() => {
     if (banners.length <= 1) return;
@@ -627,7 +666,7 @@ const Home: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex flex-col bg-surface-100 min-h-screen pb-4 overflow-x-hidden">
+    <div className={`flex flex-col bg-surface-100 min-h-screen pb-4 overflow-x-hidden${isRestoringScroll ? ' opacity-0 pointer-events-none' : ''}`}>
       <div className="animate-fade-in">
         <header className="sticky top-0 z-40 shadow-lg" style={{ background: '#283593' }}>
         <div className="px-4 py-2 flex items-center justify-between gap-3 min-h-[64px]">
@@ -1258,7 +1297,7 @@ const Home: React.FC = () => {
         )} */}
 
         {allNews.length > 0 && !newsLoading && (
-          <section className="animate-fade-in-up" style={{ animationDelay: '0.32s' }}>
+          <section id="news-section" className="animate-fade-in-up" style={{ animationDelay: '0.32s' }}>
             <div className="flex justify-between items-center mb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-1.5 h-7 bg-gradient-to-b from-primary to-primary-600 rounded-full shadow-sm"></div>
@@ -1273,6 +1312,7 @@ const Home: React.FC = () => {
                 <div
                   key={news.id || news._id || i}
                   onClick={() => {
+                    sessionStorage.setItem('returnToNews', 'true');
                     const id = news.id || news._id || i;
                     navigate(`/news/${id}`);
                   }}

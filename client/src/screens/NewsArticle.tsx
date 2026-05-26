@@ -63,6 +63,15 @@ const NewsArticle: React.FC = () => {
       </div>
 
       <main className="max-w-4xl mx-auto px-5 pt-8 animate-fade-in">
+        {/* Back Button */}
+        <button 
+          onClick={() => navigate(-1)} 
+          className="flex items-center gap-1 text-gray-500 hover:text-[#204a8e] transition-colors mb-4 font-medium text-[15px]"
+        >
+          <span className="material-symbols-rounded text-[20px]">arrow_back</span>
+          Back
+        </button>
+
         {/* Title */}
         <h1 className="text-[26px] font-bold text-[#204a8e] leading-[1.3] mb-5 tracking-tight">
           {news.title}
@@ -101,7 +110,8 @@ const NewsArticle: React.FC = () => {
           <button
             onClick={async () => {
               const newsId = news.id || news._id;
-              const shareUrl = `${window.location.origin}/api/share/news/${newsId}`;
+              // Adding ?v=2 to bypass WhatsApp's cache
+              const shareUrl = `${window.location.origin}/api/share/news/${newsId}?v=${Date.now()}`;
               
               const shareData = {
                 title: news.title,
