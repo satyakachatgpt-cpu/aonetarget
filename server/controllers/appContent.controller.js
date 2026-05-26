@@ -154,7 +154,10 @@ export const shareNews = async (req, res) => {
     
     // Clean up image url if it's relative
     let image = news.thumbnail || news.imageUrl || news.image || 'https://aonetarget.in/pwa-512x512.png';
-    if (image.startsWith('/')) {
+    if (!image.startsWith('http')) {
+      if (!image.startsWith('/')) {
+        image = '/' + image;
+      }
       image = 'https://aonetarget.in' + image;
     }
 
