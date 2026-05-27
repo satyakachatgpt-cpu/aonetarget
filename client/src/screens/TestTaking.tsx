@@ -12,7 +12,9 @@ const TestTaking: React.FC = () => {
   const { testId } = useParams<{ testId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  const launchedSeriesId = location.state?.seriesId;
+  // Capture location.state once in a ref — prevents reset when popstate fires during back-button trap
+  const locationStateRef = useRef(location.state);
+  const launchedSeriesId = locationStateRef.current?.seriesId;
 
   const [test, setTest] = useState<any>(null);
   const [questions, setQuestions] = useState<any[]>([]);
@@ -64,8 +66,9 @@ const TestTaking: React.FC = () => {
       }
     }
 
-    if (location.state?.review && location.state?.resultId) {
-      fetchReviewData(location.state.resultId);
+    const initialState = locationStateRef.current;
+    if (initialState?.review && initialState?.resultId) {
+      fetchReviewData(initialState.resultId);
     } else {
       fetchTestData();
     }
@@ -73,7 +76,8 @@ const TestTaking: React.FC = () => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [testId, location.state]);
+  // Only re-run when testId changes — NOT on location.state changes (which happen on popstate)
+  }, [testId]);
 
   const fetchReviewData = async (resultId: string) => {
     try {
@@ -312,17 +316,26 @@ const TestTaking: React.FC = () => {
   }, [questions.length, submitted, hasAcceptedTerms, timeLeft > 0, test?.termsAndConditions, test?.closeDate, test?.endDate, handleSubmit]);
 
   useEffect(() => {
-    // Only trap back button DURING the active test (after terms accepted and before submission)
-    if (submitted || loading || !hasAcceptedTerms) return;
+    // Push the history trap as early as possible (when questions are loaded),
+    // NOT waiting for terms acceptance — this prevents the 1-2s flash of Terms UI
+    // when user swipes back, because both history entries will now look the same.
+    if (submitted || loading || questions.length === 0) return;
     
-    window.history.pushState(null, '', window.location.href);
+    // Capture the existing React Router state so we don't break location.state
+    const currentState = window.history.state;
+    
+    // Push TWO entries so the first swipe back stays on test page and fires popstate
+    window.history.pushState(currentState, '', window.location.href);
+    window.history.pushState(currentState, '', window.location.href);
+    
     const handlePopState = () => {
       setShowBackModal(true);
-      window.history.pushState(null, '', window.location.href);
+      // Re-push to keep user on test page
+      window.history.pushState(currentState, '', window.location.href);
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [submitted, loading, hasAcceptedTerms]);
+  }, [submitted, loading, questions.length]);
 
   // Handle browser back button on Result Page
   useEffect(() => {

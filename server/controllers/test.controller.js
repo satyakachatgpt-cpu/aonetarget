@@ -30,6 +30,7 @@ export const reorderTests = async (req, res) => {
           update: { 
             $set: { 
               sortBy: total - index,
+              sortingOrder: total - index,
               updatedAt: new Date().toISOString()
             } 
           }
@@ -121,6 +122,7 @@ export const reorderSeriesTests = async (req, res) => {
           update: { 
             $set: { 
               sortBy: total - index,
+              sortingOrder: total - index,
               updatedAt: new Date().toISOString()
             } 
           }
@@ -418,7 +420,7 @@ export const getTestById = async (req, res) => {
       }
 
         // 5. Final check for test-specific timing (Shared by free and paid)
-        if (isTestExpired(test)) {
+        if (!isAdmin && isTestExpired(test)) {
           console.warn(`[getTestById] Access Denied - Individual test ${id} has expired`);
           return res.status(403).json({ error: 'This test has expired and is no longer available.', code: 'TEST_EXPIRED' });
         }
