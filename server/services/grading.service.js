@@ -15,7 +15,7 @@ export const evaluateTest = ({ questions, answers, test }) => {
     const qIdStr = q.id ? String(q.id) : (q._id ? q._id.toString() : null);
     const studentAnswer = qIdStr ? (answers[qIdStr] || null) : null;
     const normalizedCorrect = (q.correctAnswer || q.correct_answer || q.answer || q['Correct Answer'] || q.correctOption || 'A').toString().toUpperCase().trim();
-    const isCorrect = studentAnswer === normalizedCorrect;
+    const isCorrect = studentAnswer && (studentAnswer.toString().toUpperCase().trim() === normalizedCorrect);
     
     // Resolve marks: Test-level wins, then Question-level fallback, then 0. 
     // We use explicit checks for undefined/null/empty string to allow 0.
