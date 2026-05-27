@@ -30,6 +30,7 @@ export const reorderTests = async (req, res) => {
           update: { 
             $set: { 
               sortBy: total - index,
+              sortingOrder: total - index,
               updatedAt: new Date().toISOString()
             } 
           }
@@ -121,6 +122,7 @@ export const reorderSeriesTests = async (req, res) => {
           update: { 
             $set: { 
               sortBy: total - index,
+              sortingOrder: total - index,
               updatedAt: new Date().toISOString()
             } 
           }
