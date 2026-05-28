@@ -158,6 +158,49 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, [isAdminLoggedIn]);
 
+  // Security Measures (Anti-Piracy, Screenshot & Recording Deterrent)
+  useEffect(() => {
+    const isAdmin = () => window.location.hash.startsWith('#/admin');
+
+    const handleContextMenu = (e: MouseEvent) => {
+      if (!isAdmin()) e.preventDefault();
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (isAdmin()) return;
+      if (
+        e.key === 'F12' ||
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) ||
+        (e.ctrlKey && (e.key === 'U' || e.key === 'P' || e.key === 'S')) ||
+        (e.metaKey && e.altKey && (e.key === 'I' || e.key === 'J' || e.key === 'U')) ||
+        e.key === 'PrintScreen'
+      ) {
+        e.preventDefault();
+      }
+    };
+
+    const handleCopyPaste = (e: ClipboardEvent) => {
+      if (!isAdmin()) {
+        const target = e.target as HTMLElement;
+        if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
+          e.preventDefault();
+        }
+      }
+    };
+
+    document.addEventListener('contextmenu', handleContextMenu);
+    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('copy', handleCopyPaste);
+    document.addEventListener('cut', handleCopyPaste);
+
+    return () => {
+      document.removeEventListener('contextmenu', handleContextMenu);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('copy', handleCopyPaste);
+      document.removeEventListener('cut', handleCopyPaste);
+    };
+  }, []);
+
   const handleSplashComplete = useCallback(() => {
     setShowSplash(false);
   }, []);
