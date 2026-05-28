@@ -82,8 +82,14 @@ export const handleUnauthorized = async (response: Response | { status: number; 
       }
     } catch (e) { /* ignore parse errors */ }
 
-    const isTokenError = data.code === 'TOKEN_EXPIRED' || data.code === 'INVALID_TOKEN' || data.code === 'NO_AUTH';
+    const isTokenError = data.code === 'INVALID_TOKEN' || data.code === 'NO_AUTH';
     const isAdminPath = url.includes('/admin/') || url.includes('/v2/upload') || url.includes('/courses/import') || url.includes('/v1/apk') || url.includes('/dashboard/stats');
+
+    if (data.code === 'TOKEN_EXPIRED' && !isAdminPath) {
+      // Do NOT clear session here. authStore's checkAuth or interceptor will handle the refresh.
+      // If refresh fails, authStore will clear the session.
+      return;
+    }
 
     if (isTokenError || status === 401) {
       if (isAdminPath && (localStorage.getItem('adminToken') || localStorage.getItem('isAdminAuthenticated'))) {
