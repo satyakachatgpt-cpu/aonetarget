@@ -8,6 +8,7 @@
     "dev": "node --no-deprecation server.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1056.0",
     "@google/generative-ai": "^0.24.1",
     "axios": "^1.15.0",
     "bcrypt": "^5.1.1",

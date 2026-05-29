@@ -66,9 +66,9 @@ app.use(
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com", "https://www.youtube.com"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "https://img.youtube.com"],
-        frameSrc: ["https://www.youtube.com", "https://checkout.razorpay.com"],
-        connectSrc: ["'self'", "https://api.razorpay.com"],
+        imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "https://img.youtube.com", "https://files.aonetarget.in"],
+        frameSrc: ["https://www.youtube.com", "https://checkout.razorpay.com", "https://files.aonetarget.in"],
+        connectSrc: ["'self'", "https://api.razorpay.com", "https://files.aonetarget.in"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
       },
     },
@@ -152,7 +152,8 @@ const isValidProxyUrl = (urlStr) => {
       'res.cloudinary.com',
       'drive.google.com',
       'docs.google.com',
-      'googleusercontent.com'
+      'googleusercontent.com',
+      'files.aonetarget.in'
     ];
     
     const isAllowed = allowedDomains.some(domain => 
