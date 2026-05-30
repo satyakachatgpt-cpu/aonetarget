@@ -162,9 +162,9 @@ const TestTaking: React.FC = () => {
       const testData = await res.json();
       if (!testData || typeof testData !== 'object') throw new Error('Invalid test data');
       setTest(testData);
-      const q = (Array.isArray(testData.questions) ? testData.questions : []).map((qn: any) => ({
+      const q = (Array.isArray(testData.questions) ? testData.questions : []).map((qn: any, index: number) => ({
         ...qn,
-        id: qn.id || qn._id || `q_${Math.random()}`,
+        id: `${qn.id || qn._id || 'q'}_idx_${index}`,
         correctAnswer: (qn.correctAnswer || qn.correct_answer || qn.answer || qn['Correct Answer'] || qn.correctOption || 'A').toString().toUpperCase()
       }));
       setQuestions(q);
@@ -316,10 +316,10 @@ const TestTaking: React.FC = () => {
   }, [questions.length, submitted, hasAcceptedTerms, timeLeft > 0, test?.termsAndConditions, test?.closeDate, test?.endDate, handleSubmit]);
 
   useEffect(() => {
-    // Push the history trap as early as possible (when questions are loaded),
-    // NOT waiting for terms acceptance — this prevents the 1-2s flash of Terms UI
-    // when user swipes back, because both history entries will now look the same.
-    if (submitted || loading || questions.length === 0) return;
+    const needsTerms = test?.termsAndConditions && test?.termsAndConditions.trim() !== '' && test?.termsAndConditions !== '<p><br></p>';
+    
+    // Only trap back button if the test is actively running (terms accepted or not needed)
+    if (submitted || loading || questions.length === 0 || (needsTerms && !hasAcceptedTerms)) return;
     
     // Capture the existing React Router state so we don't break location.state
     const currentState = window.history.state;
@@ -335,7 +335,7 @@ const TestTaking: React.FC = () => {
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [submitted, loading, questions.length]);
+  }, [submitted, loading, questions.length, hasAcceptedTerms, test?.termsAndConditions]);
 
   // Handle browser back button on Result Page
   useEffect(() => {

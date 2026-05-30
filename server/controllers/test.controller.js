@@ -772,7 +772,7 @@ export const bulkExcelImport = async (req, res) => {
       }
 
       return {
-        id: row.id || `q_${Date.now()}_${i}`,
+        id: row.id ? `${row.id}_${Date.now()}_${i}` : `q_${Date.now()}_${i}`,
         question: row.question || row.Question || '',
         optionA: row.optionA || row['Option A'] || '',
         optionB: row.optionB || row['Option B'] || '',
