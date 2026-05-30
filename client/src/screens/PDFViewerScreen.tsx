@@ -4,59 +4,168 @@ import mammoth from 'mammoth';
 import DOMPurify from 'dompurify';
 import { getPdfUrl, getViewerUrl } from '../lib/utils';
 
+// Detect Mobile (iOS and Android) — Both have issues with native iframes for PDFs
+const isMobile = (): boolean =>
+  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+// ─────────────────────────────────────────
+// Mobile PDF.js canvas viewer (stays in-app)
+// ─────────────────────────────────────────
+const MobilePdfViewer: React.FC<{ url: string; onReady: () => void; onError: () => void }> = ({
+  url,
+  onReady,
+  onError,
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [pages, setPages] = useState<HTMLCanvasElement[]>([]);
+  const [loadedPages, setLoadedPages] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const render = async () => {
+      try {
+        const pdfjsLib = await import('pdfjs-dist');
+        
+        // iOS Safari strictly blocks Cross-Origin Web Workers. 
+        // Workaround: Fetch the script as text and create a local Blob URL.
+        const workerUrl = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+        
+        if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+          try {
+            const workerRes = await fetch(workerUrl);
+            const workerCode = await workerRes.text();
+            const blob = new Blob([workerCode], { type: 'text/javascript' });
+            pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
+          } catch (workerErr) {
+            console.warn("Failed to create worker blob, falling back to CDN URL", workerErr);
+            pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+          }
+        }
+
+        // DIRECT CLOUDFLARE R2 FETCH (Fastest) — works because you enabled CORS!
+        const loadingTask = pdfjsLib.getDocument({ url, withCredentials: false });
+        const pdf = await loadingTask.promise;
+        if (cancelled) return;
+
+        setTotalPages(pdf.numPages);
+
+        for (let i = 1; i <= pdf.numPages; i++) {
+          if (cancelled) break;
+
+          const page = await pdf.getPage(i);
+          const nativeViewport = page.getViewport({ scale: 1 });
+          const screenScale = (window.innerWidth / nativeViewport.width) * (window.devicePixelRatio || 2);
+          const viewport = page.getViewport({ scale: Math.min(screenScale, 4) });
+
+          const canvas = document.createElement('canvas');
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          canvas.style.width = '100%';
+          canvas.style.display = 'block';
+          canvas.style.marginBottom = '8px';
+          canvas.style.background = '#fff';
+
+          const ctx = canvas.getContext('2d')!;
+          await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+          if (cancelled) break;
+
+          // Show page 1 immediately — don't wait for rest of pages
+          if (i === 1) {
+            setPages([canvas]);
+            onReady();
+          } else {
+            setPages(prev => [...prev, canvas]);
+          }
+          setLoadedPages(i);
+        }
+      } catch (e) {
+        console.error('[PDF.js] render error', e);
+        if (!cancelled) onError();
+      }
+    };
+
+    render();
+    return () => { cancelled = true; };
+  }, [url]);
+
+  // Mount canvases into DOM imperatively
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el || pages.length === 0) return;
+    el.innerHTML = '';
+    pages.forEach(c => el.appendChild(c));
+  }, [pages]);
+
+  return (
+    <div style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch', height: '100%', background: '#525659' }}>
+      {loadedPages < totalPages && totalPages > 0 && (
+        <div style={{ position: 'sticky', top: 0, zIndex: 10, background: '#1e40af', height: 3 }}>
+          <div
+            style={{
+              height: '100%',
+              background: '#60a5fa',
+              width: `${(loadedPages / totalPages) * 100}%`,
+              transition: 'width 0.3s ease',
+            }}
+          />
+        </div>
+      )}
+      <div ref={containerRef} style={{ padding: '8px' }} />
+    </div>
+  );
+};
+
+// ─────────────────────────────────────────
+// Main screen
+// ─────────────────────────────────────────
 const PDFViewerScreen: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const queryParams = new URLSearchParams(location.search);
   const containerRef = useRef<HTMLDivElement>(null);
-  
-  const pdfUrl = location.state?.pdf?.fileUrl || 
-                 location.state?.pdf?.url || 
-                 location.state?.pdf?.link || 
-                 location.state?.fileUrl ||
-                 location.state?.url ||
-                 queryParams.get('url') || '';
-  const title = location.state?.title || location.state?.pdf?.title || queryParams.get('title') || 'Document';
+
+  const pdfUrl =
+    location.state?.pdf?.fileUrl ||
+    location.state?.pdf?.url ||
+    location.state?.pdf?.link ||
+    location.state?.fileUrl ||
+    location.state?.url ||
+    queryParams.get('url') ||
+    '';
+  const title =
+    location.state?.title || location.state?.pdf?.title || queryParams.get('title') || 'Document';
   const subject = location.state?.pdf?.subject || 'Study Material';
 
   const [docxContent, setDocxContent] = useState<string | null>(null);
-  const [pdfIframeUrl, setPdfIframeUrl] = useState<string | null>(null);
+  const [useMobileViewer, setUseMobileViewer] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
   const [useFallback, setUseFallback] = useState(false);
 
   const fullPdfUrl = getPdfUrl(pdfUrl);
-  
-  // Extension detection: URL + Title
+
   const fileExt = (pdfUrl || '').toLowerCase().split('?')[0].split('.').pop() || '';
-  const isDocx = fileExt.startsWith('doc') || 
-                 (title || '').toLowerCase().endsWith('.docx') || 
-                 (title || '').toLowerCase().endsWith('.doc');
+  const isDocx =
+    fileExt.startsWith('doc') ||
+    (title || '').toLowerCase().endsWith('.docx') ||
+    (title || '').toLowerCase().endsWith('.doc');
 
   const handleExit = useCallback(() => {
-    if (window.opener) {
-      window.close();
-    } else {
-      navigate(-1);
-    }
+    if (window.opener) window.close();
+    else navigate(-1);
   }, [navigate]);
 
   useEffect(() => {
-    if (!fullPdfUrl) {
-       setLoading(false);
-       return;
-    }
-    
-    const loadDocument = async () => {
+    if (!fullPdfUrl) { setLoading(false); return; }
+
+    const load = async () => {
       try {
         setLoading(true);
-        setError(null);
-        setProgress(10);
-        
+
         if (isDocx) {
           try {
-            // Docs need to be fetched via proxy for Mammoth to work (CORS)
             const proxyUrl = `/api/proxy-resource?url=${encodeURIComponent(fullPdfUrl)}`;
             const res = await fetch(proxyUrl, { mode: 'cors' });
             if (!res.ok) throw new Error('Proxy fetch failed');
@@ -65,19 +174,21 @@ const PDFViewerScreen: React.FC = () => {
             setDocxContent(result.value);
             setLoading(false);
           } catch (e) {
-            console.warn('Docx loading failed, showing fallback', e);
+            console.warn('Docx loading failed', e);
             setUseFallback(true);
             setLoading(false);
           }
           return;
         }
 
-        // Native PDF Iframe View with security flags
-        // Use the centralized viewer URL logic which adds proxy/signing if needed
-        const viewerUrl = getViewerUrl(fullPdfUrl);
-        setPdfIframeUrl(`${viewerUrl}#toolbar=0&navpanes=0&view=FitH`);
-        setProgress(100);
-        setLoading(false);
+        // Mobile (iOS + Android): use PDF.js canvas viewer (stays in app, uses DIRECT CDN URL now)
+        if (isMobile()) {
+          setUseMobileViewer(true);
+          return; // Loader is removed by MobilePdfViewer onReady
+        }
+
+        // Desktop: fast native iframe directly to CDN URL (no 25MB limit)
+        // Set a slight delay just to ensure state updates, loading spinner removed by iframe onLoad
       } catch (err) {
         console.error('Document Load Error:', err);
         setUseFallback(true);
@@ -85,16 +196,17 @@ const PDFViewerScreen: React.FC = () => {
       }
     };
 
-    loadDocument();
+    load();
   }, [fullPdfUrl, isDocx]);
 
-
-  // SECURITY: Block dev-tools shortcuts scoped to PDF viewer only
+  // Block dev-tools shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeEl = document.activeElement as HTMLElement;
-      const activeTag = activeEl?.tagName || '';
-      const isTyping = activeTag === 'INPUT' || activeTag === 'TEXTAREA' || activeEl?.isContentEditable;
+      const isTyping =
+        activeEl?.tagName === 'INPUT' ||
+        activeEl?.tagName === 'TEXTAREA' ||
+        activeEl?.isContentEditable;
       if (isTyping) return;
       const k = e.key.toLowerCase();
       if (
@@ -109,54 +221,53 @@ const PDFViewerScreen: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  if (!pdfUrl && !location.state) {
-    navigate(-1);
-    return null;
-  }
+  if (!pdfUrl && !location.state) { navigate(-1); return null; }
 
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-[#f4f7f6] z-[99999] flex flex-col font-outfit h-[100dvh] w-full overflow-hidden"
       onContextMenu={(e) => e.preventDefault()}
     >
-      {/* Header */}
       <div className="bg-white/95 backdrop-blur-md px-4 py-2 md:py-3 flex items-center justify-between border-b border-gray-200 shadow-sm z-[110] shrink-0">
-        <button 
-          onClick={handleExit} 
-          className="w-9 h-9 rounded-xl flex items-center justify-center bg-gray-100 text-gray-800 hover:bg-gray-200 transition-all group scale-100 active:scale-95 z-[120]"
+        <button
+          onClick={handleExit}
+          className="w-9 h-9 rounded-xl flex items-center justify-center bg-gray-100 text-gray-800 hover:bg-gray-200 transition-all scale-100 active:scale-95 z-[120]"
         >
           <span className="material-symbols-rounded text-[20px] pointer-events-none">arrow_back</span>
         </button>
-        
+
         <div className="flex-1 px-4 text-center min-w-0">
-          <h1 className="text-[12px] font-black truncate text-gray-900 leading-tight uppercase tracking-tight">{title}</h1>
+          <h1 className="text-[12px] font-black truncate text-gray-900 leading-tight uppercase tracking-tight">
+            {title}
+          </h1>
           <div className="flex items-center justify-center gap-2 mt-0.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${isDocx ? 'bg-blue-600' : 'bg-green-600'}`}></span>
-            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest leading-none">{isDocx ? 'Word Document' : 'Vector-Optimized PDF'} • {subject}</p>
+            <span className={`w-1.5 h-1.5 rounded-full ${isDocx ? 'bg-blue-600' : 'bg-green-600'}`} />
+            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest leading-none">
+              {isDocx ? 'Word Document' : 'Vector-Optimized PDF'} • {subject}
+            </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button 
-            onClick={handleExit}
-            className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-50 text-red-600 hover:bg-red-100 transition-all scale-100 active:scale-95 z-[120]"
-          >
-            <span className="material-symbols-rounded text-[20px] pointer-events-none">close</span>
-          </button>
-        </div>
+        <button
+          onClick={handleExit}
+          className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-50 text-red-600 hover:bg-red-100 transition-all scale-100 active:scale-95 z-[120]"
+        >
+          <span className="material-symbols-rounded text-[20px] pointer-events-none">close</span>
+        </button>
       </div>
 
-      {/* Content */}
       <div className="flex-1 relative bg-white overflow-auto min-h-0" ref={containerRef}>
-        {loading ? (
+        {loading && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 animate-fade-in bg-[#f4f7f6] z-[101]">
-             <div className="relative w-16 h-16">
-                <div className="absolute inset-0 border-4 border-blue-50 rounded-full"></div>
-                <div className="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin"></div>
-             </div>
-             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest tracking-[0.2em] animate-pulse">Initializing Secure Viewport...</p>
+            <div className="relative w-16 h-16">
+              <div className="absolute inset-0 border-4 border-blue-50 rounded-full" />
+              <div className="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin" />
+            </div>
+            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] animate-pulse">
+              {useMobileViewer ? 'Rendering PDF…' : 'Initializing Secure Viewport…'}
+            </p>
           </div>
-        ) : null}
+        )}
 
         {useFallback ? (
           <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-gray-50 w-full h-full max-w-2xl mx-auto">
@@ -166,84 +277,46 @@ const PDFViewerScreen: React.FC = () => {
                   {isDocx ? 'description' : 'picture_as_pdf'}
                 </span>
               </div>
-              
-              <h2 className="text-2xl font-black text-gray-900 mb-3 uppercase tracking-tight">Secure Document Preview</h2>
+              <h2 className="text-2xl font-black text-gray-900 mb-3 uppercase tracking-tight">
+                Secure Document Preview
+              </h2>
               <p className="text-sm text-gray-500 mb-10 leading-relaxed font-medium">
-                For security reasons, this {isDocx ? 'document' : 'PDF'} needs to be opened in our secure internal viewer. This protects the content from unauthorized access.
+                For security reasons, this {isDocx ? 'document' : 'PDF'} needs to be opened in our
+                secure internal viewer. This protects the content from unauthorized access.
               </p>
-
-              <div className="space-y-4 max-w-sm mx-auto">
-                <div className="p-5 bg-orange-50 rounded-2xl border border-orange-100 flex items-start gap-4">
-                  <span className="material-symbols-rounded text-orange-500 mt-0.5">info</span>
-                  <p className="text-[11px] text-orange-700 text-left leading-normal font-bold uppercase tracking-tight">
-                    Note: If the document doesn't load correctly, please try refreshing the page. For security reasons, direct downloads are disabled.
-                  </p>
-                </div>
+              <div className="p-5 bg-orange-50 rounded-2xl border border-orange-100 flex items-start gap-4 max-w-sm mx-auto">
+                <span className="material-symbols-rounded text-orange-500 mt-0.5">info</span>
+                <p className="text-[11px] text-orange-700 text-left leading-normal font-bold uppercase tracking-tight">
+                  If the document doesn't load correctly, please try refreshing the page.
+                </p>
               </div>
             </div>
           </div>
-        ) : isDocx ? (
-          <div className="w-full max-w-4xl mx-auto bg-white shadow-xl lg:shadow-[0_20px_50px_rgba(0,0,0,0.06)] rounded-sm p-4 md:p-20 mb-24 h-fit animate-slide-up overflow-x-hidden">
-            <div 
-              className="prose prose-slate max-w-none text-gray-800 leading-relaxed font-outfit docx-content-area break-words"
-              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(docxContent || '') }} 
-            />
-            <style dangerouslySetInnerHTML={{ __html: `
-              .docx-content-area { width: 100%; word-break: break-word; }
-              .docx-content-area h1 { font-size: 1.4rem; md:font-size: 1.8rem; font-weight: 900; color: #111; margin-bottom: 1.5rem; border-bottom: 2px solid #eee; padding-bottom: 0.5rem; }
-              .docx-content-area h2 { font-size: 1.2rem; md:font-size: 1.4rem; font-weight: 800; color: #222; margin-top: 1.5rem; }
-              .docx-content-area p { margin-bottom: 1rem; font-size: 0.9rem; md:font-size: 0.95rem; line-height: 1.6; }
-              .docx-content-area table { width: 100% !important; border-collapse: collapse; margin: 1.5rem 0; border: 1px solid #ddd; table-layout: auto; display: block; overflow-x: auto; }
-              .docx-content-area td, .docx-content-area th { border: 1px solid #ddd; padding: 8px; font-size: 0.8rem; }
-              .docx-content-area img { max-width: 100%; height: auto; border-radius: 6px; margin: 1.5rem 0; box-shadow: 0 5px 20px rgba(0,0,0,0.05); }
-            `}} />
-          </div>
-        ) : pdfIframeUrl ? (
-          (() => {
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-            if (isIOS) {
-              return (
-                <div className="w-full h-full bg-zinc-900 overflow-hidden">
-                   <object 
-                    data={pdfIframeUrl} 
-                    type="application/pdf" 
-                    className="w-full h-full border-none"
-                   >
-                     <embed src={pdfIframeUrl} type="application/pdf" className="w-full h-full" />
-                     <iframe src={pdfIframeUrl} className="w-full h-full border-none" title={title} />
-                   </object>
-                </div>
-              );
-            }
-            // For Android/Desktop: Use Google Viewer for external/proxied URLs to avoid 'Open' prompt
-            const actualUrl = pdfIframeUrl.includes('url=') 
-              ? decodeURIComponent(pdfIframeUrl.split('url=')[1].split('&')[0]) 
-              : fullPdfUrl;
-              
-            const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(actualUrl)}&embedded=true`;
 
-            return (
-              <div className="relative w-full h-full overflow-hidden bg-white">
-                {/* Security Shield: Blocks the "Pop-out" button in the top-right corner of Google Viewer */}
-                <div 
-                  className="absolute top-0 right-0 w-[180px] h-[60px] z-[110] bg-transparent cursor-default select-none pointer-events-auto"
-                  title="Secure View: Download Disabled"
-                  onContextMenu={(e) => e.preventDefault()}
-                />
-                
-                <iframe 
-                  src={googleViewerUrl} 
-                  className="w-full h-full border-none block m-0 p-0"
-                  title={title}
-                  // sandbox prevents popups/new tabs from opening even if the button is clicked
-                  sandbox="allow-scripts allow-same-origin"
-                />
-              </div>
-            );
-          })()
+        ) : isDocx && docxContent ? (
+          <div className="w-full max-w-4xl mx-auto bg-white shadow-xl rounded-sm p-4 md:p-20 mb-24 h-fit animate-slide-up overflow-x-hidden">
+            <div
+              className="prose prose-slate max-w-none text-gray-800 leading-relaxed font-outfit docx-content-area break-words"
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(docxContent) }}
+            />
+          </div>
+        ) : useMobileViewer && fullPdfUrl ? (
+          <MobilePdfViewer
+            url={fullPdfUrl}
+            onReady={() => setLoading(false)}
+            onError={() => { setUseFallback(true); setLoading(false); }}
+          />
+        ) : fullPdfUrl && !isMobile() ? (
+          <div className="w-full h-full bg-[#525659] overflow-hidden">
+            <iframe
+              src={fullPdfUrl + '#toolbar=0&navpanes=0'}
+              className="w-full h-full border-none block m-0 p-0"
+              title={title}
+              onLoad={() => setLoading(false)}
+            />
+          </div>
         ) : null}
       </div>
-
     </div>
   );
 };
