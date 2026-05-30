@@ -74,3 +74,56 @@ export const uploadFileToR2 = async (filePath, originalName, mimetype) => {
     throw new Error(`Failed to upload to R2: ${error.message}`);
   }
 };
+
+/**
+ * Generates a presigned URL for direct upload from the browser to Cloudflare R2
+ * @param {string} originalName - Original name of the uploaded file
+ * @param {string} mimetype - Mimetype of the file
+ * @returns {Promise<Object>} - Object containing the presigned uploadUrl and the final publicUrl
+ */
+export const getPresignedUrl = async (originalName, mimetype) => {
+  if (!process.env.R2_ACCOUNT_ID || !process.env.R2_ACCESS_KEY_ID || !process.env.R2_SECRET_ACCESS_KEY || !process.env.R2_BUCKET_NAME) {
+    throw new Error('R2 configuration missing. Please check your environment variables.');
+  }
+
+  const s3 = getS3Client();
+  const bucketName = process.env.R2_BUCKET_NAME;
+  const baseUrl = process.env.R2_PUBLIC_BASE_URL;
+
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  
+  const safeOriginalName = originalName.replace(/[^a-zA-Z0-9.\-_]/g, '').toLowerCase();
+  const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+  
+  const key = `aot/documents/${year}/${month}/${uniqueSuffix}-${safeOriginalName}`;
+
+  const command = new PutObjectCommand({
+    Bucket: bucketName,
+    Key: key,
+    ContentType: mimetype,
+  });
+
+  try {
+    const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
+    // Generate URL valid for 30 minutes
+    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 1800 });
+
+    const fileExtension = originalName.split('.').pop() || 'raw';
+
+    return {
+      uploadUrl, // The frontend will PUT the file to this URL
+      publicUrl: `${baseUrl}/${key}`, // The final URL to store in the DB
+      key: key,
+      format: fileExtension,
+      resource_type: "raw",
+      storage: "r2",
+      provider: "cloudflare-r2"
+    };
+  } catch (error) {
+    console.error('Failed to generate R2 presigned URL:', error);
+    throw new Error(`Failed to generate presigned URL: ${error.message}`);
+  }
+};
+
