@@ -316,10 +316,10 @@ const TestTaking: React.FC = () => {
   }, [questions.length, submitted, hasAcceptedTerms, timeLeft > 0, test?.termsAndConditions, test?.closeDate, test?.endDate, handleSubmit]);
 
   useEffect(() => {
-    // Push the history trap as early as possible (when questions are loaded),
-    // NOT waiting for terms acceptance — this prevents the 1-2s flash of Terms UI
-    // when user swipes back, because both history entries will now look the same.
-    if (submitted || loading || questions.length === 0) return;
+    const needsTerms = test?.termsAndConditions && test?.termsAndConditions.trim() !== '' && test?.termsAndConditions !== '<p><br></p>';
+    
+    // Only trap back button if the test is actively running (terms accepted or not needed)
+    if (submitted || loading || questions.length === 0 || (needsTerms && !hasAcceptedTerms)) return;
     
     // Capture the existing React Router state so we don't break location.state
     const currentState = window.history.state;
@@ -335,7 +335,7 @@ const TestTaking: React.FC = () => {
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [submitted, loading, questions.length]);
+  }, [submitted, loading, questions.length, hasAcceptedTerms, test?.termsAndConditions]);
 
   // Handle browser back button on Result Page
   useEffect(() => {
