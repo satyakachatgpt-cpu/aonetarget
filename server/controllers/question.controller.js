@@ -327,7 +327,7 @@ export const bulkExcelUpload = async (req, res) => {
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' });
     const questions = jsonData.map((row, i) => ({
-      id: row.id || `q_${Date.now()}_${i}`,
+      id: row.id ? `${row.id}_${Date.now()}_${i}` : `q_${Date.now()}_${i}`,
       question: row.question || row.Question || '',
       optionA: row.optionA || row['Option A'] || '',
       optionB: row.optionB || row['Option B'] || '',

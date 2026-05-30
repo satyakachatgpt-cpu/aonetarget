@@ -162,9 +162,9 @@ const TestTaking: React.FC = () => {
       const testData = await res.json();
       if (!testData || typeof testData !== 'object') throw new Error('Invalid test data');
       setTest(testData);
-      const q = (Array.isArray(testData.questions) ? testData.questions : []).map((qn: any) => ({
+      const q = (Array.isArray(testData.questions) ? testData.questions : []).map((qn: any, index: number) => ({
         ...qn,
-        id: qn.id || qn._id || `q_${Math.random()}`,
+        id: `${qn.id || qn._id || 'q'}_idx_${index}`,
         correctAnswer: (qn.correctAnswer || qn.correct_answer || qn.answer || qn['Correct Answer'] || qn.correctOption || 'A').toString().toUpperCase()
       }));
       setQuestions(q);

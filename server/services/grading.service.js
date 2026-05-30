@@ -11,9 +11,11 @@ export const evaluateTest = ({ questions, answers, test }) => {
   let obtainedMarks = 0;
   let negativeMarksTotal = 0;
 
-  const questionResults = questions.map((q) => {
+  const questionResults = questions.map((q, index) => {
     const qIdStr = q.id ? String(q.id) : (q._id ? q._id.toString() : null);
-    const studentAnswer = qIdStr ? (answers[qIdStr] || null) : null;
+    const compositeId = `${qIdStr || 'q'}_idx_${index}`;
+    // Fallback: check if the answer exists under the composite ID first, else try the old qIdStr (for backward compatibility if needed)
+    const studentAnswer = answers[compositeId] !== undefined ? answers[compositeId] : (qIdStr ? (answers[qIdStr] || null) : null);
     const normalizedCorrect = (q.correctAnswer || q.correct_answer || q.answer || q['Correct Answer'] || q.correctOption || 'A').toString().toUpperCase().trim();
     const isCorrect = studentAnswer && (studentAnswer.toString().toUpperCase().trim() === normalizedCorrect);
     

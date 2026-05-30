@@ -398,7 +398,17 @@ export const getAdminTestResults = async (req, res) => {
                 $expr: {
                   $and: [
                     { $not: ['$$hasName'] },
-                    { $eq: ['$id', '$$tid'] }
+                    {
+                      $or: [
+                        { $eq: ['$id', '$$tid'] },
+                        {
+                          $and: [
+                            { $regexMatch: { input: { $toString: '$$tid' }, regex: /^[0-9a-fA-F]{24}$/ } },
+                            { $eq: ['$_id', { $convert: { input: '$$tid', to: 'objectId', onError: null, onNull: null } }] }
+                          ]
+                        }
+                      ]
+                    }
                   ]
                 }
               }
@@ -412,9 +422,23 @@ export const getAdminTestResults = async (req, res) => {
       {
         $lookup: {
           from: 'students',
-          localField: 'studentId',
-          foreignField: 'id',
+          let: { sid: '$studentId' },
           pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $or: [
+                    { $eq: ['$id', '$$sid'] },
+                    {
+                      $and: [
+                        { $regexMatch: { input: { $toString: '$$sid' }, regex: /^[0-9a-fA-F]{24}$/ } },
+                        { $eq: ['$_id', { $convert: { input: '$$sid', to: 'objectId', onError: null, onNull: null } }] }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
             { $limit: 1 },
             { $project: { _id: 0, name: 1, phone: 1, email: 1 } }
           ],
@@ -752,32 +776,47 @@ export const submitTest = async (req, res) => {
       submittedAt: new Date()
     };
 
-    // --- Optimized Ranking Calculation ---
+    // --- O(1) Extremely Fast Ranking Calculation ---
     let rank = 0;
     let totalStudents = 0;
     try {
-      const tid = req.params.testId;
-      const lb = await getLeaderboard(db, tid);
-
+      const tid = String(req.params.testId);
       const studentScore = Number(evaluation.obtainedMarks) || 0;
       const studentTime = Number(timeTaken) || 999999;
 
-      // Calculate rank among others' best attempts
-      // lb already contains best attempts per student (including current student's past attempts if any)
-      // To strictly rank among OTHERS, we could filter lb by studentId, but the leaderboard concept 
-      // usually includes the current best too. The existing code filtered out current student.
-      const otherStudentsBest = lb.filter(s => String(s._id) !== String(effectiveStudentId));
+      const testIdFilter = [
+        { testId: tid },
+        { testId: !isNaN(Number(tid)) ? Number(tid) : null }
+      ].filter(v => v.testId !== null);
 
-      totalStudents = otherStudentsBest.length + 1;
-      rank = otherStudentsBest.filter(s =>
-        (Number(s.score) > studentScore) ||
-        (Number(s.score) === studentScore && Number(s.time) < studentTime)
-      ).length + 1;
+      // Fast lookup: Count unique students who scored better or same score but faster
+      const betterStudentsIds = await db.collection('testResults').distinct('studentId', {
+        $or: testIdFilter,
+        $and: [
+          {
+            $or: [
+              { obtainedMarks: { $gt: studentScore } },
+              { obtainedMarks: studentScore, timeTaken: { $lt: studentTime } }
+            ]
+          }
+        ]
+      });
+
+      const uniqueBetterOthers = betterStudentsIds.filter(id => String(id) !== String(effectiveStudentId));
+      rank = uniqueBetterOthers.length + 1;
+
+      // Fast lookup: Count total unique students
+      const allStudentIds = await db.collection('testResults').distinct('studentId', {
+        $or: testIdFilter
+      });
+      
+      const uniqueAllOthers = allStudentIds.filter(id => String(id) !== String(effectiveStudentId));
+      totalStudents = uniqueAllOthers.length + 1;
 
     } catch (rankErr) {
-      console.error('Ranking calculation failed:', rankErr);
+      console.error('Fast ranking calculation failed:', rankErr);
     }
-    // --- End Ranking Calculation ---
+    // --- End Fast Ranking Calculation ---
 
     resultData.rank = rank;
     resultData.totalStudents = totalStudents;
