@@ -107,6 +107,38 @@ export const uploadAPI = {
   },
 
   uploadDocument: async (file: File, options: any = {}) => {
+    try {
+      // Step 1: Attempt to get a Presigned URL for Direct Upload
+      const presignedRes = await axios.get(`${API_BASE_URL}/v2/upload/presigned-url`, {
+        params: { filename: file.name, fileType: file.type },
+        headers: { ...getAdminHeaders() }
+      }).catch(() => null);
+
+      if (presignedRes && presignedRes.data && presignedRes.data.uploadUrl) {
+        // Step 2: Direct Upload to Cloudflare R2
+        const { uploadUrl, publicUrl, key, format, resource_type, storage, provider } = presignedRes.data;
+        
+        await axios.put(uploadUrl, file, {
+          headers: { 'Content-Type': file.type },
+          onUploadProgress: options.onUploadProgress
+        });
+
+        // Step 3: Return the expected format
+        return {
+          success: true,
+          url: publicUrl,
+          public_id: key,
+          bytes: file.size,
+          format,
+          storage,
+          provider
+        };
+      }
+    } catch (directUploadErr) {
+      console.warn('Direct upload failed, falling back to server upload', directUploadErr);
+    }
+
+    // Fallback: Original Server-Side Upload (Double-hop)
     const formData = new FormData();
     formData.append('file', file);
 

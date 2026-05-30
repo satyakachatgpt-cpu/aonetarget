@@ -9,6 +9,34 @@ import fs from 'fs';
 const router = express.Router();
 
 // ─────────────────────────────────
+// GET /api/v2/upload/presigned-url (Direct Upload Support)
+// ─────────────────────────────────
+router.get('/v2/upload/presigned-url', authMiddleware, async (req, res) => {
+  try {
+    const { filename, fileType } = req.query;
+    
+    if (!filename || !fileType) {
+      return res.status(400).json({ success: false, error: "Filename and fileType are required" });
+    }
+
+    if (process.env.PDF_STORAGE_PROVIDER !== 'r2') {
+      return res.status(400).json({ success: false, error: "Direct upload is only supported for R2 storage" });
+    }
+
+    const { getPresignedUrl } = await import('../services/r2.service.js');
+    const result = await getPresignedUrl(filename, fileType);
+
+    return res.status(200).json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('Failed to generate presigned URL:', error);
+    return res.status(500).json({ success: false, error: "Failed to generate presigned URL" });
+  }
+});
+
+// ─────────────────────────────────
 // POST /api/v2/upload/image
 // ─────────────────────────────────
 router.post('/v2/upload/image', authMiddleware, uploadLimiter, uploadImage.single('file'), async (req, res) => {
