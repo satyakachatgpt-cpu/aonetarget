@@ -1,10 +1,9 @@
 import rateLimit from 'express-rate-limit';
 import mongoose from 'mongoose';
 
-// Public Rate Limiter (for student registration/check)
 export const publicLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 50, // Limit each IP to 50 requests per windowMs
+  max: 500, // Limit each IP to 500 requests per windowMs (Increased for institute Wi-Fi)
   message: { error: 'Too many requests from this IP, please try again after 15 minutes' }
 });
 
@@ -37,7 +36,7 @@ export const videoUploadLimiter = rateLimit({
 // Auth Rate Limiter
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // Limit each IP to 10 requests per windowMs
+  max: 500, // Limit each IP to 500 requests per windowMs (Increased for institute Wi-Fi)
   message: { error: 'Too many verify requests from this IP, please try again after 15 minutes' }
 });
 
