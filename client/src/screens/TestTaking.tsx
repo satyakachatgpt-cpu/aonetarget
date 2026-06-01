@@ -99,10 +99,10 @@ const TestTaking: React.FC = () => {
       const testData = await testRes.json();
 
       setTest(testData);
-      const q = (Array.isArray(testData.questions) ? testData.questions : []).map((qn: any) => ({
+      const q = (Array.isArray(testData.questions) ? testData.questions : []).map((qn: any, index: number) => ({
         ...qn,
-        id: qn.id || qn._id || `q_${Math.random()}`,
-        correctAnswer: (qn.correctAnswer || qn.correct_answer || qn.answer || qn['Correct Answer'] || qn.correctOption || 'A').toString().toUpperCase()
+        id: `${qn.id || qn._id || 'q'}_idx_${index}`,
+        correctAnswer: (qn.correctAnswer || qn.correct_answer || qn.answer || qn['Correct Answer'] || qn.correctOption || '').toString().toUpperCase()
       }));
       setQuestions(q);
 
@@ -165,7 +165,7 @@ const TestTaking: React.FC = () => {
       const q = (Array.isArray(testData.questions) ? testData.questions : []).map((qn: any, index: number) => ({
         ...qn,
         id: `${qn.id || qn._id || 'q'}_idx_${index}`,
-        correctAnswer: (qn.correctAnswer || qn.correct_answer || qn.answer || qn['Correct Answer'] || qn.correctOption || 'A').toString().toUpperCase()
+        correctAnswer: (qn.correctAnswer || qn.correct_answer || qn.answer || qn['Correct Answer'] || qn.correctOption || '').toString().toUpperCase()
       }));
       setQuestions(q);
 
@@ -255,8 +255,10 @@ const TestTaking: React.FC = () => {
         const negMarks = Math.abs(Number(tNeg !== null ? tNeg : (qNeg !== null ? qNeg : 0)));
 
         totalMarks += marks;
-        if (answers[q.id]) {
-          if (answers[q.id] === q.correctAnswer) {
+        const studentAns = answers[q.id];
+        if (studentAns) {
+          const isCorrect = studentAns.toString().toUpperCase().trim() === (q.correctAnswer || '').toString().toUpperCase().trim();
+          if (isCorrect) {
             correctCount++;
             obtainedMarks += marks;
           } else {
@@ -672,8 +674,9 @@ const TestTaking: React.FC = () => {
                   <h3 className="font-bold text-sm mb-3 text-gray-700">Answer Review</h3>
                   <div className="space-y-3">
                     {questions.map((q, idx) => {
-                      const studentAns = answers[q.id];
-                      const isCorrect = studentAns === q.correctAnswer;
+                      const studentAns = answers[q.id] || answers[String(q.id).split('_idx_')[0]] || null;
+                      const correctAns = q.correctAnswer;
+                      const isCorrect = studentAns ? studentAns.toString().toUpperCase() === correctAns.toString().toUpperCase() : false;
                       return (
                         <div key={q.id} className={`p-3 rounded-lg border ${studentAns ? (isCorrect ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50') : 'border-gray-200 bg-gray-50'}`}>
                           <div className="text-xs font-semibold text-gray-700">
@@ -687,10 +690,10 @@ const TestTaking: React.FC = () => {
                           <div className="mt-1 text-[10px]">
                             {studentAns ? (
                               <span className={isCorrect ? 'text-green-600' : 'text-[#D32F2F]'}>
-                                Your answer: {studentAns} {isCorrect ? '✓' : `✗ (Correct: ${q.correctAnswer})`}
+                                Your answer: {studentAns} {isCorrect ? '✓' : `✗ (Correct: ${correctAns})`}
                               </span>
                             ) : (
-                              <span className="text-gray-400">Not answered (Correct: {q.correctAnswer})</span>
+                              <span className="text-gray-400">Not answered (Correct: {correctAns})</span>
                             )}
                           </div>
                           {q.explanation && (
@@ -805,9 +808,9 @@ const TestTaking: React.FC = () => {
     : questions;
 
   const currentQuestion = displayQuestions[currentIndex];
-  const answeredCount = displayQuestions.filter(q => answers[q.id] !== undefined).length;
-  const flaggedCount = displayQuestions.filter(q => flagged.has(q.id)).length;
-  const remainingCount = displayQuestions.length - answeredCount;
+  const answeredCount = questions.filter(q => answers[q.id] !== undefined).length;
+  const flaggedCount = questions.filter(q => flagged.has(q.id)).length;
+  const remainingCount = questions.length - answeredCount;
   const isSectionMode = Array.isArray(test?.sections) && test.sections.length > 0 && !!activeSectionId;
   const currentSectionIndex = isSectionMode 
     ? test.sections.findIndex((s: any) => String(s.id) === String(activeSectionId)) 

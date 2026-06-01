@@ -42,7 +42,25 @@ export function getAdminHeaders(): Record<string, string> {
 }
 
 export function getAuthHeaders(): Record<string, string> {
-  const studentToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+  // Primary: localStorage (normal browser)
+  let studentToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+  
+  // Fallback: sessionStorage (PWA auto-login edge case where localStorage not yet persisted)
+  if (!studentToken) {
+    studentToken = sessionStorage.getItem('accessToken') || sessionStorage.getItem('token');
+  }
+  
+  // Fallback: authStore Zustand state via window (PWA memory-only token)
+  if (!studentToken) {
+    try {
+      const raw = localStorage.getItem('studentData');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        studentToken = parsed?.accessToken || parsed?.token || null;
+      }
+    } catch (e) {}
+  }
+
   if (studentToken) {
     return { 'Authorization': `Bearer ${studentToken}` };
   }

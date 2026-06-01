@@ -16,7 +16,8 @@ export const evaluateTest = ({ questions, answers, test }) => {
     const compositeId = `${qIdStr || 'q'}_idx_${index}`;
     // Fallback: check if the answer exists under the composite ID first, else try the old qIdStr (for backward compatibility if needed)
     const studentAnswer = answers[compositeId] !== undefined ? answers[compositeId] : (qIdStr ? (answers[qIdStr] || null) : null);
-    const normalizedCorrect = (q.correctAnswer || q.correct_answer || q.answer || q['Correct Answer'] || q.correctOption || 'A').toString().toUpperCase().trim();
+    const rawCorrect = q.correctAnswer || q.correct_answer || q.answer || q['Correct Answer'] || q.correctOption || '';
+    const normalizedCorrect = rawCorrect.toString().toUpperCase().trim();
     const isCorrect = studentAnswer && (studentAnswer.toString().toUpperCase().trim() === normalizedCorrect);
     
     // Resolve marks: Test-level wins, then Question-level fallback, then 0. 
