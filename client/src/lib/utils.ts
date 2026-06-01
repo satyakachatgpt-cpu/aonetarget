@@ -63,17 +63,23 @@ export const getPdfUrl = (url: string | undefined | null): string => {
 export const getViewerUrl = (url: string | undefined | null): string => {
   const normalizedUrl = getPdfUrl(url);
   if (!normalizedUrl) return "";
-  
-  // If it's a local URL (same origin as API), we might not need proxy, 
-  // but proxying ensures consistent headers for PDF viewing.
-  // Especially for Cloudinary and Google Drive.
-  if (normalizedUrl.includes('res.cloudinary.com') || 
-      normalizedUrl.includes('drive.google.com') || 
-      normalizedUrl.includes('docs.google.com') ||
-      !normalizedUrl.startsWith(window.location.origin)) {
+
+  // Cloudflare R2 (files.aonetarget.in) — direct access, no proxy needed
+  // Backend CSP already has frameSrc: ["https://files.aonetarget.in"] so iframe works fine
+  if (normalizedUrl.includes('files.aonetarget.in')) {
+    return normalizedUrl;
+  }
+
+  // Cloudinary, Google Drive, or any other external URL — use proxy as before
+  if (
+    normalizedUrl.includes('res.cloudinary.com') ||
+    normalizedUrl.includes('drive.google.com') ||
+    normalizedUrl.includes('docs.google.com') ||
+    !normalizedUrl.startsWith(window.location.origin)
+  ) {
     return `${API_BASE}/api/proxy-resource?url=${encodeURIComponent(normalizedUrl)}`;
   }
-  
+
   return normalizedUrl;
 };
 
