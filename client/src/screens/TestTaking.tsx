@@ -99,11 +99,30 @@ const TestTaking: React.FC = () => {
       const testData = await testRes.json();
 
       setTest(testData);
-      const q = (Array.isArray(testData.questions) ? testData.questions : []).map((qn: any, index: number) => ({
-        ...qn,
-        id: `${qn.id || qn._id || 'q'}_idx_${index}`,
-        correctAnswer: (qn.correctAnswer || qn.correct_answer || qn.answer || qn['Correct Answer'] || qn.correctOption || '').toString().toUpperCase()
-      }));
+
+      // Build a map of correctAnswer from saved questionResults in DB
+      // (Server strips correctAnswer from live question API for students to prevent cheating,
+      //  but it IS saved in the result's questionResults for review purposes)
+      const correctAnswerMap: Record<string, string> = {};
+      if (Array.isArray(resultData.questionResults)) {
+        resultData.questionResults.forEach((qr: any) => {
+          if (qr.questionId && qr.correctAnswer) {
+            correctAnswerMap[String(qr.questionId)] = qr.correctAnswer;
+          }
+        });
+      }
+
+      const q = (Array.isArray(testData.questions) ? testData.questions : []).map((qn: any, index: number) => {
+        const qOriginalId = String(qn.id || qn._id || 'q');
+        // Try to get correctAnswer from saved result first, then fallback to question fields
+        const savedCorrect = correctAnswerMap[qOriginalId] || '';
+        const fieldCorrect = (qn.correctAnswer || qn.correct_answer || qn.answer || qn['Correct Answer'] || qn.correctOption || '').toString().toUpperCase();
+        return {
+          ...qn,
+          id: `${qOriginalId}_idx_${index}`,
+          correctAnswer: savedCorrect || fieldCorrect
+        };
+      });
       setQuestions(q);
 
       setAnswers(resultData.answers || {});
@@ -227,6 +246,27 @@ const TestTaking: React.FC = () => {
       if (!res.ok) throw new Error('Failed to submit');
       const resultData = await res.json();
       setResult(resultData);
+
+      // Restore correct answers from the submission result into the questions state
+      // so they display immediately in the Answer Review panel
+      if (Array.isArray(resultData.questionResults)) {
+        const correctAnswerMap: Record<string, string> = {};
+        resultData.questionResults.forEach((qr: any) => {
+          if (qr.questionId && qr.correctAnswer) {
+            correctAnswerMap[String(qr.questionId)] = qr.correctAnswer;
+          }
+        });
+
+        setQuestions(prevQuestions => prevQuestions.map(qn => {
+          const qOriginalId = String(qn.id).split('_idx_')[0];
+          const savedCorrect = correctAnswerMap[qOriginalId];
+          if (savedCorrect) {
+            return { ...qn, correctAnswer: savedCorrect };
+          }
+          return qn;
+        }));
+      }
+
       setSubmitted(true);
     } catch (err) {
       console.error('Submit error:', err);

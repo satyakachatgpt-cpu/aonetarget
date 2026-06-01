@@ -51,7 +51,7 @@ const MyTests: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-surface-100 pb-20">
+    <div className="min-h-screen bg-surface-100 pb-20 overflow-x-hidden">
       <StudentSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} student={student} />
 
       <header className="relative bg-gradient-to-br from-primary-800 via-primary-700 to-primary-600 text-white pt-10 pb-10 px-4 overflow-hidden shadow-lg">
@@ -83,9 +83,12 @@ const MyTests: React.FC = () => {
         ) : testResults.length > 0 ? (
           <div className="space-y-3">
             {testResults.map((result, idx) => {
-              const score = Number(result.score) || Number(result.obtainedMarks) || 0;
-              const total = Number(result.totalMarks) || 0;
-              const accuracy = total > 0 ? Math.round((score / total) * 100) : 0;
+              const scoreRaw = Number(result.score) || Number(result.obtainedMarks) || 0;
+              const totalRaw = Number(result.totalMarks) || 0;
+              // Round to avoid floating point display like 1.6499999999
+              const score = Number.isInteger(scoreRaw) ? scoreRaw : Math.round(scoreRaw * 10) / 10;
+              const total = Number.isInteger(totalRaw) ? totalRaw : Math.round(totalRaw * 10) / 10;
+              const accuracy = total > 0 ? Math.round((scoreRaw / totalRaw) * 100) : 0;
               
               const baseName = result.testName && result.testName !== 'Test' && result.testName !== 'Mock Test'
                 ? result.testName 
