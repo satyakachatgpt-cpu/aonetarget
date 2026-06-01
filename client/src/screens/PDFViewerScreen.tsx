@@ -157,6 +157,24 @@ const PDFViewerScreen: React.FC = () => {
     else navigate(-1);
   }, [navigate]);
 
+  // Enable pinch-to-zoom for PDF viewer only
+  useEffect(() => {
+    const meta = document.querySelector('meta[name="viewport"]');
+    const originalContent = meta?.getAttribute('content');
+    
+    if (meta) {
+      // Allow zooming up to 5x while on this screen
+      meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover');
+    }
+
+    return () => {
+      // Revert to non-scalable when leaving
+      if (meta && originalContent) {
+        meta.setAttribute('content', originalContent);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (!fullPdfUrl) { setLoading(false); return; }
 
@@ -228,7 +246,7 @@ const PDFViewerScreen: React.FC = () => {
       className="fixed inset-0 bg-[#f4f7f6] z-[99999] flex flex-col font-outfit h-[100dvh] w-full overflow-hidden"
       onContextMenu={(e) => e.preventDefault()}
     >
-      <div className="bg-white/95 backdrop-blur-md px-4 py-2 md:py-3 flex items-center justify-between border-b border-gray-200 shadow-sm z-[110] shrink-0">
+      <div className="bg-white/95 backdrop-blur-md px-4 pt-[max(env(safe-area-inset-top),8px)] pb-2 md:py-3 flex items-center justify-between border-b border-gray-200 shadow-sm z-[110] shrink-0">
         <button
           onClick={handleExit}
           className="w-9 h-9 rounded-xl flex items-center justify-center bg-gray-100 text-gray-800 hover:bg-gray-200 transition-all scale-100 active:scale-95 z-[120]"
