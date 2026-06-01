@@ -833,14 +833,8 @@ export const submitTest = async (req, res) => {
       timeTaken
     });
 
-    // Strip correctAnswer and isCorrect from response for students (keep in DB for later review)
-    const responseData = isAdmin ? resultData : {
-      ...resultData,
-      questionResults: resultData.questionResults?.map(qr => {
-        const { correctAnswer, isCorrect, ...safeQr } = qr;
-        return safeQr;
-      })
-    };
+    // Return full resultData so client can immediately display Answer Review
+    const responseData = resultData;
 
     res.status(201).json(responseData);
   } catch (error) {
