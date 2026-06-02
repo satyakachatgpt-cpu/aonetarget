@@ -259,7 +259,7 @@ const WatchPage: React.FC = () => {
   if (!currentVideo) {
     return (
       <div className="h-[100dvh] bg-[#000000] flex flex-col items-center justify-center overflow-hidden font-outfit relative">
-        <div onClick={handleBack} className="fixed top-0 left-0 w-24 h-24 z-[9999999] cursor-pointer group flex items-start justify-start p-6 active:scale-90 transition-all">
+        <div onClick={handleBack} className="fixed top-0 left-0 w-24 h-24 z-[9999999] cursor-pointer group flex items-start justify-start p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] active:scale-90 transition-all">
           <div className="w-10 h-10 bg-white/10 hover:bg-red-600/80 backdrop-blur-3xl border border-white/20 rounded-full text-white flex items-center justify-center shadow-2xl transition-all duration-200">
             <span className="material-symbols-rounded text-2xl font-bold">arrow_back</span>
           </div>
