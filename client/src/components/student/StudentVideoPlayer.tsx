@@ -650,7 +650,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
         </div>
 
         {/* Top Control Bar - Strengthened Contrast */}
-        <div className={`absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/95 via-black/40 to-transparent z-40 p-6 flex items-start justify-between transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+        <div className={`absolute top-[env(safe-area-inset-top)] left-0 right-0 h-32 bg-gradient-to-b from-black/95 via-black/40 to-transparent z-40 p-6 flex items-start justify-between transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
             <button 
               onClick={onClose} 
               className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 flex items-center justify-center text-white active:scale-90 transition-all pointer-events-auto shadow-xl"
@@ -873,7 +873,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
         {/* Live Chat Overlay */}
         {isLive && showChat && (
            <div className={`absolute top-0 bottom-0 right-0 w-full sm:w-[350px] bg-zinc-950/95 backdrop-blur-2xl border-l border-white/10 z-[60] transition-all duration-500 ease-in-out shadow-2xl flex flex-col pointer-events-auto`}>
-              <div className="p-6 border-b border-white/5 flex items-center justify-between">
+              <div className="p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] border-b border-white/5 flex items-center justify-between">
                  <div className="flex items-center gap-3">
                     <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse shadow-[0_0_8px_red]" />
                     <span className="text-xs font-black text-white tracking-[0.2em] uppercase">Live Chat</span>
