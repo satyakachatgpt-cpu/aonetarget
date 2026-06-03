@@ -97,7 +97,7 @@ const RecordedTab: React.FC<RecordedTabProps> = ({
                 <div className="relative w-28 h-20 rounded-2xl overflow-hidden flex-shrink-0">
                   {!failedImages.has(video.id) ? (
                     <img
-                      src={getImageUrl(video.thumbnail) || getYouTubeThumbnail(video.youtubeUrl || video.videoUrl || '') || `https://picsum.photos/400/225?sig=${video.id}`}
+                      src={getImageUrl(video.thumbnail) || getYouTubeThumbnail(video.recordedLink || video.recordingUrl || video.replayUrl || video.youtubeUrl || video.videoUrl || video.url || video.meetingLink || '') || `https://picsum.photos/400/225?sig=${video.id}`}
                       alt={video.title}
                       className="w-full h-full object-cover"
                       loading="lazy"

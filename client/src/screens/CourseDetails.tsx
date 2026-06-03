@@ -212,7 +212,8 @@ const CourseDetails: React.FC = () => {
 
   const handleVideoClick = (video: Video) => {
     // STRICT PLAYABILITY RULE: Upcoming live streams must not open player
-    if (video.contentType === 'live_stream' && computeEffectiveStatus(video) !== 'live') {
+    const status = computeEffectiveStatus(video);
+    if (video.contentType === 'live_stream' && status === 'upcoming') {
       return;
     }
 
@@ -220,8 +221,18 @@ const CourseDetails: React.FC = () => {
 
     const canPlay = (isEnrolled && !isCourseExpired) || video.isFree || video.isDemo || isFirstVideoInRoot;
 
-    // Resolve raw URL first
-    const rawUrl = video.youtubeUrl || video.videoUrl || video.url || video.meetingLink || (video as any).streamId || '';
+    // Resolve raw URL first (include recorded links for ended live streams)
+    const rawUrl = video.recordedLink || 
+                   video.recordingUrl || 
+                   video.replayUrl || 
+                   video.youtubeUrl || 
+                   video.videoUrl || 
+                   video.url || 
+                   video.meetingLink || 
+                   video.liveUrl || 
+                   video.streamUrl || 
+                   (video as any).streamId || 
+                   '';
 
     const url = toYouTubeEmbed(rawUrl);
     if (canPlay && url) {
@@ -916,7 +927,18 @@ const CourseDetails: React.FC = () => {
       {showVideoPlayer && selectedVideo && (
         <StudentVideoPlayer
           videoId={selectedVideo.id || selectedVideo._id || ''}
-          src={selectedVideo.youtubeUrl ? selectedVideo.youtubeUrl : (selectedVideo.videoUrl ? getVideoUrl(selectedVideo.videoUrl) : (selectedVideo.url ? (selectedVideo.url.includes('youtube.com') || selectedVideo.url.includes('youtu.be') ? selectedVideo.url : getVideoUrl(selectedVideo.url)) : selectedVideo.meetingLink || ''))}
+          src={toYouTubeEmbed(
+            selectedVideo.recordedLink || 
+            selectedVideo.recordingUrl || 
+            selectedVideo.replayUrl || 
+            selectedVideo.youtubeUrl || 
+            selectedVideo.videoUrl || 
+            selectedVideo.url || 
+            selectedVideo.meetingLink || 
+            selectedVideo.liveUrl || 
+            selectedVideo.streamUrl || 
+            ''
+          )}
           title={selectedVideo.title}
           courseTitle={course?.name || course?.title}
           courseId={id}
