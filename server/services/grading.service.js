@@ -70,8 +70,8 @@ export const evaluateTest = ({ questions, answers, test }) => {
     wrongAnswers: wrongCount,
     unanswered: questions.length - answeredCount,
     totalMarks,
-    obtainedMarks: Math.max(0, obtainedMarks),
-    negativeMarksTotal,
-    percentage: totalMarks > 0 ? Math.round((Math.max(0, obtainedMarks) / totalMarks) * 100) : 0,
+    obtainedMarks: Number(obtainedMarks.toFixed(2)),
+    negativeMarksTotal: Number(negativeMarksTotal.toFixed(2)),
+    percentage: totalMarks > 0 ? Number(((obtainedMarks / totalMarks) * 100).toFixed(2)) : 0,
   };
 };

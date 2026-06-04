@@ -78,6 +78,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const [showChat, setShowChat] = useState(false);
   const [autoNextEnabled, setAutoNextEnabled] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
+  const isDraggingRef = useRef(false);
   const [liveChatInput, setLiveChatInput] = useState('');
   const [viewport, setViewport] = useState({ 
     width: typeof window !== 'undefined' ? window.innerWidth : 0, 
@@ -388,7 +389,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
           time = videoRef.current.currentTime;
           total = videoRef.current.duration || duration;
         }
-        if (!isDragging) {
+        if (!isDraggingRef.current) {
           setCurrentTime(time);
         }
         
@@ -716,21 +717,25 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                <div className="absolute h-full bg-white transition-all duration-150" style={{ width: `${(currentTime/(duration||1))*100}%` }} />
                <input 
                  type="range" min="0" max={duration||0} step="0.5" value={currentTime} 
-                 onMouseDown={() => setIsDragging(true)}
-                 onMouseUp={() => {
+                 onPointerDown={() => { setIsDragging(true); isDraggingRef.current = true; }}
+                 onPointerUp={(e) => {
                     setIsDragging(false);
-                    if(isYoutube){ playerRef.current?.seekTo(currentTime, true); } 
-                    else { if(videoRef.current) videoRef.current.currentTime = currentTime; }
+                    isDraggingRef.current = false;
+                    const t = parseFloat(e.currentTarget.value);
+                    if(isYoutube){ playerRef.current?.seekTo(t, true); } 
+                    else { if(videoRef.current) videoRef.current.currentTime = t; }
                  }}
-                 onTouchStart={() => setIsDragging(true)}
-                 onTouchEnd={() => {
+                 onPointerCancel={() => {
                     setIsDragging(false);
-                    if(isYoutube){ playerRef.current?.seekTo(currentTime, true); } 
-                    else { if(videoRef.current) videoRef.current.currentTime = currentTime; }
+                    isDraggingRef.current = false;
                  }}
                  onChange={(e) => { 
                    const t = parseFloat(e.target.value); 
-                   setCurrentTime(t); 
+                   setCurrentTime(t);
+                   if (isDraggingRef.current) {
+                     if(isYoutube){ playerRef.current?.seekTo(t, true); } 
+                     else { if(videoRef.current) videoRef.current.currentTime = t; }
+                   }
                  }} 
                  className="absolute -top-4 left-0 w-full h-10 opacity-0 cursor-pointer z-[60]"
                  style={{ touchAction: 'none' }}
