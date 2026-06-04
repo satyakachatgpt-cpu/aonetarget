@@ -236,7 +236,7 @@ const TestTaking: React.FC = () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
-          studentId: student?.id || 'anonymous',
+          studentId: student?.id || student?._id || 'anonymous',
           answers,
           timeTaken,
           courseId: launchedSeriesId

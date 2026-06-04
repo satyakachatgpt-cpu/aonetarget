@@ -614,10 +614,17 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                     </a>
                   </div>
                 ) : (
-                  <div 
-                    id={`student-player-${youtubeId}`} 
-                    className="w-full h-full" 
-                  />
+                  <>
+                    <div 
+                      id={`student-player-${youtubeId}`} 
+                      className="w-full h-full pointer-events-none" 
+                    />
+                    {/* INVISIBLE OVERLAY TO BLOCK YOUTUBE NATIVE UI INTERACTION */}
+                    <div 
+                      className="absolute inset-0 z-[50] cursor-pointer" 
+                      onClick={togglePlay}
+                    />
+                  </>
                 )}
               </div>
             ) : (
@@ -725,7 +732,8 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                    const t = parseFloat(e.target.value); 
                    setCurrentTime(t); 
                  }} 
-                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-[60]" 
+                 className="absolute -top-4 left-0 w-full h-10 opacity-0 cursor-pointer z-[60]"
+                 style={{ touchAction: 'none' }}
                />
             </div>
 

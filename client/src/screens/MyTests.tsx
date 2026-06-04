@@ -17,7 +17,7 @@ const MyTests: React.FC = () => {
       return;
     }
     if (student) {
-      fetchTestResults(student.id);
+      fetchTestResults(student.id || student._id);
     }
   }, [isAuthenticated, student, navigate]);
 

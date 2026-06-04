@@ -61,7 +61,7 @@ const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
         class: globalStudent.class || '12th',
         higherEducation: globalStudent.higherEducation || '12th Pass'
       });
-      fetchStats(globalStudent.id);
+      fetchStats(globalStudent.id || globalStudent._id);
     }
   }, [isAuthenticated, globalStudent, navigate]);
 
@@ -114,7 +114,7 @@ const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
 
   const handleSaveProfile = async () => {
     try {
-      const response = await fetch(`/api/students/${student.id}`, {
+      const response = await fetch(`/api/students/${student.id || student._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(editForm)

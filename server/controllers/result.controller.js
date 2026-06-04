@@ -836,6 +836,56 @@ export const submitTest = async (req, res) => {
     // Return full resultData so client can immediately display Answer Review
     const responseData = resultData;
 
+    // Update student's course/test-series progress
+    try {
+      const courseIdsToUpdate = [];
+      
+      if (test.courseId) courseIdsToUpdate.push(String(test.courseId));
+      if (test.courseIds && Array.isArray(test.courseIds)) {
+        test.courseIds.forEach(c => courseIdsToUpdate.push(String(c)));
+      }
+      if (test.testSeriesId) courseIdsToUpdate.push(String(test.testSeriesId));
+      if (test.seriesId) courseIdsToUpdate.push(String(test.seriesId));
+      if (test.testSeries && Array.isArray(test.testSeries)) {
+        test.testSeries.forEach(s => courseIdsToUpdate.push(String(s)));
+      }
+      if (req.body.courseId) courseIdsToUpdate.push(String(req.body.courseId));
+
+      const uniqueCourseIds = [...new Set(courseIdsToUpdate.filter(Boolean))];
+
+      if (uniqueCourseIds.length > 0) {
+        const student = await db.collection('students').findOne({
+          $or: [
+            { id: effectiveStudentId },
+            { userId: effectiveStudentId },
+            { _id: mongoose.Types.ObjectId.isValid(effectiveStudentId) ? new mongoose.Types.ObjectId(effectiveStudentId) : null }
+          ].filter(v => v.id || v.userId || v._id)
+        });
+
+        if (student) {
+          const canonicalStudentId = student.id || String(student._id);
+          const studentIdVariants = [String(student._id), student.id, student.userId].filter(Boolean);
+          const itemId = String(req.params.testId);
+
+          for (const cId of uniqueCourseIds) {
+            const progressQuery = { studentId: { $in: studentIdVariants }, courseId: cId };
+            const progressUpdate = {
+              $setOnInsert: {
+                studentId: canonicalStudentId,
+                courseId: cId,
+                createdAt: new Date()
+              },
+              $addToSet: { completedTests: itemId },
+              $set: { updatedAt: new Date() }
+            };
+            await db.collection('courseProgress').updateOne(progressQuery, progressUpdate, { upsert: true });
+          }
+        }
+      }
+    } catch (progressErr) {
+      console.error('Failed to auto-update course progress upon submission:', progressErr);
+    }
+
     res.status(201).json(responseData);
   } catch (error) {
     logError({ action: 'SUBMIT', error, context: { testId: req.params.testId } });
