@@ -101,6 +101,8 @@ export const connectDB = async (isInitialConnect = true) => {
       // 2. Test Results: Optimize ranking aggregations and student history views
       await ensureIndex('testResults', { testId: 1, studentId: 1, createdAt: -1 }, { name: 'test_student_history' });
       await ensureIndex('testResults', { studentId: 1, createdAt: -1 }, { name: 'student_results_history' });
+      await ensureIndex('testResults', { testId: 1, studentId: 1, obtainedMarks: -1, timeTaken: 1 }, { name: 'test_student_leaderboard' });
+      await ensureIndex('testResults', { testId: 1, obtainedMarks: -1, timeTaken: 1 }, { name: 'test_marks_time' });
 
       // 3. Tests & Series: Fast filtering for course/series test lists
       await ensureIndex('tests', { courseId: 1, isSeries: 1, status: 1 }, { name: 'course_tests_listing' });

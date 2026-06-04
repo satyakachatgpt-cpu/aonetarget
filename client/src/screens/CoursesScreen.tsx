@@ -62,7 +62,7 @@ const CoursesScreen: React.FC = () => {
     try {
       const [allCourses, enrolledCoursesRes] = await Promise.all([
         coursesAPI.getAll(),
-        student?.id ? fetch(`/api/students/${student.id}/courses`, { headers: getAuthHeaders() }).then(r => r.json()) : Promise.resolve([])
+        (student?.id || student?._id) ? fetch(`/api/students/${student.id || student._id}/courses`, { headers: getAuthHeaders() }).then(r => r.json()) : Promise.resolve([])
       ]);
       
       const enrolled = Array.isArray(enrolledCoursesRes) ? enrolledCoursesRes : [];

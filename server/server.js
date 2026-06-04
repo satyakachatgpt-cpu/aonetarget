@@ -83,8 +83,8 @@ process.on('uncaughtException', (err) => {
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('[FATAL] Unhandled Rejection at:', promise, 'reason:', reason);
-  process.exit(1);
+  console.error('[WARNING] Unhandled Rejection at:', promise, 'reason:', reason);
+  // Do not exit the process for unhandled rejections to prevent server crash loops
 });
 
 // Start the bootstrap process

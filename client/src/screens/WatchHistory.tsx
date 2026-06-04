@@ -125,10 +125,11 @@ const WatchHistory: React.FC = () => {
   };
 
   const handleClearAll = async () => {
-    if (!student?.id) return;
+    const studentId = student?.id || student?._id;
+    if (!studentId) return;
     setClearing(true);
     try {
-      await fetch(`/api/students/${student.id}/watch-history`, { method: 'DELETE', headers: getAuthHeaders() });
+      await fetch(`/api/students/${studentId}/watch-history`, { method: 'DELETE', headers: getAuthHeaders() });
       setHistory([]);
     } catch (e) {
       console.error('Clear failed:', e);
