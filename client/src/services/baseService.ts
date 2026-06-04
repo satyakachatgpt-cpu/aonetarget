@@ -116,10 +116,9 @@ export const handleUnauthorized = async (response: Response | { status: number; 
         throw new Error(data.error || 'Admin session expired. Please login again.');
       } else if (localStorage.getItem('accessToken') || localStorage.getItem('isStudentAuthenticated')) {
         clearStudentSession();
-        if (window.location.hash !== '#/student-login' && window.location.hash !== '#/login') {
-          window.location.hash = '#/student-login';
-        }
-        throw new Error(data.error || 'Session expired. Please login again.');
+        // Force a hard reload so the React/Zustand memory state wipes clean
+        // and reads the now-empty localStorage, preventing a fake login state.
+        window.location.href = '/';
       }
     }
   }

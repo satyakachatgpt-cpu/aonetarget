@@ -78,6 +78,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const [showChat, setShowChat] = useState(false);
   const [autoNextEnabled, setAutoNextEnabled] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
+  const isDraggingRef = useRef(false);
   const [liveChatInput, setLiveChatInput] = useState('');
   const [viewport, setViewport] = useState({ 
     width: typeof window !== 'undefined' ? window.innerWidth : 0, 
@@ -91,6 +92,22 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const completedSentRef = useRef<Record<string, boolean>>({}); // Prevent duplicate calls for same video in same session
 
+  const progressBarRef = useRef<HTMLDivElement>(null);
+
+  const handleProgressBarScrub = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!progressBarRef.current || !duration) return;
+    const rect = progressBarRef.current.getBoundingClientRect();
+    let x = e.clientX - rect.left;
+    if (x < 0) x = 0;
+    if (x > rect.width) x = rect.width;
+    
+    const percentage = x / rect.width;
+    const newTime = percentage * duration;
+    
+    setCurrentTime(newTime);
+    if(isYoutube){ playerRef.current?.seekTo(newTime, true); } 
+    else { if(videoRef.current) videoRef.current.currentTime = newTime; }
+  };
   // HANDLE ORIENTATION & VIEWPORT (Debounced for stability)
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout>;
@@ -388,7 +405,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
           time = videoRef.current.currentTime;
           total = videoRef.current.duration || duration;
         }
-        if (!isDragging) {
+        if (!isDraggingRef.current) {
           setCurrentTime(time);
         }
         
@@ -711,30 +728,38 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
 
         {/* Bottom Controls - Increased Contrast and Area */}
         <div className={`absolute bottom-0 left-0 right-0 p-6 pt-24 pb-8 bg-gradient-to-t from-black/95 via-black/70 to-transparent z-50 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-            {/* Progress Bar */}
-            <div className="relative w-full h-1 bg-white/20 rounded-full mb-6 cursor-pointer group pointer-events-auto">
-               <div className="absolute h-full bg-white transition-all duration-150" style={{ width: `${(currentTime/(duration||1))*100}%` }} />
-               <input 
-                 type="range" min="0" max={duration||0} step="0.5" value={currentTime} 
-                 onMouseDown={() => setIsDragging(true)}
-                 onMouseUp={() => {
-                    setIsDragging(false);
-                    if(isYoutube){ playerRef.current?.seekTo(currentTime, true); } 
-                    else { if(videoRef.current) videoRef.current.currentTime = currentTime; }
-                 }}
-                 onTouchStart={() => setIsDragging(true)}
-                 onTouchEnd={() => {
-                    setIsDragging(false);
-                    if(isYoutube){ playerRef.current?.seekTo(currentTime, true); } 
-                    else { if(videoRef.current) videoRef.current.currentTime = currentTime; }
-                 }}
-                 onChange={(e) => { 
-                   const t = parseFloat(e.target.value); 
-                   setCurrentTime(t); 
-                 }} 
-                 className="absolute -top-4 left-0 w-full h-10 opacity-0 cursor-pointer z-[60]"
-                 style={{ touchAction: 'none' }}
-               />
+            {/* Progress Bar (Custom Pointer-based Scrubber) */}
+            <div 
+              ref={progressBarRef}
+              className="relative w-full h-8 flex items-center mb-6 cursor-pointer group pointer-events-auto touch-none"
+              onPointerDown={(e) => {
+                setIsDragging(true); 
+                isDraggingRef.current = true;
+                (e.target as HTMLElement).setPointerCapture(e.pointerId);
+                handleProgressBarScrub(e);
+              }}
+              onPointerMove={(e) => {
+                if (isDraggingRef.current) {
+                  handleProgressBarScrub(e);
+                }
+              }}
+              onPointerUp={(e) => {
+                setIsDragging(false); 
+                isDraggingRef.current = false;
+                try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch(err){}
+              }}
+              onPointerCancel={(e) => {
+                setIsDragging(false); 
+                isDraggingRef.current = false;
+                try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch(err){}
+              }}
+            >
+               {/* Background Track */}
+               <div className="absolute left-0 right-0 h-1 bg-white/20 rounded-full" />
+               {/* Filled Track */}
+               <div className="absolute left-0 h-1 bg-white rounded-full transition-all duration-75" style={{ width: `${(currentTime/(duration||1))*100}%` }} />
+               {/* Thumb */}
+               <div className="absolute h-4 w-4 bg-white rounded-full transform -translate-x-1/2 transition-all duration-75 shadow-[0_0_10px_rgba(255,255,255,0.8)]" style={{ left: `${(currentTime/(duration||1))*100}%` }} />
             </div>
 
             <div className="flex items-center justify-between pointer-events-auto">

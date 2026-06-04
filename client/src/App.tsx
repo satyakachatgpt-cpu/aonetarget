@@ -103,7 +103,23 @@ const ProtectedRedirect = () => {
   return <Navigate to="/student-login" state={{ from: path }} />;
 };
 
+// Use Vite's define plugin to inject the build timestamp automatically
+declare const __APP_VERSION__: string;
+const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev-version';
+
 const App: React.FC = () => {
+  // Force logout on app update
+  useEffect(() => {
+    const currentVersion = localStorage.getItem('app_version');
+    if (currentVersion !== APP_VERSION) {
+      const savedDeviceId = localStorage.getItem('deviceId');
+      localStorage.clear();
+      sessionStorage.clear();
+      localStorage.setItem('app_version', APP_VERSION);
+      if (savedDeviceId) localStorage.setItem('deviceId', savedDeviceId);
+      window.location.href = '/'; // Reload completely
+    }
+  }, []);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => {
     const isAuth = localStorage.getItem('isAdminAuthenticated') === 'true';
     if (!isAuth) return false;

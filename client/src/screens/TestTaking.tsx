@@ -518,7 +518,7 @@ const TestTaking: React.FC = () => {
                 <circle cx="65" cy="65" r="58" stroke="currentColor" strokeWidth="10" fill="transparent" className="text-gray-100" />
                 <circle cx="65" cy="65" r="58" stroke="currentColor" strokeWidth="10" fill="transparent"
                   strokeDasharray={364.42}
-                  strokeDashoffset={364.42 - (364.42 * (result.percentage || 0)) / 100}
+                  strokeDashoffset={364.42 - (364.42 * Math.max(0, result.percentage || 0)) / 100}
                   strokeLinecap="round"
                   className="text-[#1A237E] transition-all duration-1000 ease-out" />
               </svg>

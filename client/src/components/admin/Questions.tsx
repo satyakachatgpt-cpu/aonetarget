@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import FileUploadButton from '../shared/FileUploadButton';
+import { getAuthHeaders } from '../../services/apiClient';
 
 interface TestQuestion {
   id: string;
