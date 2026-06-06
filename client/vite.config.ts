@@ -140,7 +140,7 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: "dist",
       sourcemap: false,
-      target: 'es2020',
+      target: 'es2015',
       rollupOptions: {
         output: {
           manualChunks: {
