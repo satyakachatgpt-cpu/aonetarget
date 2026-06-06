@@ -2,7 +2,8 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import DOMPurify from 'dompurify';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getImageUrl } from '@/lib/utils';
-import { getAuthHeaders, getAdminHeaders, reportedQuestionsAPI } from '../services/apiClient';
+import { getAuthHeaders, getAdminHeaders, reportedQuestionsAPI, handleUnauthorized } from '../services/apiClient';
+import { useAuthStore } from '../store/authStore';
 import { renderQuestionText } from '../components/admin/tests/shared/TestUtils';
 import 'katex/dist/katex.min.css';
 
@@ -85,6 +86,7 @@ const TestTaking: React.FC = () => {
       const res = await fetch(`/api/test-results/${resultId}`, {
         headers: getAuthHeaders()
       });
+      await handleUnauthorized(res, `/api/test-results/${resultId}`);
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         throw new Error(`${errData.error || 'Result not found'} (ID: ${resultId})`);
@@ -95,6 +97,7 @@ const TestTaking: React.FC = () => {
       const testRes = await fetch(`/api/tests/${testId}`, {
         headers: { ...getAuthHeaders(), ...getAdminHeaders() }
       });
+      await handleUnauthorized(testRes, `/api/tests/${testId}`);
       if (!testRes.ok) throw new Error('Test not found');
       const testData = await testRes.json();
 
@@ -168,6 +171,7 @@ const TestTaking: React.FC = () => {
       const res = await fetch(`/api/tests/${testId}?t=${Date.now()}`, {
         headers: { ...getAuthHeaders(), ...getAdminHeaders() }
       });
+      await handleUnauthorized(res, `/api/tests/${testId}`);
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         if (res.status === 403 && errData.code === 'EXPIRED') {
@@ -232,7 +236,7 @@ const TestTaking: React.FC = () => {
     const timeTaken = Math.floor((Date.now() - startTimeRef.current) / 1000);
 
     try {
-      const res = await fetch(`/api/tests/${testId}/submit`, {
+      let res = await fetch(`/api/tests/${testId}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
@@ -243,7 +247,28 @@ const TestTaking: React.FC = () => {
         })
       });
 
-      if (!res.ok) throw new Error('Failed to submit');
+      if (res.status === 401) {
+        const errData = await res.clone().json().catch(() => ({}));
+        if (errData.code === 'TOKEN_EXPIRED') {
+          const refreshed = await useAuthStore.getState().refreshToken();
+          if (refreshed) {
+            res = await fetch(`/api/tests/${testId}/submit`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+              body: JSON.stringify({
+                studentId: student?.id || student?._id || 'anonymous',
+                answers,
+                timeTaken,
+                courseId: launchedSeriesId
+              })
+            });
+          }
+        }
+      }
+
+      await handleUnauthorized(res, `/api/tests/${testId}/submit`);
+
+      if (!res.ok) throw new Error('Failed to submit test');
       const resultData = await res.json();
       setResult(resultData);
 
@@ -268,58 +293,9 @@ const TestTaking: React.FC = () => {
       }
 
       setSubmitted(true);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Submit error:', err);
-      const totalQuestions = questions.length;
-      const answeredCount = Object.keys(answers).length;
-      let correctCount = 0;
-      let wrongCount = 0;
-      let totalMarks = 0;
-      let obtainedMarks = 0;
-      let negativeMarksTotal = 0;
-      questions.forEach(q => {
-        const tMarks = (test?.marksPerQuestion !== undefined && test?.marksPerQuestion !== null && test?.marksPerQuestion !== '') ? Number(test.marksPerQuestion) :
-          (test?.marks !== undefined && test?.marks !== null && test?.marks !== '') ? Number(test.marks) : null;
-
-        const qMarks = (q.marks !== undefined && q.marks !== null && q.marks !== '') ? Number(q.marks) :
-          (q.positiveMarks !== undefined && q.positiveMarks !== null && q.positiveMarks !== '') ? Number(q.positiveMarks) : null;
-
-        const marks = tMarks !== null ? tMarks : (qMarks !== null ? qMarks : 0);
-
-        const tNeg = (test?.negativeMarking !== undefined && test?.negativeMarking !== null && test?.negativeMarking !== '') ? test.negativeMarking :
-          (test?.negative !== undefined && test?.negative !== null && test?.negative !== '') ? test.negative : null;
-
-        const qNeg = (q.negativeMarks !== undefined && q.negativeMarks !== null && q.negativeMarks !== '') ? q.negativeMarks :
-          (q.negative !== undefined && q.negative !== null && q.negative !== '') ? q.negative : null;
-
-        const negMarks = Math.abs(Number(tNeg !== null ? tNeg : (qNeg !== null ? qNeg : 0)));
-
-        totalMarks += marks;
-        const studentAns = answers[q.id];
-        if (studentAns) {
-          const isCorrect = studentAns.toString().toUpperCase().trim() === (q.correctAnswer || '').toString().toUpperCase().trim();
-          if (isCorrect) {
-            correctCount++;
-            obtainedMarks += marks;
-          } else {
-            wrongCount++;
-            negativeMarksTotal += negMarks;
-            obtainedMarks -= negMarks;
-          }
-        }
-      });
-      setResult({
-        totalQuestions,
-        correctAnswers: correctCount,
-        wrongAnswers: wrongCount,
-        unanswered: totalQuestions - answeredCount,
-        totalMarks,
-        obtainedMarks: Math.max(0, obtainedMarks),
-        negativeMarksTotal,
-        percentage: totalMarks > 0 ? Math.round((Math.max(0, obtainedMarks) / totalMarks) * 100) : 0,
-        timeTaken
-      });
-      setSubmitted(true);
+      alert(err.message || 'Failed to submit test. Please check your internet connection and retry.');
     } finally {
       setSubmitting(false);
       setConfirmSubmit(false);
@@ -457,6 +433,7 @@ const TestTaking: React.FC = () => {
       const res = await fetch(`/api/tests/${testId}/leaderboard?limit=10`, {
         headers: getAuthHeaders()
       });
+      await handleUnauthorized(res, `/api/tests/${testId}/leaderboard`);
       if (res.ok) {
         const data = await res.json();
         setLeaderboard(data.leaderboard || []);
