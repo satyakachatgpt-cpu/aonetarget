@@ -98,11 +98,29 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const handleProgressBarScrub = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!progressBarRef.current || !duration) return;
     const rect = progressBarRef.current.getBoundingClientRect();
-    let x = e.clientX - rect.left;
-    if (x < 0) x = 0;
-    if (x > rect.width) x = rect.width;
     
-    const percentage = x / rect.width;
+    // Check if CSS fallback rotation is currently active
+    const _isPhysicalLandscape = viewport.width > viewport.height;
+    const _isMobile = viewport.width < 1024;
+    const _isLandscape = orientation === 'landscape';
+    const _needsRotation = !isAdmin && _isMobile && _isLandscape && !_isPhysicalLandscape;
+
+    let percentage = 0;
+    
+    if (_needsRotation) {
+       // In CSS rotation, the progress bar runs vertically down the screen
+       let y = e.clientY - rect.top;
+       if (y < 0) y = 0;
+       if (y > rect.height) y = rect.height;
+       percentage = y / rect.height;
+    } else {
+       // Normal horizontal progress bar
+       let x = e.clientX - rect.left;
+       if (x < 0) x = 0;
+       if (x > rect.width) x = rect.width;
+       percentage = x / rect.width;
+    }
+    
     const newTime = percentage * duration;
     
     setCurrentTime(newTime);
@@ -253,7 +271,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
 
   // Professional fullscreen toggle (like YouTube)
   const toggleFullscreen = () => {
-    if (!document.fullscreenElement) {
+    if (!document.fullscreenElement && !isFullscreen) {
       // Enter fullscreen + lock landscape if mobile
       const el = document.documentElement;
       if (el.requestFullscreen) {
