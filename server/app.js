@@ -441,6 +441,21 @@ app.use('/api', counsellingRoutes);
 // --- Migrated Student & User Routes (Separate Mounting) ---
 
 
+// --- Digital Asset Links (TWA/Android App) ---
+// MUST be before the SPA catch-all so it is never intercepted by React router
+app.get('/.well-known/assetlinks.json', (req, res) => {
+  const assetLinksPath = path.join(__dirname, '../client/dist/.well-known/assetlinks.json');
+  const fallbackPath = path.join(__dirname, '../client/public/.well-known/assetlinks.json');
+  const filePath = fs.existsSync(assetLinksPath) ? assetLinksPath : fallbackPath;
+  if (fs.existsSync(filePath)) {
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.sendFile(filePath);
+  } else {
+    res.status(404).json({ error: 'assetlinks.json not found' });
+  }
+});
+
 // --- React SPA Catch-all (Production) ---
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, "../client/dist", "index.html");

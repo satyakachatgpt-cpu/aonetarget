@@ -27,7 +27,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const playerRef = useRef<any>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const intervalRef = useRef<any>(null);
-  
+  const seekbarRef = useRef<HTMLDivElement>(null);
+  const isScrubbing = useRef(false);
+  const tapTimer = useRef<any>(null);
+  const tapCount = useRef(0);
+
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [duration, setDuration] = useState(0);
@@ -35,7 +39,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const [showControls, setShowControls] = useState(true);
   const [isReady, setIsReady] = useState(false);
   const [hasError, setHasError] = useState(false);
-  
+  const [isLandscape, setIsLandscape] = useState(
+    () => window.innerWidth > window.innerHeight
+  );
+
   // QUALITY CONTROL STATE
   const [availableQualities, setAvailableQualities] = useState<string[]>([]);
   const [currentQuality, setCurrentQuality] = useState<string>('auto');
@@ -168,6 +175,47 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     return () => clearInterval(intervalRef.current);
   }, [isPlaying]);
 
+  // ORIENTATION CHANGE: recalc landscape state + reset scrubbing + hide controls
+  useEffect(() => {
+    const handleOrientation = () => {
+      const landscape = window.innerWidth > window.innerHeight;
+      setIsLandscape(landscape);
+      // Cancel any active scrub when phone rotates
+      isScrubbing.current = false;
+      // In landscape: request fullscreen + lock orientation for immersive mode
+      if (landscape) {
+        setShowControls(false);
+        try {
+          const el = document.documentElement;
+          if (el.requestFullscreen) {
+            el.requestFullscreen().then(() => {
+              if (screen.orientation && (screen.orientation as any).lock) {
+                (screen.orientation as any).lock('landscape').catch(() => {});
+              }
+            }).catch(() => {});
+          }
+        } catch (_) {}
+      } else {
+        setShowControls(true);
+        try {
+          if (document.exitFullscreen && document.fullscreenElement) {
+            document.exitFullscreen().catch(() => {});
+          }
+          if (screen.orientation && (screen.orientation as any).unlock) {
+            (screen.orientation as any).unlock();
+          }
+        } catch (_) {}
+      }
+    };
+
+    window.addEventListener('resize', handleOrientation);
+    window.addEventListener('orientationchange', handleOrientation);
+    return () => {
+      window.removeEventListener('resize', handleOrientation);
+      window.removeEventListener('orientationchange', handleOrientation);
+    };
+  }, []);
+
   const togglePlay = () => {
     if (videoId && playerRef.current) {
       if (isPlaying) {
@@ -272,7 +320,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       </div>
 
       {/* INDUSTRIAL HARD MASK: TOP */}
-      <div className="absolute top-0 left-0 right-0 h-[10%] bg-black z-30 pointer-events-none border-b border-white/5 flex items-center px-10">
+      <div className={`absolute top-0 left-0 right-0 h-[10%] bg-black z-30 pointer-events-none border-b border-white/5 flex items-center px-10 ${isLandscape ? '!hidden' : ''}`}>
          <div className="flex items-center gap-3">
             <span className="w-2 h-2 bg-red-600 rounded-full animate-pulse shadow-[0_0_8px_red]" />
             <p className="text-[10px] font-black text-white/50 uppercase tracking-[0.5em] italic">SECURE STREAM ISOLATION</p>
@@ -280,18 +328,34 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       </div>
 
       {/* INDUSTRIAL HARD MASK: BOTTOM */}
-      <div className="absolute bottom-0 left-0 right-0 h-[10%] bg-black z-30 pointer-events-none border-t border-white/5" />
+      <div className={`absolute bottom-0 left-0 right-0 h-[10%] bg-black z-30 pointer-events-none border-t border-white/5 ${isLandscape ? '!hidden' : ''}`} />
 
       {/* MASTER INTERACTION SHIELD: Optimized to not block controls */}
-      <div 
-        className="absolute inset-0 z-40 cursor-pointer" 
-        onClick={(e) => { 
-          // Only trigger if we're not clicking an overlay button
-          if ((e.target as HTMLElement).classList.contains('cursor-pointer')) {
-            togglePlay(); 
-            setShowQualityMenu(false); 
+      <div
+        className="absolute inset-0 z-40 cursor-pointer"
+        onClick={(e) => {
+          e.stopPropagation();
+          const target = e.target as HTMLElement;
+          if (target.closest('button') || target.tagName === 'BUTTON') return;
+
+          setShowQualityMenu(false);
+          tapCount.current += 1;
+
+          if (tapCount.current === 1) {
+            tapTimer.current = setTimeout(() => {
+              if (tapCount.current === 1) {
+                togglePlay();
+              }
+              tapCount.current = 0;
+            }, 300);
+          } else if (tapCount.current >= 2) {
+            clearTimeout(tapTimer.current);
+            tapCount.current = 0;
+            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+            const x = e.clientX;
+            skip(x < rect.left + rect.width / 2 ? -10 : 10);
           }
-        }} 
+        }}
       />
 
       {/* INTERNAL CONTROLS ONLY - NO INTERNAL EXIT BUTTON TO AVOID OVERLAP */}
@@ -299,26 +363,64 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       {/* INDUSTRIAL CONTROLS */}
       <div className={`absolute bottom-0 left-0 right-0 pt-32 pb-8 px-12 bg-gradient-to-t from-black via-black/40 to-transparent z-[50] transition-all duration-200 ${showControls ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-12'}`}>
          
-         {/* SCRUBBER */}
-         <div className="relative w-full h-1 group/scrub mb-10 cursor-pointer bg-white/10 rounded-full hover:h-1.5 transition-all">
-            <div 
-              className="absolute h-full bg-white transition-all duration-200 shadow-[0_0_15px_white]" 
-              style={{ width: `${(currentTime / (duration || 1)) * 100}%` }} 
-            />
-            <input 
-              type="range" min="0" max={duration || 0} step="0.1" 
-              value={currentTime} 
-              onChange={(e) => {
-                const t = parseFloat(e.target.value);
-                if (videoId && playerRef.current) {
-                  playerRef.current.seekTo(t, true);
-                } else if (videoRef.current) {
-                  videoRef.current.currentTime = t;
-                }
-                setCurrentTime(t);
-              }}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-[60]"
-            />
+         {/* SCRUBBER — getBoundingClientRect() called live on every move for accuracy */}
+         <div
+           ref={seekbarRef}
+           className="relative w-full h-1 group/scrub mb-10 cursor-pointer bg-white/10 rounded-full hover:h-1.5 transition-all"
+           onMouseDown={(e) => {
+             e.stopPropagation();
+             isScrubbing.current = true;
+             const rect = seekbarRef.current!.getBoundingClientRect();
+             const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+             const t = ratio * (duration || 0);
+             setCurrentTime(t);
+             if (videoId && playerRef.current) playerRef.current.seekTo(t, true);
+             else if (videoRef.current) videoRef.current.currentTime = t;
+           }}
+           onMouseMove={(e) => {
+             if (!isScrubbing.current) return;
+             const rect = seekbarRef.current!.getBoundingClientRect();
+             const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+             const t = ratio * (duration || 0);
+             setCurrentTime(t);
+             if (videoId && playerRef.current) playerRef.current.seekTo(t, true);
+             else if (videoRef.current) videoRef.current.currentTime = t;
+           }}
+           onMouseUp={() => { isScrubbing.current = false; }}
+           onMouseLeave={() => { isScrubbing.current = false; }}
+           onTouchStart={(e) => {
+             e.stopPropagation();
+             isScrubbing.current = true;
+             const rect = seekbarRef.current!.getBoundingClientRect();
+             const touch = e.touches[0];
+             const ratio = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+             const t = ratio * (duration || 0);
+             setCurrentTime(t);
+             if (videoId && playerRef.current) playerRef.current.seekTo(t, true);
+             else if (videoRef.current) videoRef.current.currentTime = t;
+           }}
+           onTouchMove={(e) => {
+             if (!isScrubbing.current) return;
+             // Always recalculate rect live — critical for landscape rotation accuracy
+             const rect = seekbarRef.current!.getBoundingClientRect();
+             const touch = e.touches[0];
+             const ratio = Math.max(0, Math.min(1, (touch.clientX - rect.left) / rect.width));
+             const t = ratio * (duration || 0);
+             setCurrentTime(t);
+             if (videoId && playerRef.current) playerRef.current.seekTo(t, true);
+             else if (videoRef.current) videoRef.current.currentTime = t;
+           }}
+           onTouchEnd={() => { isScrubbing.current = false; }}
+         >
+           <div
+             className="absolute h-full bg-white transition-all duration-200 shadow-[0_0_15px_white]"
+             style={{ width: `${(currentTime / (duration || 1)) * 100}%` }}
+           />
+           {/* Invisible hit-area for thumb */}
+           <div
+             className="absolute top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-md pointer-events-none"
+             style={{ left: `calc(${(currentTime / (duration || 1)) * 100}% - 6px)` }}
+           />
          </div>
 
          <div className="flex items-center justify-between">
