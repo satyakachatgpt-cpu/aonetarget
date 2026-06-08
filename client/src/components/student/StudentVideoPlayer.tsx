@@ -93,6 +93,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const completedSentRef = useRef<Record<string, boolean>>({}); // Prevent duplicate calls for same video in same session
 
   const progressBarRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   const handleProgressBarScrub = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!progressBarRef.current || !duration) return;
@@ -116,11 +117,34 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
       const w = window.innerWidth;
       const h = window.innerHeight;
       const isLandscapeView = w > h;
+      const isMobileView = w < 1024;
       
       setViewport({ width: w, height: h });
       
       if (!isAdmin) {
         setOrientation(isLandscapeView ? 'landscape' : 'portrait');
+      }
+
+      // Physical landscape on mobile: auto enter fullscreen + lock orientation (immersive mode)
+      if (isMobileView && isLandscapeView && !isAdmin) {
+        const el = document.documentElement;
+        if (!document.fullscreenElement && el.requestFullscreen) {
+          el.requestFullscreen().then(() => {
+            if ((screen.orientation as any)?.lock) {
+              (screen.orientation as any).lock('landscape').catch(() => {});
+            }
+            setIsFullscreen(true);
+          }).catch(() => {});
+        }
+      } else if (isMobileView && !isLandscapeView) {
+        // Portrait on mobile: exit fullscreen
+        if (document.fullscreenElement && document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        }
+        if ((screen.orientation as any)?.unlock) {
+          (screen.orientation as any).unlock();
+        }
+        setIsFullscreen(false);
       }
     };
 
@@ -129,12 +153,26 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
       timeoutId = setTimeout(updateViewport, 150);
     };
 
+    // Sync fullscreen state with browser fullscreen change (e.g. user presses back)
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setIsFullscreen(false);
+        if ((screen.orientation as any)?.unlock) {
+          (screen.orientation as any).unlock();
+        }
+      } else {
+        setIsFullscreen(true);
+      }
+    };
+
     // Initial sync
     updateViewport();
     
     window.addEventListener('resize', handleResize);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
     return () => {
       window.removeEventListener('resize', handleResize);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
       clearTimeout(timeoutId);
     };
   }, [isAdmin]);
@@ -211,7 +249,51 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const isPhysicalLandscape = viewport.width > viewport.height;
   const isMobile = viewport.width < 1024;
   const isLandscape = orientation === 'landscape';
-  const needsRotation = !isAdmin && isLandscape && !isPhysicalLandscape;
+  const needsRotation = !isAdmin && isMobile && isLandscape && !isPhysicalLandscape;
+
+  // Professional fullscreen toggle (like YouTube)
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      // Enter fullscreen + lock landscape if mobile
+      const el = document.documentElement;
+      if (el.requestFullscreen) {
+        el.requestFullscreen().then(() => {
+          if (isMobile && (screen.orientation as any)?.lock) {
+            (screen.orientation as any).lock('landscape').catch(() => {});
+          }
+          setIsFullscreen(true);
+          if (isMobile) setOrientation('landscape');
+        }).catch(() => {
+          // Fallback if requestFullscreen is blocked (e.g. Incognito mode)
+          setIsFullscreen(true);
+          if (isMobile) setOrientation('landscape');
+        });
+      } else {
+        // Fallback if requestFullscreen is not supported
+        setIsFullscreen(true);
+        if (isMobile) setOrientation('landscape');
+      }
+    } else {
+      // Exit fullscreen + unlock orientation
+      if (document.exitFullscreen) {
+        document.exitFullscreen().then(() => {
+          if (isMobile && (screen.orientation as any)?.unlock) {
+            (screen.orientation as any).unlock();
+          }
+          setIsFullscreen(false);
+          if (isMobile) setOrientation('portrait');
+        }).catch(() => {
+          // Fallback if exitFullscreen is blocked
+          setIsFullscreen(false);
+          if (isMobile) setOrientation('portrait');
+        });
+      } else {
+        // Fallback if not supported
+        setIsFullscreen(false);
+        if (isMobile) setOrientation('portrait');
+      }
+    }
+  };
 
   // BRANCHING LOGIC: Determine engine
   const getYouTubeIdRobust = (url: string): string | null => {
@@ -585,25 +667,17 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
       onContextMenu={(e) => e.preventDefault()}
     >
       <div 
-        className={`absolute bg-black transition-all duration-700 ease-in-out shadow-2xl ${
-          isAdmin 
-            ? 'inset-0 w-full h-full border-0'
-            : needsRotation 
-              ? 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90 scale-100 z-50' 
-              : `border-0 overflow-hidden ${
-                  isPhysicalLandscape 
-                    ? 'inset-0 w-full h-full rounded-none' 
-                    : isMobile
-                      ? 'inset-0 w-full h-full rounded-none'
-                      : 'top-0 bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[450px] rounded-none sm:rounded-3xl'
-                }`
+        className={`absolute bg-black transition-all duration-500 ease-in-out shadow-2xl ${
+          needsRotation 
+            ? 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90 scale-100 z-50' 
+            : 'inset-0 w-full h-full border-0 overflow-hidden'
         }`}
-        style={{
+        style={{ 
           transformOrigin: 'center center',
-          width: isAdmin ? '100%' : (needsRotation ? `${viewport.height}px` : '100%'),
-          height: isAdmin ? '100%' : (needsRotation ? `${viewport.width}px` : '100%'),
-          maxHeight: isAdmin ? '100%' : (needsRotation ? `${viewport.width}px` : '100%'),
-          maxWidth: isAdmin ? '100%' : (needsRotation ? `${viewport.height}px` : (isPhysicalLandscape ? '100%' : (isMobile ? '100%' : (isLandscape ? '100%' : '450px')))),
+          width: needsRotation ? `${viewport.height}px` : '100%',
+          height: needsRotation ? `${viewport.width}px` : '100%',
+          maxWidth: needsRotation ? `${viewport.height}px` : '100%',
+          maxHeight: needsRotation ? `${viewport.width}px` : '100%'
         }}
       >
         <div className="absolute inset-0 z-10 bg-black w-full h-full">
@@ -673,8 +747,9 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
           </span>
         </div>
 
-        {/* Top Control Bar - Strengthened Contrast */}
-        <div className={`absolute top-[env(safe-area-inset-top)] left-0 right-0 h-32 bg-gradient-to-b from-black/95 via-black/40 to-transparent z-40 p-6 flex items-start justify-between transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+        {/* Top Control Bar */}
+        <div className={`absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/95 via-black/40 to-transparent z-40 p-6 flex items-start justify-between transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+          style={{ paddingTop: `max(1.5rem, env(safe-area-inset-top))` }}>
             <button 
               onClick={onClose} 
               className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 flex items-center justify-center text-white active:scale-90 transition-all pointer-events-auto shadow-xl"
@@ -701,19 +776,11 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                      <span className="material-symbols-rounded text-sm text-red-500 animate-pulse">visibility</span>
                      <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Admin Preview</span>
                   </div>
-                ) : (
-                  <button 
-                    onClick={() => setOrientation(isLandscape ? 'portrait' : 'landscape')}
-                    className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all pointer-events-auto"
-                  >
-                    <span className="material-symbols-rounded text-xl">{isLandscape ? 'stay_primary_portrait' : 'stay_primary_landscape'}</span>
-                  </button>
-                )}
+                ) : null}
                 
                 {(pdf1 || pdf2 || studyMaterial) && (
                   <button 
                     onClick={() => {
-                      // Toggle a resources view or just show first one
                       const url = pdf1 || pdf2 || studyMaterial;
                       if (url) window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent('Lesson Material')}`, '_blank');
                     }}
@@ -793,7 +860,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                      >
                         <span className="material-symbols-rounded text-2xl">{isMuted ? 'volume_off' : 'volume_up'}</span>
                      </button>
-                     <div className="text-white/90 text-xs font-medium font-mono whitespace-nowrap hidden sm:block opacity-60">
+                     <div className="text-white/90 text-xs font-medium font-mono whitespace-nowrap opacity-60">
                         {formatTime(currentTime)} <span className="opacity-40 mx-0.5">/</span> {formatTime(duration)}
                      </div>
                   </div>
@@ -886,18 +953,11 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                   </div>
 
                   <button 
-                    onClick={() => {
-                        const el = document.querySelector('.fixed.inset-0');
-                        if (!document.fullscreenElement) {
-                           el?.requestFullscreen();
-                        } else {
-                           document.exitFullscreen();
-                        }
-                    }}
+                    onClick={toggleFullscreen}
                     title="Toggle Fullscreen"
                     className="w-9 h-9 rounded-full flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all flex"
                   >
-                     <span className="material-symbols-rounded text-[24px]">fullscreen</span>
+                     <span className="material-symbols-rounded text-[24px]">{isFullscreen ? 'fullscreen_exit' : 'fullscreen'}</span>
                   </button>
                </div>
             </div>
