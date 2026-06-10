@@ -614,7 +614,7 @@ export const reevaluateTest = async (req, res) => {
     };
     if (!isNaN(testId)) questionFilter.$or.push({ testId: Number(testId) });
 
-    const questions = await db.collection('questions').find(questionFilter).toArray();
+    const questions = await db.collection('questions').find(questionFilter).sort({ orderIndex: 1, id: 1 }).toArray();
     if (questions.length === 0) {
       return res.status(400).json({ success: false, message: 'No questions found for this test. Cannot re-evaluate.' });
     }
@@ -713,7 +713,7 @@ export const submitTest = async (req, res) => {
     const db = getDb();
     const { studentId, answers, timeTaken } = req.body;
     const isAdmin = req.user?.isAdmin || req.user?.role === 'admin';
-    const tokenStudentId = req.user?.studentId;
+    const tokenStudentId = req.user?.studentId || req.user?.id || req.user?.userId;
 
     if (!isAdmin && String(studentId) !== String(tokenStudentId)) {
       return res.status(403).json({ error: 'Forbidden' });
@@ -743,7 +743,7 @@ export const submitTest = async (req, res) => {
 
     const questionFilter = { $or: [{ testId: tid }, { testId: test.id || test._id.toString() }] };
     if (!isNaN(tid)) questionFilter.$or.push({ testId: Number(tid) });
-    const separateQuestions = await db.collection('questions').find(questionFilter).toArray();
+    const separateQuestions = await db.collection('questions').find(questionFilter).sort({ orderIndex: 1, id: 1 }).toArray();
     const questions = separateQuestions.length > 0 ? separateQuestions : (test.questions || []);
 
     const evaluation = evaluateTest({ questions, answers, test });
