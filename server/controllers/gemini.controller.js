@@ -1,4 +1,5 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
+import fs from 'fs';
 
 export const parsePDFWithGemini = async (req, res) => {
   try {
@@ -7,8 +8,29 @@ export const parsePDFWithGemini = async (req, res) => {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    // Reverted back to gemini-flash-latest because of free tier rate limits
     const modelName = "gemini-flash-latest";
-    const model = genAI.getGenerativeModel({ model: modelName });
+    
+    const safetySettings = [
+      {
+        category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+        threshold: HarmBlockThreshold.BLOCK_NONE,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+        threshold: HarmBlockThreshold.BLOCK_NONE,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+        threshold: HarmBlockThreshold.BLOCK_NONE,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+        threshold: HarmBlockThreshold.BLOCK_NONE,
+      },
+    ];
+
+    const model = genAI.getGenerativeModel({ model: modelName, safetySettings });
 
     console.log(`[Gemini] Starting AI analysis for: ${req.file.originalname}`);
 
@@ -93,9 +115,30 @@ Combine multi-page questions logically. Ignore headers, footers, watermarks, and
       }
     };
 
-    const result = await model.generateContent([systemPrompt, pdfPart]);
+    let result;
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        result = await model.generateContent([systemPrompt, pdfPart]);
+        break; // Success, break out of retry loop
+      } catch (err) {
+        if (err.status === 503 && retries > 1) {
+          console.warn(`[Gemini] 503 Service Unavailable (High Demand). Retrying in 3 seconds... (${retries - 1} attempts left)`);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          retries--;
+        } else {
+          throw err; // Not a 503 error or out of retries, throw it
+        }
+      }
+    }
+    
     const response = await result.response;
     const text = response.text();
+
+    // DEBUG: Save the raw text from Gemini to see what it actually returned
+    try {
+      fs.writeFileSync('gemini_debug.txt', text);
+    } catch(e) {}
 
     let questions = [];
     try {

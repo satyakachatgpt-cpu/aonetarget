@@ -1,0 +1,1502 @@
+[
+  {
+    "questionNumber": 1,
+    "questionEn": "Pick out the correct statements :\n(a) Haemophilia is a sex-linked recessive disease\n(b) Down's syndrome is due to aneuploidy\n(c) Phenylketonuria is an autosomal recessive gene disorder\n(d) Sickle cell anaemia is a X-linked recessive gene disorder",
+    "questionHi": "",
+    "options": [
+      "(a) and (d) are correct",
+      "(b) and (d) are correct",
+      "(a), (c) and (d) are correct",
+      "(a), (b) and (c) are correct"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 2,
+    "questionEn": "A true breeding plant is :",
+    "questionHi": "",
+    "options": [
+      "near homozygous and produces offspring of its own kind",
+      "always homozygous recessive in its genetic constitution",
+      "one that is able to breed on its own",
+      "produced due to cross-pollination among unrelated plants"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 3,
+    "questionEn": "If a colour-blind man marries a woman who is homozygous for normal colour vision, the probability of their son being colour-blind is:-",
+    "questionHi": "",
+    "options": [
+      "0.75",
+      "1",
+      "0",
+      "0.5"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 4,
+    "questionEn": "Which of the following characteristics represent 'Inheritance of blood groups' in humans ?\na. Dominance\nb. Co-dominance\nc. Multiple allele\nd. Incomplete dominance\ne. Polygenic inheritance",
+    "questionHi": "",
+    "options": [
+      "b, c and e",
+      "a, b and c",
+      "b, d and e",
+      "a, c and e"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 5,
+    "questionEn": "XO type of sex determination can be found in:",
+    "questionHi": "",
+    "options": [
+      "Birds",
+      "Grasshoppers",
+      "Monkeys",
+      "Drosophila"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 6,
+    "questionEn": "The final proof for DNA as the genetic material came from the experiments of :",
+    "questionHi": "",
+    "options": [
+      "Hershey and Chase",
+      "Avery, Mcleod and McCarty",
+      "Hargobind Khorana",
+      "Griffith"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 7,
+    "questionEn": "The experimental proof for semiconservative replication of DNA was first shown in a",
+    "questionHi": "",
+    "options": [
+      "Fungus",
+      "Bacterium",
+      "Plant",
+      "Virus"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 8,
+    "questionEn": "Under which of the following conditions will there be no change in the reading frame of following mRNA ? $5'-\\text{AACAGCGGUGCUAUU}-3'$",
+    "questionHi": "",
+    "options": [
+      "Insertion of G at 5th position",
+      "Deletion of G from 5th position",
+      "Insertion of A and G and 4th and 5th positions respectively",
+      "Deletion of GGU from 7th, 8th and 9th Positions"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 9,
+    "questionEn": "What will be the sequence of mRNA produced by the following stretch of DNA ?\n$3'-\\text{ATGCATGCATGCATG}-5'$ TEMPLATE STRAND\n$5'-\\text{TACGTACGTACGTAC}-3'$ CODING STRAND",
+    "questionHi": "",
+    "options": [
+      "$3'-\\text{AUGCAUGCAUGCAUG}-5'$",
+      "$5'-\\text{UACGUACGUACGUAC}-3'$",
+      "$3'-\\text{UACGUACGUACGUAC}-5'$",
+      "$5'-\\text{AUGCAUGCAUGCAUG}-3'$"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 10,
+    "questionEn": "From the following, identify the correct combination of salient features of Genetic Code :-",
+    "questionHi": "",
+    "options": [
+      "Universal, Non-ambiguous, Overlapping",
+      "Degenerate, Overlapping, Commaless",
+      "Universal, Ambiguous, Degenerate",
+      "Degenerate, Non-overlapping, Nonambiguous"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 11,
+    "questionEn": "Among the following sets of examples for divergent evolution, select the incorrect option:",
+    "questionHi": "",
+    "options": [
+      "Forelimbs of man, bat and cheetah",
+      "Heart of bat, man and cheetah",
+      "Brain of bat, man and cheetah",
+      "Eye of octopus, bat and man"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 12,
+    "questionEn": "Variations caused by mutation, as proposed by Hugo de Vries, are",
+    "questionHi": "",
+    "options": [
+      "random and directional",
+      "random and directionless",
+      "small and directional",
+      "small and directionless"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 13,
+    "questionEn": "Match the hominids with their correct brain size:<table style=\"border-collapse:collapse;width:100%;margin-top:8px;\"><thead><tr style=\"background:#f3f4f6;\"><th style=\"border:1px solid #d1d5db;padding:8px 12px;text-align:left;font-weight:600;\">Hominid</th><th style=\"border:1px solid #d1d5db;padding:8px 12px;text-align:left;font-weight:600;\">Brain Size</th></tr></thead><tbody><tr><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">(a) Homo habilis</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">(i) 900 cc</td></tr><tr><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">(b) Homo neanderthalensis</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">(ii) 1350 cc</td></tr><tr><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">(c) Homo erectus</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">(iii) 650-800 cc</td></tr><tr><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">(d) Homo sapiens</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">(iv) 1400 cc</td></tr></tbody></table>Select the correct option.",
+    "questionHi": "",
+    "options": [
+      "(a)-(iii), (b)-(i), (c)-(iv), (d)-(ii)",
+      "(a)-(iii), (b)-(ii), (c)-(i), (d)-(iv)",
+      "(a)-(iii), (b)-(iv), (c)-(i), (d)-(ii)",
+      "(a)-(iv), (b)-(iii), (c)-(i), (d)-(ii)"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 14,
+    "questionEn": "Which of the following refer to correct example(s) of organisms which have evolved due to changes in environment brought about by anthropogenic action?\n(a) Darwin's Finches of Galapagos islands.\n(b) Herbicide resistant weeds.\n(c) Drug resistant eukaryotes.\n(d) Man-created breeds of domesticated animals like dogs.",
+    "questionHi": "",
+    "options": [
+      "Only (d)",
+      "Only (a)",
+      "(a) and (c)",
+      "(b), (c) and (d)"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 15,
+    "questionEn": "Mammals were evolved from",
+    "questionHi": "",
+    "options": [
+      "Sauropsids",
+      "Synapsids",
+      "Thecodonts",
+      "Tyranosaurus"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 16,
+    "questionEn": "Select the correct group/set of Australian Marsupials exhibiting adaptive radiation.",
+    "questionHi": "",
+    "options": [
+      "Numbat, Spotted cuscus, Flying phalanger",
+      "Mole, Flying squirrel, Tasmanian tiger cat",
+      "Lemur, Anteater, Wolf",
+      "Tasmanian wolf, Bobcat, Marsupial mole"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 17,
+    "questionEn": "Read the following statements and find out the incorrect statements.\na. The placenta is located inside the locule of ovary. Arising from the placenta are the ovules.\nb. The number of ovules in an ovary may be one (papaya, watermelon and orchids) to many (wheat, paddy and mango).\nc. Each ovule has one of two protective envelops called integuments.\nd. Enclosed within the integuments is a huge mass of cells called the perisperm.",
+    "questionHi": "",
+    "options": [
+      "b and d",
+      "c and d",
+      "b and c",
+      "a and d"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 18,
+    "questionEn": "Fill in the blanks :\n1. The male and female gametes in angiosperms are produced in the ...a... and ...b..., respectively.\n2. In angiosperms, both male and female gametes are ...c..., they have to be brought together for ...d... to occur. The ...e... is the mechanism to achieve this objective.",
+    "questionHi": "",
+    "options": [
+      "a-pollen grain, b-embryo sac, c-motile, d-pollination, e-fertilisation",
+      "a-generative cell, b-nucellus, c-non motile, d-pollination, e-fertilisation",
+      "a-pollen grain, b-embryo sac, c-motile, d-fertilisation, e-pollination",
+      "a-pollen grain, b-embryo sac, c-non-motile, d-fertilisation, e-pollination"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 19,
+    "questionEn": "Read the following statements and find out the correct statements ?\na. Majority of flowering plants use a range of animals as pollinating agents.\nb. Bees, butterflies, flies, beetles, wasps, ants, moth, birds (sunbirds and humming birds) and bats are the common pollinating agents.\nc. Among the animals, insects particularly bees are the dominant biotic pollinating agents.\nd. Even larger animals such as some primates (lemurs), arboreal (tree dwelling) rodents, or even reptiles (gecko lizard and garden lizard) have also been reported as pollinators in some species.\ne. Often flowers of animal pollinated plants are specifically adapted for a particular species of animal.",
+    "questionHi": "",
+    "options": [
+      "a and b",
+      "b and c",
+      "d and e",
+      "All of the above"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 20,
+    "questionEn": "Which of the following are outbreeding devices?\na. Non-synchronisation pollen release and stigma receptivity.\nb. Different position of the anther and stigma so that pollen cannot come in contact with the stigma of the same flower.\nc. Production of the unisexual flowers",
+    "questionHi": "",
+    "options": [
+      "only a and b",
+      "only b and c",
+      "only c",
+      "a, b and c"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 21,
+    "questionEn": "Read the following statements and find out the incorrect statements.\na. Embryo development precedes endosperm development.\nb. Though the seeds differs greatly, the early stages of embryo development (embrogeny) are similar in both monocotyledons and dicotyledons.\nc. A typical dicotyledonous embryo consists of an embryonal axis and two cotyledons.\nd. Endosperm may either be completely consumed by the developing embryo (e.g. castor and coconut) before seed maturation or it may persist in the mature seed (e.g. wheat, rice, maize, pea, groundnut and beans).\ne. The coconut water from tender coconut is cellular endosperm and the surrounding white kernel is the nuclear endosperm.",
+    "questionHi": "",
+    "options": [
+      "a, b and c",
+      "b, c and d",
+      "c, d and e",
+      "a, d and e"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 22,
+    "questionEn": "Identify the parts labelled (A to G) in the diagram of male reproductive system from the list I to X given along with:\nI. Fundus\nII. Uriniferous tubules\nIII. Seminiferous tubules\nIV. Seminal vesicle\nV. Prostate\nVI. Ejaculatory duct\nVII. Rectum\nVIII. Anus\nIX. Bulbourethral gland\nX. Scrotum",
+    "questionHi": "",
+    "options": [
+      "A-IV, B-V, C-I, D-III, E-IX, F-X, G-II",
+      "A-V, B-III, C-I, D-II, E-IV, F-VI, G-VIII",
+      "A-IV, B-V, C-X, D-IX, E-VIII, F-VII, G-VI",
+      "A-X, B-IX, C-VIII, D-IV, E-III, F-II, G-I"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 23,
+    "questionEn": "What is true for natural methods of contraception?",
+    "questionHi": "",
+    "options": [
+      "They increases phagocytosis of sperms",
+      "They employ barriers to prevent fertilisation",
+      "They are natural ways of avoiding chances of fertilisation",
+      "They are surgical methods and are terminal Methods"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 24,
+    "questionEn": "The correct match is -<table style=\"border-collapse:collapse;width:100%;margin-top:8px;\"><thead><tr style=\"background:#f3f4f6;\"><th style=\"border:1px solid #d1d5db;padding:8px;text-align:left;font-weight:600;\">Column - I</th><th style=\"border:1px solid #d1d5db;padding:8px;text-align:left;font-weight:600;\">Column - II</th></tr></thead><tbody><tr><td style=\"border:1px solid #d1d5db;padding:8px;\">(A) Lippes loop</td><td style=\"border:1px solid #d1d5db;padding:8px;\">(I) Non-medicated IUDs</td></tr><tr><td style=\"border:1px solid #d1d5db;padding:8px;\">(B) Multiload 375</td><td style=\"border:1px solid #d1d5db;padding:8px;\">(II) Hormone releasing IUDs</td></tr><tr><td style=\"border:1px solid #d1d5db;padding:8px;\">(C) CuT</td><td style=\"border:1px solid #d1d5db;padding:8px;\">(III) Copper releasing IUDs</td></tr><tr><td style=\"border:1px solid #d1d5db;padding:8px;\">(D) Cu7</td><td style=\"border:1px solid #d1d5db;padding:8px;\"></td></tr><tr><td style=\"border:1px solid #d1d5db;padding:8px;\">(E) LNG - 20</td><td style=\"border:1px solid #d1d5db;padding:8px;\"></td></tr><tr><td style=\"border:1px solid #d1d5db;padding:8px;\">(F) Progestasert</td><td style=\"border:1px solid #d1d5db;padding:8px;\"></td></tr></tbody></table>",
+    "questionHi": "",
+    "options": [
+      "I - A; II - B, F; III - C, D, E",
+      "I - A; II - E, F; III - B, C, D",
+      "I - B; II - E, F; III - A, C, D",
+      "I - B; II - A, F; III - C, D, E"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 25,
+    "questionEn": "Following statements are given regarding MTP.\n(i) MTPs are generally advised during first trimester\n(ii) MTPs are used as a contraceptive method\n(iii) MTPs are always surgical",
+    "questionHi": "",
+    "options": [
+      "i and iii",
+      "ii and iii",
+      "only i",
+      "i and ii"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 26,
+    "questionEn": "The best definition of the process of gastrulation is that it is a process where the",
+    "questionHi": "",
+    "options": [
+      "single layered blastula become two layered",
+      "archenteron is formed after gastrulation",
+      "zygote gets converted into larva",
+      "cells move to occupy their definite position"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 27,
+    "questionEn": "Two offsprings developed in the same uterus from fertilisation of two different ova are",
+    "questionHi": "",
+    "options": [
+      "monozygotic twins",
+      "dizygotic twins",
+      "Identical twins",
+      "Both (1) and (3)"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 28,
+    "questionEn": "How many testicular lobules are present in each testis ?",
+    "questionHi": "",
+    "options": [
+      "About 250",
+      "Infinite",
+      "About 100",
+      "About 150"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 29,
+    "questionEn": "Select the odd one out from the following structures with reference to the male",
+    "questionHi": "",
+    "options": [
+      "Vasa efferentia",
+      "Isthmus",
+      "Rete testis",
+      "Epididymis"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 30,
+    "questionEn": "In spermiation the sperms release from",
+    "questionHi": "",
+    "options": [
+      "epididymis",
+      "prostate gland",
+      "seminiferous tubules",
+      "vas deferens"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 31,
+    "questionEn": "Consider the following reactant samples:\n(I) 1 mol of A and 2 mol of B in a 1 L vessel.\n(II) 2 mol of A and 2 mol of B in a 2 L vessel.\n(III) 0.2 mol of A and 0.2 mol of B in a 0.1 L vessel.\nWhich reactant sample reacts by the highest rate if the reactant is in a gaseous state and does not follow zero and negative order?",
+    "questionHi": "",
+    "options": [
+      "I",
+      "II",
+      "III",
+      "All have equal rate"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 32,
+    "questionEn": "Assertion (A): In a reversible endothermic reaction, the activation energy of the forward reaction is higher than that of the backward reaction. Reason (R): In an endothermic reaction, the threshold energy of the forward reaction is more than that of the backward reaction.",
+    "questionHi": "",
+    "options": [
+      "Both (A) and (R) are correct but (R) is not the correct explanation of (A)",
+      "(A) is correct but (R) is not correct",
+      "(A) is incorrect but (R) is correct",
+      "Both (A) and (R) are correct and (R) is the correct explanation of (A)"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 33,
+    "questionEn": "The van't Hoff factor ($i$) for a dilute aqueous solution of the strong electrolyte barium hydroxide is",
+    "questionHi": "",
+    "options": [
+      "2",
+      "3",
+      "0",
+      "1"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 34,
+    "questionEn": "Which one of the following is incorrect for ideal solution ?",
+    "questionHi": "",
+    "options": [
+      "$\\Delta P = P_{\\text{obs}} - P_{\\text{calculated by Raoult's law}} = 0$",
+      "$\\Delta G_{\\text{mix}} = 0$",
+      "$\\Delta H_{\\text{mix}} = 0$",
+      "$\\Delta U_{\\text{mix}} = 0$"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 35,
+    "questionEn": "The freezing point depression constant ($K_f$) of benzene is $5.12\\text{ K kg mol}^{-1}$. The freezing point depression for the solution of molality $0.078\\text{ m}$ containing a non-electrolyte solute in benzene is (rounded off upto two decimal places) :",
+    "questionHi": "",
+    "options": [
+      "0.60 K",
+      "0.20 K",
+      "0.80 K",
+      "0.40 K"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 36,
+    "questionEn": "In one molal solution that contains $0.5\\text{ mole}$ of a solute, there is",
+    "questionHi": "",
+    "options": [
+      "500 g of solvent",
+      "100 mL of solvent",
+      "1000 g of solvent",
+      "500 mL of solvent"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 37,
+    "questionEn": "One mole of sugar is dissolved in three moles of water at $298\\text{ K}$. The relative lowering of vapour pressure is",
+    "questionHi": "",
+    "options": [
+      "0.20",
+      "0.50",
+      "0.33",
+      "0.25"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 38,
+    "questionEn": "For an ideal solution, the correct option is :-",
+    "questionHi": "",
+    "options": [
+      "$\\Delta_{\\text{mix}} S = 0$ at constant T and P",
+      "$\\Delta_{\\text{mix}} V \\neq 0$ at constant T and P",
+      "$\\Delta_{\\text{mix}} H = 0$ at constant T and P",
+      "$\\Delta_{\\text{mix}} G = 0$ at constant T and P"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 39,
+    "questionEn": "The number of Faradays (F) required to produce $20\\text{ g}$ of calcium from molten $\\text{CaCl}_2$ (Atomic mass of $\\text{Ca} = 40\\text{ g mol}^{-1}$) is :",
+    "questionHi": "",
+    "options": [
+      "4",
+      "1",
+      "2",
+      "3"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 40,
+    "questionEn": "On electrolysis of dil. sulphuric acid using Platinum (Pt) electrode, the product obtained at anode will be:",
+    "questionHi": "",
+    "options": [
+      "$\\text{SO}_2$ gas",
+      "Hydrogen gas",
+      "Oxygen gas",
+      "$\\text{H}_2\\text{S}$ gas"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 41,
+    "questionEn": "Two half cell reactions are given below :\n$\\text{Co}^{3+} + e^- \\rightarrow \\text{Co}^{2+}$, $E^\\circ_{\\text{Co}^{2+}/\\text{Co}^{3+}} = -1.81\\text{V}$\n$2\\text{Al}^{3+} + 6e^- \\rightarrow 2\\text{Al(s)}$, $E^\\circ_{\\text{Al}/\\text{Al}^{3+}} = +1.66\\text{ V}$\nThe standard EMF of a cell with feasible redox reaction will be :",
+    "questionHi": "",
+    "options": [
+      "+7.09 V",
+      "+0.15 V",
+      "+3.47 V",
+      "-3.47 V"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 42,
+    "questionEn": "Standard electrode potential for the cell with cell reaction $\\text{Zn(s)} + \\text{Cu}^{2+}\\text{(aq)} \\rightarrow \\text{Zn}^{2+}\\text{(aq)} + \\text{Cu(s)}$ is $1.1\\text{ V}$. Calculate the standard gibbs energy change for the cell reaction. (Given $F = 96487\\text{ C mol}^{-1}$)",
+    "questionHi": "",
+    "options": [
+      "$-200.27\\text{ kJ mol}^{-1}$",
+      "$-212.27\\text{ kJ mol}^{-1}$",
+      "$-212.27\\text{ J mol}^{-1}$",
+      "$-200.27\\text{ J mol}^{-1}$"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 43,
+    "questionEn": "When $0.1\\text{ mol }\\text{MnO}_4^{2-}$ is oxidised the quantity of electricity required to completely oxidise $\\text{MnO}_4^{2-}$ to $\\text{MnO}_4^-$ is :-",
+    "questionHi": "",
+    "options": [
+      "96500 C",
+      "$2 \\times 96500$ C",
+      "9650 C",
+      "96.50 C"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 44,
+    "questionEn": "The weight of silver (at wt. = 108) displaced by a quantity of electricity which displaces $5600\\text{ mL}$ of $\\text{O}_2$ at STP will be :-",
+    "questionHi": "",
+    "options": [
+      "5.4 g",
+      "10.8 g",
+      "54.0 g",
+      "108.0 g"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 45,
+    "questionEn": "Promoters and Poison are the substance use in chemical reaction which",
+    "questionHi": "",
+    "options": [
+      "Enhance and decrease the activity of catalyst respectively",
+      "Decrease and enhance the activity of catalyst respectively",
+      "Do not have any effect on catalyst",
+      "Can be used in place of catalyst whenever required"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 46,
+    "questionEn": "Peptization process may be defined as",
+    "questionHi": "",
+    "options": [
+      "Formation of precipitate by adding two ionic solutions",
+      "Conversion of colloidal sol into precipitate",
+      "Conversion of precipitate into colloidal sol",
+      "Enrichment precipitate from solution"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 47,
+    "questionEn": "Which of the following is/are correct statements\n(A) Hardy Schulz rule is related to coagulation\n(B) Brownian movement and Tyndall effect are shown by colloids\n(C) When liquid is dispersed in liquid, it is called gel.\n(D) Gold number is a measure of protective power of lyophillic colloid.",
+    "questionHi": "",
+    "options": [
+      "A, B, D",
+      "B, C, D",
+      "A, C, D",
+      "A, B, C"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 48,
+    "questionEn": "On adding $\\text{AgNO}_3$ solution into KI solution, colloidal sol can be obtained from.\n(A) 100 mL of 0.1 M $\\text{AgNO}_3$ + 100 mL of 0.1 M KI\n(B) 100 mL of 0.1 M $\\text{AgNO}_3$ + 100 mL of 0.2 M KI\n(C) 100 mL of 0.2 M $\\text{AgNO}_3$ + 100 mL of 0.1 M KI\n(D) 100 mL of 0.15 M $\\text{AgNO}_3$ + 100 mL of 0.25 M KI",
+    "questionHi": "",
+    "options": [
+      "A, B, C",
+      "B, C, D",
+      "A, B, D",
+      "A, C, D"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 49,
+    "questionEn": "The Tyndall effect is observed only when following conditions are satisfied\n(a) The diameter of the dispersed particles is much smaller than the wavelength of the light used.\n(b) The diameter of the dispersed particle is not much smaller than the wavelength of the light used.\n(c) The refractive indices of the dispersed phase and dispersion medium are almost similar in magnitude.\n(d) The refractive index of the dispersed phase and dispersion medium differ greatly in magnitude.",
+    "questionHi": "",
+    "options": [
+      "(a) and (d)",
+      "(b) and (d)",
+      "(a) and (c)",
+      "(b) and (c)"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 50,
+    "questionEn": "The correct statement(s) pertaining to the adsorption of a gas on a solid surface is (are)-\n(A) Adsorption is always exothermic\n(B) Physisorption may transform into chemisorption at high temperature\n(C) Physisorption increases with increasing temperature but chemisorption decreases with increasing temperature\n(D) Chemisorption is more exothermic than physisorption, however it is very slow due to higher energy of activation",
+    "questionHi": "",
+    "options": [
+      "A, B, C",
+      "B, C, D",
+      "A, C, D",
+      "A, B, D"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 51,
+    "questionEn": "Choose the correct reason(s) for the stability of the lyophobic colloidal particle.\n(A) Preferential adsorption of ions on their surface from the solution\n(B) Preferential adsorption of solvent on their surface from the solution\n(C) Attraction between different particles having opposite charges on their surface\n(D) Potential difference between the fixed layer and the diffused layer of opposite charges around the colloidal particles",
+    "questionHi": "",
+    "options": [
+      "A, B",
+      "B, C",
+      "C, D",
+      "A, D"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 52,
+    "questionEn": "An element has a body-centered cubic (bcc) structure with a cell edge of $288\\text{ pm}$. The atomic radius is:",
+    "questionHi": "",
+    "options": [
+      "$\\frac{\\sqrt{2}}{4} \\times 288\\text{ pm}$",
+      "$\\frac{4}{\\sqrt{3}} \\times 288\\text{ pm}$",
+      "$\\frac{\\sqrt{3}}{4} \\times 288\\text{ pm}$",
+      "$\\frac{288}{2}\\text{ pm}$"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 53,
+    "questionEn": "Which of the following defects is also known as a \"dislocation defect\" and does not change the density of the crystal?",
+    "questionHi": "",
+    "options": [
+      "Schottky defect",
+      "Frenkel defect",
+      "Metal excess defect",
+      "Impurity defect"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 54,
+    "questionEn": "If 'a' is the edge length of the unit cell, the correct order of packing efficiency for the different types of unit cells is:",
+    "questionHi": "",
+    "options": [
+      "fcc > bcc > simple cubic",
+      "bcc > fcc > simple cubic",
+      "simple cubic > bcc > fcc",
+      "fcc > simple cubic > bcc"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 55,
+    "questionEn": "A compound is formed by two elements M and N. The element N forms ccp and atoms of M occupy 1/3rd of the tetrahedral voids. What is the formula of the compound?",
+    "questionHi": "",
+    "options": [
+      "$\\text{MN}_2$",
+      "$\\text{M}_2\\text{N}_3$",
+      "$\\text{M}_3\\text{N}_2$",
+      "$\\text{M}_2\\text{N}$"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 56,
+    "questionEn": "Which stoichiometric defect is shown by AgBr?",
+    "questionHi": "",
+    "options": [
+      "Schottky defect only",
+      "Frenkel defect only",
+      "Both Schottky and Frenkel defects",
+      "Non-stoichiometric defect"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 57,
+    "questionEn": "For a reaction A+B$\\rightarrow$Products, the rate law is Rate=$k$[A][B]$^2$. If the concentration of A is doubled and B is halved, the new rate of the reaction will be:",
+    "questionHi": "",
+    "options": [
+      "Increased by a factor of 4",
+      "Decreased by a factor of 4",
+      "Decreased by a factor of 2",
+      "Remains unchanged"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 58,
+    "questionEn": "The rate constant ($k$) of a reaction is measured at different temperatures ($T$). A plot of $\\ln k$ versus $1/T$ yields a straight line with a slope of $-6.6\\times10^3\\text{ K}$. What is the activation energy ($E_a$) for the reaction? ($R=8.314\\text{ J mol}^{-1}\\text{ K}^{-1}$)",
+    "questionHi": "",
+    "options": [
+      "54.8 kJ/mol",
+      "110.2 kJ/mol",
+      "0.79 kJ/mol",
+      "25.4 kJ/mol"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 59,
+    "questionEn": "A first-order reaction is $75\\%$ complete in $60$ minutes. Find the time required for $87.5\\%$ completion of the same reaction.",
+    "questionHi": "",
+    "options": [
+      "80 minutes",
+      "90 minutes",
+      "120 minutes",
+      "150 minutes"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 60,
+    "questionEn": "Consider the following multi-step reaction mechanism:\n1. A+B $\\rightleftharpoons$ C (Fast equilibrium)\n2. C+B $\\rightarrow$ D (Slow)\nThe overall order of the reaction with respect to B is:",
+    "questionHi": "",
+    "options": [
+      "1",
+      "2",
+      "0",
+      "3"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 61,
+    "questionEn": "The number of free electrons per $10\\text{ mm}$ of an ordinary copper wire is about $2 \\times 10^{21}$. The average drift speed of the electrons is $0.25\\text{ mm/s}$ The current flowing is :-",
+    "questionHi": "",
+    "options": [
+      "0.8 A",
+      "8 A",
+      "80 A",
+      "5 A"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 62,
+    "questionEn": "In the circuit shown here, what is the value of the unknown resistance R so that the total resistance of the circuit between points 'P' and 'Q' is also equal to R :–",
+    "questionHi": "",
+    "options": [
+      "3 $\\Omega$",
+      "$\\sqrt{39}\\ \\Omega$",
+      "$\\sqrt{69}\\ \\Omega$",
+      "10 $\\Omega$"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 63,
+    "questionEn": "Thirteen resistances each of resistance R $\\Omega$ are connected in the circuit as shown in the figure. The effective resistance between A and B is :-",
+    "questionHi": "",
+    "options": [
+      "4R/3 $\\Omega$",
+      "2R $\\Omega$",
+      "R $\\Omega$",
+      "2R/3 $\\Omega$"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 64,
+    "questionEn": "The reading of ammeter is $I_1$ when only $S_1$ is closed and $I_2$ when only $S_2$ is closed. The reading is $I_3$ when both $S_1$ & $S_2$ are closed simultaneously then :-",
+    "questionHi": "",
+    "options": [
+      "$I_1 > $I_2 > $I_3$",
+      "$I_2 > $I_3 > $I_1$",
+      "$I_3 > $I_2 > $I_1$",
+      "$I_3 > $I_1 > $I_2$"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 65,
+    "questionEn": "Six resistors each of $10\\ \\Omega$ are connected as shown. The equivalent resistance between points X and Y is:",
+    "questionHi": "",
+    "options": [
+      "20 $\\Omega$",
+      "5 $\\Omega$",
+      "25/3 $\\Omega$",
+      "10 $\\Omega$"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 66,
+    "questionEn": "Internal resistance of primary cell depends on :-",
+    "questionHi": "",
+    "options": [
+      "the nature of electrolyte",
+      "the area of plates immersed in the electrolyte",
+      "the concentration of electrolyte and distance between the plates",
+      "all the above"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 67,
+    "questionEn": "When a resistance of 2 ohms is connected across the terminals of a cell, the current is 0.5 A. When the resistance is increased to 5 ohms, the current becomes 0.25 A. The e.m.f. of the cell is:-",
+    "questionHi": "",
+    "options": [
+      "1.0 V",
+      "1.5 V",
+      "2.0 V",
+      "2.5 V"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 68,
+    "questionEn": "You are provided with 48 cells, each of emf 2 volts and internal resistance 4 ohms. What maximum current can flow in the circuit having an external resistance of $12\\ \\Omega$ ?",
+    "questionHi": "",
+    "options": [
+      "1 A",
+      "1.2 A",
+      "0.96 A",
+      "1.08 A"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 69,
+    "questionEn": "A student measures the terminal potential difference ($V$) of a cell (of emf $\\varepsilon$ and internal resistance $r$) as a function of the current ($I$) flowing through it. The slope and intercept of the graph between V and I, then respectively, are :-",
+    "questionHi": "",
+    "options": [
+      "$-\\varepsilon$ and $r$",
+      "$\\varepsilon$ and $-r$",
+      "$-r$ and $\\varepsilon$",
+      "$r$ and $-\\varepsilon$"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 70,
+    "questionEn": "20% of the main current passes through the galvanometer. If the resistance of the galvanometer is G, then the resistance of the shunt will be :-",
+    "questionHi": "",
+    "options": [
+      "G/50",
+      "G/4",
+      "50G",
+      "9G"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 71,
+    "questionEn": "A copper wire of length 10 m and radius $(10^{-2} / \\sqrt{\\pi})\\text{ m}$ has electrical resistance of $10\\ \\Omega$. The current density in the wire for an electric field strength of 10 (V/m) is:",
+    "questionHi": "",
+    "options": [
+      "$10^6\\text{ A/m}^2$",
+      "$10^{-5}\\text{ A/m}^2$",
+      "$10^5\\text{ A/m}^2$",
+      "$10^4\\text{ A/m}^2$"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 72,
+    "questionEn": "The equivalent resistance of the infinite network given below is :",
+    "questionHi": "",
+    "options": [
+      "2 $\\Omega$",
+      "$(1 + \\sqrt{2})\\ \\Omega$",
+      "$(1 + \\sqrt{3})\\ \\Omega$",
+      "$(1 + \\sqrt{5})\\ \\Omega$"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 73,
+    "questionEn": "10 resistors, each of resistance R are connected in series to a battery of emf E and negligible internal resistance. Then those are connected in parallel to the same battery, the current is increased n times. The value of n is :",
+    "questionHi": "",
+    "options": [
+      "100",
+      "1",
+      "1000",
+      "10"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 74,
+    "questionEn": "What is the equivalent resistance between A and B?",
+    "questionHi": "",
+    "options": [
+      "3R/2",
+      "2R",
+      "R",
+      "R/2"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 75,
+    "questionEn": "Potential inside a charged spherical shell is :–",
+    "questionHi": "",
+    "options": [
+      "uniform",
+      "proportional to the distance from the centre",
+      "inversely proportional to the distance",
+      "inversely proportional to square of distance from the centre"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 76,
+    "questionEn": "Four charges 2C, – 3C, –4C and 5C respectively are placed at the four corners of a square. Which of the following statements is true for the point of intersection of the diagonals ?",
+    "questionHi": "",
+    "options": [
+      "E = 0, V = 0",
+      "E $\\neq$ 0, V = 0",
+      "E = 0, V $\\neq$ 0",
+      "E $\\neq$ 0, V $\\neq$ 0"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 77,
+    "questionEn": "In a region, the potential is represented by $V(x, y, z) = 6x - 8xy - 8y + 6yz$, where V is in volts and x, y, z are in metres. The electric force experienced by a charge of 2 coulombs situated at the point (1, 1, 1) is :-",
+    "questionHi": "",
+    "options": [
+      "$6\\sqrt{5}$ N",
+      "30 N",
+      "24 N",
+      "$4\\sqrt{35}$ N"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 78,
+    "questionEn": "An electric dipole is placed at an angle of $30^\\circ$ with an electric field intensity $2 \\times 10^5\\text{ N/C}$. It experiences a torque equal to 4 Nm. The charge on the dipole, if the dipole length is 2 cm, is :-",
+    "questionHi": "",
+    "options": [
+      "5 mC",
+      "$7\\ \\mu\\text{C}$",
+      "8 mC",
+      "2 mC"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 79,
+    "questionEn": "Two parallel infinite line charges with linear charge densities $+\\lambda\\text{ C/m}$ and $-\\lambda\\text{ C/m}$ are placed at a distance of 2R in free space. What is the electric field mid-way between the two line charges?",
+    "questionHi": "",
+    "options": [
+      "zero",
+      "$\\frac{2\\lambda}{\\pi \\epsilon_0 R}\\text{ N/C}$",
+      "$\\frac{\\lambda}{\\pi \\epsilon_0 R}\\text{ N/C}$",
+      "$\\frac{\\lambda}{2\\pi \\epsilon_0 R}\\text{ N/C}$"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 80,
+    "questionEn": "Two point charges A and B, having charges +Q and –Q respectively, are placed at certain distance apart and force acting between them is F. If 25% charge of A is transferred to B, then force between the charges becomes:",
+    "questionHi": "",
+    "options": [
+      "F",
+      "9F/16",
+      "16F/9",
+      "4F/3"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 81,
+    "questionEn": "A parallel plate capacitor is connected with a battery whose potential difference remains constant. If the plates of the capacitor are shifted apart then the intensity of electric field :",
+    "questionHi": "",
+    "options": [
+      "decreases and charge on plates also decreases.",
+      "remains constant but charge on plates decreases.",
+      "remains constant but charge on the plates increases.",
+      "increases but charge on the plates decreases."
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 82,
+    "questionEn": "The electric field between the plates of a parallel plate capacitor when connected to a certain battery is $E_0$. If the space between the plates of the capacitor is filled by introducing a material of dielectric constant K without disturbing the battery connections; the field between the plates will be :",
+    "questionHi": "",
+    "options": [
+      "K$E_0$",
+      "$E_0$",
+      "$E_0$/K",
+      "None of the above"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 83,
+    "questionEn": "Three capacitors each of capacity $4\\ \\mu\\text{F}$ are to be connected in such a way that the effective capacitance is $6\\ \\mu\\text{F}$. This can be done by :-",
+    "questionHi": "",
+    "options": [
+      "connecting all of them in series",
+      "connecting all of them in parallel",
+      "connecting two in series and one in parallel",
+      "connecting two in parallel and one in series"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 84,
+    "questionEn": "A number of capacitors, each of capacitance $1\\ \\mu\\text{F}$ and each one of which gets punctured if a potential difference just exceeding 500 volt is applied, are provided. Then an arrangement suitable for giving a capacitor of capacitance $3\\ \\mu\\text{F}$ across which 2000 volt may be applied requires at least :",
+    "questionHi": "",
+    "options": [
+      "4 component capacitors",
+      "12 component capacitors",
+      "48 component capacitors",
+      "16 component capacitors"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 85,
+    "questionEn": "Two thin dielectric slabs of dielectric constants $K_1$ and $K_2$ ($K_1 < K_2$) are inserted between the plates of a parallel plate capacitor, as shown in the figure. The variation of electric field 'E' between the plates with distance 'd' as measured from plate P is correctly shown by :-",
+    "questionHi": "",
+    "options": [
+      "(1)",
+      "(2)",
+      "(3)",
+      "(4)"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 86,
+    "questionEn": "A parallel plate capacitor has a uniform electric field $\\vec{E}$ in the space between the plates. If the distance between the plates is 'd' and the area of each plate is 'A', the energy stored in the capacitor is : ($\\epsilon_0$ = permittivity of free space)",
+    "questionHi": "",
+    "options": [
+      "$\\frac{1}{2}\\epsilon_0 E^2$",
+      "$\\varepsilon_0$ EAd",
+      "$\\frac{1}{2}\\epsilon_0 E^2 Ad$",
+      "$\\frac{E^2 Ad}{\\epsilon_0}$"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 87,
+    "questionEn": "The distance between the two plates of a parallel plate capacitor is doubled and the area of each plate is halved. If C is its initial capacitance, its final capacitance is equal to:",
+    "questionHi": "",
+    "options": [
+      "2C",
+      "C/2",
+      "4C",
+      "C/4"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 88,
+    "questionEn": "The energy required to charge a parallel plate condenser of plate separation d and plate area of cross-section A such that the uniform electric field between the plates is E, is :-",
+    "questionHi": "",
+    "options": [
+      "$\\epsilon_0 E^2 Ad$",
+      "$\\frac{1}{2} \\epsilon_0 E^2 Ad$",
+      "$\\frac{1}{2} \\epsilon_0 E^2 / Ad$",
+      "$\\epsilon_0 E^2 / Ad$"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 89,
+    "questionEn": "Two capacitors, $3\\ \\mu\\text{F}$ and $4\\ \\mu\\text{F}$, are individually charged across a 6 V battery. After being disconnected from the battery, they are connected together with the negative plate of one connected to the positive plate of the other. What is the final total energy stored ?",
+    "questionHi": "",
+    "options": [
+      "$1.26 \\times 10^{-4}$ J",
+      "$2.57 \\times 10^{-4}$ J",
+      "$1.26 \\times 10^{-6}$ J",
+      "$2.57 \\times 10^{-6}$ J"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 90,
+    "questionEn": "A parallel plate air capacitor is charged to a potential difference of V volts. After disconnecting the charging battery the distance between the plates of the capacitor is increased using an insulating handle. As a result the potential difference between the plates :-",
+    "questionHi": "",
+    "options": [
+      "decreases",
+      "does not change",
+      "becomes zero",
+      "increases"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 91,
+    "questionEn": "Who was the first President of Independent India?",
+    "questionHi": "",
+    "options": [
+      "Dr. Rajendra Prasad",
+      "Dr. S. Radhakrishnan",
+      "V.V. Giri",
+      "Zakir Husain"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 92,
+    "questionEn": "The 'Stupa of Sanchi' is located in which state?",
+    "questionHi": "",
+    "options": [
+      "Uttar Pradesh",
+      "Madhya Pradesh",
+      "Bihar",
+      "Maharashtra"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 93,
+    "questionEn": "Which is the longest river in India?",
+    "questionHi": "",
+    "options": [
+      "Brahmaputra",
+      "Yamuna",
+      "Ganga",
+      "Godavari"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 94,
+    "questionEn": "Which city is known as the 'Diamond City' of India?",
+    "questionHi": "",
+    "options": [
+      "Mumbai",
+      "Surat",
+      "Panna",
+      "Jaipur"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 95,
+    "questionEn": "In which state is the 'Kaziranga National Park' located?",
+    "questionHi": "",
+    "options": [
+      "West Bengal",
+      "Assam",
+      "Manipur",
+      "Odisha"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 96,
+    "questionEn": "Who wrote the National Anthem of India, 'Jana Gana Mana'?",
+    "questionHi": "",
+    "options": [
+      "Bankim Chandra Chatterjee",
+      "Rabindranath Tagore",
+      "Sarojini Naidu",
+      "Mahatma Gandhi"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 97,
+    "questionEn": "Which state is the largest producer of Tea in India?",
+    "questionHi": "",
+    "options": [
+      "West Bengal",
+      "Kerala",
+      "Assam",
+      "Tamil Nadu"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 98,
+    "questionEn": "Which is the highest waterfall in India?",
+    "questionHi": "",
+    "options": [
+      "Jog Falls",
+      "Kunchikal Falls",
+      "Dudhsagar Falls",
+      "Athirappilly Falls"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 99,
+    "questionEn": "The classical dance 'Kathakali' originated in which state?",
+    "questionHi": "",
+    "options": [
+      "Tamil Nadu",
+      "Kerala",
+      "Karnataka",
+      "Odisha"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 100,
+    "questionEn": "Which is the largest freshwater lake in India?",
+    "questionHi": "",
+    "options": [
+      "Chilika Lake",
+      "Wular Lake",
+      "Dal Lake",
+      "Pulicat Lake"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  }
+]
