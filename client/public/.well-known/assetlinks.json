@@ -1,8 +1,14 @@
-[{
-  "relation": ["delegate_permission/common.handle_all_urls"],
-  "target": {
-    "namespace": "android_app",
-    "package_name": "in.aonetarget.twa",
-    "sha256_cert_fingerprints": ["EA:72:9A:50:48:3B:8B:42:4A:92:B8:28:9C:DB:60:51:55:2F:BA:9E:EF:7A:9C:3A:E4:E6:0A:F0:B4:B2:9F:0B"]
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "in.aonetarget.twb",
+      "sha256_cert_fingerprints": [
+        "73:B8:74:F7:E1:E5:42:48:AF:7F:E0:FD:54:8D:28:05:33:76:47:9A:C9:C3:28:FF:E5:D9:83:ED:09:F3:F5:87"
+      ]
+    }
   }
-}]
+]
