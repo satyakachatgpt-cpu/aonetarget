@@ -3,7 +3,8 @@ import { toast } from 'sonner';
 
 
 
-export const API_BASE_URL = '/api';
+// Use absolute URL for production (Capacitor/App) so it doesn't try to fetch from localhost
+export const API_BASE_URL = import.meta.env.DEV ? '/api' : 'https://aonetarget.in/api';
 
 console.log('[API_BASE_URL]', API_BASE_URL, window.location.href);
 
