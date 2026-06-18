@@ -1,4 +1,4 @@
-package com.aonetarget.academy;
+package com.aonetarget.education;
 
 import com.getcapacitor.BridgeActivity;
 
