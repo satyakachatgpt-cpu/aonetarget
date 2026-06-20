@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import DOMPurify from 'dompurify';
 import { useDebounce } from '../hooks/useDebounce';
 import { useNavigate } from 'react-router-dom';
-import { coursesAPI, blogAPI, newsAPI, categoriesAPI, bannersAPI, testsAPI, testSeriesAPI, liveVideosAPI, quickLinksAPI } from '../services/apiClient';
+import { coursesAPI, blogAPI, newsAPI, categoriesAPI, bannersAPI, testsAPI, testSeriesAPI, liveVideosAPI, quickLinksAPI, API_BASE_URL } from '../services/apiClient';
 import StudentSidebar from '../components/StudentSidebar';
 import { useAuthStore } from '../store/authStore';
 import { Course, Student } from '../types';
@@ -440,7 +440,7 @@ const Home: React.FC = () => {
 
     const fetchExamDocs = async () => {
       try {
-        const response = await fetch('/api/exam-documents');
+        const response = await fetch(`${API_BASE_URL}/exam-documents`);
         if (response.ok) {
           const data = await response.json();
           const active = (Array.isArray(data) ? data : [])

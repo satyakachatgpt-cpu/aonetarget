@@ -117,7 +117,7 @@ const App: React.FC = () => {
       sessionStorage.clear();
       localStorage.setItem('app_version', APP_VERSION);
       if (savedDeviceId) localStorage.setItem('deviceId', savedDeviceId);
-      window.location.href = '/'; // Reload completely
+      window.location.reload(); // Reload completely
     }
   }, []);
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(() => {

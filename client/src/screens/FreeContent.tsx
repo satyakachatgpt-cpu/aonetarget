@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import StudentSidebar from '../components/StudentSidebar';
 import { testsAPI, testSeriesAPI, coursesAPI, getAuthHeaders } from '../services/apiClient';
 import { getImageUrl, getVideoUrl, getPdfUrl, getYouTubeThumbnail, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
+import { API_BASE_URL } from '../services/apiClient';
 
 const FreeContent: React.FC = () => {
     const navigate = useNavigate();
@@ -40,14 +41,14 @@ const FreeContent: React.FC = () => {
 
 
             const [coursesRes, testsRes, subjTestsRes, seriesRes, ebooksRes, docsRes, videosRes, pdfsRes] = await Promise.all([
-                fetch(`/api/courses?isFree=true&t=${Date.now()}`).then(r => r.json()),
-                fetch(`/api/tests?isFree=true&t=${Date.now()}`).then(r => r.json()),
-                fetch(`/api/subjective-tests?isFree=true&t=${Date.now()}`).then(r => r.json()),
-                fetch(`/api/test-series?isFree=true&t=${Date.now()}`).then(r => r.json()),
-                fetch(`/api/ebooks?isFree=true&t=${Date.now()}`).then(r => r.json()),
-                fetch(`/api/exam-documents?isFree=true&t=${Date.now()}`).then(r => r.json()),
-                fetch(`/api/videos?isFree=true&t=${Date.now()}`).then(r => r.json()),
-                fetch(`/api/pdfs?isFree=true&t=${Date.now()}`).then(r => r.json())
+                fetch(`${API_BASE_URL}/courses?isFree=true&t=${Date.now()}`).then(r => r.json()),
+                fetch(`${API_BASE_URL}/tests?isFree=true&t=${Date.now()}`).then(r => r.json()),
+                fetch(`${API_BASE_URL}/subjective-tests?isFree=true&t=${Date.now()}`).then(r => r.json()),
+                fetch(`${API_BASE_URL}/test-series?isFree=true&t=${Date.now()}`).then(r => r.json()),
+                fetch(`${API_BASE_URL}/ebooks?isFree=true&t=${Date.now()}`).then(r => r.json()),
+                fetch(`${API_BASE_URL}/exam-documents?isFree=true&t=${Date.now()}`).then(r => r.json()),
+                fetch(`${API_BASE_URL}/videos?isFree=true&t=${Date.now()}`).then(r => r.json()),
+                fetch(`${API_BASE_URL}/pdfs?isFree=true&t=${Date.now()}`).then(r => r.json())
             ]);
 
             const getItems = (res: any) => {

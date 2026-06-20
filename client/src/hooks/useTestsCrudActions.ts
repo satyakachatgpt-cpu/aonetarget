@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { testsAPI, resultsAPI } from '../services/apiClient';
+import { API_BASE_URL } from '../services/apiClient';
 
 interface Props {
   editingTest: any;
@@ -137,7 +138,7 @@ export const useTestsCrudActions = ({
           if (viewingTestSeries) {
             const seriesId =
               viewingTestSeries.id || (viewingTestSeries as any)._id;
-            const res = await fetch(`/api/courses/${seriesId}/tests`);
+            const res = await fetch(`${API_BASE_URL}/courses/${seriesId}/tests`);
             if (res.ok) {
               const data = await res.json();
               setDetailTests(Array.isArray(data) ? data : []);

@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { testsAPI, invalidateCache, getAdminHeaders } from '../services/apiClient';
+import { API_BASE_URL } from '../services/apiClient';
 
 interface Props {
   bulkUploadData: any;
@@ -68,7 +69,7 @@ export const useTestsBulkUploadUploadLogic = ({
         if (!confirm) return;
 
         showToast("Clearing existing questions...", "success");
-        await fetch(`/api/questions/test/${testId}`, { 
+        await fetch(`${API_BASE_URL}/questions/test/${testId}`, { 
           method: 'DELETE',
           headers: getAdminHeaders()
         });
@@ -226,7 +227,7 @@ export const useTestsBulkUploadUploadLogic = ({
 
         // 4. Update the test's viewFormat if needed
         const formatVal = bulkUploadData.format || "default";
-        await fetch(`/api/tests/${testId}`, {
+        await fetch(`${API_BASE_URL}/tests/${testId}`, {
           method: "PUT",
           headers: { ...getAdminHeaders(), "Content-Type": "application/json" },
           body: JSON.stringify({ viewFormat: formatVal }),

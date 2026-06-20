@@ -6,6 +6,7 @@ import { getAuthHeaders, getAdminHeaders, reportedQuestionsAPI, handleUnauthoriz
 import { useAuthStore } from '../store/authStore';
 import { renderQuestionText } from '../components/admin/tests/shared/TestUtils';
 import 'katex/dist/katex.min.css';
+import { API_BASE_URL } from '../services/apiClient';
 
 type QuestionStatus = 'unanswered' | 'answered' | 'flagged' | 'flagged-answered';
 
@@ -83,7 +84,7 @@ const TestTaking: React.FC = () => {
   const fetchReviewData = async (resultId: string) => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/test-results/${resultId}`, {
+      const res = await fetch(`${API_BASE_URL}/test-results/${resultId}`, {
         headers: getAuthHeaders()
       });
       await handleUnauthorized(res, `/api/test-results/${resultId}`);
@@ -94,7 +95,7 @@ const TestTaking: React.FC = () => {
       const resultData = await res.json();
 
       // Fetch the test data as well to get questions
-      const testRes = await fetch(`/api/tests/${testId}`, {
+      const testRes = await fetch(`${API_BASE_URL}/tests/${testId}`, {
         headers: { ...getAuthHeaders(), ...getAdminHeaders() }
       });
       await handleUnauthorized(testRes, `/api/tests/${testId}`);
@@ -168,7 +169,7 @@ const TestTaking: React.FC = () => {
 
   const fetchTestData = async () => {
     try {
-      const res = await fetch(`/api/tests/${testId}?t=${Date.now()}`, {
+      const res = await fetch(`${API_BASE_URL}/tests/${testId}?t=${Date.now()}`, {
         headers: { ...getAuthHeaders(), ...getAdminHeaders() }
       });
       await handleUnauthorized(res, `/api/tests/${testId}`);
@@ -236,7 +237,7 @@ const TestTaking: React.FC = () => {
     const timeTaken = Math.floor((Date.now() - startTimeRef.current) / 1000);
 
     try {
-      let res = await fetch(`/api/tests/${testId}/submit`, {
+      let res = await fetch(`${API_BASE_URL}/tests/${testId}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
@@ -252,7 +253,7 @@ const TestTaking: React.FC = () => {
         if (errData.code === 'TOKEN_EXPIRED') {
           const refreshed = await useAuthStore.getState().refreshToken();
           if (refreshed) {
-            res = await fetch(`/api/tests/${testId}/submit`, {
+            res = await fetch(`${API_BASE_URL}/tests/${testId}/submit`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
               body: JSON.stringify({
@@ -430,7 +431,7 @@ const TestTaking: React.FC = () => {
   const fetchLeaderboard = async () => {
     try {
       setFetchingLeaderboard(true);
-      const res = await fetch(`/api/tests/${testId}/leaderboard?limit=10`, {
+      const res = await fetch(`${API_BASE_URL}/tests/${testId}/leaderboard?limit=10`, {
         headers: getAuthHeaders()
       });
       await handleUnauthorized(res, `/api/tests/${testId}/leaderboard`);
@@ -474,7 +475,7 @@ const TestTaking: React.FC = () => {
     const pctColor = result.percentage >= 70 ? 'text-green-600' : result.percentage >= 40 ? 'text-amber-600' : 'text-[#D32F2F]';
     return (
       <div className="bg-gray-50 pb-8">
-        <header className="bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white py-4 px-4">
+        <header className="bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white pt-10 pb-4 px-4">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(-1)}
@@ -850,8 +851,8 @@ const TestTaking: React.FC = () => {
 
   if (!loading && !error && !submitted && needsTerms && !hasAcceptedTerms) {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col">
-        <header className="bg-[#1A237E] text-white py-3 px-4 sticky top-0 z-30 shadow-md">
+      <div className="fixed inset-0 bg-gray-50 flex flex-col">
+        <header className="bg-[#1A237E] text-white pt-10 pb-3 px-4 sticky top-0 z-30 shadow-md">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(-1)}
@@ -908,8 +909,8 @@ const TestTaking: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      <header className="bg-[#1A237E] text-white px-4 py-3 flex items-center justify-between sticky top-0 z-30">
+    <div className="fixed inset-0 bg-gray-50 flex flex-col">
+      <header className="bg-[#1A237E] text-white px-4 pt-10 pb-3 flex items-center justify-between sticky top-0 z-30">
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <button
             onClick={() => {

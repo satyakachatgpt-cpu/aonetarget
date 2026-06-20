@@ -4,6 +4,7 @@ import { getImageUrl } from '../lib/utils';
 import { coursesAPI, subjectsAPI, getAuthHeaders } from '../services/apiClient';
 import { subcategoriesAPI } from '../services/academicService';
 import { isCategoryMatch, getCourseLevel1Key, getCourseLevel2Key, normalizeSubcategoryId } from './CategoryPage';
+import { API_BASE_URL } from '../services/apiClient';
 
 interface Course {
   _id?: string;
@@ -223,7 +224,7 @@ const ContentTypeDetail: React.FC = () => {
 
       if (studentId) {
         try {
-          const enrolledRes = await fetch(`/api/students/${studentId}/courses`, { headers: getAuthHeaders() });
+          const enrolledRes = await fetch(`${API_BASE_URL}/students/${studentId}/courses`, { headers: getAuthHeaders() });
           const enrolled = await enrolledRes.json();
           const ids = Array.isArray(enrolled) ? enrolled.map((c: any) => c.id || c.courseId || c._id) : [];
           setEnrolledCourseIds(ids);
@@ -318,7 +319,7 @@ const ContentTypeDetail: React.FC = () => {
     }
     const cId = course.id || course._id || '';
     try {
-      await fetch(`/api/students/${studentId}/enroll`, {
+      await fetch(`${API_BASE_URL}/students/${studentId}/enroll`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ courseId: cId }),

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { coursesAPI, categoriesAPI, getAuthHeaders } from '../services/apiClient';
 import { getImageUrl } from '../lib/utils';
+import { API_BASE_URL } from '../services/apiClient';
 
 interface Course {
   id: string;
@@ -62,7 +63,7 @@ const CoursesScreen: React.FC = () => {
     try {
       const [allCourses, enrolledCoursesRes] = await Promise.all([
         coursesAPI.getAll(),
-        (student?.id || student?._id) ? fetch(`/api/students/${student.id || student._id}/courses`, { headers: getAuthHeaders() }).then(r => r.json()) : Promise.resolve([])
+        (student?.id || student?._id) ? fetch(`${API_BASE_URL}/students/${student.id || student._id}/courses`, { headers: getAuthHeaders() }).then(r => r.json()) : Promise.resolve([])
       ]);
       
       const enrolled = Array.isArray(enrolledCoursesRes) ? enrolledCoursesRes : [];

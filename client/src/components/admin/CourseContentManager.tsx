@@ -953,7 +953,7 @@ const CourseContentManager: React.FC<Props> = ({ showToast, initialCourse, onCle
               const courseId = (editedCourse as any)._id || (editedCourse as any).id;
               const isPackage = courseId?.toString().startsWith('pkg_');
               const endpoint = isPackage ? 'packages' : 'courses';
-              const res = await fetch(`/api/${endpoint}/${courseId}`, { headers: getAuthHeaders() });
+              const res = await fetch(`${API_BASE_URL}/${endpoint}/${courseId}`, { headers: getAuthHeaders() });
               if (res.ok) {
                 const freshCourse = await res.json();
                 if (freshCourse && !freshCourse.error) {

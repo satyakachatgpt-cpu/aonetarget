@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import { getAuthHeaders } from '../services/apiClient';
+import { API_BASE_URL } from '../services/apiClient';
 
 const MyCourses: React.FC = () => {
   const navigate = useNavigate();
@@ -33,7 +34,7 @@ const MyCourses: React.FC = () => {
   const fetchCourses = async (studentId: string) => {
     try {
       if (import.meta.env.DEV) console.log(`[MyCourses] API URL: /api/students/${studentId}/courses`);
-      const response = await fetch(`/api/students/${studentId}/courses`, { headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/students/${studentId}/courses`, { headers: getAuthHeaders() });
       
       if (!response.ok) {
         const errorText = await response.text();

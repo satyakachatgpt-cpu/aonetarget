@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { RightSideDrawer, DrawerBody } from './DrawerSystem';
 import CustomDropdown from './CustomDropdown';
+import { API_BASE_URL } from '../../services/apiClient';
 
 interface AddTestPDFBulkDrawerProps {
     isOpen: boolean;
@@ -59,7 +60,7 @@ const AddTestPDFBulkDrawer: React.FC<AddTestPDFBulkDrawerProps> = ({
             const formDataToUpload = new FormData();
             formDataToUpload.append('pdf', selectedFile);
 
-            const response = await fetch('/api/v2/parse/gemini-pdf', {
+            const response = await fetch(`${API_BASE_URL}/v2/parse/gemini-pdf`, {
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,

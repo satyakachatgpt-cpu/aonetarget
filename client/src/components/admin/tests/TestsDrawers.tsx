@@ -7,6 +7,7 @@ import AddTestPDFBulkDrawer from "../AddTestPDFBulkDrawer";
 import AddQuestionDrawer from "../AddQuestionDrawer";
 import BulkEditQuestionsDrawer from "../BulkEditQuestionsDrawer";
 import { testsAPI, questionsAPI, getAdminHeaders } from "../../../services/apiClient";
+import { API_BASE_URL } from '../../../services/apiClient';
 
 interface Props {
   showModal: boolean;
@@ -106,7 +107,7 @@ const TestsDrawers: React.FC<Props> = ({
         }));
 
       if (updates.length > 0) {
-        fetch('/api/questions/update-all', {
+        fetch(`${API_BASE_URL}/questions/update-all`, {
           method: 'PUT',
           headers: {
             ...getAdminHeaders(),
@@ -408,7 +409,7 @@ const TestsDrawers: React.FC<Props> = ({
                 const qId = q._id || q.id;
                 if (qId && typeof qId === "string" && qId.length > 5) {
                   try {
-                    return await fetch(`/api/questions/${qId}`, {
+                    return await fetch(`${API_BASE_URL}/questions/${qId}`, {
                       method: "PUT",
                       headers: {
                         ...getAdminHeaders(),

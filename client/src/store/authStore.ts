@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { clearStudentSession } from '../services/apiClient';
+import { clearStudentSession, API_BASE_URL } from '../services/apiClient';
 
 interface AuthState {
     student: any;
@@ -83,7 +83,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (tokenRefreshTimeout) clearTimeout(tokenRefreshTimeout);
         try {
             const token = localStorage.getItem('accessToken');
-            await fetch('/api/auth/logout', {
+            await fetch(`${API_BASE_URL}/auth/logout`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
@@ -103,7 +103,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             const headers: Record<string, string> = {};
             if (token) headers['Authorization'] = `Bearer ${token}`;
 
-            const response = await fetch('/api/me', { headers });
+            const response = await fetch(`${API_BASE_URL}/me`, { headers });
 
             if (response.ok) {
                 const data = await response.json();
@@ -134,7 +134,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     refreshToken: async () => {
         try {
-            const response = await fetch('/api/auth/refresh', {
+            const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
                 method: 'POST',
                 credentials: 'include',
                 headers: { 'Content-Type': 'application/json' },
@@ -169,7 +169,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 const headers: Record<string, string> = { 'Content-Type': 'application/json' };
                 if (token) headers['Authorization'] = `Bearer ${token}`;
 
-                const response = await fetch('/api/heartbeat', {
+                const response = await fetch(`${API_BASE_URL}/heartbeat`, {
                     method: 'POST',
                     headers,
                     body: JSON.stringify({

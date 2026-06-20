@@ -1,6 +1,8 @@
+
+import { API_BASE_URL } from '../../services/apiClient';
 export const generateDOCX = async (questions: any[], format: string = 'default', fileName: string = 'Paper.docx') => {
   try {
-    const response = await fetch('/api/generate-docx', {
+    const response = await fetch(`${API_BASE_URL}/generate-docx`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ questions, title: fileName.split('.')[0] })

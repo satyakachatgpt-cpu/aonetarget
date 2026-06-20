@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import { getImageUrl, getVideoUrl, getYouTubeThumbnail, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
 import { getAuthHeaders } from '../services/apiClient';
+import { API_BASE_URL } from '../services/apiClient';
 
 const WatchHistory: React.FC = () => {
   const navigate = useNavigate();
@@ -34,8 +35,8 @@ const WatchHistory: React.FC = () => {
     try {
       // Fetch from both sources for maximum coverage
       const [historyRes, progressRes] = await Promise.all([
-        fetch(`/api/students/${studentId}/watch-history`, { headers: getAuthHeaders() }),
-        fetch(`/api/progress/${studentId}`, { headers: getAuthHeaders() })
+        fetch(`${API_BASE_URL}/students/${studentId}/watch-history`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE_URL}/progress/${studentId}`, { headers: getAuthHeaders() })
       ]);
 
       const historyData = await historyRes.json().catch(() => []);
@@ -129,7 +130,7 @@ const WatchHistory: React.FC = () => {
     if (!studentId) return;
     setClearing(true);
     try {
-      await fetch(`/api/students/${studentId}/watch-history`, { method: 'DELETE', headers: getAuthHeaders() });
+      await fetch(`${API_BASE_URL}/students/${studentId}/watch-history`, { method: 'DELETE', headers: getAuthHeaders() });
       setHistory([]);
     } catch (e) {
       console.error('Clear failed:', e);
