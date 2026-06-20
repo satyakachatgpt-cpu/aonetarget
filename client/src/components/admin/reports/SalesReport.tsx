@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { coursesAPI, getAdminHeaders } from '../../../services/apiClient';
+import { API_BASE_URL } from '../../../services/apiClient';
 
 interface SaleRecord {
   id: string;
@@ -70,7 +71,7 @@ const SalesReport: React.FC<Props> = ({ showToast }) => {
       query.append('page', currentPage.toString());
       query.append('limit', pageSize.toString());
 
-      const res = await fetch(`/api/admin/reports/sales?${query.toString()}`, {
+      const res = await fetch(`${API_BASE_URL}/admin/reports/sales?${query.toString()}`, {
           headers: getAdminHeaders()
       });
       const data = await res.json();
@@ -108,7 +109,7 @@ const SalesReport: React.FC<Props> = ({ showToast }) => {
       if (selectedCourse) query.append('courseId', selectedCourse);
       query.append('export', 'true');
 
-      const res = await fetch(`/api/admin/reports/sales?${query.toString()}`, {
+      const res = await fetch(`${API_BASE_URL}/admin/reports/sales?${query.toString()}`, {
           headers: getAdminHeaders()
       });
       const data = await res.json();

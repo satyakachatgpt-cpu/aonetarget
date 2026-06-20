@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import FileUploadButton from '../shared/FileUploadButton';
 import { getAuthHeaders } from '../../services/apiClient';
+import { API_BASE_URL } from '../../services/apiClient';
 
 interface TestQuestion {
   id: string;
@@ -98,7 +99,7 @@ const Questions: React.FC<Props> = ({ showToast }) => {
   const loadCourses = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/courses');
+      const res = await fetch(`${API_BASE_URL}/courses`);
       if (res.ok) {
         const data = await res.json();
         setCourses(Array.isArray(data) ? data : []);
@@ -115,12 +116,12 @@ const Questions: React.FC<Props> = ({ showToast }) => {
       setLoadingTests(true);
       setSelectedCourse(course);
       setSelectedTest(null);
-      const res = await fetch(`/api/courses/${course.id}/tests`);
+      const res = await fetch(`${API_BASE_URL}/courses/${course.id}/tests`);
       if (res.ok) {
         const data = await res.json();
         setTests(Array.isArray(data) ? data : []);
       } else {
-        const allRes = await fetch('/api/tests');
+        const allRes = await fetch(`${API_BASE_URL}/tests`);
         if (allRes.ok) {
           const allTests = await allRes.json();
           const courseTests = (Array.isArray(allTests) ? allTests : []).filter((t: any) => t.courseId === course.id);
@@ -137,7 +138,7 @@ const Questions: React.FC<Props> = ({ showToast }) => {
 
   const selectTest = async (test: Test) => {
     try {
-      const res = await fetch(`/api/tests/${test.id}`);
+      const res = await fetch(`${API_BASE_URL}/tests/${test.id}`);
       if (res.ok) {
         const fullTest = await res.json();
         setSelectedTest({ ...fullTest, questions: fullTest.questions || [] });
@@ -192,7 +193,7 @@ const Questions: React.FC<Props> = ({ showToast }) => {
       }
 
       const testId = selectedTest.id || (selectedTest as any)._id;
-      const res = await fetch(`/api/tests/${testId}`, {
+      const res = await fetch(`${API_BASE_URL}/tests/${testId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...selectedTest, questions })
@@ -219,7 +220,7 @@ const Questions: React.FC<Props> = ({ showToast }) => {
     try {
       const questions = (selectedTest.questions || []).filter(q => q.id !== questionId);
       const testId = selectedTest.id || (selectedTest as any)._id;
-      const res = await fetch(`/api/tests/${testId}`, {
+      const res = await fetch(`${API_BASE_URL}/tests/${testId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...selectedTest, questions })
@@ -341,7 +342,7 @@ const Questions: React.FC<Props> = ({ showToast }) => {
         ...q,
       }));
       const testIdentifier = selectedTest.id || (selectedTest as any)._id;
-      const res = await fetch(`/api/tests/${testIdentifier}/bulk-questions`, {
+      const res = await fetch(`${API_BASE_URL}/tests/${testIdentifier}/bulk-questions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ questions: questionsToUpload }),
@@ -350,7 +351,7 @@ const Questions: React.FC<Props> = ({ showToast }) => {
         showToast(`${bulkQuestions.length} questions uploaded successfully!`, 'success');
         setShowBulkUpload(false);
         setBulkQuestions([]);
-        const refreshRes = await fetch(`/api/tests/${testIdentifier}`);
+        const refreshRes = await fetch(`${API_BASE_URL}/tests/${testIdentifier}`);
         if (refreshRes.ok) {
           const fullTest = await refreshRes.json();
           setSelectedTest({ ...fullTest, questions: fullTest.questions || [] });

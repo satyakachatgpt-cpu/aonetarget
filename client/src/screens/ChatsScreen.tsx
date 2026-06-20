@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAuthHeaders } from '../services/apiClient';
+import { getAuthHeaders, API_BASE_URL } from '../services/apiClient';
 
 interface ChatMessage {
   id: string;
@@ -40,7 +40,7 @@ const ChatsScreen: React.FC = () => {
 
   const initChat = async (s: any) => {
     try {
-      const res = await fetch('/api/chats/start', {
+      const res = await fetch(`${API_BASE_URL}/chats/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ studentId: s.id || s._id, studentName: s.name })
@@ -62,7 +62,7 @@ const ChatsScreen: React.FC = () => {
 
   const fetchMessages = async (cId: string) => {
     try {
-      const res = await fetch(`/api/chats/${cId}/messages`, { headers: getAuthHeaders() });
+      const res = await fetch(`${API_BASE_URL}/chats/${cId}/messages`, { headers: getAuthHeaders() });
       const data = await res.json();
       setMessages(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -72,7 +72,7 @@ const ChatsScreen: React.FC = () => {
 
   const markRead = async (cId: string) => {
     try {
-      await fetch(`/api/chats/${cId}/read`, {
+      await fetch(`${API_BASE_URL}/chats/${cId}/read`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ readerType: 'student' })
@@ -89,7 +89,7 @@ const ChatsScreen: React.FC = () => {
     if (!newMessage.trim() || !student || !chatId || sending) return;
     setSending(true);
     try {
-      const res = await fetch(`/api/chats/${chatId}/messages`, {
+      const res = await fetch(`${API_BASE_URL}/chats/${chatId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({

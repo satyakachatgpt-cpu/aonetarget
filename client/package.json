@@ -10,7 +10,9 @@
   },
   "dependencies": {
     "@capacitor/android": "^8.4.0",
+    "@capacitor/app": "^8.1.0",
     "@capacitor/core": "^8.4.0",
+    "@capacitor/splash-screen": "^8.0.1",
     "@capacitor/status-bar": "^8.0.2",
     "@ckeditor/ckeditor5-react": "^11.0.1",
     "@dnd-kit/core": "^6.3.1",

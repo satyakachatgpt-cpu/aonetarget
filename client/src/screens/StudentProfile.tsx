@@ -4,6 +4,7 @@ import StudentSidebar from '../components/StudentSidebar';
 import { useAuthStore } from '../store/authStore';
 import { useUIStore } from '../store/uiStore';
 import { getAuthHeaders } from '../services/apiClient';
+import { API_BASE_URL } from '../services/apiClient';
 
 interface StudentProfileProps {
   setAuth: (auth: boolean) => void;
@@ -68,8 +69,8 @@ const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
   const fetchStats = async (studentId: string) => {
     try {
       const [coursesRes, testsRes] = await Promise.all([
-        fetch(`/api/students/${studentId}/courses`, { headers: getAuthHeaders() }),
-        fetch(`/api/students/${studentId}/test-results`, { headers: getAuthHeaders() })
+        fetch(`${API_BASE_URL}/students/${studentId}/courses`, { headers: getAuthHeaders() }),
+        fetch(`${API_BASE_URL}/students/${studentId}/test-results`, { headers: getAuthHeaders() })
       ]);
 
       const coursesData = await coursesRes.json().catch(() => []);
@@ -92,7 +93,7 @@ const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch(`/api/categories`, { headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/categories`, { headers: getAuthHeaders() });
       if (response.ok) {
         const data = await response.json();
         setCategories((Array.isArray(data) ? data : []).filter((c: any) => c.isActive));
@@ -114,7 +115,7 @@ const StudentProfile: React.FC<StudentProfileProps> = ({ setAuth }) => {
 
   const handleSaveProfile = async () => {
     try {
-      const response = await fetch(`/api/students/${student.id || student._id}`, {
+      const response = await fetch(`${API_BASE_URL}/students/${student.id || student._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify(editForm)

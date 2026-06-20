@@ -4,6 +4,7 @@ import StudentVideoPlayer from '../components/student/StudentVideoPlayer';
 import Playlist from '../components/Playlist';
 import { getVideoUrl, toYouTubeEmbed, getEmbedUrl, normalizeId } from '../lib/utils';
 import { getAuthHeaders, getAdminHeaders } from '../services/apiClient';
+import { API_BASE_URL } from '../services/apiClient';
 
 function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
   const raw = (lc.streamStatus || lc.status || lc.liveStatus || lc.eventStatus || 'upcoming').toLowerCase();
@@ -87,7 +88,7 @@ const WatchPage: React.FC = () => {
 
   const fetchLiveMessages = async (vId: string) => {
     try {
-      const res = await fetch(`/api/live-chat/${vId}/messages`);
+      const res = await fetch(`${API_BASE_URL}/live-chat/${vId}/messages`);
       if (res.ok) {
         const data = await res.json();
         const normalized = (data || []).map((msg: any) => ({
@@ -143,7 +144,7 @@ const WatchPage: React.FC = () => {
       const senderId = useAdminRole ? 'admin' : (student?.id || student?._id || 'student');
       const role = useAdminRole ? 'admin' : 'student';
 
-      const res = await fetch(`/api/live-chat/${vid}/messages`, {
+      const res = await fetch(`${API_BASE_URL}/live-chat/${vid}/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -186,7 +187,7 @@ const WatchPage: React.FC = () => {
       try {
         setLoading(true);
         const headers = (isAdminPreview || isUserAdmin) ? { ...getAdminHeaders() } : { ...getAuthHeaders() };
-        const response = await fetch(`/api/courses/${batchId}/videos`, {
+        const response = await fetch(`${API_BASE_URL}/courses/${batchId}/videos`, {
           headers
         });
         const videos = await response.json();
@@ -225,7 +226,7 @@ const WatchPage: React.FC = () => {
         console.log(`[WatchPage] Auto-completing video ${vId} for course ${batchId}`);
       }
       
-      await fetch(`/api/students/${sId}/courses/${batchId}/progress`, {
+      await fetch(`${API_BASE_URL}/students/${sId}/courses/${batchId}/progress`, {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({ videoId: String(vId), action: 'complete' })

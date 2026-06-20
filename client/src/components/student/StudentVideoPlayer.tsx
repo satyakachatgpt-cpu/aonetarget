@@ -4,7 +4,7 @@ import { useDispatch } from 'react-redux';
 import { updateProgress, setPlaybackSpeed as setReduxSpeed } from '../../store/slices/playerSlice';
 import { getImageUrl, extractYouTubeId, isYouTubeUrl, toYouTubeEmbed, getPdfUrl } from '../../lib/utils';
 import { useAuthStore } from '../../store/authStore';
-import { getAuthHeaders } from '../../services/apiClient';
+import { getAuthHeaders, API_BASE_URL } from '../../services/apiClient';
 
 declare global {
   interface Window {
@@ -231,7 +231,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
       if (!studentId) return;
 
       try {
-        await fetch('/api/progress/save', {
+        await fetch(`${API_BASE_URL}/progress/save`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify({

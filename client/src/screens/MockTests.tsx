@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import StudentSidebar from '../components/StudentSidebar';
 import { testsAPI, testSeriesAPI, coursesAPI, getAuthHeaders } from '../services/apiClient';
+import { API_BASE_URL } from '../services/apiClient';
 
 interface CourseGroup {
   courseId: string;
@@ -153,7 +154,7 @@ const MockTests: React.FC = () => {
     }
     try {
       const seriesId = series.id || series._id;
-      const res = await fetch(`/api/students/${student.id || student._id}/enrolled/${seriesId}?t=${Date.now()}`, {
+      const res = await fetch(`${API_BASE_URL}/students/${student.id || student._id}/enrolled/${seriesId}?t=${Date.now()}`, {
         headers: getAuthHeaders()
       });
       if (res.ok) {
@@ -206,7 +207,7 @@ const MockTests: React.FC = () => {
     setEnrolling(true);
     try {
       const seriesId = activeSeries.id || activeSeries._id;
-      const res = await fetch(`/api/students/${student.id || student._id}/enroll`, {
+      const res = await fetch(`${API_BASE_URL}/students/${student.id || student._id}/enroll`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

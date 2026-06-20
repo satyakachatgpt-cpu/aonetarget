@@ -119,7 +119,7 @@ export const handleUnauthorized = async (response: Response | { status: number; 
         clearStudentSession();
         // Force a hard reload so the React/Zustand memory state wipes clean
         // and reads the now-empty localStorage, preventing a fake login state.
-        window.location.href = '/';
+        window.location.reload();
       }
     }
   }

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import LiveClassesCalendar from '../components/student/LiveClassesCalendar';
 import { getPdfUrl, getVideoUrl, getImageUrl, getYouTubeThumbnail, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
 import { useAuthStore } from '../store/authStore';
-import { getAuthHeaders } from '../services/apiClient';
+import { getAuthHeaders, API_BASE_URL } from '../services/apiClient';
 
 const QUIZ_QUESTIONS = [
   {
@@ -66,11 +66,11 @@ const StudyDashboard: React.FC = () => {
         setLoading(true);
         const sId = storedStudent ? JSON.parse(storedStudent).id : '';
         const [courseRes, vRes, nRes, tRes, fRes] = await Promise.all([
-          fetch(`/api/courses/${id}`).then(r => r.ok ? r.json() : null),
-          fetch(`/api/courses/${id}/videos?studentId=${sId}`).then(r => r.ok ? r.json() : []),
-          fetch(`/api/courses/${id}/notes`).then(r => r.ok ? r.json() : []),
-          fetch(`/api/courses/${id}/tests`).then(r => r.ok ? r.json() : []),
-          fetch(`/api/courses/${id}/folders`).then(r => r.ok ? r.json() : [])
+          fetch(`${API_BASE_URL}/courses/${id}`).then(r => r.ok ? r.json() : null),
+          fetch(`${API_BASE_URL}/courses/${id}/videos?studentId=${sId}`).then(r => r.ok ? r.json() : []),
+          fetch(`${API_BASE_URL}/courses/${id}/notes`).then(r => r.ok ? r.json() : []),
+          fetch(`${API_BASE_URL}/courses/${id}/tests`).then(r => r.ok ? r.json() : []),
+          fetch(`${API_BASE_URL}/courses/${id}/folders`).then(r => r.ok ? r.json() : [])
         ]);
         setCourse(courseRes);
         setVideos(Array.isArray(vRes) ? vRes.sort((a: any, b: any) => (Number(a.order) || 0) - (Number(b.order) || 0)) : []);
@@ -80,7 +80,7 @@ const StudyDashboard: React.FC = () => {
         // Fetch Enrollment Status
         if (sId) {
           try {
-            const enrolledRes = await fetch(`/api/students/${sId}/enrolled/${id}`, { headers: getAuthHeaders() });
+            const enrolledRes = await fetch(`${API_BASE_URL}/students/${sId}/enrolled/${id}`, { headers: getAuthHeaders() });
             if (enrolledRes.ok) {
               const enrolledData = await enrolledRes.json();
               setIsEnrolled(enrolledData.accessAllowed || false);
@@ -97,7 +97,7 @@ const StudyDashboard: React.FC = () => {
     };
     const fetchSubjects = async () => {
       try {
-        const res = await fetch('/api/subjects');
+        const res = await fetch(`${API_BASE_URL}/subjects`);
         if (res.ok) {
           const data = await res.json();
           if (Array.isArray(data)) {

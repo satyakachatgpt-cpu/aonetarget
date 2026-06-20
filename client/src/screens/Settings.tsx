@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import { useAuthStore } from '../store/authStore';
 import { toast } from 'sonner';
-import { getAuthHeaders } from '../services/apiClient';
+import { getAuthHeaders, API_BASE_URL } from '../services/apiClient';
 
 interface SettingsProps {
   setAuth?: (auth: boolean) => void;
@@ -83,7 +83,7 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
 
     try {
       setPasswordLoading(true);
-      const response = await fetch('/api/students/change-password', {
+      const response = await fetch(`${API_BASE_URL}/students/change-password`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

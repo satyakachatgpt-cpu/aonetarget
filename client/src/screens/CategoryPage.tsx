@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { categoriesAPI, subcategoriesAPI, coursesAPI, subjectsAPI, getAuthHeaders } from '../services/apiClient';
 import { getImageUrl } from '../lib/utils';
 import { useAuthStore } from '../store/authStore';
+import { API_BASE_URL } from '../services/apiClient';
 
 interface Category {
   _id?: string;
@@ -795,7 +796,7 @@ const CategoryPage: React.FC = () => {
           subcategoriesAPI.getAll(categoryId).catch(() => []),
           subjectsAPI.getAll().catch(() => []),
           coursesAPI.getAll().catch(() => []),
-          sId ? fetch(`/api/students/${sId}/courses`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []) : Promise.resolve([])
+          sId ? fetch(`${API_BASE_URL}/students/${sId}/courses`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []) : Promise.resolve([])
         ]);
 
         const cat = (Array.isArray(cats) ? cats : []).find((c: Category) => 

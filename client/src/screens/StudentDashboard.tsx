@@ -7,6 +7,7 @@ import { useAuthStore } from '../store/authStore';
 import { Course, Student, VideoProgress } from '../types';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
+import { API_BASE_URL } from '../services/apiClient';
 
 interface TestResult {
   id: string;
@@ -58,10 +59,10 @@ const StudentDashboard: React.FC = () => {
   const fetchDashboardData = async (studentId: string) => {
     try {
       const [coursesRes, testsData, resultsRes, progressRes] = await Promise.all([
-        fetch(`/api/students/${studentId}/courses`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []),
+        fetch(`${API_BASE_URL}/students/${studentId}/courses`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []),
         testsAPI.getAll().catch(() => []),
-        fetch(`/api/students/${studentId}/test-results`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []),
-        fetch(`/api/progress/${studentId}`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => [])
+        fetch(`${API_BASE_URL}/students/${studentId}/test-results`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []),
+        fetch(`${API_BASE_URL}/progress/${studentId}`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => [])
       ]);
 
       // Process Progress (Continue Watching)

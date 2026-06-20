@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getAdminHeaders } from '../../services/apiClient';
+import { API_BASE_URL } from '../../services/apiClient';
 
 interface ReferralRecord {
   _id?: string;
@@ -56,9 +57,9 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
   const loadData = async () => {
     try {
       const [referralsRes, settingsRes, studentsRes] = await Promise.all([
-        fetch('/api/admin/referrals', { headers: getAdminHeaders() }),
-        fetch('/api/admin/referral-settings', { headers: getAdminHeaders() }),
-        fetch('/api/students', { headers: getAdminHeaders() })
+        fetch(`${API_BASE_URL}/admin/referrals`, { headers: getAdminHeaders() }),
+        fetch(`${API_BASE_URL}/admin/referral-settings`, { headers: getAdminHeaders() }),
+        fetch(`${API_BASE_URL}/students`, { headers: getAdminHeaders() })
       ]);
       const referralsData = await referralsRes.json();
       const settingsData = await settingsRes.json();
@@ -83,7 +84,7 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
   const saveSettings = async () => {
     setSavingSettings(true);
     try {
-      const res = await fetch('/api/admin/referral-settings', {
+      const res = await fetch(`${API_BASE_URL}/admin/referral-settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
         body: JSON.stringify(settings)
@@ -102,7 +103,7 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
 
   const updateReferralStatus = async (referralCode: string, referredStudentId: string, newStatus: string) => {
     try {
-      const res = await fetch('/api/admin/referrals/update-status', {
+      const res = await fetch(`${API_BASE_URL}/admin/referrals/update-status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
         body: JSON.stringify({ referralCode, referredStudentId, status: newStatus })
@@ -121,7 +122,7 @@ const Referrals: React.FC<Props> = ({ showToast }) => {
   const deleteReferral = async (referralCode: string, studentId: string) => {
     if (!window.confirm('Are you sure you want to delete this referral? This will also revert any coins earned.')) return;
     try {
-      const res = await fetch(`/api/admin/referrals/${referralCode}/${studentId}`, {
+      const res = await fetch(`${API_BASE_URL}/admin/referrals/${referralCode}/${studentId}`, {
         method: 'DELETE',
         headers: getAdminHeaders()
       });

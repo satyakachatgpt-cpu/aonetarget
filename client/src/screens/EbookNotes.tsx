@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import { getPdfUrl } from '../lib/utils';
+import { API_BASE_URL } from '../services/apiClient';
 
 const EbookNotes: React.FC = () => {
   const navigate = useNavigate();
@@ -37,9 +38,9 @@ const EbookNotes: React.FC = () => {
     try {
       setLoading(true);
       const [ebooksRes, docsRes, subjectsRes] = await Promise.all([
-        fetch('/api/ebooks').then(r => r.json()),
-        fetch('/api/exam-documents').then(r => r.json()),
-        fetch('/api/subjects').then(r => r.json())
+        fetch(`${API_BASE_URL}/ebooks`).then(r => r.json()),
+        fetch(`${API_BASE_URL}/exam-documents`).then(r => r.json()),
+        fetch(`${API_BASE_URL}/subjects`).then(r => r.json())
       ]);
       setEbooks(Array.isArray(ebooksRes) ? ebooksRes.filter((e: any) => !e.isFree).sort((a: any, b: any) => (Number(a.sortBy) || 0) - (Number(b.sortBy) || 0)) : []);
       setExamDocs(Array.isArray(docsRes) ? docsRes.filter((d: any) => d.status === 'active' && !d.isFree).sort((a: any, b: any) => {

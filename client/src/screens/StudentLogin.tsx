@@ -786,7 +786,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
           setLoading(true);
           try {
             // Directly send registration OTP (backend already checks if user exists)
-            const otpRes = await fetch('/api/students/signup/send-otp', {
+            const otpRes = await fetch(`${API_BASE_URL}/students/signup/send-otp`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ phone: data.phone })
@@ -876,7 +876,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       <form onSubmit={handleProfileSubmit(async (data) => {
         setLoading(true);
         try {
-          const response = await fetch('/api/students/register', {
+          const response = await fetch(`${API_BASE_URL}/students/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)

@@ -13,6 +13,8 @@ import { Course, Video, Progress } from '../types';
 import { useAuthStore } from '../store/authStore';
 import { useUIStore } from '../store/uiStore';
 import { CATEGORY_GRADIENTS } from '../constants';
+import { API_BASE_URL as _API_BASE_URL } from '../services/apiClient';
+const API_BASE_URL = _API_BASE_URL;
 
 // Local Video interface removed; using Course/Video/Progress from ../types
 
@@ -95,7 +97,7 @@ const CourseDetails: React.FC = () => {
 
   const fetchLiveMessages = async (vId: string) => {
     try {
-      const res = await fetch(`/api/live-chat/${vId}/messages`);
+      const res = await fetch(`${API_BASE_URL}/live-chat/${vId}/messages`);
       if (res.ok) {
         const data = await res.json();
         // Normalize fields for StudentVideoPlayer
@@ -133,7 +135,7 @@ const CourseDetails: React.FC = () => {
     if (!finalMsg || !selectedVideo || !student) return;
     try {
       const vid = selectedVideo.id || selectedVideo._id;
-      const res = await fetch(`/api/live-chat/${vid}/messages`, {
+      const res = await fetch(`${API_BASE_URL}/live-chat/${vid}/messages`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -310,7 +312,7 @@ const CourseDetails: React.FC = () => {
   const fetchCourseProgress = useCallback(async () => {
     if (!studentId || !id) return;
     try {
-      const progressRes = await fetch(`/api/students/${studentId}/courses/${id}/progress`, { headers: getAuthHeaders() });
+      const progressRes = await fetch(`${API_BASE_URL}/students/${studentId}/courses/${id}/progress`, { headers: getAuthHeaders() });
       if (progressRes.ok) {
         const progressData = await progressRes.json();
         
@@ -339,11 +341,11 @@ const CourseDetails: React.FC = () => {
     try {
       const h = getAuthHeaders();
       const [courseData, videosData, notesData, testsData, foldersData] = await Promise.all([
-        fetch(`/api/courses/${id}`, { headers: h }).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch(`/api/courses/${id}/videos?studentId=${studentId}`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`/api/courses/${id}/notes`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`/api/courses/${id}/tests`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`/api/courses/${id}/folders`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`${API_BASE_URL}/courses/${id}`, { headers: h }).then(r => r.ok ? r.json() : null).catch(() => null),
+        fetch(`${API_BASE_URL}/courses/${id}/videos?studentId=${studentId}`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`${API_BASE_URL}/courses/${id}/notes`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`${API_BASE_URL}/courses/${id}/tests`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch(`${API_BASE_URL}/courses/${id}/folders`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
       ]);
 
       if (courseData && !courseData.error) {
@@ -357,7 +359,7 @@ const CourseDetails: React.FC = () => {
 
       if (studentId) {
         try {
-          const enrolledRes = await fetch(`/api/students/${studentId}/enrolled/${id}`, { headers: getAuthHeaders() });
+          const enrolledRes = await fetch(`${API_BASE_URL}/students/${studentId}/enrolled/${id}`, { headers: getAuthHeaders() });
           if (enrolledRes.ok) {
             const enrolledData = await enrolledRes.json();
             setIsEnrolled(enrolledData.enrolled || false);
@@ -387,7 +389,7 @@ const CourseDetails: React.FC = () => {
 
     setEnrolling(true);
     try {
-      const response = await fetch(`/api/students/${studentId}/enroll`, {
+      const response = await fetch(`${API_BASE_URL}/students/${studentId}/enroll`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({ courseId: id })
@@ -396,7 +398,7 @@ const CourseDetails: React.FC = () => {
       if (response.ok) {
         setIsEnrolled(true);
         alert('Enrollment successful! You now have access to all course content.');
-        const progressRes = await fetch(`/api/students/${studentId}/courses/${id}/progress`, { headers: getAuthHeaders() });
+        const progressRes = await fetch(`${API_BASE_URL}/students/${studentId}/courses/${id}/progress`, { headers: getAuthHeaders() });
         const progressData = await progressRes.json();
         setProgress(progressData);
       } else {
@@ -434,7 +436,7 @@ const CourseDetails: React.FC = () => {
         completedVideos: [...new Set([...prev.completedVideos.map(v => String(v)), videoId])]
       }));
 
-      const res = await fetch(`/api/students/${studentId}/courses/${id}/progress`, {
+      const res = await fetch(`${API_BASE_URL}/students/${studentId}/courses/${id}/progress`, {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({ videoId: String(videoId), action: 'complete' })
@@ -465,7 +467,7 @@ const CourseDetails: React.FC = () => {
     if (course?.content?.upsell?.enabled && course.content.upsell.courses.length > 0) {
       const fetchUpsell = async () => {
         try {
-          const res = await fetch('/api/courses');
+          const res = await fetch(`${API_BASE_URL}/courses`);
           if (res.ok) {
             const all = await res.json();
             const recommended = all.filter((c: any) =>

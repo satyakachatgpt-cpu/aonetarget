@@ -9,6 +9,7 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import { getAdminHeaders } from '../../services/apiClient';
+import { API_BASE_URL } from '../../services/apiClient';
 
 interface Props {
   showToast: (m: string, type?: 'success' | 'error') => void;
@@ -116,7 +117,7 @@ const Dashboard: React.FC<Props> = ({ showToast }) => {
           from: fromDate,
           to: toDate
         });
-        const res = await fetch(`/api/admin/dashboard-stats?${params}`, { headers: getAdminHeaders() });
+        const res = await fetch(`${API_BASE_URL}/admin/dashboard-stats?${params}`, { headers: getAdminHeaders() });
         if (!res.ok) throw new Error();
         const data = await res.json();
         if (isMounted) setDbStats(data);

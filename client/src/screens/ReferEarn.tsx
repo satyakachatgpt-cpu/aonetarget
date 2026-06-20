@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getAuthHeaders } from '../services/apiClient';
+import { getAuthHeaders, API_BASE_URL } from '../services/apiClient';
 
 interface Stats {
   referralCode: string;
@@ -50,7 +50,7 @@ const ReferEarn: React.FC = () => {
 
   const loadReferralData = async (sid: string) => {
     try {
-      const statsRes = await fetch(`/api/referrals/${sid}`, { headers: getAuthHeaders() });
+      const statsRes = await fetch(`${API_BASE_URL}/referrals/${sid}`, { headers: getAuthHeaders() });
       const statsData = await statsRes.json();
 
       // Set stats regardless of whether referralCode exists yet
@@ -72,7 +72,7 @@ const ReferEarn: React.FC = () => {
 
       // If no referral code, generate one
       if (!statsData.referralCode) {
-        const genRes = await fetch('/api/referrals/generate', {
+        const genRes = await fetch(`${API_BASE_URL}/referrals/generate`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify({ studentId: sid })
@@ -85,7 +85,7 @@ const ReferEarn: React.FC = () => {
       }
 
       // Always try to fetch history
-      const historyRes = await fetch(`/api/referrals/${sid}/history`, { headers: getAuthHeaders() });
+      const historyRes = await fetch(`${API_BASE_URL}/referrals/${sid}/history`, { headers: getAuthHeaders() });
       if (historyRes.ok) {
         const historyData = await historyRes.json();
         setHistory(Array.isArray(historyData) ? historyData : []);

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getImageUrl } from '../lib/utils';
-import { getAuthHeaders } from '../services/apiClient';
+import { getAuthHeaders, API_BASE_URL } from '../services/apiClient';
 
 declare global {
   interface Window {
@@ -186,7 +186,7 @@ const Checkout: React.FC = () => {
   useEffect(() => {
     const loadCourse = async () => {
       try {
-        const res = await fetch(`/api/courses/${id}`);
+        const res = await fetch(`${API_BASE_URL}/courses/${id}`);
         if (res.ok) {
           const data = await res.json();
           setCourse(data);
@@ -207,7 +207,7 @@ const Checkout: React.FC = () => {
         return;
       }
       try {
-        const res = await fetch(`/api/referrals/${resolvedId}`, { headers: getAuthHeaders() });
+        const res = await fetch(`${API_BASE_URL}/referrals/${resolvedId}`, { headers: getAuthHeaders() });
         const data = await res.json();
         // Backend returns availableCoins as source of truth
         setAvailableCoins(data.availableCoins || data.coins || 0);
@@ -238,7 +238,7 @@ const Checkout: React.FC = () => {
 
     const fetchUpsell = async () => {
       try {
-        const res = await fetch('/api/courses');
+        const res = await fetch(`${API_BASE_URL}/courses`);
         if (res.ok) {
           const allData = await res.json();
           const allCourses: Course[] = Array.isArray(allData) ? allData : (allData.courses || []);
@@ -264,7 +264,7 @@ const Checkout: React.FC = () => {
     setIsApplyingCoupon(true);
     setCouponError('');
     try {
-      const res = await fetch('/api/coupons/validate', {
+      const res = await fetch(`${API_BASE_URL}/coupons/validate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ code: couponCode, courseId: course.id || course._id || id })
@@ -311,7 +311,7 @@ const Checkout: React.FC = () => {
     }
     setProcessing(true);
     try {
-      const orderRes = await fetch('/api/razorpay/create-order', {
+      const orderRes = await fetch(`${API_BASE_URL}/razorpay/create-order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
@@ -333,7 +333,7 @@ const Checkout: React.FC = () => {
         order_id: orderData.orderId,
         handler: async function (response: any) {
           try {
-            const verifyRes = await fetch('/api/razorpay/verify', {
+            const verifyRes = await fetch(`${API_BASE_URL}/razorpay/verify`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
               body: JSON.stringify({
@@ -395,7 +395,7 @@ const Checkout: React.FC = () => {
     }
     setProcessing(true);
     try {
-      const res = await fetch('/api/purchases', {
+      const res = await fetch(`${API_BASE_URL}/purchases`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
