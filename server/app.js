@@ -80,7 +80,7 @@ app.use(requestIdMiddleware);
 
 // --- Configuration ---
 app.use(compression());
-app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
+app.set('trust proxy', 1);
 
 app.use(mongoSanitize());
 
