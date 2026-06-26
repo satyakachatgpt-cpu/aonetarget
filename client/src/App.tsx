@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, Suspense, lazy } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
+import { Capacitor } from '@capacitor/core';
 import BottomNav from './components/BottomNav';
 import SplashScreen from './components/SplashScreen';
 import { useAuthStore } from './store/authStore';
@@ -108,6 +109,14 @@ declare const __APP_VERSION__: string;
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev-version';
 
 const App: React.FC = () => {
+  useEffect(() => {
+    // Apply safe area fallback padding ONLY for native Android/iOS apps
+    // This prevents double-padding and ensures older phones get at least 24px space
+    if (Capacitor.isNativePlatform()) {
+      document.body.style.paddingTop = 'max(env(safe-area-inset-top), 24px)';
+    }
+  }, []);
+
   // Force logout on app update
   useEffect(() => {
     const currentVersion = localStorage.getItem('app_version');

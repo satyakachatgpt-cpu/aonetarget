@@ -203,11 +203,27 @@ const LiveClasses: React.FC = () => {
         </div>
       </header>
 
-      {liveClasses.length > 0 && (() => {
+      {isClassesLoading ? (
+        <div className="flex justify-center items-center py-20">
+          <span className="material-symbols-rounded animate-spin text-4xl text-primary-500">progress_activity</span>
+        </div>
+      ) : (() => {
         const ongoing = liveClasses.filter(lc => computeEffectiveStatus(lc) === 'live');
         const upcoming = liveClasses.filter(lc => computeEffectiveStatus(lc) === 'upcoming');
 
-        if (ongoing.length === 0 && upcoming.length === 0) return null;
+        if (ongoing.length === 0 && upcoming.length === 0) {
+          return (
+            <div className="flex flex-col items-center justify-center py-24 px-4 text-center animate-fade-in-up">
+              <div className="w-24 h-24 bg-primary-50 rounded-full flex items-center justify-center mb-6 border-8 border-white shadow-sm">
+                <span className="material-symbols-rounded text-5xl text-primary-300">event_busy</span>
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2 tracking-tight">No Live Classes</h2>
+              <p className="text-sm text-gray-500 max-w-[260px] font-medium leading-relaxed">
+                You don't have any ongoing or upcoming live classes at the moment.
+              </p>
+            </div>
+          );
+        }
 
         return (
           <div className="px-4 space-y-6">

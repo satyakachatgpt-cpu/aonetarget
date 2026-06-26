@@ -153,8 +153,11 @@ const PDFViewerScreen: React.FC = () => {
     (title || '').toLowerCase().endsWith('.doc');
 
   const handleExit = useCallback(() => {
-    if (window.opener) window.close();
-    else navigate(-1);
+    if (window.history.length <= 1) {
+      navigate('/courses', { replace: true });
+    } else {
+      navigate(-1);
+    }
   }, [navigate]);
 
   // Enable pinch-to-zoom for PDF viewer only
@@ -246,7 +249,10 @@ const PDFViewerScreen: React.FC = () => {
       className="fixed inset-0 bg-[#f4f7f6] z-[99999] flex flex-col font-outfit h-[100dvh] w-full overflow-hidden"
       onContextMenu={(e) => e.preventDefault()}
     >
-      <div className="bg-white/95 backdrop-blur-md px-4 pt-[max(env(safe-area-inset-top),8px)] pb-2 md:py-3 flex items-center justify-between border-b border-gray-200 shadow-sm z-[110] shrink-0">
+      <div 
+        className="bg-white/95 backdrop-blur-md px-4 pb-2 md:py-3 flex items-center justify-between border-b border-gray-200 shadow-sm z-[110] shrink-0"
+        style={{ paddingTop: 'max(env(safe-area-inset-top), 24px)' }}
+      >
         <button
           onClick={handleExit}
           className="w-9 h-9 rounded-xl flex items-center justify-center bg-gray-100 text-gray-800 hover:bg-gray-200 transition-all scale-100 active:scale-95 z-[120]"
@@ -296,18 +302,24 @@ const PDFViewerScreen: React.FC = () => {
                 </span>
               </div>
               <h2 className="text-2xl font-black text-gray-900 mb-3 uppercase tracking-tight">
-                Secure Document Preview
+                Document Preview
               </h2>
               <p className="text-sm text-gray-500 mb-10 leading-relaxed font-medium">
-                For security reasons, this {isDocx ? 'document' : 'PDF'} needs to be opened in our
-                secure internal viewer. This protects the content from unauthorized access.
+                Please wait while this {isDocx ? 'document' : 'PDF'} is loaded in our internal viewer.
+                Depending on your device and network speed, this may take a few moments.
               </p>
-              <div className="p-5 bg-orange-50 rounded-2xl border border-orange-100 flex items-start gap-4 max-w-sm mx-auto">
+              <div className="p-5 bg-orange-50 rounded-2xl border border-orange-100 flex items-start gap-4 max-w-sm mx-auto mb-6">
                 <span className="material-symbols-rounded text-orange-500 mt-0.5">info</span>
                 <p className="text-[11px] text-orange-700 text-left leading-normal font-bold uppercase tracking-tight">
-                  If the document doesn't load correctly, please try refreshing the page.
+                  If the document is taking too long to load, you can open it directly.
                 </p>
               </div>
+              <button
+                onClick={() => window.open(fullPdfUrl, '_system')}
+                className="w-full bg-[#1A237E] text-white py-3.5 rounded-xl font-bold text-sm tracking-wide hover:bg-blue-800 active:scale-95 transition-all shadow-md"
+              >
+                Open {isDocx ? 'Document' : 'PDF'} Now
+              </button>
             </div>
           </div>
 
@@ -340,3 +352,4 @@ const PDFViewerScreen: React.FC = () => {
 };
 
 export default PDFViewerScreen;
+

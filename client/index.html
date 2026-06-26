@@ -303,13 +303,132 @@
             font-weight: 400;
             margin-top: 2px;
         }
+
+        /* Prevent FOUC: Hide root until Tailwind has compiled */
+        #root {
+            opacity: 0;
+            transition: opacity 0.2s ease-in;
+        }
+        #root.tailwind-ready {
+            opacity: 1;
+        }
+
+        /* Native Offline Screen Styles */
+        #offline-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #1A237E;
+            color: white;
+            z-index: 2147483647;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Outfit', sans-serif;
+            text-align: center;
+            padding: 24px;
+        }
+        #offline-overlay h1 {
+            font-size: 28px;
+            font-weight: 800;
+            margin-bottom: 12px;
+            letter-spacing: -0.5px;
+            color: white;
+        }
+        #offline-overlay p {
+            font-size: 15px;
+            opacity: 0.8;
+            margin-bottom: 32px;
+            line-height: 1.5;
+            max-width: 300px;
+            color: white;
+        }
+        #offline-overlay button {
+            background-color: white;
+            color: #1A237E;
+            border: none;
+            padding: 14px 32px;
+            border-radius: 16px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+            transition: transform 0.2s;
+        }
+        #offline-overlay button:active {
+            transform: scale(0.95);
+        }
+        .offline-icon {
+            font-size: 64px;
+            margin-bottom: 24px;
+            opacity: 0.9;
+        }
     </style>
     <link rel="stylesheet" href="/src/index.css">
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 </head>
 
 <body class="bg-surface-100 text-gray-900" style="padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);">
+    <div id="offline-overlay">
+        <div class="offline-icon">📡</div>
+        <h1>No Internet</h1>
+        <p>Please check your network connection and try again to continue learning.</p>
+        <button onclick="window.location.reload()">Retry Connection</button>
+    </div>
     <div id="root"></div>
+    <div id="tw-detector" class="absolute hidden w-0 h-0 text-[#123456]"></div>
+    <script>
+        (function() {
+            var detector = document.getElementById('tw-detector');
+            var rootNode = document.getElementById('root');
+            var maxAttempts = 100; // max ~1.6s
+            var attempts = 0;
+            var tailwindChecked = false;
+            var bootedOffline = !navigator.onLine;
+
+            function checkTailwind() {
+                if (tailwindChecked || !rootNode) return;
+                attempts++;
+                var color = window.getComputedStyle(detector).color;
+                if (color === 'rgb(18, 52, 86)' || color === '#123456') {
+                    rootNode.classList.add('tailwind-ready');
+                    tailwindChecked = true;
+                } else if (attempts < maxAttempts) {
+                    requestAnimationFrame(checkTailwind);
+                } else {
+                    rootNode.classList.add('tailwind-ready'); // Fallback
+                    tailwindChecked = true;
+                }
+            }
+
+            function updateOfflineStatus() {
+                var overlay = document.getElementById('offline-overlay');
+                if (!rootNode) return; // safeguard
+                if (!navigator.onLine) {
+                    overlay.style.display = 'flex';
+                    // We intentionally do NOT hide rootNode (e.g. display: none) 
+                    // because Android WebView aggressively unloads web fonts 
+                    // for nodes removed from the render tree!
+                } else {
+                    if (bootedOffline) {
+                        // If we started offline, Google Fonts failed to load!
+                        // We MUST reload the page to fetch the missing fonts and icons.
+                        window.location.reload();
+                        return;
+                    }
+                    
+                    overlay.style.display = 'none';
+                    if (!tailwindChecked) {
+                        checkTailwind();
+                    }
+                }
+            }
+
+            window.addEventListener('online', updateOfflineStatus);
+            window.addEventListener('offline', updateOfflineStatus);
+            updateOfflineStatus(); // Check immediately on boot
+        })();
+    </script>
     <script type="module" src="/src/index.tsx"></script>
 </body>
 

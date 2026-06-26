@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import DOMPurify from 'dompurify';
+import { Share } from '@capacitor/share';
+import { Capacitor } from '@capacitor/core';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getImageUrl, getVideoUrl, getPdfUrl, getYouTubeThumbnail, getGradientPlaceholder, toYouTubeEmbed, isYouTubeUrl, isLiveUrl } from '../lib/utils';
 import StudentVideoPlayer from '../components/student/StudentVideoPlayer';
@@ -259,25 +261,35 @@ const CourseDetails: React.FC = () => {
   };
 
   const handleShare = async () => {
-    const courseUrl = `${window.location.origin}/#/course/${id}`;
+    const courseUrl = `https://aonetarget.in/#/course/${id}`;
     const courseTitle = course?.name || course?.title || 'Check out this course';
     const shareData = {
       title: courseTitle,
-      text: `${courseTitle} - Learn with Aone Target!`,
+      text: `${courseTitle} - Learn with Aone Target Institute!`,
       url: courseUrl,
     };
 
     try {
-      if (navigator.share) {
+      if (Capacitor.isNativePlatform()) {
+        try {
+          await Share.share({
+            title: shareData.title,
+            text: `${shareData.text}\n\n📱 Download App:\nhttps://play.google.com/store/apps/details?id=com.aonetarget.education`,
+            dialogTitle: 'Share Course'
+          });
+        } catch (err) {
+          console.log('Capacitor share failed:', err);
+        }
+      } else if (navigator.share) {
         await navigator.share(shareData);
       } else {
-        await navigator.clipboard.writeText(`${courseTitle}\n${courseUrl}`);
+        await navigator.clipboard.writeText(`${shareData.text}\n📱 Download App:\nhttps://play.google.com/store/apps/details?id=com.aonetarget.education`);
         setShareSuccess(true);
         setTimeout(() => setShareSuccess(false), 2000);
       }
     } catch (err) {
       try {
-        await navigator.clipboard.writeText(`${courseTitle}\n${courseUrl}`);
+        await navigator.clipboard.writeText(`${shareData.text}\n📱 Download App:\nhttps://play.google.com/store/apps/details?id=com.aonetarget.education`);
         setShareSuccess(true);
         setTimeout(() => setShareSuccess(false), 2000);
       } catch {
@@ -659,15 +671,14 @@ const CourseDetails: React.FC = () => {
 
   const courseImage = getImageUrl(course.imageUrl || course.thumbnail);
   const shareOnPlatform = (platform: string) => {
-    const courseUrl = `${window.location.origin}/#/course/${id}`;
     const courseTitle = course.name || course.title || 'Check out this course';
-    const text = `${courseTitle} - Learn with Aone Target Institute!`;
+    const text = `${courseTitle} - Learn with Aone Target Institute!\n\n📱 Download App:\nhttps://play.google.com/store/apps/details?id=com.aonetarget.education`;
     let url = '';
     switch (platform) {
-      case 'whatsapp': url = `https://wa.me/?text=${encodeURIComponent(text + '\n' + courseUrl)}`; break;
-      case 'telegram': url = `https://t.me/share/url?url=${encodeURIComponent(courseUrl)}&text=${encodeURIComponent(text)}`; break;
-      case 'facebook': url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(courseUrl)}`; break;
-      case 'twitter': url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(courseUrl)}`; break;
+      case 'whatsapp': url = `https://wa.me/?text=${encodeURIComponent(text)}`; break;
+      case 'telegram': url = `https://t.me/share/url?url=&text=${encodeURIComponent(text)}`; break;
+      case 'facebook': url = `https://www.facebook.com/sharer/sharer.php?u=https://play.google.com/store/apps/details?id=com.aonetarget.education`; break;
+      case 'twitter': url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`; break;
     }
     if (url) window.open(url, '_blank');
   };

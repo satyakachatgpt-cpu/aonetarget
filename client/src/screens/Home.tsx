@@ -1460,13 +1460,29 @@ const Home: React.FC = () => {
 
         <button
           onClick={async () => {
-            if (navigator.share) {
+            const shareData = {
+              title: 'AoneTarget Institute',
+              text: 'Join Aone Target Institute – Best coaching for competitive exams! 🎯',
+              url: 'https://aonetarget.in'
+            };
+            // Check if Capacitor is available (since we use it globally)
+            const isNative = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform();
+            
+            if (isNative) {
               try {
-                await navigator.share({
-                  title: 'AoneTarget Institute',
-                  text: 'Join Aone Target Institute – Best coaching for competitive exams! 🎯',
-                  url: 'https://aonetarget.in'
+                // Using dynamic import or global Share if available
+                const { Share } = await import('@capacitor/share');
+                await Share.share({
+                  title: shareData.title,
+                  text: `${shareData.text}\n\n🌐 Visit website:\nhttps://aonetarget.in\n\n📱 Download App:\nhttps://play.google.com/store/apps/details?id=com.aonetarget.education`,
+                  dialogTitle: 'Share App'
                 });
+              } catch (err) {
+                console.log('Native share failed:', err);
+              }
+            } else if (navigator.share) {
+              try {
+                await navigator.share(shareData);
               } catch (err) {
                 // User cancelled – silent fail
               }

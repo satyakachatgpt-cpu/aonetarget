@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getImageUrl } from '../lib/utils';
 import { getAuthHeaders, API_BASE_URL } from '../services/apiClient';
+import { Capacitor } from '@capacitor/core';
 
 declare global {
   interface Window {
     Razorpay: any;
+    Checkout: any;
   }
 }
 
@@ -374,12 +376,29 @@ const Checkout: React.FC = () => {
         }
       };
 
-      const razorpay = new window.Razorpay(options);
-      razorpay.on('payment.failed', (response: any) => {
-        alert(`Payment failed: ${response.error?.description || 'Please try again'}`);
-        setProcessing(false);
-      });
-      razorpay.open();
+      if (Capacitor.isNativePlatform()) {
+        const razorpay = (window as any).RazorpayCheckout;
+        const errorCallback = (error: any) => {
+          alert(`Payment failed: ${error?.description || 'Please try again'}`);
+          setProcessing(false);
+        };
+        
+        if (razorpay) {
+          razorpay.on('payment.success', options.handler);
+          razorpay.on('payment.cancel', errorCallback);
+          razorpay.open(options);
+        } else {
+          alert('Payment plugin not initialized. Please restart the app.');
+          setProcessing(false);
+        }
+      } else {
+        const razorpay = new window.Razorpay(options);
+        razorpay.on('payment.failed', (response: any) => {
+          alert(`Payment failed: ${response.error?.description || 'Please try again'}`);
+          setProcessing(false);
+        });
+        razorpay.open();
+      }
     } catch (error: any) {
       alert(error.message || 'Payment failed. Please try again.');
       setProcessing(false);
@@ -825,3 +844,5 @@ const Checkout: React.FC = () => {
 };
 
 export default Checkout;
+
+

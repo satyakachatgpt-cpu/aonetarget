@@ -55,17 +55,15 @@ const WatchPage: React.FC = () => {
   }
 
   const handleBack = useCallback(() => {
-    if (returnTo) {
-      navigate(returnTo);
+    const state = window.history.state;
+    if (state && state.idx > 0) {
+      navigate(-1);
+    } else if (returnTo) {
+      navigate(returnTo, { replace: true });
+    } else if (isAdminPreview) {
+      navigate((source === 'free-content' || source === 'free') ? '/admin/free-content' : '/admin/course-content', { replace: true });
     } else {
-      const state = window.history.state;
-      if (state && state.idx > 0) {
-        navigate(-1);
-      } else if (isAdminPreview) {
-        navigate((source === 'free-content' || source === 'free') ? '/admin/free-content' : '/admin/course-content');
-      } else {
-        navigate('/live-classes', { replace: true });
-      }
+      navigate('/live-classes', { replace: true });
     }
   }, [navigate, returnTo, isAdminPreview, source]);
 
@@ -365,3 +363,5 @@ const WatchPage: React.FC = () => {
 };
 
 export default WatchPage;
+
+

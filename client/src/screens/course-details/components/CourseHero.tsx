@@ -64,3 +64,4 @@ const CourseHero: React.FC<CourseHeroProps> = ({
 };
 
 export default CourseHero;
+
