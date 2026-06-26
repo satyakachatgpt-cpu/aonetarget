@@ -122,3 +122,5 @@ const AllNews: React.FC = () => {
 };
 
 export default AllNews;
+
+

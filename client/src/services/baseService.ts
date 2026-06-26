@@ -84,6 +84,9 @@ export const clearStudentSession = () => {
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('token');
+  sessionStorage.removeItem('accessToken');
+  sessionStorage.removeItem('token');
+  sessionStorage.removeItem('studentData');
   document.cookie = "accessToken=; Path=/api; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
   document.cookie = "refreshToken=; Path=/api/auth/refresh; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
 };

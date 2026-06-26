@@ -3,6 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { blogAPI } from '../services/apiClient';
 import { getImageUrl } from '../lib/utils';
 import DOMPurify from 'dompurify';
+import { Share } from '@capacitor/share';
+import { Capacitor } from '@capacitor/core';
 
 const NewsArticle: React.FC = () => {
   const { id } = useParams();
@@ -113,8 +115,8 @@ const NewsArticle: React.FC = () => {
           <button
             onClick={async () => {
               const newsId = news.id || news._id;
-              // Adding ?v=2 to bypass WhatsApp's cache
-              const shareUrl = `${window.location.origin}/api/share/news/${newsId}?v=${Date.now()}`;
+              // Adding ?v=Date to bypass WhatsApp's cache
+              const shareUrl = `https://aonetarget.in/api/share/news/${newsId}?v=${Date.now()}`;
               
               const shareData = {
                 title: news.title,
@@ -122,7 +124,17 @@ const NewsArticle: React.FC = () => {
                 url: shareUrl,
               };
               
-              if (typeof navigator !== 'undefined' && navigator.share) {
+              if (Capacitor.isNativePlatform()) {
+                try {
+                  await Share.share({
+                    title: shareData.title,
+                    text: `${shareData.text}\n\n📱 Download App:\nhttps://play.google.com/store/apps/details?id=com.aonetarget.education\n\n🌐 Read on web:\n${shareUrl}`,
+                    dialogTitle: 'Share Post'
+                  });
+                } catch (err) {
+                  console.log('Capacitor share failed:', err);
+                }
+              } else if (typeof navigator !== 'undefined' && navigator.share) {
                 try {
                   await navigator.share(shareData);
                 } catch (err) {

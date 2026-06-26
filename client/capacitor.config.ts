@@ -6,12 +6,16 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   plugins: {
     SplashScreen: {
-      launchShowDuration: 0,       // Hide native splash immediately
+      launchShowDuration: 0,
       launchAutoHide: true,
       backgroundColor: '#1A237E',  // Match your app's primary color
       showSpinner: false,
       androidScaleType: 'CENTER_CROP',
     },
+    Keyboard: {
+      resize: 'body',
+      resizeOnFullScreen: true,
+    }
   },
 };
 

@@ -103,8 +103,8 @@ const ReferEarn: React.FC = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const shareUrl = `${window.location.origin}/#/?ref=${referralCode}`;
-  const shareMessage = `Join Aone Target Institute and get amazing courses for NEET & IIT-JEE preparation! Use my referral code: ${referralCode} or click here: ${shareUrl}`;
+  const shareUrl = `https://aonetarget.in/#/?ref=${referralCode}`;
+  const shareMessage = `Join Aone Target Institute and get amazing courses for NEET & IIT-JEE preparation! Use my referral code: ${referralCode}\n\n📱 Download App:\nhttps://play.google.com/store/apps/details?id=com.aonetarget.education\n\n🌐 Or click here:\n${shareUrl}`;
 
   const shareWhatsApp = () => {
     window.open(`https://wa.me/?text=${encodeURIComponent(shareMessage)}`, '_blank');

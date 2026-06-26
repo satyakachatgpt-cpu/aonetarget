@@ -325,3 +325,5 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
 };
 
 export default Settings;
+
+
