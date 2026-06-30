@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { categoriesAPI } from '../services/apiClient';
 import StudentSidebar from '../components/StudentSidebar';
@@ -27,11 +27,18 @@ const ExploreCourses: React.FC = () => {
   const [student, setStudent] = useState<any>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' } | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type });
     setTimeout(() => setToast(null), 3000);
   };
+
+  useEffect(() => {
+    if (isSearchOpen && searchInputRef.current) {
+      searchInputRef.current.focus({ preventScroll: true });
+    }
+  }, [isSearchOpen]);
 
   useEffect(() => {
     const storedStudent = localStorage.getItem('studentData');
@@ -68,7 +75,7 @@ const ExploreCourses: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-surface-100 pb-24">
-      <header className="bg-gradient-to-br from-primary-800 via-primary-600 to-primary-500 text-white pt-6 pb-10 px-4 rounded-b-[2rem] relative overflow-hidden transition-all duration-300">
+      <header className="bg-gradient-to-br from-primary-800 via-primary-600 to-primary-500 text-white pt-6 pb-10 px-4 rounded-b-[2rem] relative overflow-clip transition-all duration-300">
         <div className="absolute inset-0 opacity-10">
           <div className="absolute -top-10 -right-10 w-40 h-40 bg-white rounded-full blur-3xl" />
           <div className="absolute bottom-0 left-0 w-32 h-32 bg-white rounded-full blur-3xl" />
@@ -99,7 +106,7 @@ const ExploreCourses: React.FC = () => {
               <div className="flex-1 flex items-center gap-2 animate-slide-in-right">
                 <div className="flex-1 relative">
                   <input
-                    autoFocus
+                    ref={searchInputRef}
                     type="text"
                     placeholder="Search courses..."
                     value={searchQuery}
