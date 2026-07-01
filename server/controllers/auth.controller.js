@@ -320,7 +320,18 @@ export const loginWithPassword = async (req, res) => {
     // DEVICE BINDING LOGIC
     const activeDeviceId = student.activeDeviceId || student.deviceId;
 
-    if (!activeDeviceId) {
+    if (student.isReviewer) {
+      // BYPASS: Reviewer accounts don't get device locked
+      await db.collection('students').updateOne(
+        { _id: student._id },
+        { 
+          $set: { 
+            activeDeviceIP: incomingIP,
+            activeDeviceLastLoginAt: new Date()
+          } 
+        }
+      );
+    } else if (!activeDeviceId) {
       // CASE 1: First time login - Bind device
       await db.collection('students').updateOne(
         { _id: student._id },
@@ -661,7 +672,18 @@ export const verifyOtp = async (req, res) => {
     // DEVICE BINDING LOGIC
     const activeDeviceId = student.activeDeviceId || student.deviceId; // Check both new and legacy fields
 
-    if (!activeDeviceId) {
+    if (student.isReviewer) {
+      // BYPASS: Reviewer accounts don't get device locked
+      await db.collection('students').updateOne(
+        { _id: student._id },
+        { 
+          $set: { 
+            activeDeviceIP: incomingIP,
+            activeDeviceLastLoginAt: new Date()
+          } 
+        }
+      );
+    } else if (!activeDeviceId) {
       // CASE 1: First time login - Bind device
       await db.collection('students').updateOne(
         { _id: student._id },
