@@ -62,13 +62,12 @@ const StudentDashboard: React.FC = () => {
         fetch(`${API_BASE_URL}/students/${studentId}/courses`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []),
         testsAPI.getAll().catch(() => []),
         fetch(`${API_BASE_URL}/students/${studentId}/test-results`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []),
-        fetch(`${API_BASE_URL}/progress/${studentId}`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => [])
+        fetch(`${API_BASE_URL}/progress/${studentId}`, { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : null).catch(() => null)
       ]);
 
       // Process Progress (Continue Watching)
-      const backendProgress = Array.isArray(progressRes) ? progressRes : [];
-      if (backendProgress.length > 0) {
-        setContinueWatching(backendProgress as VideoProgress[]);
+      if (progressRes && Array.isArray(progressRes)) {
+        setContinueWatching(progressRes as VideoProgress[]);
       } else {
         // Fallback to localStorage
         try {
@@ -244,6 +243,12 @@ const StudentDashboard: React.FC = () => {
                 <span className="w-1.5 h-1.5 bg-brandBlue rounded-full animate-pulse"></span>
                 Continue Watching
               </h3>
+              <button 
+                onClick={() => navigate('/watch-history')}
+                className="text-[10px] font-bold text-brandBlue uppercase tracking-wider bg-blue-50 px-2 py-1 rounded-lg hover:bg-blue-100 transition-colors"
+              >
+                View All
+              </button>
             </div>
             <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-2 -mx-4 px-4 snap-x">
               {continueWatching.map((v, i) => (

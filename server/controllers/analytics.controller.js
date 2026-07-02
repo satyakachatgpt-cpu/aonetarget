@@ -81,13 +81,30 @@ export const getProgress = async (req, res) => {
 
     const { userId } = req.params;
 
-    const progress = await db.collection('videoProgress')
+    const rawProgress = await db.collection('videoProgress')
       .find({ userId: userId })
       .sort({ lastUpdated: -1 })
       .limit(20)
       .toArray();
 
-    res.json(progress);
+    const courseIds = [...new Set(rawProgress.map(p => String(p.courseId)))].filter(id => id && id !== 'undefined' && id !== 'null');
+    const objectIds = courseIds.filter(id => ObjectId.isValid(id)).map(id => new ObjectId(id));
+    
+    const courses = await db.collection('courses').find({
+      $or: [
+        { id: { $in: courseIds } },
+        { _id: { $in: objectIds } }
+      ]
+    }).project({ _id: 1, id: 1 }).toArray();
+
+    const validCourseIds = new Set(courses.map(c => String(c.id || c._id)));
+
+    const validProgress = rawProgress.filter(p => {
+      const cId = String(p.courseId);
+      return validCourseIds.has(cId);
+    });
+
+    res.json(validProgress);
   } catch (error) {
     console.error('Get progress error:', error);
     res.status(500).json({ error: 'Failed to fetch progress' });

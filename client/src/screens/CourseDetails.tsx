@@ -521,6 +521,26 @@ const CourseDetails: React.FC = () => {
     }
   }, [course]);
 
+  useEffect(() => {
+    // If course is not found after loading, clean it up from local storage so it stops appearing in "Continue Watching"
+    if (!loading && !course && id) {
+      try {
+        const progressData = JSON.parse(localStorage.getItem('player_progress') || '{}');
+        const newData = { ...progressData };
+        let changed = false;
+        Object.keys(newData).forEach(key => {
+          if (newData[key].courseId === id) {
+            delete newData[key];
+            changed = true;
+          }
+        });
+        if (changed) {
+          localStorage.setItem('player_progress', JSON.stringify(newData));
+        }
+      } catch (e) { console.error('Cleanup fail:', e); }
+    }
+  }, [loading, course, id]);
+
   const navigateIntoFolder = (folder: any) => {
     setNavigationHistory(prev => [...prev, folder]);
   };
@@ -661,7 +681,7 @@ const CourseDetails: React.FC = () => {
             <span className="material-symbols-rounded text-5xl text-gray-300">error</span>
           </div>
           <p className="text-gray-500 font-medium">Course not found</p>
-          <button onClick={() => navigate('/courses')} className="mt-4 btn-primary px-6 py-2.5 text-sm">
+          <button onClick={() => navigate('/courses', { replace: true })} className="mt-4 btn-primary px-6 py-2.5 text-sm">
             Back to Courses
           </button>
         </div>
