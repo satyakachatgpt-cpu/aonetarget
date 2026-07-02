@@ -223,7 +223,7 @@ const WatchHistory: React.FC = () => {
                   {/* Thumbnail Left */}
                   <div className="relative w-24 aspect-video rounded-xl overflow-hidden shrink-0 bg-gray-100">
                     <img 
-                      src={getImageUrl(item.thumbnail)} 
+                      src={getThumbnail(item) || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?w=200&q=80'} 
                       alt={item.title}
                       className="w-full h-full object-cover"
                       onError={(e) => {
