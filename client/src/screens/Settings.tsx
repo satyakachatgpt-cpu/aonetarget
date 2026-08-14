@@ -220,7 +220,7 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
         </button>
 
         <p className="text-center text-[10px] text-gray-300 mt-4">
-          Aone Target Institute Pvt. Ltd. | Version 1.0.0
+          Aone Target Institute Pvt. Ltd. | Version 1.3.0
         </p>
       </div>
 
