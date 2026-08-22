@@ -34,8 +34,8 @@ const AdminLogin: React.FC<Props> = ({ setAuth }) => {
 
         // Fallback: Simple authentication without backend
         // For local testing when backend isn't deployed
-        const defaultAdminId = 'admin';
-        const defaultPassword = 'aone@2026';
+        const defaultAdminId = 'aonetarget25@gmail.com';
+        const defaultPassword = 'aonetarget@1234';
 
         if (cleanAdminId === defaultAdminId && cleanPassword === defaultPassword) {
           response = {

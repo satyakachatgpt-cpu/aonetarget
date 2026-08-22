@@ -29,11 +29,15 @@ export async function findAdmin(adminId) {
   if (!adminId) return null;
   const db = getDb();
 
+  const cleanId = typeof adminId === 'string' ? adminId.trim() : adminId;
+  const lowerId = typeof adminId === 'string' ? adminId.toLowerCase().trim() : null;
+
   return await db.collection('admins').findOne({
     $or: [
-      { adminId: adminId },
+      { adminId: cleanId },
+      ...(lowerId ? [{ adminId: lowerId }, { email: lowerId }] : []),
       { _id: ObjectId.isValid(adminId) ? new ObjectId(adminId) : null }
-    ].filter(f => f.adminId || f._id)
+    ].filter(Boolean)
   });
 }
 

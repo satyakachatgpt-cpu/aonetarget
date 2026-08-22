@@ -177,7 +177,15 @@ export const adminLogin = async (req, res) => {
   const db = mongoose.connection.db;
 
   try {
-    const admin = await db.collection('admins').findOne({ adminId: adminId?.trim() });
+    const cleanAdminId = adminId?.trim();
+    const lowerAdminId = cleanAdminId?.toLowerCase();
+
+    const admin = await db.collection('admins').findOne({
+      $or: [
+        { adminId: cleanAdminId },
+        ...(lowerAdminId ? [{ adminId: lowerAdminId }, { email: lowerAdminId }] : [])
+      ].filter(Boolean)
+    });
     const isMatch = await verifyAndMigratePassword(db, admin, password, 'admins', `Admin ${adminId}`);
 
     if (!isMatch) {
