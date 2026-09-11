@@ -4,6 +4,7 @@ import { Toaster } from 'sonner';
 import { Capacitor } from '@capacitor/core';
 import BottomNav from './components/BottomNav';
 import SplashScreen from './components/SplashScreen';
+import BackButtonHandler from './components/BackButtonHandler';
 import { useAuthStore } from './store/authStore';
 import { clearAdminSession } from './services/apiClient';
 import FreeContent from './screens/FreeContent';
@@ -163,6 +164,23 @@ const App: React.FC = () => {
     return true;
   });
 
+  const [showAuthPopup, setShowAuthPopup] = useState(() => {
+    if (window.location.hash.startsWith('#/admin')) return false;
+    const dismissed = sessionStorage.getItem('auth_popup_dismissed') === 'true';
+    return !dismissed;
+  });
+
+  const handleCloseAuthPopup = useCallback(() => {
+    sessionStorage.setItem('auth_popup_dismissed', 'true');
+    setShowAuthPopup(false);
+  }, []);
+
+  useEffect(() => {
+    const handleClose = () => handleCloseAuthPopup();
+    window.addEventListener('app:close-auth-popup', handleClose);
+    return () => window.removeEventListener('app:close-auth-popup', handleClose);
+  }, [handleCloseAuthPopup]);
+
   // Proactive Admin Session Monitor
   useEffect(() => {
     if (!isAdminLoggedIn) return;
@@ -242,6 +260,25 @@ const App: React.FC = () => {
         <SplashScreen onComplete={handleSplashComplete} />
       ) : (
         <Router>
+          <BackButtonHandler />
+          {showAuthPopup && !isStudentLoggedIn && !window.location.hash.startsWith('#/admin') && !window.location.hash.startsWith('#/student-login') && (
+            <div 
+              data-auth-popup="true"
+              className="fixed inset-0 z-[100] bg-black/65 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200"
+            >
+              <div className="w-full max-w-[420px] h-full sm:h-auto sm:max-h-[90vh] bg-white sm:rounded-[28px] overflow-hidden shadow-2xl relative flex flex-col">
+                <Suspense fallback={<PageLoader />}>
+                  <StudentLogin 
+                    setAuth={(student, token, devId, refresh) => {
+                      setIsStudentLoggedIn(student, token, devId, refresh);
+                      handleCloseAuthPopup();
+                    }}
+                    onClose={handleCloseAuthPopup}
+                  />
+                </Suspense>
+              </div>
+            </div>
+          )}
           <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/admin-login" element={isAdminLoggedIn ? <Navigate to="/admin" replace /> : <AdminLogin setAuth={setIsAdminLoggedIn} />} />

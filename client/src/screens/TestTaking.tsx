@@ -353,7 +353,11 @@ const TestTaking: React.FC = () => {
       window.history.pushState(currentState, '', window.location.href);
     };
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+    window.addEventListener('app:backbutton', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      window.removeEventListener('app:backbutton', handlePopState);
+    };
   }, [submitted, loading, questions.length, hasAcceptedTerms, test?.termsAndConditions]);
 
   // Handle browser back button on Result Page

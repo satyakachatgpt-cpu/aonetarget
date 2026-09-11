@@ -48,6 +48,7 @@ type ProfileFormData = z.infer<typeof profileSchema>;
 interface StudentLoginProps {
   setAuth: (student: any, accessToken?: string, deviceId?: string, refreshToken?: string) => void;
   onSuccess?: () => void;
+  onClose?: () => void;
 }
 
 const getDeviceType = () => {
@@ -74,7 +75,7 @@ const getDeviceId = () => {
 };
 
 
-const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
+const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess, onClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -1128,7 +1129,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
   return (
     <>
-      <AuthLayout>
+      <AuthLayout onBack={onClose}>
         {step === 'login' && renderLoginStep()}
         {step === 'otp' && renderOtpStep()}
         {step === 'signup' && renderSignupStep()}
