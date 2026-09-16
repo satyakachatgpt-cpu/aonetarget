@@ -6,7 +6,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
 
-  const backendUrl = 'http://127.0.0.1:5000';
+  const backendUrl = 'http://127.0.0.1:5004';
 
   return {
     plugins: [
