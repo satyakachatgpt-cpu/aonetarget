@@ -207,6 +207,27 @@ const CourseDetails: React.FC = () => {
     return () => setBottomNavHidden(false);
   }, [showVideoPlayer, setBottomNavHidden]);
 
+  // Handle mobile web / browser back button when video is open (fallback for non-Capacitor environments)
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) return;
+    if (!showVideoPlayer) return;
+
+    window.history.pushState({ videoModal: true }, '');
+
+    const handlePopState = () => {
+      setShowVideoPlayer(false);
+      setSelectedVideo(null);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      if (window.history.state?.videoModal) {
+        window.history.back();
+      }
+    };
+  }, [showVideoPlayer]);
+
 
   const handleImageError = useCallback((id: string) => {
     setFailedImages(prev => new Set(prev).add(id));

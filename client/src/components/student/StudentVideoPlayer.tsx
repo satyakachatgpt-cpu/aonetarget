@@ -192,6 +192,14 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
       window.removeEventListener('resize', handleResize);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       clearTimeout(timeoutId);
+      if (document.fullscreenElement && document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+      if ((screen.orientation as any)?.unlock) {
+        try {
+          (screen.orientation as any).unlock();
+        } catch (e) {}
+      }
     };
   }, [isAdmin]);
 
@@ -666,6 +674,39 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPlaying, isMuted, togglePlay]);
 
+  // HARDWARE / PHONE BACK BUTTON HANDLER
+  useEffect(() => {
+    const handleVideoBack = (e: Event) => {
+      e.preventDefault();
+
+      // 1. If settings menu open, close it
+      if (showSettingsMenu || showQualityMenu) {
+        setShowSettingsMenu(false);
+        setShowQualityMenu(false);
+        return;
+      }
+
+      // 2. If live chat open, close it
+      if (showChat) {
+        setShowChat(false);
+        if (onChatVisibilityChange) onChatVisibilityChange(false);
+        return;
+      }
+
+      // 3. If fullscreen active, exit fullscreen
+      if (isFullscreen || document.fullscreenElement) {
+        toggleFullscreen();
+        return;
+      }
+
+      // 4. Otherwise, exit video player
+      onClose();
+    };
+
+    window.addEventListener('app:video-back', handleVideoBack);
+    return () => window.removeEventListener('app:video-back', handleVideoBack);
+  }, [showSettingsMenu, showQualityMenu, showChat, isFullscreen, onClose, toggleFullscreen, onChatVisibilityChange]);
+
   const formatTime = (s: number) => {
     const min = Math.floor(s / 60);
     const sec = Math.floor(s % 60);
@@ -679,6 +720,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
 
   return (
     <div 
+      data-student-video-player="true"
       className="fixed inset-0 z-[1000000] bg-black font-outfit select-none overflow-hidden p-0"
       onMouseMove={handleUserActivity}
       onTouchStart={handleUserActivity}
@@ -770,6 +812,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
           style={{ paddingTop: `max(1.5rem, env(safe-area-inset-top))` }}>
             <button 
               onClick={onClose} 
+              data-video-back-btn="true"
               className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 flex items-center justify-center text-white active:scale-90 transition-all pointer-events-auto shadow-xl"
             >
                <span className="material-symbols-rounded text-2xl">arrow_back</span>

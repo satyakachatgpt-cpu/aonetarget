@@ -56,6 +56,22 @@ export const BackButtonHandler: React.FC = () => {
           return;
         }
 
+        // Check if Video Player is open
+        const videoPlayerEl = document.querySelector('[data-student-video-player="true"]') as HTMLElement | null;
+        if (videoPlayerEl) {
+          const videoEvent = new CustomEvent('app:video-back', { cancelable: true });
+          const dispatched = window.dispatchEvent(videoEvent);
+          if (!dispatched) {
+            return;
+          }
+          const videoBackBtn = videoPlayerEl.querySelector('[data-video-back-btn="true"]') as HTMLElement | null;
+          if (videoBackBtn) {
+            videoBackBtn.click();
+            return;
+          }
+          return;
+        }
+
         // Get current cleaned route
         const currentPathname = locationRef.current.pathname;
         const hashPath = window.location.hash ? window.location.hash.replace(/^#/, '').split('?')[0] : '';
