@@ -65,11 +65,9 @@ input, textarea, [contenteditable] {
   /* Apply safe-area only to iOS to prevent unwanted padding on Android */
   @supports (-webkit-touch-callout: none) {
     .pwa-status-bar {
-      /* Hard fallback: ensure space is ALWAYS reserved on launch */
-      height: 44px;
-      height: env(safe-area-inset-top, 44px);
-      min-height: 44px; /* Force minimum height for notched iPhones */
-      display: block !important;
+      display: none !important;
+      height: 0 !important;
+      min-height: 0 !important;
     }
     
     .sidebar-header-ios {

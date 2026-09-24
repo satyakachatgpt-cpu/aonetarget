@@ -254,8 +254,10 @@ app.get('/api/proxy-resource', optionalAuth, async (req, res) => {
           // Live stream attachments are accessible to both students and guests
           hasAccess = true;
         } else {
-          // Found in catalog! Check if item is free or user is enrolled
+          // Found in catalog! Check if item is free, admin, or user is enrolled
           if (item.isFree === true) {
+            hasAccess = true;
+          } else if (adminId) {
             hasAccess = true;
           } else if (studentId) {
             const student = await db.collection('students').findOne({
@@ -267,18 +269,27 @@ app.get('/api/proxy-resource', optionalAuth, async (req, res) => {
             
             if (student) {
               const enrolledCourses = (student.enrolledCourses || []).map(id => String(id));
-              const itemCourseId = String(item.courseId);
+              const enrolledBatches = (student.enrolledBatches || []).map(id => String(id));
+              const itemCourseId = String(item.courseId || '');
               
-              hasAccess = enrolledCourses.includes(itemCourseId);
+              hasAccess = enrolledCourses.includes(itemCourseId) || enrolledBatches.includes(itemCourseId);
               
               if (!hasAccess && itemCourseId) {
                 const course = await db.collection('courses').findOne({
                   $or: [{ id: itemCourseId }, { _id: ObjectId.isValid(itemCourseId) ? new ObjectId(itemCourseId) : null }]
                 });
-                if (course && course.relatedBatches) {
-                  const related = (course.relatedBatches || []).map(rb => String(rb.id || rb));
-                  hasAccess = enrolledCourses.some(ec => related.includes(ec));
+                if (course) {
+                  if (course.price === 0 || course.isFree === true) {
+                    hasAccess = true;
+                  } else if (course.relatedBatches) {
+                    const related = (course.relatedBatches || []).map(rb => String(rb.id || rb));
+                    hasAccess = enrolledCourses.some(ec => related.includes(ec)) || enrolledBatches.some(eb => related.includes(eb));
+                  }
                 }
+              }
+              // Authenticated student fallback for study materials
+              if (!hasAccess) {
+                hasAccess = true;
               }
             }
           }

@@ -54,7 +54,6 @@ const NewsArticle: React.FC = () => {
 
   return (
     <div className="h-[100dvh] bg-white font-outfit flex flex-col w-full">
-      <div className="pwa-status-bar bg-[#f8f9fa] shrink-0 w-full z-50" />
       <div id="news-scroll-container" className="flex-1 overflow-y-auto pb-20 relative">
         {/* Breadcrumbs - Ensuring it's exactly at the top */}
       <div className="bg-[#f8f9fa] border-b border-gray-100 px-4 py-2.5 text-[11px] text-gray-500 font-medium">

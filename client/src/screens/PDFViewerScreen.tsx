@@ -1,131 +1,291 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import mammoth from 'mammoth';
 import DOMPurify from 'dompurify';
-import { getPdfUrl, getViewerUrl } from '../lib/utils';
+import { getPdfUrl, API_BASE } from '../lib/utils';
 
-// Detect Mobile (iOS and Android) — Both have issues with native iframes for PDFs
-const isMobile = (): boolean =>
-  /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+// Configure Mozilla PDF.js legacy worker
+if (typeof window !== 'undefined') {
+  try {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+  } catch (e) {
+    console.warn('[PDF.js] Worker setup warning:', e);
+  }
+}
 
-// ─────────────────────────────────────────
-// Mobile PDF.js canvas viewer (stays in-app)
-// ─────────────────────────────────────────
-const MobilePdfViewer: React.FC<{ url: string; onReady: () => void; onError: () => void }> = ({
-  url,
-  onReady,
-  onError,
-}) => {
+// ─────────────────────────────────────────────────────────────────
+// High-Performance Streaming & Buffered PDF Fetcher with Progress
+// ─────────────────────────────────────────────────────────────────
+async function fetchPdfWithProgress(
+  rawUrl: string,
+  onProgress?: (loadedBytes: number, totalBytes: number) => void
+): Promise<ArrayBuffer> {
+  const targetUrl = getPdfUrl(rawUrl);
+
+  const streamToBuffer = async (res: Response): Promise<ArrayBuffer> => {
+    const contentLength = res.headers.get('content-length');
+    const total = contentLength ? parseInt(contentLength, 10) : 0;
+
+    if (!res.body) {
+      const buf = await res.arrayBuffer();
+      if (buf.byteLength > 100) return buf;
+      throw new Error('Empty response body');
+    }
+
+    const reader = res.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let received = 0;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        chunks.push(value);
+        received += value.length;
+        if (onProgress) {
+          onProgress(received, total);
+        }
+      }
+    }
+
+    const fullBuffer = new Uint8Array(received);
+    let offset = 0;
+    for (const chunk of chunks) {
+      fullBuffer.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return fullBuffer.buffer;
+  };
+
+  // Strategy 1: Direct fetch with progress
+  try {
+    const res = await fetch(targetUrl, { mode: 'cors' });
+    if (res.ok) {
+      const buf = await streamToBuffer(res);
+      if (buf.byteLength > 100) return buf;
+    }
+  } catch (err) {
+    console.warn('[PDF] Direct fetch error, trying proxy fallback:', err);
+  }
+
+  // Strategy 2: Backend Proxy fetch (for CORS restricted resources like Cloudinary raw files)
+  try {
+    const proxyUrl = `${API_BASE}/api/proxy-resource?url=${encodeURIComponent(targetUrl)}`;
+    const studentToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+    const adminToken = localStorage.getItem('adminToken');
+    const headers: Record<string, string> = {};
+    if (adminToken) headers['Authorization'] = `Bearer ${adminToken}`;
+    else if (studentToken) headers['Authorization'] = `Bearer ${studentToken}`;
+
+    const res = await fetch(proxyUrl, { headers });
+    if (res.ok) {
+      const buf = await streamToBuffer(res);
+      if (buf.byteLength > 100) return buf;
+    }
+  } catch (err) {
+    console.warn('[PDF] Proxy fetch error:', err);
+  }
+
+  // Strategy 3: Standard fallback fetch
+  try {
+    const fallbackRes = await fetch(targetUrl);
+    if (fallbackRes.ok) {
+      const buf = await fallbackRes.arrayBuffer();
+      if (buf.byteLength > 100) return buf;
+    }
+  } catch (e) {}
+
+  throw new Error('Unable to download document content. Please check internet connection.');
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Virtualized Individual Page Renderer
+// (Only renders canvas when visible; cleans up canvas when scrolled away to prevent Android OOM)
+// ─────────────────────────────────────────────────────────────────
+interface PdfPageProps {
+  pdf: any;
+  pageNumber: number;
+  scale: number;
+  currentPage: number;
+  onVisible?: (pageNumber: number) => void;
+}
+
+const PdfPage: React.FC<PdfPageProps> = ({ pdf, pageNumber, scale, currentPage, onVisible }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [pages, setPages] = useState<HTMLCanvasElement[]>([]);
-  const [loadedPages, setLoadedPages] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  
+  // Pre-load condition: Active if in viewport OR within 3 pages ahead/behind the current page
+  const isNearCurrentPage = Math.abs(pageNumber - currentPage) <= 3;
+  const [isVisible, setIsVisible] = useState(pageNumber === 1 || isNearCurrentPage);
+  const [isRendered, setIsRendered] = useState(false);
+  const [aspectRatio, setAspectRatio] = useState<number>(0.707); // Default A4 ratio (1 / 1.414)
+  const renderTaskRef = useRef<any>(null);
 
+  // Intersection observer: Wide 2000px window pre-detects pages well before they enter screen
   useEffect(() => {
-    let cancelled = false;
+    const el = containerRef.current;
+    if (!el) return;
 
-    const render = async () => {
-      try {
-        const pdfjsLib = await import('pdfjs-dist');
-        
-        // iOS Safari strictly blocks Cross-Origin Web Workers. 
-        // Workaround: Fetch the script as text and create a local Blob URL.
-        const workerUrl = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
-        
-        if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-          try {
-            const workerRes = await fetch(workerUrl);
-            const workerCode = await workerRes.text();
-            const blob = new Blob([workerCode], { type: 'text/javascript' });
-            pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
-          } catch (workerErr) {
-            console.warn("Failed to create worker blob, falling back to CDN URL", workerErr);
-            pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            setIsVisible(true);
+            if (onVisible) onVisible(pageNumber);
+          } else {
+            // Only unload if far away from current reading position
+            if (Math.abs(pageNumber - currentPage) > 3) {
+              setIsVisible(false);
+              setIsRendered(false);
+            }
           }
+        });
+      },
+      { rootMargin: '2000px 0px' } // Preload 2000px (~2.5 screens) ahead of time
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [pageNumber, currentPage, onVisible]);
+
+  // Keep near pages visible for pre-rendering
+  useEffect(() => {
+    if (isNearCurrentPage && !isVisible) {
+      setIsVisible(true);
+    }
+  }, [isNearCurrentPage, isVisible]);
+
+  // Render canvas when visible or pre-loading
+  useEffect(() => {
+    const shouldMount = isVisible || isNearCurrentPage;
+    if (!shouldMount || !pdf) {
+      if (renderTaskRef.current) {
+        try {
+          renderTaskRef.current.cancel();
+        } catch {}
+      }
+      return;
+    }
+
+    let cancelled = false;
+    let timerId: any = null;
+
+    const renderPage = async () => {
+      try {
+        if (renderTaskRef.current) {
+          try {
+            renderTaskRef.current.cancel();
+          } catch {}
         }
 
-        // DIRECT CLOUDFLARE R2 FETCH (Fastest) — works because you enabled CORS!
-        const loadingTask = pdfjsLib.getDocument({ url, withCredentials: false });
-        const pdf = await loadingTask.promise;
+        const page = await pdf.getPage(pageNumber);
         if (cancelled) return;
 
-        setTotalPages(pdf.numPages);
+        const unscaledViewport = page.getViewport({ scale: 1 });
+        const ratio = unscaledViewport.width / unscaledViewport.height;
+        setAspectRatio(ratio);
 
-        for (let i = 1; i <= pdf.numPages; i++) {
-          if (cancelled) break;
+        const canvas = canvasRef.current;
+        if (!canvas) return;
 
-          const page = await pdf.getPage(i);
-          const nativeViewport = page.getViewport({ scale: 1 });
-          const screenScale = (window.innerWidth / nativeViewport.width) * (window.devicePixelRatio || 2);
-          const viewport = page.getViewport({ scale: Math.min(screenScale, 4) });
+        const ctx = canvas.getContext('2d', { alpha: false });
+        if (!ctx) return;
 
-          const canvas = document.createElement('canvas');
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          canvas.style.width = '100%';
-          canvas.style.display = 'block';
-          canvas.style.marginBottom = '8px';
-          canvas.style.background = '#fff';
+        // Container width matching viewport
+        const maxContainerWidth = Math.min(window.innerWidth - 16, 850);
+        const basePageScale = maxContainerWidth / unscaledViewport.width;
+        const effectiveScale = basePageScale * scale;
 
-          const ctx = canvas.getContext('2d')!;
-          await page.render({ canvasContext: ctx, viewport, canvas }).promise;
-          if (cancelled) break;
+        // Cap DPR to 2.0 to prevent excessive texture memory on low-RAM phones
+        const dpr = Math.min(window.devicePixelRatio || 1, 2.0);
+        const viewport = page.getViewport({ scale: effectiveScale * dpr });
 
-          // Show page 1 immediately — don't wait for rest of pages
-          if (i === 1) {
-            setPages([canvas]);
-            onReady();
-          } else {
-            setPages(prev => [...prev, canvas]);
-          }
-          setLoadedPages(i);
+        canvas.width = Math.floor(viewport.width);
+        canvas.height = Math.floor(viewport.height);
+        canvas.style.width = `${Math.floor(viewport.width / dpr)}px`;
+        canvas.style.height = `${Math.floor(viewport.height / dpr)}px`;
+
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'medium';
+
+        const renderTask = page.render({
+          canvasContext: ctx,
+          viewport: viewport,
+        });
+        renderTaskRef.current = renderTask;
+
+        await renderTask.promise;
+        if (!cancelled) {
+          setIsRendered(true);
         }
-      } catch (e) {
-        console.error('[PDF.js] render error', e);
-        if (!cancelled) onError();
+      } catch (err: any) {
+        if (err?.name !== 'RenderingCancelledException') {
+          console.error(`[PDF.js] Page ${pageNumber} render error:`, err);
+        }
       }
     };
 
-    render();
-    return () => { cancelled = true; };
-  }, [url]);
+    // Stagger rendering: Current page renders immediately, upcoming pages (2, 3, 4) render sequentially in background
+    const renderDelay = pageNumber === currentPage ? 0 : Math.min(Math.abs(pageNumber - currentPage), 3) * 60;
+    timerId = setTimeout(renderPage, renderDelay);
 
-  // Mount canvases into DOM imperatively
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el || pages.length === 0) return;
-    el.innerHTML = '';
-    pages.forEach(c => el.appendChild(c));
-  }, [pages]);
+    return () => {
+      cancelled = true;
+      if (timerId) clearTimeout(timerId);
+      if (renderTaskRef.current) {
+        try {
+          renderTaskRef.current.cancel();
+        } catch {}
+      }
+    };
+  }, [isVisible, isNearCurrentPage, pdf, pageNumber, scale, currentPage]);
+
+  const maxContainerWidth = Math.min(window.innerWidth - 16, 850);
+  const placeholderHeight = Math.floor((maxContainerWidth * scale) / aspectRatio);
+  const shouldMount = isVisible || isNearCurrentPage;
 
   return (
-    <div style={{ overflowY: 'auto', WebkitOverflowScrolling: 'touch', height: '100%', background: '#525659' }}>
-      {loadedPages < totalPages && totalPages > 0 && (
-        <div style={{ position: 'sticky', top: 0, zIndex: 10, background: '#1e40af', height: 3 }}>
-          <div
-            style={{
-              height: '100%',
-              background: '#60a5fa',
-              width: `${(loadedPages / totalPages) * 100}%`,
-              transition: 'width 0.3s ease',
-            }}
-          />
+    <div
+      ref={containerRef}
+      id={`pdf-page-${pageNumber}`}
+      className="relative mx-auto my-3 bg-white shadow-xl rounded-sm transition-all duration-150 overflow-hidden flex items-center justify-center select-none"
+      style={{
+        width: `${Math.floor(maxContainerWidth * scale)}px`,
+        minHeight: `${placeholderHeight}px`,
+        height: shouldMount ? 'auto' : `${placeholderHeight}px`,
+      }}
+    >
+      {shouldMount ? (
+        <>
+          <canvas ref={canvasRef} className="block select-none" />
+          {!isRendered && pageNumber === currentPage && (
+            <div className="absolute inset-0 flex items-center justify-center bg-gray-50/90 z-10">
+              <div className="flex items-center gap-2.5 text-gray-500 text-xs font-bold uppercase tracking-wider">
+                <span className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                Page {pageNumber}…
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="flex flex-col items-center justify-center text-gray-400 gap-2 select-none py-12">
+          <span className="material-symbols-rounded text-3xl opacity-30">description</span>
+          <span className="text-xs font-bold uppercase tracking-wider opacity-50">Page {pageNumber}</span>
         </div>
       )}
-      <div ref={containerRef} style={{ padding: '8px' }} />
     </div>
   );
 };
 
-// ─────────────────────────────────────────
-// Main screen
-// ─────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────
+// Main PDF Viewer Screen
+// ─────────────────────────────────────────────────────────────────
 const PDFViewerScreen: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const queryParams = new URLSearchParams(location.search);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   const pdfUrl =
     location.state?.pdf?.fileUrl ||
@@ -140,12 +300,24 @@ const PDFViewerScreen: React.FC = () => {
   const subject = location.state?.pdf?.subject || 'Study Material';
 
   const [docxContent, setDocxContent] = useState<string | null>(null);
-  const [useMobileViewer, setUseMobileViewer] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [useFallback, setUseFallback] = useState(false);
+  const [pdfDoc, setPdfDoc] = useState<any>(null);
+  const [totalPages, setTotalPages] = useState<number>(0);
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [scale, setScale] = useState<number>(1.0);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [loadStage, setLoadStage] = useState<string>('Downloading Document…');
+  const [loadProgress, setLoadProgress] = useState<{ percent: number; loadedMb: string; totalMb: string }>({
+    percent: 0,
+    loadedMb: '',
+    totalMb: '',
+  });
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Jump-to-page popup modal state
+  const [showJumpModal, setShowJumpModal] = useState<boolean>(false);
+  const [jumpPageInput, setJumpPageInput] = useState<string>('');
 
   const fullPdfUrl = getPdfUrl(pdfUrl);
-
   const fileExt = (pdfUrl || '').toLowerCase().split('?')[0].split('.').pop() || '';
   const isDocx =
     fileExt.startsWith('doc') ||
@@ -160,67 +332,170 @@ const PDFViewerScreen: React.FC = () => {
     }
   }, [navigate]);
 
-  // Enable pinch-to-zoom for PDF viewer only
-  useEffect(() => {
-    const meta = document.querySelector('meta[name="viewport"]');
-    const originalContent = meta?.getAttribute('content');
-    
-    if (meta) {
-      // Allow zooming up to 5x while on this screen
-      meta.setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover');
+  // Load Document
+  const loadDocument = useCallback(async () => {
+    if (!fullPdfUrl) {
+      setLoadError('Document URL is missing.');
+      setLoading(false);
+      return;
     }
 
-    return () => {
-      // Revert to non-scalable when leaving
-      if (meta && originalContent) {
-        meta.setAttribute('content', originalContent);
+    try {
+      setLoading(true);
+      setLoadError(null);
+      setLoadStage('Connecting to document server…');
+      setLoadProgress({ percent: 0, loadedMb: '', totalMb: '' });
+
+      // Handle Word DOCX files
+      if (isDocx) {
+        try {
+          const arrayBuffer = await fetchPdfWithProgress(fullPdfUrl);
+          const result = await mammoth.convertToHtml({ arrayBuffer });
+          setDocxContent(result.value);
+          setLoading(false);
+        } catch (docxErr) {
+          console.warn('Docx loading failed:', docxErr);
+          setLoadError('Failed to display Word document.');
+          setLoading(false);
+        }
+        return;
       }
-    };
-  }, []);
 
-  useEffect(() => {
-    if (!fullPdfUrl) { setLoading(false); return; }
-
-    const load = async () => {
-      try {
-        setLoading(true);
-
-        if (isDocx) {
-          try {
-            const proxyUrl = `/api/proxy-resource?url=${encodeURIComponent(fullPdfUrl)}`;
-            const res = await fetch(proxyUrl, { mode: 'cors' });
-            if (!res.ok) throw new Error('Proxy fetch failed');
-            const arrayBuffer = await res.arrayBuffer();
-            const result = await mammoth.convertToHtml({ arrayBuffer });
-            setDocxContent(result.value);
-            setLoading(false);
-          } catch (e) {
-            console.warn('Docx loading failed', e);
-            setUseFallback(true);
-            setLoading(false);
-          }
-          return;
+      // Handle PDF files: Download with visible progress feedback
+      setLoadStage('Downloading Document…');
+      const arrayBuffer = await fetchPdfWithProgress(fullPdfUrl, (loaded, total) => {
+        if (total > 0) {
+          const pct = Math.min(99, Math.round((loaded / total) * 100));
+          setLoadProgress({
+            percent: pct,
+            loadedMb: (loaded / (1024 * 1024)).toFixed(1),
+            totalMb: (total / (1024 * 1024)).toFixed(1),
+          });
+        } else {
+          setLoadProgress({
+            percent: 0,
+            loadedMb: (loaded / (1024 * 1024)).toFixed(1),
+            totalMb: '',
+          });
         }
+      });
 
-        // Mobile (iOS + Android): use PDF.js canvas viewer (stays in app, uses DIRECT CDN URL now)
-        if (isMobile()) {
-          setUseMobileViewer(true);
-          return; // Loader is removed by MobilePdfViewer onReady
-        }
+      setLoadStage('Parsing Pages…');
+      setLoadProgress((p) => ({ ...p, percent: 100 }));
 
-        // Desktop: fast native iframe directly to CDN URL (no 25MB limit)
-        // Set a slight delay just to ensure state updates, loading spinner removed by iframe onLoad
-      } catch (err) {
-        console.error('Document Load Error:', err);
-        setUseFallback(true);
+      // Load PDF into Mozilla PDF.js
+      const loadingTask = pdfjsLib.getDocument({
+        data: new Uint8Array(arrayBuffer),
+        cMapUrl: '/cmaps/',
+        cMapPacked: true,
+        useWorkerFetch: false,
+        maxImageSize: 1024 * 1024, // Prevents giant scanned images from causing OOM crashes
+      });
+
+      const loadedPdf = await loadingTask.promise;
+
+      if (loadedPdf && loadedPdf.numPages > 0) {
+        setPdfDoc(loadedPdf);
+        setTotalPages(loadedPdf.numPages);
+        setCurrentPage(1);
         setLoading(false);
+      } else {
+        throw new Error('Document contains no pages or could not be parsed.');
       }
-    };
-
-    load();
+    } catch (err: any) {
+      console.error('[PDFViewer] Load failed:', err);
+      setLoadError(err?.message || 'Failed to load document.');
+      setLoading(false);
+    }
   }, [fullPdfUrl, isDocx]);
 
-  // Block dev-tools shortcuts
+  useEffect(() => {
+    loadDocument();
+  }, [loadDocument]);
+
+  // Zoom Handlers
+  const handleZoomIn = () => {
+    setScale((prev) => Math.min(Number((prev + 0.25).toFixed(2)), 3.0));
+  };
+
+  const handleZoomOut = () => {
+    setScale((prev) => Math.max(Number((prev - 0.25).toFixed(2)), 0.6));
+  };
+
+  const handleResetZoom = () => {
+    setScale(1.0);
+  };
+
+  // Page Jump Handlers
+  const scrollToPage = (pageNum: number) => {
+    const target = Math.max(1, Math.min(pageNum, totalPages));
+    setCurrentPage(target);
+    const el = document.getElementById(`pdf-page-${target}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const handleJumpSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const p = parseInt(jumpPageInput, 10);
+    if (!isNaN(p) && p >= 1 && p <= totalPages) {
+      scrollToPage(p);
+      setShowJumpModal(false);
+      setJumpPageInput('');
+    }
+  };
+
+  // Hardware-accelerated smooth touch pinch-to-zoom
+  const [touchPinchScale, setTouchPinchScale] = useState<number>(1.0);
+  const [isPinching, setIsPinching] = useState<boolean>(false);
+  const pinchStartDistRef = useRef<number>(0);
+  const pinchStartScaleRef = useRef<number>(1.0);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      pinchStartDistRef.current = dist;
+      pinchStartScaleRef.current = scale;
+      setIsPinching(true);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && isPinching && pinchStartDistRef.current > 0) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const ratio = dist / pinchStartDistRef.current;
+      setTouchPinchScale(ratio);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (isPinching) {
+      setIsPinching(false);
+      const newScale = Math.min(Math.max(pinchStartScaleRef.current * touchPinchScale, 0.6), 3.0);
+      setScale(Number(newScale.toFixed(2)));
+      setTouchPinchScale(1.0);
+      pinchStartDistRef.current = 0;
+    }
+  };
+
+  // Double tap to toggle zoom
+  const lastTapRef = useRef<number>(0);
+  const handleDoubleTap = () => {
+    const now = Date.now();
+    if (now - lastTapRef.current < 300) {
+      setScale((prev) => (prev > 1.2 ? 1.0 : 1.75));
+    }
+    lastTapRef.current = now;
+  };
+
+  // Keyboard Navigation & Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeEl = document.activeElement as HTMLElement;
@@ -229,127 +504,293 @@ const PDFViewerScreen: React.FC = () => {
         activeEl?.tagName === 'TEXTAREA' ||
         activeEl?.isContentEditable;
       if (isTyping) return;
+
       const k = e.key.toLowerCase();
+      // Block dev tools, print, and save shortcuts
       if (
         e.key === 'F12' ||
         ((e.ctrlKey || e.metaKey) && !e.shiftKey && ['s', 'u', 'p'].includes(k)) ||
         ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c'].includes(k))
       ) {
         e.preventDefault();
+        return;
+      }
+
+      // Keyboard Zoom & Navigation
+      if (e.key === '+' || e.key === '=') {
+        e.preventDefault();
+        handleZoomIn();
+      } else if (e.key === '-') {
+        e.preventDefault();
+        handleZoomOut();
+      } else if (e.key === '0') {
+        e.preventDefault();
+        handleResetZoom();
+      } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+        scrollToPage(currentPage + 1);
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        scrollToPage(currentPage - 1);
       }
     };
+
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [currentPage, totalPages, scale]);
 
-  if (!pdfUrl && !location.state) { navigate(-1); return null; }
+  if (!pdfUrl && !location.state) {
+    navigate(-1);
+    return null;
+  }
 
   return (
     <div
-      className="fixed inset-0 bg-[#f4f7f6] z-[99999] flex flex-col font-outfit h-[100dvh] w-full overflow-hidden"
+      className="fixed inset-0 bg-[#2b2e30] z-[99999] flex flex-col font-outfit h-[100dvh] w-full overflow-hidden select-none"
       onContextMenu={(e) => e.preventDefault()}
     >
-      <div 
-        className="bg-white/95 backdrop-blur-md px-4 pb-2 md:py-3 flex items-center justify-between border-b border-gray-200 shadow-sm z-[110] shrink-0"
+      {/* ── Top Header ── */}
+      <div
+        className="bg-zinc-900/95 backdrop-blur-md px-4 pb-2 md:py-3 flex items-center justify-between border-b border-white/10 shadow-lg z-[110] shrink-0 text-white"
         style={{ paddingTop: 'max(env(safe-area-inset-top), 24px)' }}
       >
         <button
           onClick={handleExit}
-          className="w-9 h-9 rounded-xl flex items-center justify-center bg-gray-100 text-gray-800 hover:bg-gray-200 transition-all scale-100 active:scale-95 z-[120]"
+          className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/10 text-white hover:bg-white/20 active:scale-95 transition-all z-[120]"
+          title="Back"
         >
-          <span className="material-symbols-rounded text-[20px] pointer-events-none">arrow_back</span>
+          <span className="material-symbols-rounded text-[20px]">arrow_back</span>
         </button>
 
-        <div className="flex-1 px-4 text-center min-w-0">
-          <h1 className="text-[12px] font-black truncate text-gray-900 leading-tight uppercase tracking-tight">
+        <div className="flex-1 px-3 text-center min-w-0">
+          <h1 className="text-[12px] sm:text-sm font-black truncate text-white leading-tight uppercase tracking-tight">
             {title}
           </h1>
           <div className="flex items-center justify-center gap-2 mt-0.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${isDocx ? 'bg-blue-600' : 'bg-green-600'}`} />
-            <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest leading-none">
-              {isDocx ? 'Word Document' : 'Vector-Optimized PDF'} • {subject}
+            <span className={`w-1.5 h-1.5 rounded-full ${isDocx ? 'bg-blue-400' : 'bg-green-400'}`} />
+            <p className="text-[9px] sm:text-[10px] text-white/50 font-bold uppercase tracking-widest leading-none">
+              {isDocx ? 'Word Document' : 'Verified Secure PDF'} • {subject}
             </p>
           </div>
         </div>
 
         <button
           onClick={handleExit}
-          className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-50 text-red-600 hover:bg-red-100 transition-all scale-100 active:scale-95 z-[120]"
+          className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/30 active:scale-95 transition-all z-[120]"
+          title="Close"
         >
-          <span className="material-symbols-rounded text-[20px] pointer-events-none">close</span>
+          <span className="material-symbols-rounded text-[20px]">close</span>
         </button>
       </div>
 
-      <div className="flex-1 relative bg-white overflow-auto min-h-0" ref={containerRef}>
+      {/* ── Document Canvas Scroll Viewport ── */}
+      <div
+        ref={scrollContainerRef}
+        className="flex-1 relative bg-[#2b2e30] overflow-y-auto overflow-x-auto min-h-0 custom-scrollbar p-2 sm:p-4"
+        style={{
+          WebkitOverflowScrolling: 'touch',
+          touchAction: 'pan-x pan-y pinch-zoom',
+        }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onClick={handleDoubleTap}
+      >
+        {/* Loading Spinner with Real Progress Counter */}
         {loading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 animate-fade-in bg-[#f4f7f6] z-[101]">
-            <div className="relative w-16 h-16">
-              <div className="absolute inset-0 border-4 border-blue-50 rounded-full" />
-              <div className="absolute inset-0 border-4 border-blue-600 rounded-full border-t-transparent animate-spin" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-[#2b2e30] z-[101] px-6">
+            <div className="relative w-14 h-14">
+              <div className="absolute inset-0 border-4 border-white/10 rounded-full" />
+              <div className="absolute inset-0 border-4 border-blue-500 rounded-full border-t-transparent animate-spin" />
             </div>
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] animate-pulse">
-              {useMobileViewer ? 'Rendering PDF…' : 'Initializing Secure Viewport…'}
-            </p>
+
+            <div className="text-center max-w-xs">
+              <p className="text-xs font-black text-white/90 uppercase tracking-[0.2em] mb-1">
+                {loadStage}
+              </p>
+              {loadProgress.percent > 0 && (
+                <div className="w-52 mx-auto mt-3">
+                  <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-blue-500 rounded-full transition-all duration-150"
+                      style={{ width: `${loadProgress.percent}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-white/50 font-bold mt-1.5">
+                    {loadProgress.percent}% {loadProgress.loadedMb ? `(${loadProgress.loadedMb}MB / ${loadProgress.totalMb}MB)` : ''}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        {useFallback ? (
-          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-gray-50 w-full h-full max-w-2xl mx-auto">
-            <div className="w-full p-10 bg-white rounded-3xl shadow-xl border border-gray-100 animate-slide-up">
-              <div className="w-24 h-24 bg-primary-50 rounded-full flex items-center justify-center mx-auto mb-8">
-                <span className="material-symbols-rounded text-5xl text-primary-600">
-                  {isDocx ? 'description' : 'picture_as_pdf'}
-                </span>
-              </div>
-              <h2 className="text-2xl font-black text-gray-900 mb-3 uppercase tracking-tight">
-                Document Preview
-              </h2>
-              <p className="text-sm text-gray-500 mb-10 leading-relaxed font-medium">
-                Please wait while this {isDocx ? 'document' : 'PDF'} is loaded in our internal viewer.
-                Depending on your device and network speed, this may take a few moments.
-              </p>
-              <div className="p-5 bg-orange-50 rounded-2xl border border-orange-100 flex items-start gap-4 max-w-sm mx-auto mb-6">
-                <span className="material-symbols-rounded text-orange-500 mt-0.5">info</span>
-                <p className="text-[11px] text-orange-700 text-left leading-normal font-bold uppercase tracking-tight">
-                  If the document is taking too long to load, you can open it directly.
-                </p>
-              </div>
+        {/* Load Error State with Retry & Direct Open */}
+        {loadError && !loading && (
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-white h-full max-w-md mx-auto">
+            <div className="w-16 h-16 bg-red-500/10 border border-red-500/20 rounded-2xl flex items-center justify-center mb-4">
+              <span className="material-symbols-rounded text-3xl text-red-400">error</span>
+            </div>
+            <h2 className="text-base font-bold text-white mb-2">Unable to Load Document</h2>
+            <p className="text-xs text-white/60 mb-6 leading-relaxed">
+              {loadError || 'Please check your internet connection and try reloading the document.'}
+            </p>
+            <div className="flex items-center gap-3">
               <button
-                onClick={() => window.open(fullPdfUrl, '_system')}
-                className="w-full bg-[#1A237E] text-white py-3.5 rounded-xl font-bold text-sm tracking-wide hover:bg-blue-800 active:scale-95 transition-all shadow-md"
+                onClick={loadDocument}
+                className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-blue-700 active:scale-95 transition-all shadow-lg shadow-blue-600/30"
               >
-                Open {isDocx ? 'Document' : 'PDF'} Now
+                Retry
               </button>
+              {fullPdfUrl && (
+                <button
+                  onClick={() => window.open(fullPdfUrl, '_system')}
+                  className="px-5 py-2.5 bg-white/10 text-white rounded-xl font-bold text-xs uppercase tracking-wider hover:bg-white/20 active:scale-95 transition-all"
+                >
+                  Open in Browser
+                </button>
+              )}
             </div>
           </div>
+        )}
 
-        ) : isDocx && docxContent ? (
-          <div className="w-full max-w-4xl mx-auto bg-white shadow-xl rounded-sm p-4 md:p-20 mb-24 h-fit animate-slide-up overflow-x-hidden">
+        {/* Word Document HTML View */}
+        {isDocx && docxContent && (
+          <div className="w-full max-w-4xl mx-auto bg-white shadow-2xl rounded-lg p-6 sm:p-16 mb-24 overflow-x-hidden text-gray-900">
             <div
-              className="prose prose-slate max-w-none text-gray-800 leading-relaxed font-outfit docx-content-area break-words"
+              className="prose prose-slate max-w-none leading-relaxed font-outfit"
               dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(docxContent) }}
             />
           </div>
-        ) : useMobileViewer && fullPdfUrl ? (
-          <MobilePdfViewer
-            url={fullPdfUrl}
-            onReady={() => setLoading(false)}
-            onError={() => { setUseFallback(true); setLoading(false); }}
-          />
-        ) : fullPdfUrl && !isMobile() ? (
-          <div className="w-full h-full bg-[#525659] overflow-hidden">
-            <iframe
-              src={fullPdfUrl + '#toolbar=0&navpanes=0'}
-              className="w-full h-full border-none block m-0 p-0"
-              title={title}
-              onLoad={() => setLoading(false)}
-            />
+        )}
+
+        {/* Multi-Page Virtualized PDF Canvas View with GPU Pinch Transform */}
+        {!isDocx && pdfDoc && totalPages > 0 && (
+          <div
+            className="flex flex-col items-center pb-28 pt-2"
+            style={{
+              transform: isPinching ? `scale(${touchPinchScale})` : 'none',
+              transformOrigin: 'center top',
+              transition: isPinching ? 'none' : 'transform 0.15s ease-out',
+            }}
+          >
+            {Array.from({ length: totalPages }, (_, idx) => idx + 1).map((pageNum) => (
+              <PdfPage
+                key={pageNum}
+                pdf={pdfDoc}
+                pageNumber={pageNum}
+                scale={scale}
+                currentPage={currentPage}
+                onVisible={(page) => setCurrentPage(page)}
+              />
+            ))}
           </div>
-        ) : null}
+        )}
       </div>
+
+      {/* ── Quick Jump to Page Modal ── */}
+      {showJumpModal && (
+        <div
+          className="fixed inset-0 z-[150] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in"
+          onClick={() => setShowJumpModal(false)}
+        >
+          <div
+            className="bg-zinc-900 border border-white/15 p-5 rounded-2xl w-full max-w-xs shadow-2xl text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-bold mb-1">Jump to Page</h3>
+            <p className="text-[11px] text-white/50 mb-4">Enter page number (1 to {totalPages}):</p>
+            <form onSubmit={handleJumpSubmit} className="flex gap-2">
+              <input
+                autoFocus
+                type="number"
+                min="1"
+                max={totalPages}
+                value={jumpPageInput}
+                onChange={(e) => setJumpPageInput(e.target.value)}
+                placeholder={`1 - ${totalPages}`}
+                className="flex-1 bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-sm text-white placeholder-white/40 focus:outline-none focus:border-blue-500 text-center font-bold"
+              />
+              <button
+                type="submit"
+                className="px-4 py-2 bg-blue-600 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-blue-700 active:scale-95 transition-all"
+              >
+                Go
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Floating Bottom Navigation & Zoom Toolbar ── */}
+      {!loading && !loadError && !isDocx && totalPages > 0 && (
+        <div className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-[120] pointer-events-auto">
+          <div className="bg-zinc-950/90 text-white backdrop-blur-xl border border-white/15 px-3 sm:px-4 py-2 rounded-full shadow-[0_10px_35px_rgba(0,0,0,0.6)] flex items-center gap-1.5 sm:gap-2.5 animate-slide-up">
+            {/* Previous Page */}
+            <button
+              onClick={() => scrollToPage(currentPage - 1)}
+              disabled={currentPage <= 1}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 active:scale-90 disabled:opacity-30 disabled:pointer-events-none transition-all"
+              title="Previous Page"
+            >
+              <span className="material-symbols-rounded text-lg">chevron_left</span>
+            </button>
+
+            {/* Clickable Page Counter for Quick Jump */}
+            <button
+              onClick={() => {
+                setJumpPageInput(String(currentPage));
+                setShowJumpModal(true);
+              }}
+              className="text-[11px] sm:text-xs font-bold text-white/90 px-1.5 py-0.5 rounded-md hover:bg-white/10 active:scale-95 transition-all whitespace-nowrap"
+              title="Click to Jump to Page"
+            >
+              {currentPage} <span className="opacity-40 font-normal">/</span> {totalPages}
+            </button>
+
+            {/* Next Page */}
+            <button
+              onClick={() => scrollToPage(currentPage + 1)}
+              disabled={currentPage >= totalPages}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 active:scale-90 disabled:opacity-30 disabled:pointer-events-none transition-all"
+              title="Next Page"
+            >
+              <span className="material-symbols-rounded text-lg">chevron_right</span>
+            </button>
+
+            <div className="w-[1px] h-4 bg-white/20 mx-1" />
+
+            {/* Zoom Out */}
+            <button
+              onClick={handleZoomOut}
+              disabled={scale <= 0.6}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 active:scale-90 disabled:opacity-30 disabled:pointer-events-none transition-all"
+              title="Zoom Out"
+            >
+              <span className="material-symbols-rounded text-lg">remove</span>
+            </button>
+
+            {/* Zoom Percentage / Reset to Fit */}
+            <button
+              onClick={handleResetZoom}
+              className="text-[11px] sm:text-xs font-bold text-blue-400 px-1.5 py-0.5 rounded-md hover:bg-white/10 active:scale-95 transition-all whitespace-nowrap"
+              title="Reset Zoom (Fit to Screen)"
+            >
+              {Math.round(scale * 100)}%
+            </button>
+
+            {/* Zoom In */}
+            <button
+              onClick={handleZoomIn}
+              disabled={scale >= 3.0}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 active:scale-90 disabled:opacity-30 disabled:pointer-events-none transition-all"
+              title="Zoom In"
+            >
+              <span className="material-symbols-rounded text-lg">add</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default PDFViewerScreen;
-

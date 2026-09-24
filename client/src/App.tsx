@@ -82,8 +82,6 @@ const MainLayout: React.FC<{ isLoggedIn: boolean; children: React.ReactNode }> =
 
   return (
     <div className="max-w-md mx-auto h-[100dvh] bg-white shadow-xl relative overflow-hidden flex flex-col w-full">
-      {/* PWA Status Bar Background (Only visible in standalone mode) */}
-      <div className="pwa-status-bar bg-[#283593] shrink-0" />
       <div id="sidebar-root" />
       <div ref={scrollRef} className="flex-1 overflow-y-auto hide-scrollbar relative smooth-scroll">
         <div 
