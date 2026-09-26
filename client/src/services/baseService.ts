@@ -12,6 +12,20 @@ export const apiCache: Record<string, { data: any; timestamp: number }> = {};
 export const pendingRequests: Record<string, Promise<any>> = {};
 export const CACHE_TTL = 30000;
 
+// Global Fetch Interceptor for automatic 401 & 403 handling (DEVICE_UNLINKED / USER_BLOCKED)
+if (typeof window !== 'undefined' && !(window as any).__fetch_intercepted__) {
+  (window as any).__fetch_intercepted__ = true;
+  const originalFetch = window.fetch;
+  window.fetch = async (...args) => {
+    const response = await originalFetch(...args);
+    if (response.status === 401 || response.status === 403) {
+      const url = typeof args[0] === 'string' ? args[0] : (args[0] as Request)?.url || '';
+      handleUnauthorized(response.clone(), url).catch(() => {});
+    }
+    return response;
+  };
+}
+
 // Axios Global Interceptor for 401, 429, and requestId
 axios.interceptors.response.use(
   (response) => response,
@@ -19,7 +33,7 @@ axios.interceptors.response.use(
     const status = error.response?.status;
     const data = error.response?.data;
     
-    if (status === 401) {
+    if (status === 401 || status === 403) {
       handleUnauthorized({ status, data }, error.config?.url || '').catch(() => {});
     } else if (status === 429) {
       toast.error('Too many requests, please wait');
@@ -62,10 +76,15 @@ export function getAuthHeaders(): Record<string, string> {
     } catch (e) {}
   }
 
+  const headers: Record<string, string> = {};
   if (studentToken) {
-    return { 'Authorization': `Bearer ${studentToken}` };
+    headers['Authorization'] = `Bearer ${studentToken}`;
   }
-  return {};
+  const deviceId = localStorage.getItem('deviceId') || localStorage.getItem('studentDeviceId');
+  if (deviceId) {
+    headers['x-device-id'] = deviceId;
+  }
+  return headers;
 }
 
 export const clearAdminSession = () => {
@@ -89,12 +108,18 @@ export const clearStudentSession = () => {
   sessionStorage.removeItem('studentData');
   document.cookie = "accessToken=; Path=/api; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
   document.cookie = "refreshToken=; Path=/api/auth/refresh; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+  if (typeof window !== 'undefined' && (window as any).__authStore__) {
+    try {
+      (window as any).__authStore__.setState({ student: null, isAuthenticated: false, accessToken: null, deviceId: null });
+      (window as any).__authStore__.getState().stopHeartbeat?.();
+    } catch (e) {}
+  }
 };
 
 export const handleUnauthorized = async (response: Response | { status: number; data?: any }, url: string) => {
   const status = 'status' in response ? response.status : (response as any).response?.status;
   
-  if (status === 401) {
+  if (status === 401 || status === 403) {
     let data: any = {};
     try {
       if ('json' in response && typeof response.json === 'function') {
@@ -104,8 +129,24 @@ export const handleUnauthorized = async (response: Response | { status: number; 
       }
     } catch (e) { /* ignore parse errors */ }
 
-    const isTokenError = data.code === 'INVALID_TOKEN' || data.code === 'NO_AUTH';
+    const isCurrentPageAdmin = typeof window !== 'undefined' && (
+      window.location.hash.startsWith('#/admin') || 
+      window.location.pathname.startsWith('/admin')
+    );
     const isAdminPath = url.includes('/admin/') || url.includes('/v2/upload') || url.includes('/courses/import') || url.includes('/v1/apk') || url.includes('/dashboard/stats');
+
+    if (data.code === 'DEVICE_UNLINKED' || data.code === 'USER_BLOCKED' || data.code === 'ANOTHER_DEVICE') {
+      clearStudentSession();
+      if (!isCurrentPageAdmin && !isAdminPath) {
+        if (window.location.hash !== '#/student-login') {
+          window.location.hash = '#/student-login';
+        }
+        toast.error(data.error || 'Your session has ended.', { duration: 6000 });
+      }
+      return;
+    }
+
+    const isTokenError = data.code === 'INVALID_TOKEN' || data.code === 'NO_AUTH';
 
     if (data.code === 'TOKEN_EXPIRED' && !isAdminPath) {
       // Do NOT clear session here. authStore's checkAuth or interceptor will handle the refresh.
@@ -119,10 +160,16 @@ export const handleUnauthorized = async (response: Response | { status: number; 
         if (window.location.hash !== '#/admin-login') window.location.hash = '#/admin-login';
         throw new Error(data.error || 'Admin session expired. Please login again.');
       } else if (localStorage.getItem('accessToken') || localStorage.getItem('isStudentAuthenticated')) {
+        // Save current location for seamless return after login
+        const currentPath = window.location.hash 
+          ? window.location.hash.replace(/^#/, '') 
+          : (window.location.pathname + window.location.search);
+        if (currentPath && !currentPath.includes('login') && !currentPath.includes('register')) {
+          sessionStorage.setItem('postLoginRedirect', currentPath);
+        }
         clearStudentSession();
-        // Force a hard reload so the React/Zustand memory state wipes clean
-        // and reads the now-empty localStorage, preventing a fake login state.
-        window.location.reload();
+        window.location.hash = '#/student-login';
+        toast.error('Your session has expired. Please login again to continue.', { duration: 5000 });
       }
     }
   }

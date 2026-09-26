@@ -272,9 +272,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setShowQualityMenu(false);
   };
 
-  const formatTime = (s: number) => {
-    const m = Math.floor(s / 60);
-    const r = Math.floor(s % 60);
+  const formatTime = (s: number, forceHours = false) => {
+    if (!s || isNaN(s) || s < 0) return forceHours ? '00:00:00' : '0:00';
+    const totalSecs = Math.floor(s);
+    const hrs = Math.floor(totalSecs / 3600);
+    const m = Math.floor((totalSecs % 3600) / 60);
+    const r = totalSecs % 60;
+    if (hrs > 0 || forceHours) {
+      return `${hrs.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${r.toString().padStart(2, '0')}`;
+    }
     return `${m}:${r < 10 ? '0' : ''}${r}`;
   };
 

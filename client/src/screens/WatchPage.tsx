@@ -34,6 +34,18 @@ const WatchPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const [isLandscape, setIsLandscape] = useState(window.innerWidth > window.innerHeight);
+  const [playlist, setPlaylist] = useState<any[]>([]);
+  const [currentVideo, setCurrentVideo] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'lectures' | 'about' | 'notes'>('lectures');
+  const [autoPlayEnabled, setAutoPlayEnabled] = useState(true);
+  const [liveMessages, setLiveMessages] = useState<any[]>([]);
+  const [newLiveMessage, setNewLiveMessage] = useState('');
+  const pollRef = useRef<any>(null);
+  const [student, setStudent] = useState<any>(null);
+  const [isChatVisible, setIsChatVisible] = useState(false);
+
   const searchParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
   const isAdminPreview = searchParams.get('adminPreview') === '1';
   const source = searchParams.get('source');
@@ -55,29 +67,36 @@ const WatchPage: React.FC = () => {
   }
 
   const handleBack = useCallback(() => {
-    const state = window.history.state;
-    if (state && state.idx > 0) {
+    // 1. If opened within existing browser history, cleanly pop back to previous page
+    if (window.history.length > 1) {
       navigate(-1);
-    } else if (returnTo) {
-      navigate(returnTo, { replace: true });
-    } else if (isAdminPreview) {
-      navigate((source === 'free-content' || source === 'free') ? '/admin/free-content' : '/admin/course-content', { replace: true });
-    } else {
-      navigate('/live-classes', { replace: true });
+      return;
     }
-  }, [navigate, returnTo, isAdminPreview, source]);
 
-  const [isLandscape, setIsLandscape] = useState(window.innerWidth > window.innerHeight);
-  const [playlist, setPlaylist] = useState<any[]>([]);
-  const [currentVideo, setCurrentVideo] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'lectures' | 'about' | 'notes'>('lectures');
-  const [autoPlayEnabled, setAutoPlayEnabled] = useState(true);
-  const [liveMessages, setLiveMessages] = useState<any[]>([]);
-  const [newLiveMessage, setNewLiveMessage] = useState('');
-  const pollRef = useRef<any>(null);
-  const [student, setStudent] = useState<any>(null);
-  const [isChatVisible, setIsChatVisible] = useState(false);
+    // 2. Explicit returnTo target takes priority if opened directly
+    if (returnTo) {
+      navigate(returnTo, { replace: true });
+      return;
+    }
+
+    // 3. Admin preview return target
+    if (isAdminPreview) {
+      navigate((source === 'free-content' || source === 'free') ? '/admin/free-content' : '/admin/course-content', { replace: true });
+      return;
+    }
+
+    // 4. Fallback if opened without history
+    const targetBatchId = batchId && batchId !== 'live' && batchId !== 'undefined' && batchId !== 'history' ? batchId : null;
+    const courseId = targetBatchId || (location.state as any)?.courseId || currentVideo?.courseId;
+
+    if (courseId && courseId !== 'live' && courseId !== 'history') {
+      navigate(`/course/${courseId}`, { replace: true });
+    } else if (currentVideo?.isLive || currentVideo?.contentType === 'live_stream' || currentVideo?.type === 'live') {
+      navigate('/live-classes', { replace: true });
+    } else {
+      navigate('/free-content', { replace: true });
+    }
+  }, [navigate, returnTo, isAdminPreview, source, batchId, location.state, currentVideo]);
 
   useEffect(() => {
     const data = localStorage.getItem('studentData');
@@ -86,7 +105,15 @@ const WatchPage: React.FC = () => {
 
   const fetchLiveMessages = async (vId: string) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/live-chat/${vId}/messages`);
+      const studentToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      const adminToken = localStorage.getItem('adminToken');
+      const authHeader = studentToken ? { 'Authorization': `Bearer ${studentToken}` } : (adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {});
+      const res = await fetch(`${API_BASE_URL}/live-chat/${vId}/messages`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeader
+        }
+      });
       if (res.ok) {
         const data = await res.json();
         const normalized = (data || []).map((msg: any) => ({
@@ -336,7 +363,8 @@ const WatchPage: React.FC = () => {
     );
   }
 
-  const isLive = currentVideo.contentType === 'live_stream' && streamStatus === 'live';
+  const isLive = (currentVideo.contentType === 'live_stream' || currentVideo.type === 'live') && 
+                 (streamStatus === 'live' || currentVideo.streamStatus === 'live' || currentVideo.status === 'live');
   
   // STABLE VIDEO ID FOR PROGRESS SYNC
   const stableVideoId = String(currentVideo.id || currentVideo._id || currentVideo.sourceVideoId || `v-${currentVideo.title}`);
@@ -346,6 +374,7 @@ const WatchPage: React.FC = () => {
       videoId={stableVideoId}
       src={toYouTubeEmbed(replaySource || '')}
       title={currentVideo.title}
+      duration={currentVideo.duration && currentVideo.duration !== '00:00' ? currentVideo.duration : undefined}
       isLive={isLive}
       chatMessages={liveMessages}
       onSendMessage={handleSendLiveMessage}
@@ -355,6 +384,9 @@ const WatchPage: React.FC = () => {
       courseId={batchId || (location.state as any)?.courseId}
       courseTitle={currentVideo.courseTitle || (location.state as any)?.courseTitle}
       isAdmin={isUserAdmin}
+      provider={currentVideo.provider}
+      streamUrl={currentVideo.streamUrl || (replaySource && replaySource.includes('.m3u8') ? replaySource : undefined)}
+      youtubeUrl={currentVideo.youtubeUrl}
       pdf1={currentVideo.pdf1 || currentVideo.pdf1Url || currentVideo.pdfUrl}
       pdf2={currentVideo.pdf2 || currentVideo.pdf2Url}
       studyMaterial={currentVideo.studyMaterial || currentVideo.studyMaterialUrl || currentVideo.documentUrl || currentVideo.material}

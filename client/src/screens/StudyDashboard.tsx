@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import LiveClassesCalendar from '../components/student/LiveClassesCalendar';
-import { getPdfUrl, getVideoUrl, getImageUrl, getYouTubeThumbnail, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
+import { getPdfUrl, getVideoUrl, getImageUrl, getYouTubeThumbnail, toYouTubeEmbed, isYouTubeUrl, formatDurationBadge } from '../lib/utils';
 import { useAuthStore } from '../store/authStore';
 import { getAuthHeaders, API_BASE_URL } from '../services/apiClient';
 
@@ -376,7 +376,7 @@ const StudyDashboard: React.FC = () => {
                               <h4 className="font-bold text-sm truncate">{video.title}</h4>
                               <div className="flex gap-2 mt-1">
                                 <span className="text-[8px] bg-blue-50 text-brandBlue px-1.5 py-0.5 rounded font-bold uppercase">Video</span>
-                                <span className="text-[8px] text-gray-400">{video.duration}</span>
+                                <span className="text-[8px] text-gray-400">{formatDurationBadge(video.duration)}</span>
                               </div>
                             </div>
                               <button

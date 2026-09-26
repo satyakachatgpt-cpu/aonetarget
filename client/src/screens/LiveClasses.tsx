@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import { liveVideosAPI } from '../services/apiClient';
-import { isLiveUrl, isYouTubeUrl, getEmbedUrl } from '../lib/utils';
+import { isLiveUrl, isYouTubeUrl, getEmbedUrl, getPdfUrl } from '../lib/utils';
 
 // ─── Helper: resolve stream URL ────────────────────────────────────────────────
 function resolveStreamUrl(lc: any): string {
@@ -153,6 +153,17 @@ const LiveClasses: React.FC = () => {
 
   const studentId = student?.id || student?._id || student?.studentId;
 
+  const openPdf = (url: string, title: string) => {
+    const currentPath = window.location.hash.replace(/^#/, '') || window.location.pathname;
+    navigate(`/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent(title)}&returnTo=${encodeURIComponent(currentPath)}`, {
+      state: {
+        pdf: { fileUrl: getPdfUrl(url) },
+        title,
+        returnTo: currentPath
+      }
+    });
+  };
+
   // Smart join: All YouTube videos (live + normal) → custom player, others → new tab
   const smartJoin = useCallback((lc: any) => {
     if (computeEffectiveStatus(lc) !== 'live') return;
@@ -164,13 +175,14 @@ const LiveClasses: React.FC = () => {
     
     if (isYT) {
       const videoId = lc.id || lc._id || 'live';
-      navigate(`/watch/${videoId}`, {
+      navigate(`/watch/${videoId}?returnTo=/live-classes`, {
         state: {
           video: {
             ...lc,
             title: lc.title || lc.name || 'Live Class',
             embedUrl: getEmbedUrl(url)
-          }
+          },
+          returnTo: '/live-classes'
         }
       });
     } else {
@@ -190,7 +202,7 @@ const LiveClasses: React.FC = () => {
         <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2"></div>
         <div className="absolute bottom-0 left-0 w-24 h-24 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2"></div>
         <div className="relative flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="p-2.5 rounded-2xl bg-white/10 backdrop-blur-sm transition-all duration-200 active:scale-[0.97]">
+          <button onClick={() => navigate('/', { replace: true })} className="p-2.5 rounded-2xl bg-white/10 backdrop-blur-sm transition-all duration-200 active:scale-[0.97]">
             <span className="material-symbols-rounded text-[22px]">arrow_back</span>
           </button>
           <div className="flex-1">
@@ -276,7 +288,7 @@ const LiveClasses: React.FC = () => {
                         <div className="flex flex-wrap gap-2 pt-4 mt-1 border-t border-red-100/50 relative z-10 px-3 pb-3">
                           {lc.pdf1 && (
                             <button
-                              onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(lc.pdf1)}&title=${encodeURIComponent('PDF 1')}`, '_blank'); }}
+                              onClick={(e) => { e.stopPropagation(); openPdf(lc.pdf1, 'PDF 1'); }}
                               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white text-red-600 text-[10px] font-black border border-red-100 hover:bg-red-600 hover:text-white transition-all shadow-sm uppercase tracking-widest"
                             >
                               <span className="material-symbols-rounded text-base">picture_as_pdf</span>
@@ -285,7 +297,7 @@ const LiveClasses: React.FC = () => {
                           )}
                           {lc.pdf2 && (
                             <button
-                              onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(lc.pdf2)}&title=${encodeURIComponent('PDF 2')}`, '_blank'); }}
+                              onClick={(e) => { e.stopPropagation(); openPdf(lc.pdf2, 'PDF 2'); }}
                               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white text-red-600 text-[10px] font-black border border-red-100 hover:bg-red-600 hover:text-white transition-all shadow-sm uppercase tracking-widest"
                             >
                               <span className="material-symbols-rounded text-base">picture_as_pdf</span>
@@ -294,7 +306,7 @@ const LiveClasses: React.FC = () => {
                           )}
                           {lc.studyMaterial && (
                             <button
-                              onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(lc.studyMaterial)}&title=${encodeURIComponent('Study Material')}`, '_blank'); }}
+                              onClick={(e) => { e.stopPropagation(); openPdf(lc.studyMaterial, 'Study Material'); }}
                               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white text-indigo-600 text-[10px] font-black border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all shadow-sm uppercase tracking-widest"
                             >
                               <span className="material-symbols-rounded text-base">auto_stories</span>
@@ -372,7 +384,7 @@ const LiveClasses: React.FC = () => {
                           <div className="flex flex-wrap gap-2 pt-4 border-t border-gray-50 px-3 pb-3">
                             {lc.pdf1 && (
                               <button
-                                onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(lc.pdf1)}&title=${encodeURIComponent('PDF 1')}`, '_blank'); }}
+                                onClick={(e) => { e.stopPropagation(); openPdf(lc.pdf1, 'PDF 1'); }}
                                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white text-red-600 text-[10px] font-black border border-red-100 hover:bg-red-600 hover:text-white transition-all shadow-sm uppercase tracking-widest"
                               >
                                 <span className="material-symbols-rounded text-sm">picture_as_pdf</span>
@@ -381,7 +393,7 @@ const LiveClasses: React.FC = () => {
                             )}
                             {lc.studyMaterial && (
                               <button
-                                onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(lc.studyMaterial)}&title=${encodeURIComponent('Study Material')}`, '_blank'); }}
+                                onClick={(e) => { e.stopPropagation(); openPdf(lc.studyMaterial, 'Study Material'); }}
                                 className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white text-indigo-600 text-[10px] font-black border border-indigo-100 hover:bg-indigo-600 hover:text-white transition-all shadow-sm uppercase tracking-widest"
                               >
                                 <span className="material-symbols-rounded text-sm">auto_stories</span>

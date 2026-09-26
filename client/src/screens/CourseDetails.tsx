@@ -99,7 +99,15 @@ const CourseDetails: React.FC = () => {
 
   const fetchLiveMessages = async (vId: string) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/live-chat/${vId}/messages`);
+      const studentToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      const adminToken = localStorage.getItem('adminToken');
+      const authHeader = studentToken ? { 'Authorization': `Bearer ${studentToken}` } : (adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {});
+      const res = await fetch(`${API_BASE_URL}/live-chat/${vId}/messages`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeader
+        }
+      });
       if (res.ok) {
         const data = await res.json();
         // Normalize fields for StudentVideoPlayer
@@ -422,11 +430,28 @@ const CourseDetails: React.FC = () => {
 
     setEnrolling(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/students/${studentId}/enroll`, {
+      let response = await fetch(`${API_BASE_URL}/students/${studentId}/enroll`, {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
         body: JSON.stringify({ courseId: id })
       });
+
+      if (response.status === 401) {
+        const refreshed = await useAuthStore.getState().refreshToken();
+        if (refreshed) {
+          response = await fetch(`${API_BASE_URL}/students/${studentId}/enroll`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...getAuthHeaders()
+            },
+            body: JSON.stringify({ courseId: id })
+          });
+        }
+      }
 
       if (response.ok) {
         setIsEnrolled(true);
@@ -435,8 +460,13 @@ const CourseDetails: React.FC = () => {
         const progressData = await progressRes.json();
         setProgress(progressData);
       } else {
-        const error = await response.json();
-        alert(error.error || 'Failed to enroll. Please try again.');
+        const error = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+          alert('Your session has expired. Please login again to enroll.');
+          navigate('/student-login', { state: { from: location.pathname } });
+        } else {
+          alert(error.error || 'Failed to enroll. Please try again.');
+        }
       }
     } catch (error) {
       alert('Failed to enroll. Please try again.');
@@ -851,7 +881,15 @@ const CourseDetails: React.FC = () => {
             coursePrice={course.price}
             enrolling={enrolling}
             completedTests={progress.completedTests || []}
-            onStartTest={(testId) => { if (isCourseExpired) { alert('Your access to this course has expired. Please renew to continue.'); return; } navigate(`/test/${testId}`); }}
+            onStartTest={(testId) => { 
+              if (isCourseExpired) { 
+                alert('Your access to this course has expired. Please renew to continue.'); 
+                return; 
+              } 
+              navigate(`/test/${testId}`, { 
+                state: { from: location.pathname + location.search } 
+              }); 
+            }}
             onEnroll={handleEnroll}
             onBuyNow={handleBuyNow}
           />
@@ -996,8 +1034,13 @@ const CourseDetails: React.FC = () => {
           title={selectedVideo.title}
           courseTitle={course?.name || course?.title}
           courseId={id}
-          thumbnail={selectedVideo.thumbnail}
-          duration={selectedVideo.duration}
+          duration={
+            selectedVideo.duration && selectedVideo.duration !== '00:00'
+              ? selectedVideo.duration
+              : (selectedVideo.startedAt || selectedVideo.startTime) && (selectedVideo.endedAt || selectedVideo.endTime)
+                ? String(Math.floor((new Date(selectedVideo.endedAt || selectedVideo.endTime).getTime() - new Date(selectedVideo.startedAt || selectedVideo.startTime).getTime()) / 1000))
+                : undefined
+          }
           isLive={selectedVideo.contentType === 'live_stream'}
           onClose={closeVideoPlayer}
           onMarkComplete={() => {

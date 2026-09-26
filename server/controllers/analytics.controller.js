@@ -14,17 +14,28 @@ export const saveProgress = async (req, res) => {
 
     const { userId, courseId, courseTitle, videoId, progress, duration, title, thumbnail, videoUrl, youtubeUrl } = req.body;
     const isAdmin = req.user?.isAdmin || req.user?.role === 'admin';
-    const tokenStudentId = req.user?.studentId;
+    const tokenStudentId = req.user?.studentId || req.user?.id || req.user?._id;
 
     if (!userId || !videoId) {
       return res.status(400).json({ error: 'userId and videoId are required' });
     }
 
-    if (!isAdmin && String(userId) !== String(tokenStudentId)) {
-      return res.status(403).json({ error: 'Forbidden' });
+    let effectiveUserId = userId;
+    if (!isAdmin && tokenStudentId) {
+      const student = await db.collection('students').findOne({
+        $or: [
+          { id: tokenStudentId },
+          { userId: tokenStudentId },
+          ...(ObjectId.isValid(tokenStudentId) ? [{ _id: new ObjectId(tokenStudentId) }] : [])
+        ]
+      });
+      const validIds = student ? [student.id, String(student._id), student.userId].filter(Boolean) : [String(tokenStudentId)];
+      if (!validIds.includes(String(userId))) {
+        return res.status(403).json({ error: 'Forbidden' });
+      }
+      effectiveUserId = student?.id || tokenStudentId;
     }
 
-    const effectiveUserId = isAdmin ? userId : tokenStudentId;
     const query = { userId: effectiveUserId, videoId: videoId };
     const update = {
       $set: {
@@ -63,6 +74,33 @@ export const saveProgress = async (req, res) => {
       { upsert: true }
     );
 
+    // If duration is known and video in videos collection is missing duration, backfill it
+    if (duration > 0 && videoId) {
+      const hours = Math.floor(duration / 3600);
+      const mins = Math.floor((duration % 3600) / 60);
+      const secs = Math.floor(duration % 60);
+      const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
+      const formattedDur = hours > 0 ? `${pad(hours)}:${pad(mins)}:${pad(secs)}` : `${pad(mins)}:${pad(secs)}`;
+      
+      db.collection('videos').updateOne(
+        {
+          $or: [
+            { id: videoId },
+            ...(ObjectId.isValid(videoId) ? [{ _id: new ObjectId(videoId) }] : [])
+          ],
+          $or: [
+            { duration: { $exists: false } },
+            { duration: null },
+            { duration: '' },
+            { duration: '00:00' },
+            { duration: '0:00' },
+            { duration: '0' }
+          ]
+        },
+        { $set: { duration: formattedDur } }
+      ).catch(() => {});
+    }
+
     res.json({ success: true, message: 'Progress saved', result });
   } catch (error) {
     console.error('Save progress error:', error);
@@ -80,31 +118,22 @@ export const getProgress = async (req, res) => {
     if (!db) return res.status(500).json({ error: 'DB not ready' });
 
     const { userId } = req.params;
+    const student = await db.collection('students').findOne({
+      $or: [
+        { id: userId },
+        { userId: userId },
+        ...(ObjectId.isValid(userId) ? [{ _id: new ObjectId(userId) }] : [])
+      ]
+    });
+    const userIds = student ? [student.id, String(student._id), student.userId].filter(Boolean) : [userId];
 
     const rawProgress = await db.collection('videoProgress')
-      .find({ userId: userId })
+      .find({ userId: { $in: userIds } })
       .sort({ lastUpdated: -1 })
-      .limit(20)
+      .limit(50)
       .toArray();
 
-    const courseIds = [...new Set(rawProgress.map(p => String(p.courseId)))].filter(id => id && id !== 'undefined' && id !== 'null');
-    const objectIds = courseIds.filter(id => ObjectId.isValid(id)).map(id => new ObjectId(id));
-    
-    const courses = await db.collection('courses').find({
-      $or: [
-        { id: { $in: courseIds } },
-        { _id: { $in: objectIds } }
-      ]
-    }).project({ _id: 1, id: 1 }).toArray();
-
-    const validCourseIds = new Set(courses.map(c => String(c.id || c._id)));
-
-    const validProgress = rawProgress.filter(p => {
-      const cId = String(p.courseId);
-      return validCourseIds.has(cId);
-    });
-
-    res.json(validProgress);
+    res.json(rawProgress);
   } catch (error) {
     console.error('Get progress error:', error);
     res.status(500).json({ error: 'Failed to fetch progress' });

@@ -293,7 +293,13 @@ export const rejectDevice = async (req, res) => {
 export const resetDevice = async (req, res) => {
   try {
     const { studentId } = req.body;
-    const student = await Student.findById(studentId);
+    const student = await Student.findOne({
+      $or: [
+        { id: studentId },
+        { userId: studentId },
+        ...(mongoose.Types.ObjectId.isValid(studentId) ? [{ _id: new mongoose.Types.ObjectId(studentId) }] : [])
+      ]
+    });
     if (!student) return res.status(404).json({ error: 'Student not found' });
     
     student.deviceId = null;
@@ -315,11 +321,19 @@ export const resetDevice = async (req, res) => {
     
     student.deviceLocked = true;
     
-    // Also remove any active session traces
+    // Also remove any active session traces and invalidate all tokens
     student.sessionToken = null;
     student.activeSessions = [];
     
     await student.save();
+
+    try {
+      const database = getDb ? getDb() : mongoose.connection.db;
+      const studentIds = [student.id, String(student._id), student.userId].filter(Boolean);
+      await database.collection('refresh_tokens').deleteMany({ studentId: { $in: studentIds } });
+    } catch (tokenErr) {
+      console.error('[resetDevice] Error clearing refresh tokens:', tokenErr);
+    }
     
     res.json({ success: true, message: 'Device limit reset successfully' });
   } catch (error) {

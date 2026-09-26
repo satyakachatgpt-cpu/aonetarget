@@ -35,7 +35,10 @@ const BottomNav: React.FC<BottomNavProps> = ({ isLoggedIn = false }) => {
             return (
               <button
                 key={tab.name}
-                onClick={() => navigate(tab.path)}
+                onClick={() => {
+                  if (isActive) return;
+                  navigate(tab.path);
+                }}
                 className="relative flex flex-col items-center gap-0.5 py-1 px-1 min-w-[64px] transition-all duration-200 group"
               >
                 <div className={`relative p-1.5 rounded-xl transition-all duration-200 ${isActive

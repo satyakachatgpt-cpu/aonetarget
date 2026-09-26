@@ -21,7 +21,7 @@ import {
   sendLiveChatMessage,
   deleteLiveChatMessage
 } from '../controllers/communication.controller.js';
-import { adminMiddleware, authMiddleware } from '../middleware/auth.js';
+import { adminMiddleware, authMiddleware, optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -48,7 +48,7 @@ router.put('/chats/:chatId/messages/:messageId', authMiddleware, editChatMessage
 router.put('/chats/:chatId/read', authMiddleware, markChatAsRead);
 
 // Live Chat (Phase 19D)
-router.get('/live-chat/:videoId/messages', authMiddleware, getLiveChatMessages);
+router.get('/live-chat/:videoId/messages', optionalAuth, getLiveChatMessages);
 router.post('/live-chat/:videoId/messages', authMiddleware, sendLiveChatMessage);
 router.delete('/live-chat/:videoId/messages/:messageId', adminMiddleware, deleteLiveChatMessage);
 

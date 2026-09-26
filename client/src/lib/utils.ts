@@ -265,4 +265,90 @@ export const validateImage = (
 
     img.src = objectUrl;
   });
-};
+};
+
+/**
+ * Parse any raw duration string or number into seconds.
+ * Handles: "75:35", "75:35 min", "1:15:35", "75 min", "75", 4535 (seconds), "1 hr 15 min", etc.
+ */
+export const parseDurationToSeconds = (dur: string | number | undefined | null): number => {
+  if (dur === undefined || dur === null) return 0;
+  if (typeof dur === 'number') {
+    return Math.round(dur);
+  }
+  const clean = dur.toString().trim().toLowerCase();
+  if (!clean || clean === '0' || clean === '00:00' || clean === '0:00' || clean === 'video') return 0;
+
+  // If it's a decimal float string without colons (e.g. "11500.101", "4535.041", "450.5"), it is seconds from player
+  if (clean.includes('.') && !clean.includes(':')) {
+    const parsedFloat = parseFloat(clean);
+    return isNaN(parsedFloat) ? 0 : Math.round(parsedFloat);
+  }
+
+  // Handle "1 hr 15 min" or "1 hour 15 mins"
+  const hrMatch = clean.match(/(\d+)\s*(?:hr|hour)s?/);
+  const minMatch = clean.match(/(\d+)\s*(?:min|minute)s?/);
+  const secMatch = clean.match(/(\d+)\s*(?:sec|second)s?/);
+  if (hrMatch || (minMatch && !clean.includes(':'))) {
+    const hours = hrMatch ? parseInt(hrMatch[1], 10) : 0;
+    const mins = minMatch ? parseInt(minMatch[1], 10) : 0;
+    const secs = secMatch ? parseInt(secMatch[1], 10) : 0;
+    return hours * 3600 + mins * 60 + secs;
+  }
+
+  // Strip trailing "min", "mins", etc.
+  const timeOnly = clean.replace(/mins?|minutes?|secs?|seconds?|hrs?|hours?/g, '').trim();
+
+  // Match HH:MM:SS or MM:SS
+  const parts = timeOnly.split(':').map(p => parseFloat(p));
+  if (parts.length === 3 && parts.every(p => !isNaN(p))) {
+    return Math.round(parts[0] * 3600 + parts[1] * 60 + parts[2]);
+  } else if (parts.length === 2 && parts.every(p => !isNaN(p))) {
+    return Math.round(parts[0] * 60 + parts[1]);
+  } else if (parts.length === 1 && !isNaN(parts[0])) {
+    const val = parts[0];
+    if (val > 300) return Math.round(val);
+    return Math.round(val * 60);
+  }
+
+  return 0;
+};
+
+/**
+ * Format duration for video badge / timecode (e.g. "01:15:35" or "15:35")
+ */
+export const formatDurationBadge = (dur: string | number | undefined | null): string => {
+  const totalSeconds = parseDurationToSeconds(dur);
+  if (!totalSeconds || totalSeconds <= 0) return 'Video';
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  const secs = Math.floor(totalSeconds % 60);
+
+  const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+
+  if (hours > 0) {
+    return `${pad(hours)}:${pad(mins)}:${pad(secs)}`;
+  }
+  return `${pad(mins)}:${pad(secs)}`;
+};
+
+/**
+ * Format duration for human label (e.g. "1 hr 15 min", "45 min")
+ */
+export const formatDurationLabel = (dur: string | number | undefined | null): string => {
+  const totalSeconds = parseDurationToSeconds(dur);
+  if (!totalSeconds || totalSeconds <= 0) return 'Video';
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  const secs = Math.floor(totalSeconds % 60);
+
+  if (hours > 0) {
+    if (mins > 0) return `${hours} hr ${mins} min`;
+    return `${hours} hr`;
+  }
+  if (mins > 0) return `${mins} min`;
+  return `${secs} sec`;
+};
+

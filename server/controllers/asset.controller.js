@@ -1,6 +1,7 @@
 import { db } from '../config/db.js';
 import mongoose from 'mongoose';
 import { verifySignedUrl } from '../middleware/auth.js';
+import { fetchYouTubeDuration } from '../utils/helpers.js';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
@@ -55,6 +56,11 @@ export const createVideo = async (req, res) => {
         videoData.courseName = course.name || course.title;
       }
     }
+
+    if ((!videoData.duration || videoData.duration === '00:00' || videoData.duration === '0:00') && (videoData.url || videoData.youtubeUrl || videoData.videoUrl || videoData.link)) {
+      const dur = await fetchYouTubeDuration(videoData.url || videoData.youtubeUrl || videoData.videoUrl || videoData.link);
+      if (dur) videoData.duration = dur;
+    }
     
     const result = await db.collection('videos').insertOne(videoData);
     res.status(201).json({ _id: result.insertedId, ...videoData });
@@ -75,6 +81,12 @@ export const updateVideo = async (req, res) => {
     };
     
     const { _id, ...updateData } = req.body;
+
+    if ((!updateData.duration || updateData.duration === '00:00' || updateData.duration === '0:00') && (updateData.url || updateData.youtubeUrl || updateData.videoUrl || updateData.link)) {
+      const dur = await fetchYouTubeDuration(updateData.url || updateData.youtubeUrl || updateData.videoUrl || updateData.link);
+      if (dur) updateData.duration = dur;
+    }
+
     const result = await db.collection('videos').updateOne(query, { $set: updateData });
     
     if (result.matchedCount === 0) return res.status(404).json({ error: 'Video not found' });

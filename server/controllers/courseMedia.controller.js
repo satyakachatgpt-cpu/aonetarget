@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import { db } from '../config/db.js';
 import { findCourse, getRelatedCourseIds } from '../services/course.service.js';
-import { normalizeId } from '../utils/helpers.js';
+import { normalizeId, fetchYouTubeDuration } from '../utils/helpers.js';
 import { syncLiveStream } from '../services/liveStream.service.js';
 
 const { ObjectId } = mongoose.Types;
@@ -364,7 +364,10 @@ export const getCourseVideos = async (req, res) => {
         // Ensure the player always sees the expected fields
         youtubeUrl: provider === 'youtube' ? (v.youtubeUrl || videoUrl) : v.youtubeUrl,
         streamUrl: (provider === 'hls' || provider === 'direct') ? (v.streamUrl || videoUrl) : v.streamUrl,
-        videoUrl: videoUrl // Keep for backward compatibility
+        videoUrl: videoUrl, // Keep for backward compatibility
+        pdf1: v.pdf1 || v.pdf1Url,
+        pdf2: v.pdf2 || v.pdf2Url,
+        studyMaterial: v.studyMaterial || v.studyMaterialUrl
       };
     });
 
@@ -428,6 +431,11 @@ export const createCourseVideo = async (req, res) => {
     }
     delete video.instructor;
 
+    if ((!video.duration || video.duration === '00:00' || video.duration === '0:00') && (video.url || video.youtubeUrl || video.videoUrl)) {
+      const dur = await fetchYouTubeDuration(video.url || video.youtubeUrl || video.videoUrl);
+      if (dur) video.duration = dur;
+    }
+
     if (isLiveStream) {
       const syncResult = await syncLiveStream(null, video, 'create');
       res.status(201).json({ _id: syncResult._id, ...video });
@@ -463,6 +471,11 @@ export const updateCourseVideo = async (req, res) => {
     const finalUpdate = { ...updateData };
 
     if (isLiveStream) {
+      const newStreamStatus = updateData.streamStatus || finalUpdate.streamStatus || 'upcoming';
+      const newIsLive = updateData.isLive !== undefined 
+        ? updateData.isLive 
+        : (newStreamStatus === 'live' ? true : (newStreamStatus === 'ended' || newStreamStatus === 'recorded' ? false : finalUpdate.isLive));
+
       Object.assign(finalUpdate, {
         title: updateData.title || finalUpdate.title,
         platform: updateData.platform || finalUpdate.platform,
@@ -475,19 +488,40 @@ export const updateCourseVideo = async (req, res) => {
         thumbnail: updateData.thumbnail || updateData.image || finalUpdate.thumbnail,
         contentType: 'live_stream',
         type: updateData.type || 'live',
-        status: updateData.status || finalUpdate.status || 'upcoming',
+        status: updateData.status || finalUpdate.status || 'active',
+        streamStatus: newStreamStatus,
+        isLive: newIsLive,
+        startedAt: updateData.startedAt || (newIsLive ? new Date().toISOString() : finalUpdate.startedAt),
         url: updateData.meetingLink || updateData.url || updateData.link || finalUpdate.url,
         scheduleDate: updateData.scheduleDate || finalUpdate.scheduleDate,
         scheduleTime: updateData.scheduleTime || finalUpdate.scheduleTime,
-        scheduledAt: updateData.scheduledAt || finalUpdate.scheduledAt
+        scheduledAt: updateData.scheduledAt || finalUpdate.scheduledAt,
+        pdf1: updateData.pdf1 !== undefined ? updateData.pdf1 : (updateData.pdf1Url || finalUpdate.pdf1),
+        pdf2: updateData.pdf2 !== undefined ? updateData.pdf2 : (updateData.pdf2Url || finalUpdate.pdf2),
+        studyMaterial: updateData.studyMaterial !== undefined ? updateData.studyMaterial : (updateData.studyMaterialUrl || finalUpdate.studyMaterial),
+        pdf1Url: updateData.pdf1Url || updateData.pdf1 || finalUpdate.pdf1Url,
+        pdf2Url: updateData.pdf2Url || updateData.pdf2 || finalUpdate.pdf2Url,
+        studyMaterialUrl: updateData.studyMaterialUrl || updateData.studyMaterial || finalUpdate.studyMaterialUrl,
       });
-
 
       if (updateData.endTime) finalUpdate.endTime = updateData.endTime;
       if (updateData.endDateTime) finalUpdate.endDateTime = updateData.endDateTime;
       if (updateData.joinBeforeMinutes) finalUpdate.joinBeforeMinutes = updateData.joinBeforeMinutes;
       if (updateData.visibility) finalUpdate.visibility = updateData.visibility;
       delete finalUpdate.instructor;
+    } else {
+      if (updateData.pdf1 !== undefined || updateData.pdf1Url !== undefined) {
+        finalUpdate.pdf1 = updateData.pdf1 !== undefined ? updateData.pdf1 : updateData.pdf1Url;
+        finalUpdate.pdf1Url = updateData.pdf1Url || updateData.pdf1;
+      }
+      if (updateData.pdf2 !== undefined || updateData.pdf2Url !== undefined) {
+        finalUpdate.pdf2 = updateData.pdf2 !== undefined ? updateData.pdf2 : updateData.pdf2Url;
+        finalUpdate.pdf2Url = updateData.pdf2Url || updateData.pdf2;
+      }
+      if (updateData.studyMaterial !== undefined || updateData.studyMaterialUrl !== undefined) {
+        finalUpdate.studyMaterial = updateData.studyMaterial !== undefined ? updateData.studyMaterial : updateData.studyMaterialUrl;
+        finalUpdate.studyMaterialUrl = updateData.studyMaterialUrl || updateData.studyMaterial;
+      }
     }
 
     if (finalUpdate.folderId !== undefined) {
@@ -501,6 +535,31 @@ export const updateCourseVideo = async (req, res) => {
     if (updateData.provider) finalUpdate.provider = updateData.provider;
     if (updateData.streamUrl !== undefined) finalUpdate.streamUrl = updateData.streamUrl;
     if (updateData.youtubeUrl !== undefined) finalUpdate.youtubeUrl = updateData.youtubeUrl;
+
+    if ((!finalUpdate.duration || finalUpdate.duration === '00:00' || finalUpdate.duration === '0:00') && (finalUpdate.url || finalUpdate.youtubeUrl || finalUpdate.videoUrl)) {
+      const dur = await fetchYouTubeDuration(finalUpdate.url || finalUpdate.youtubeUrl || finalUpdate.videoUrl);
+      if (dur) finalUpdate.duration = dur;
+    }
+
+    // Auto-compute duration from stream start and end timestamps if duration is still missing
+    if (!finalUpdate.duration || finalUpdate.duration === '00:00' || finalUpdate.duration === '0:00') {
+      const existingVideo = await db.collection('videos').findOne(query);
+      const startVal = finalUpdate.startedAt || finalUpdate.startTime || existingVideo?.startedAt || existingVideo?.startTime || existingVideo?.createdAt;
+      const endVal = finalUpdate.endedAt || finalUpdate.endTime || (finalUpdate.streamStatus === 'recorded' ? new Date().toISOString() : null);
+      if (startVal && endVal) {
+        const diffMs = Math.max(0, new Date(endVal).getTime() - new Date(startVal).getTime());
+        const totalSecs = Math.floor(diffMs / 1000);
+        if (totalSecs > 30) {
+          const hours = Math.floor(totalSecs / 3600);
+          const mins = Math.floor((totalSecs % 3600) / 60);
+          const secs = totalSecs % 60;
+          const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
+          finalUpdate.duration = hours > 0 
+            ? `${pad(hours)}:${pad(mins)}:${pad(secs)}`
+            : `${pad(mins)}:${pad(secs)}`;
+        }
+      }
+    }
 
     if (isLiveStream) {
       await syncLiveStream(videoId, finalUpdate, 'update');

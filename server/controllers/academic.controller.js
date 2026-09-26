@@ -479,7 +479,10 @@ export const getFoldersByCourse = async (req, res) => {
     const query = {
       courseId: { $in: idVariants }
     };
-    const folders = await Folder.find(query).sort({ order: 1, sortingOrder: 1 }).lean();
+    const folders = await Folder.find(query).lean();
+    if (Array.isArray(folders)) {
+      folders.sort((a, b) => (a.order || 0) - (b.order || 0) || (a.sortingOrder || 0) - (b.sortingOrder || 0));
+    }
     res.json(folders || []);
   } catch (error) {
     console.error('Fetch folders error:', error);

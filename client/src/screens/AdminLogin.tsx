@@ -58,6 +58,7 @@ const AdminLogin: React.FC<Props> = ({ setAuth }) => {
           localStorage.setItem('adminToken', response.token);
         }
         localStorage.setItem('adminLoginTimestamp', Date.now().toString());
+        sessionStorage.setItem('auth_popup_dismissed', 'true');
         setAuth(true);
         navigate('/admin');
       } else {
@@ -105,6 +106,7 @@ const AdminLogin: React.FC<Props> = ({ setAuth }) => {
                   type="text"
                   value={adminId}
                   onChange={(e) => setAdminId(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleLogin(e); }}
                   className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-navy/5 focus:border-navy transition-all outline-none"
                   placeholder="Enter your ID"
                   required
@@ -120,6 +122,7 @@ const AdminLogin: React.FC<Props> = ({ setAuth }) => {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleLogin(e); }}
                   className="w-full pl-12 pr-4 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-navy/5 focus:border-navy transition-all outline-none"
                   placeholder="••••••••"
                   required

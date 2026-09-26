@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { coursesAPI, categoriesAPI, getAuthHeaders } from '../services/apiClient';
+import { coursesAPI, categoriesAPI, getAuthHeaders, fetchStudentCoursesWithAuth } from '../services/apiClient';
 import { getImageUrl } from '../lib/utils';
 import { API_BASE_URL } from '../services/apiClient';
 
@@ -63,7 +63,7 @@ const CoursesScreen: React.FC = () => {
     try {
       const [allCourses, enrolledCoursesRes] = await Promise.all([
         coursesAPI.getAll(),
-        (student?.id || student?._id) ? fetch(`${API_BASE_URL}/students/${student.id || student._id}/courses`, { headers: getAuthHeaders() }).then(r => r.json()) : Promise.resolve([])
+        (student?.id || student?._id) ? fetchStudentCoursesWithAuth(student.id || student._id) : Promise.resolve([])
       ]);
       
       const enrolled = Array.isArray(enrolledCoursesRes) ? enrolledCoursesRes : [];
@@ -102,7 +102,16 @@ const CoursesScreen: React.FC = () => {
     <div className="min-h-screen bg-gray-50 pb-20">
       <header className="bg-brandBlue text-white pt-6 pb-4 px-4 sticky top-0 z-40">
         <div className="flex items-center gap-3 mb-4">
-          <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-white/20">
+          <button 
+            onClick={() => {
+              if (window.history.length > 1) {
+                navigate(-1);
+              } else {
+                navigate('/', { replace: true });
+              }
+            }} 
+            className="p-2 rounded-full hover:bg-white/20"
+          >
             <span className="material-symbols-rounded">arrow_back</span>
           </button>
           <h1 className="text-lg font-bold">Our Courses</h1>
@@ -172,9 +181,9 @@ const CoursesScreen: React.FC = () => {
                         </div>
                         <div className="mt-2 flex items-center gap-2">
                           <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                            <div className="h-full bg-green-500 rounded-full" style={{ width: `${course.progress || 30}%` }}></div>
+                            <div className="h-full bg-green-500 rounded-full transition-all duration-300" style={{ width: `${Math.min(100, Math.max(0, course.progress ?? 0))}%` }}></div>
                           </div>
-                          <span className="text-[10px] font-bold text-gray-500">{course.progress || 30}%</span>
+                          <span className="text-[10px] font-bold text-gray-500">{Math.round(course.progress ?? 0)}%</span>
                         </div>
                       </div>
                     </div>

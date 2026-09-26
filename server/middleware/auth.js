@@ -8,8 +8,8 @@ if (!process.env.JWT_SECRET) {
 }
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
-const ACCESS_TOKEN_EXPIRY = '15m';
-const REFRESH_TOKEN_EXPIRY = '7d';
+const ACCESS_TOKEN_EXPIRY = '30d';
+const REFRESH_TOKEN_EXPIRY = '180d';
 
 export function generateTokens(student) {
   const payload = {
@@ -61,7 +61,7 @@ export function verifySignedUrl(filePath, signature, expiry) {
   return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected));
 }
 
-export function authMiddleware(req, res, next) {
+export async function authMiddleware(req, res, next) {
   const authHeader = req.headers['authorization'] || req.headers['Authorization'];
   let token = null;
 
@@ -89,6 +89,49 @@ export function authMiddleware(req, res, next) {
         name: decoded.name,
         role: 'admin'
       };
+      return next();
+    }
+
+    // Verify student status in DB (Blocked / Unlinked device)
+    if (decoded.studentId) {
+      const db = mongoose.connection.db;
+      if (db) {
+        const student = await db.collection('students').findOne({
+          $or: [
+            { id: decoded.studentId },
+            { userId: decoded.studentId },
+            ...(mongoose.Types.ObjectId.isValid(decoded.studentId) ? [{ _id: new mongoose.Types.ObjectId(decoded.studentId) }] : [])
+          ]
+        });
+
+        if (!student) {
+          return res.status(401).json({
+            error: 'User not found. Please login again.',
+            code: 'INVALID_TOKEN'
+          });
+        }
+
+        if (student.isBanned || student.status === 'blocked' || student.status === 'inactive') {
+          return res.status(403).json({
+            error: student.banReason || 'Your account has been blocked by administrator.',
+            code: 'USER_BLOCKED'
+          });
+        }
+
+        if (!student.isReviewer && student.deviceLocked && !student.activeDeviceId && !student.deviceId) {
+          return res.status(401).json({
+            error: 'Your device has been unlinked by administrator. Please login again.',
+            code: 'DEVICE_UNLINKED'
+          });
+        }
+        const clientDeviceId = req.headers['x-device-id'] || req.headers['x-device-uid'] || req.body?.deviceId;
+        if (!student.isReviewer && student.deviceLocked && student.activeDeviceId && clientDeviceId && student.activeDeviceId !== clientDeviceId) {
+          return res.status(401).json({
+            error: 'You have logged in from another device. Please login again.',
+            code: 'ANOTHER_DEVICE'
+          });
+        }
+      }
     }
 
     next();
@@ -155,11 +198,11 @@ export function adminMiddleware(req, res, next) {
   }
 }
 
-export function optionalAuth(req, res, next) {
+export async function optionalAuth(req, res, next) {
   try {
     let token = null;
 
-    const authHeader = req.headers.authorization;
+    const authHeader = req.headers.authorization || req.headers.Authorization;
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.substring(7);
     }
@@ -169,9 +212,60 @@ export function optionalAuth(req, res, next) {
     }
 
     if (token) {
-      req.user = verifyAccessToken(token);
+      const decoded = verifyAccessToken(token);
+      req.user = decoded;
+
+      // Verify student status in DB if token provided
+      if (decoded.studentId && !decoded.isAdmin && decoded.role !== 'admin') {
+        const db = mongoose.connection.db;
+        if (db) {
+          const student = await db.collection('students').findOne({
+            $or: [
+              { id: decoded.studentId },
+              { userId: decoded.studentId },
+              ...(mongoose.Types.ObjectId.isValid(decoded.studentId) ? [{ _id: new mongoose.Types.ObjectId(decoded.studentId) }] : [])
+            ]
+          });
+
+          if (!student) {
+            return res.status(401).json({
+              error: 'User not found. Please login again.',
+              code: 'INVALID_TOKEN'
+            });
+          }
+
+          if (student.isBanned || student.status === 'blocked' || student.status === 'inactive') {
+            return res.status(403).json({
+              error: student.banReason || 'Your account has been blocked by administrator.',
+              code: 'USER_BLOCKED'
+            });
+          }
+
+          if (!student.isReviewer && student.deviceLocked && !student.activeDeviceId && !student.deviceId) {
+            return res.status(401).json({
+              error: 'Your device has been unlinked by administrator. Please login again.',
+              code: 'DEVICE_UNLINKED'
+            });
+          }
+
+          const clientDeviceId = req.headers['x-device-id'] || req.headers['x-device-uid'] || req.body?.deviceId;
+          if (!student.isReviewer && student.deviceLocked && student.activeDeviceId && clientDeviceId && student.activeDeviceId !== clientDeviceId) {
+            return res.status(401).json({
+              error: 'You have logged in from another device. Please login again.',
+              code: 'ANOTHER_DEVICE'
+            });
+          }
+        }
+      }
     }
   } catch (e) {
+    if (e.name === 'TokenExpiredError') {
+      return res.status(401).json({
+        error: 'Session expired. Please login again.',
+        code: 'TOKEN_EXPIRED'
+      });
+    }
+    req.user = null;
   }
   next();
 }

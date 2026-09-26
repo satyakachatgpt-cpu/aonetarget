@@ -115,6 +115,22 @@ export const heartbeat = async (req, res) => {
       return res.json({ valid: false, reason: 'not_authenticated' });
     }
 
+    if (student.isBanned || student.status === 'blocked' || student.status === 'inactive') {
+      return res.json({
+        valid: false,
+        reason: 'user_blocked',
+        message: student.banReason || 'Your account has been blocked by administrator.'
+      });
+    }
+
+    if (!student.isReviewer && student.deviceLocked && !student.activeDeviceId && !student.deviceId) {
+      return res.json({
+        valid: false,
+        reason: 'device_unlinked',
+        message: 'Your device has been unlinked by administrator. Please login again.'
+      });
+    }
+
     if (clientDeviceId && student.activeDeviceId && clientDeviceId !== student.activeDeviceId) {
       return res.json({
         valid: false,

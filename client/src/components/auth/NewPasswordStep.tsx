@@ -37,6 +37,7 @@ export const NewPasswordStep: React.FC<NewPasswordStepProps> = ({
               value={newPasswordData.password}
               onChange={(e) => setNewPasswordData({ ...newPasswordData, password: e.target.value })}
               placeholder="••••••••"
+              onKeyDown={(e) => { if (e.key === 'Enter') resetPasswordSubmit(e); }}
               className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold pr-12"
             />
             <button
@@ -57,6 +58,7 @@ export const NewPasswordStep: React.FC<NewPasswordStepProps> = ({
               type={showConfirmPassword ? 'text' : 'password'}
               value={newPasswordData.confirm}
               onChange={(e) => setNewPasswordData({ ...newPasswordData, confirm: e.target.value })}
+              onKeyDown={(e) => { if (e.key === 'Enter') resetPasswordSubmit(e); }}
               placeholder="••••••••"
               className="w-full px-5 py-4 bg-gray-50 border border-gray-100 rounded-2xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold pr-12"
             />

@@ -188,21 +188,10 @@ export const getCourseLiveClasses = async (req, res) => {
       ]
     };
 
-    const projection = {
-      title: 1, name: 1, teacherName: 1, instructor: 1,
-      scheduledTime: 1, scheduledDate: 1, scheduledAt: 1,
-      scheduleDate: 1, scheduleTime: 1,
-      publishOn: 1,
-      date: 1, createdAt: 1, endTime: 1, endDateTime: 1,
-      joinBeforeMinutes: 1, status: 1, meetingLink: 1,
-      url: 1, videoUrl: 1, link: 1, id: 1
-    };
-
-
     const [c1, c2, c3] = await Promise.all([
-      db.collection('liveVideos').find(query).project(projection).toArray(),
-      db.collection('liveClasses').find(query).project(projection).toArray(),
-      db.collection('videos').find({ ...query, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).project(projection).toArray()
+      db.collection('liveVideos').find(query).toArray(),
+      db.collection('liveClasses').find(query).toArray(),
+      db.collection('videos').find({ ...query, contentType: { $in: ['youtube_zoom', 'live_stream'] } }).toArray()
     ]);
 
     const merged = [...c1, ...c2, ...c3].map(item => {
@@ -223,6 +212,10 @@ export const getCourseLiveClasses = async (req, res) => {
       }
 
       item.status = calculateStreamStatus(item);
+      item.isLive = item.status === 'live';
+      if (!item.pdf1 && item.pdf1Url) item.pdf1 = item.pdf1Url;
+      if (!item.pdf2 && item.pdf2Url) item.pdf2 = item.pdf2Url;
+      if (!item.studyMaterial && item.studyMaterialUrl) item.studyMaterial = item.studyMaterialUrl;
 
       return item;
     }).sort((a, b) => new Date(a.date || a.publishOn || a.createdAt) - new Date(b.date || b.publishOn || b.createdAt));
@@ -271,13 +264,38 @@ export const startLiveStream = async (req, res) => {
 export const endLiveStream = async (req, res) => {
   try {
     const id = req.params.id;
+    const db = getDb();
+    const query = {
+      $or: [
+        { id: id },
+        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
+      ].filter(f => f.id || f._id)
+    };
+    const existing = await db.collection('liveVideos').findOne(query) || await db.collection('videos').findOne(query);
+
+    const endedAt = new Date();
     const update = {
       status: 'recorded',
       streamStatus: 'recorded',
       isLive: false,
-      endedAt: new Date().toISOString(),
-      endTime: new Date().toISOString()
+      endedAt: endedAt.toISOString(),
+      endTime: endedAt.toISOString()
     };
+
+    const startTimeVal = existing?.startedAt || existing?.startTime || existing?.scheduledAt || existing?.createdAt;
+    if (startTimeVal) {
+      const diffMs = Math.max(0, endedAt.getTime() - new Date(startTimeVal).getTime());
+      const totalSecs = Math.floor(diffMs / 1000);
+      if (totalSecs > 0) {
+        const hours = Math.floor(totalSecs / 3600);
+        const mins = Math.floor((totalSecs % 3600) / 60);
+        const secs = totalSecs % 60;
+        const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
+        update.duration = hours > 0 
+          ? `${pad(hours)}:${pad(mins)}:${pad(secs)}`
+          : `${pad(mins)}:${pad(secs)}`;
+      }
+    }
 
     // Use central sync helper
     await syncLiveStream(id, update, 'update');

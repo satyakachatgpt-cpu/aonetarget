@@ -14,7 +14,7 @@ import Student from '../models/Student.js';
 import * as authService from '../services/auth.service.js';
 
 const OTP_EXPIRY_MS = 10 * 60 * 1000;
-const REFRESH_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+const REFRESH_EXPIRY_MS = 180 * 24 * 60 * 60 * 1000;
 
 function shouldExposeOtp() {
   // CRITICAL: Never expose OTP in API responses
@@ -91,7 +91,7 @@ function setAccessCookie(res, accessToken) {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/api',
-    maxAge: 15 * 60 * 1000
+    maxAge: 30 * 24 * 60 * 60 * 1000
   });
 }
 
@@ -969,6 +969,12 @@ export const refreshAccessToken = async (req, res) => {
     
     if (!student) return res.status(401).json({ error: 'User not found' });
     
+    // If device was unlinked / reset by admin, deny token refresh
+    if (!student.isReviewer && student.deviceLocked && !student.activeDeviceId && !student.deviceId) {
+      await db.collection('refresh_tokens').deleteMany({ studentId: { $in: [student.id, String(student._id)] } });
+      return res.status(401).json({ error: 'Device has been unlinked. Please log in again.', code: 'DEVICE_UNLINKED' });
+    }
+
     await db.collection('refresh_tokens').deleteOne({ _id: tokenRecord._id });
     const session = await issueStudentSession(req, res, db, student.toObject(), student.deviceId || null);
     res.json({ accessToken: session.accessToken, refreshToken: session.refreshToken });

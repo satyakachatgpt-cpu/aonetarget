@@ -9,8 +9,28 @@ import sendSMS from '../utils/sendSMS.js';
 import Student from '../models/Student.js';
 import { unlockReferralCoins, useCoinsForPurchase } from './referral.controller.js';
 
-function canActForStudent(req, studentId) {
-  return req.admin || req.user?.isAdmin || req.user?.role === 'admin' || String(req.user?.studentId) === String(studentId);
+async function canActForStudent(req, studentId, db) {
+  if (req.admin || req.user?.isAdmin || req.user?.role === 'admin') return true;
+  const tokenStudentId = req.user?.studentId || req.user?.id || req.user?._id;
+  if (!tokenStudentId) return false;
+  if (String(tokenStudentId) === String(studentId)) return true;
+
+  if (db) {
+    try {
+      const student = await db.collection('students').findOne(getStudentFilter(studentId));
+      if (student) {
+        const variants = [
+          String(student._id),
+          student.id,
+          student.userId
+        ].filter(Boolean);
+        if (variants.includes(String(tokenStudentId))) return true;
+      }
+    } catch (e) {
+      console.error('[canActForStudent] Error checking student variants:', e);
+    }
+  }
+  return false;
 }
 
 const getStudentFilter = (studentId) => {
@@ -33,7 +53,8 @@ export const createRazorpayOrder = async (req, res) => {
     if (!courseId || !studentId) {
       return res.status(400).json({ error: 'courseId and studentId are required' });
     }
-    if (!canActForStudent(req, studentId)) {
+    const isAuthorized = await canActForStudent(req, studentId, db);
+    if (!isAuthorized) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
@@ -95,6 +116,7 @@ export const createRazorpayOrder = async (req, res) => {
       amount: Math.round(finalAmount * 100),
       currency: 'INR',
       receipt: `receipt_${Date.now()}`,
+      payment_capture: 1, // Auto-capture payment upon authorization
       notes: {
         courseId: course.id || course._id.toString(),
         studentId,
@@ -142,8 +164,9 @@ export const createRazorpayOrder = async (req, res) => {
 export const verifyRazorpayPayment = async (req, res) => {
   try {
     const db = getDb();
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, courseId, studentId, referralCode, couponCode } = req.body;
-    if (!canActForStudent(req, studentId)) {
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, courseId, studentId, referralCode, couponCode, coinsUsed } = req.body;
+    const isAuthorized = await canActForStudent(req, studentId, db);
+    if (!isAuthorized) {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
@@ -180,20 +203,48 @@ export const verifyRazorpayPayment = async (req, res) => {
     }
 
     const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
-    const paymentRes = await fetch(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}`, {
-      headers: { 'Authorization': `Basic ${auth}` }
-    });
-    const paymentData = await paymentRes.json();
+    let paymentData = null;
+    try {
+      const paymentRes = await fetch(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}`, {
+        headers: { 'Authorization': `Basic ${auth}` }
+      });
+      paymentData = await paymentRes.json();
+    } catch (fetchErr) {
+      console.error('Razorpay payment fetch error:', fetchErr);
+      return res.status(500).json({ error: 'Unable to connect to payment gateway' });
+    }
 
-    if (!paymentRes.ok || paymentData.status !== 'captured') {
-      console.error('Payment not captured. (Payload omitted for security)');
+    // Auto-capture if payment is authorized but not yet captured (common in live mode when manual capture is configured on Razorpay dashboard)
+    if (paymentData && paymentData.status === 'authorized') {
+      try {
+        const captureRes = await fetch(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}/capture`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Basic ${auth}`
+          },
+          body: JSON.stringify({
+            amount: paymentData.amount,
+            currency: 'INR'
+          })
+        });
+        if (captureRes.ok) {
+          paymentData = await captureRes.json();
+        }
+      } catch (capErr) {
+        console.error('Razorpay auto-capture error:', capErr);
+      }
+    }
+
+    if (!paymentData || paymentData.status !== 'captured') {
+      console.error('Payment not captured. (Payload omitted for security)', paymentData?.status);
       // Send Failure Email
       if (studentId && courseId) {
         try {
           const student = await db.collection('students').findOne(getStudentFilter(studentId));
           const course = await findCourse(courseId);
           if (student && student.email && course) {
-            const { subject, html } = templates.paymentFailed(student.name || 'Student', course.name || course.title, course.price, paymentData.error?.description || 'Payment was not captured');
+            const { subject, html } = templates.paymentFailed(student.name || 'Student', course.name || course.title, course.price, paymentData?.error?.description || 'Payment was not captured');
             sendEmail({ to: student.email, subject, html }).catch(e => console.error('Payment failure email error:', e));
 
             const failMessage = 'Your payment of Rs ' + course.price + ' for AoneTarget course has failed. Please try again or contact support.';
@@ -238,9 +289,18 @@ export const verifyRazorpayPayment = async (req, res) => {
       return res.status(201).json({ success: true, purchase: existingPurchase, alreadyProcessed: true });
     }
 
-    const actualCourseId = course.id || courseId;
+    const actualCourseId = (course.id || course._id?.toString() || courseId).toString();
     const actualAmount = paymentData.amount / 100;
-    const expectedAmount = breakdown.totalAmount;
+
+    // Calculate coin discount if coins were used
+    let coinDiscount = 0;
+    if (coinsUsed > 0) {
+      const available = student?.availableCoins || 0;
+      const actualCoinsToUse = Math.min(coinsUsed, available);
+      coinDiscount = actualCoinsToUse / 10;
+    }
+    const expectedAmount = Math.max(0, breakdown.totalAmount - coinDiscount);
+
     if (expectedAmount > 0 && Math.abs(actualAmount - expectedAmount) > 1) {
       console.error(`[PAYMENT FRAUD] Amount mismatch: paid ₹${actualAmount}, expected ₹${expectedAmount}, orderId: ${razorpay_order_id}`);
       return res.status(400).json({ error: 'Payment amount does not match course price' });
@@ -252,8 +312,9 @@ export const verifyRazorpayPayment = async (req, res) => {
       razorpayOrderId: razorpay_order_id,
       studentId,
       courseId: actualCourseId,
+      courseMongoId: course._id ? String(course._id) : undefined,
       courseName: course.name || course.title || courseId,
-      amount: breakdown.totalAmount || actualAmount,
+      amount: expectedAmount || actualAmount,
       basePrice: breakdown.basePrice,
       gstAmount: breakdown.gstAmount,
       gstPercentage: breakdown.gstPercentage,
@@ -275,41 +336,45 @@ export const verifyRazorpayPayment = async (req, res) => {
       );
     }
 
-    if (enrolledCourses.includes(actualCourseId)) {
-      // Already enrolled, but this is a new purchase record (manual or retry)
-      // Usually verifyRazorpayPayment shouldn't hit this if existingPurchase check above works
-    } else {
-      // Get linked test series IDs (Bidirectional & Multi-ID matching)
-      const directLinkedSeriesIds = (course.content?.testSeries || []).filter(id => id && typeof id === 'string');
-      
-      const batchVariants = await getRelatedCourseIds(course, actualCourseId);
+    // Get linked test series IDs (Bidirectional & Multi-ID matching)
+    const directLinkedSeriesIds = (course.content?.testSeries || []).filter(id => id && typeof id === 'string');
+    
+    const batchVariants = await getRelatedCourseIds(course, actualCourseId);
 
-      const [reverseSeriesColl, reverseSeriesTests] = await Promise.all([
-        db.collection('testSeries').find({
-          $or: [
-            { courseId: { $in: batchVariants } },
-            { courseIds: { $in: batchVariants } }
-          ]
-        }).toArray(),
-        db.collection('tests').find({
-          isSeries: true,
-          $or: [
-            { courseId: { $in: batchVariants } },
-            { courseIds: { $in: batchVariants } }
-          ]
-        }).toArray()
-      ]);
+    const [reverseSeriesColl, reverseSeriesTests] = await Promise.all([
+      db.collection('testSeries').find({
+        $or: [
+          { courseId: { $in: batchVariants } },
+          { courseIds: { $in: batchVariants } }
+        ]
+      }).toArray(),
+      db.collection('tests').find({
+        isSeries: true,
+        $or: [
+          { courseId: { $in: batchVariants } },
+          { courseIds: { $in: batchVariants } }
+        ]
+      }).toArray()
+    ]);
 
-      const reverseLinkedSeriesIds = [
-        ...reverseSeriesColl.map(ts => ts.id || ts._id.toString()),
-        ...reverseSeriesTests.map(ts => ts.id || ts._id.toString())
-      ];
-      const allLinkedSeriesIds = [...new Set([...directLinkedSeriesIds, ...reverseLinkedSeriesIds])];
+    const reverseLinkedSeriesIds = [
+      ...reverseSeriesColl.map(ts => ts.id || ts._id.toString()),
+      ...reverseSeriesTests.map(ts => ts.id || ts._id.toString())
+    ];
+    const allLinkedSeriesIds = [...new Set([...directLinkedSeriesIds, ...reverseLinkedSeriesIds])];
 
-      await db.collection('students').updateOne(
-        getStudentFilter(studentId),
-        { $addToSet: { enrolledCourses: { $each: [actualCourseId, ...batchVariants, ...allLinkedSeriesIds] } } }
-      );
+    const allEnrollmentIds = [
+      actualCourseId,
+      String(course._id),
+      ...(course.id ? [String(course.id)] : []),
+      ...batchVariants,
+      ...allLinkedSeriesIds
+    ].filter(Boolean);
+
+    await db.collection('students').updateOne(
+      getStudentFilter(studentId),
+      { $addToSet: { enrolledCourses: { $each: allEnrollmentIds } } }
+    );
 
       // Coin Deduction (Internal Helper)
       const maxCoinsAllowed = Math.floor((breakdown.totalAmount || 0) * 10);
@@ -329,7 +394,6 @@ export const verifyRazorpayPayment = async (req, res) => {
         // This is the first purchase
         await unlockReferralCoins(studentId, purchase.id);
       }
-    }
 
     // Send Payment Success Email
     if (student.email) {

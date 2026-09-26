@@ -84,6 +84,15 @@ export const BackButtonHandler: React.FC = () => {
           return;
         }
 
+        // 2b. Mock Tests series inner view handler
+        if (activePath.startsWith('/mock-tests')) {
+          const mockEvent = new CustomEvent('app:mocktests-back', { cancelable: true });
+          const dispatched = window.dispatchEvent(mockEvent);
+          if (!dispatched) {
+            return;
+          }
+        }
+
         // 3. Check if user is on the Home page -> Instant exit on single back press
         const isHome = activePath === '/' || activePath === '' || activePath === '/#/';
 
@@ -93,7 +102,7 @@ export const BackButtonHandler: React.FC = () => {
         }
 
         // 4. Secondary main tabs -> Go back to Home
-        const secondaryTabs = ['/explore', '/batches', '/free-content', '/my-courses', '/student-dashboard'];
+        const secondaryTabs = ['/courses', '/explore', '/batches', '/free-content', '/my-courses', '/student-dashboard', '/live-classes'];
         if (secondaryTabs.includes(activePath)) {
           navigate('/', { replace: true });
           return;

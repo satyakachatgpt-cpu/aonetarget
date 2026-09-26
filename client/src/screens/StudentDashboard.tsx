@@ -270,7 +270,7 @@ const StudentDashboard: React.FC = () => {
                       courseId: v.courseId || '',
                       courseTitle: (v as any).courseTitle || '',
                     };
-                    navigate(`/watch/${v.courseId || 'history'}/${vId}`, {
+                    navigate(`/watch/${v.courseId || 'history'}/${vId}?returnTo=/student-dashboard`, {
                       state: {
                         video: (videoObj.videoUrl || videoObj.youtubeUrl) ? videoObj : null,
                         courseTitle: (v as any).courseTitle || 'Watch History',

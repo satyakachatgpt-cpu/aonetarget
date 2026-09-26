@@ -1,5 +1,6 @@
 import React from 'react';
-import { getImageUrl, getYouTubeThumbnail, getPdfUrl, getGradientPlaceholder } from '../../../lib/utils';
+import { useNavigate } from 'react-router-dom';
+import { getImageUrl, getYouTubeThumbnail, getPdfUrl, getGradientPlaceholder, formatDurationBadge, formatDurationLabel } from '../../../lib/utils';
 import { CATEGORY_GRADIENTS } from '../../../constants';
 import { Video } from '../../../types';
 
@@ -36,6 +37,34 @@ const RecordedTab: React.FC<RecordedTabProps> = ({
   normalizeId,
   computeStatus,
 }) => {
+  const navigate = useNavigate();
+
+  const openPdf = (url: string, title: string) => {
+    const currentPath = window.location.hash.replace(/^#/, '') || window.location.pathname;
+    navigate(`/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent(title)}&returnTo=${encodeURIComponent(currentPath)}`, {
+      state: {
+        pdf: { fileUrl: getPdfUrl(url) },
+        title,
+        returnTo: currentPath
+      }
+    });
+  };
+
+  const resolveVideoDuration = (video: any) => {
+    if (video.duration && video.duration !== '00:00' && video.duration !== '0:00' && video.duration !== '0') {
+      return video.duration;
+    }
+    const start = video.startedAt || video.startTime || video.scheduledAt;
+    const end = video.endedAt || video.endTime;
+    if (start && end) {
+      const diffMs = new Date(end).getTime() - new Date(start).getTime();
+      if (diffMs > 0) {
+        return Math.floor(diffMs / 1000);
+      }
+    }
+    return video.duration;
+  };
+
   return (
     <div className="space-y-3">
       {navigationHistory.length > 0 && (
@@ -120,7 +149,7 @@ const RecordedTab: React.FC<RecordedTabProps> = ({
                     )}
                   </div>
                   <div className="absolute bottom-1.5 right-1.5 bg-black/70 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-md">
-                    {video.duration || '00:00'}
+                    {formatDurationBadge(resolveVideoDuration(video))}
                   </div>
                   {(video.isFree || video.isDemo || (index === 0 && navigationHistory.length === 0)) && !isEnrolled && (
                     <div className="absolute top-1.5 left-1.5 bg-green-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">
@@ -136,7 +165,9 @@ const RecordedTab: React.FC<RecordedTabProps> = ({
                     <div className="flex-1 min-w-0">
                       <h4 className="font-bold text-sm text-gray-800 line-clamp-2 leading-tight">{video.title}</h4>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] text-gray-400 font-medium">{video.duration || '00:00'} min</span>
+                        <span className="text-[10px] text-gray-400 font-medium">
+                          {formatDurationLabel(resolveVideoDuration(video))}
+                        </span>
                         {isCompleted && (
                           <span className="text-[10px] text-green-600 font-bold bg-green-50 px-1.5 py-0.5 rounded">Completed</span>
                         )}
@@ -164,7 +195,7 @@ const RecordedTab: React.FC<RecordedTabProps> = ({
                       onClick={(e) => { 
                         e.stopPropagation(); 
                         const url = video.pdf1 || video.pdf1Url || video.pdfUrl;
-                        window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent('PDF 1')}`, '_blank'); 
+                        if (url) openPdf(url, 'PDF 1');
                       }}
                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-50 text-red-600 text-[9px] font-black uppercase tracking-widest border border-red-100/50 shadow-sm"
                     >
@@ -177,7 +208,7 @@ const RecordedTab: React.FC<RecordedTabProps> = ({
                       onClick={(e) => { 
                         e.stopPropagation(); 
                         const url = video.pdf2 || video.pdf2Url;
-                        window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent('PDF 2')}`, '_blank'); 
+                        if (url) openPdf(url, 'PDF 2');
                       }}
                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-red-50 text-red-600 text-[9px] font-black uppercase tracking-widest border border-red-100/50 shadow-sm"
                     >
@@ -190,7 +221,7 @@ const RecordedTab: React.FC<RecordedTabProps> = ({
                       onClick={(e) => { 
                         e.stopPropagation(); 
                         const url = video.studyMaterial || video.studyMaterialUrl || video.documentUrl || video.material;
-                        window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent('Study Material')}`, '_blank'); 
+                        if (url) openPdf(url, 'Study Material');
                       }}
                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-widest border border-indigo-100/50 shadow-sm"
                     >

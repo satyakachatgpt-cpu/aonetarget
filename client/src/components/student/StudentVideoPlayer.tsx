@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Hls from 'hls.js';
 import { useDispatch } from 'react-redux';
 import { updateProgress, setPlaybackSpeed as setReduxSpeed } from '../../store/slices/playerSlice';
-import { getImageUrl, extractYouTubeId, isYouTubeUrl, toYouTubeEmbed, getPdfUrl } from '../../lib/utils';
+import { getImageUrl, extractYouTubeId, isYouTubeUrl, toYouTubeEmbed, getPdfUrl, parseDurationToSeconds } from '../../lib/utils';
 import { useAuthStore } from '../../store/authStore';
 import { getAuthHeaders, API_BASE_URL } from '../../services/apiClient';
 
@@ -65,7 +65,20 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const initialDurationSecs = typeof propDuration === 'string' ? parseDurationToSeconds(propDuration) : (typeof propDuration === 'number' ? propDuration : 0);
+  const [duration, setDuration] = useState(initialDurationSecs || 0);
+
+  useEffect(() => {
+    if (propDuration) {
+      const parsed = typeof propDuration === 'string' ? parseDurationToSeconds(propDuration) : propDuration;
+      if (parsed > 0) {
+        setDuration(prev => (prev > 0 ? prev : parsed));
+      }
+    }
+  }, [propDuration]);
+
+  const seekGraceUntilRef = useRef<number>(0);
+  const targetSeekTimeRef = useRef<number>(0);
   const [showControls, setShowControls] = useState(true);
   const [isReady, setIsReady] = useState(false);
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
@@ -94,9 +107,33 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
 
   const progressBarRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [dragPercentage, setDragPercentage] = useState<number | null>(null);
 
-  const handleProgressBarScrub = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!progressBarRef.current || !duration) return;
+  const getEffectiveDuration = useCallback(() => {
+    if (duration > 0) return duration;
+    if (playerRef.current?.getDuration) {
+      const ytDur = playerRef.current.getDuration();
+      if (ytDur > 0) {
+        setDuration(ytDur);
+        return ytDur;
+      }
+    }
+    if (videoRef.current?.duration && videoRef.current.duration > 0) {
+      setDuration(videoRef.current.duration);
+      return videoRef.current.duration;
+    }
+    if (propDuration) {
+      const p = typeof propDuration === 'string' ? parseDurationToSeconds(propDuration) : propDuration;
+      if (p > 0) {
+        setDuration(p);
+        return p;
+      }
+    }
+    return 0;
+  }, [duration, propDuration]);
+
+  const calculateScrubPercentage = (clientX: number, clientY: number): number => {
+    if (!progressBarRef.current) return 0;
     const rect = progressBarRef.current.getBoundingClientRect();
     
     // Check if CSS fallback rotation is currently active
@@ -106,26 +143,132 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
     const _needsRotation = !isAdmin && _isMobile && _isLandscape && !_isPhysicalLandscape;
 
     let percentage = 0;
-    
     if (_needsRotation) {
-       // In CSS rotation, the progress bar runs vertically down the screen
-       let y = e.clientY - rect.top;
-       if (y < 0) y = 0;
-       if (y > rect.height) y = rect.height;
-       percentage = y / rect.height;
+      let y = clientY - rect.top;
+      if (y < 0) y = 0;
+      if (y > rect.height) y = rect.height;
+      percentage = rect.height > 0 ? y / rect.height : 0;
     } else {
-       // Normal horizontal progress bar
-       let x = e.clientX - rect.left;
-       if (x < 0) x = 0;
-       if (x > rect.width) x = rect.width;
-       percentage = x / rect.width;
+      let x = clientX - rect.left;
+      if (x < 0) x = 0;
+      if (x > rect.width) x = rect.width;
+      percentage = rect.width > 0 ? x / rect.width : 0;
+    }
+    return Math.max(0, Math.min(1, percentage));
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const effDuration = getEffectiveDuration();
+    if (!progressBarRef.current || effDuration <= 0) return;
+    setIsDragging(true);
+    isDraggingRef.current = true;
+    
+    if (progressBarRef.current.setPointerCapture) {
+      try { progressBarRef.current.setPointerCapture(e.pointerId); } catch (err) {}
     }
     
-    const newTime = percentage * duration;
+    const pct = calculateScrubPercentage(e.clientX, e.clientY);
+    setDragPercentage(pct);
+    setCurrentTime(pct * effDuration);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const effDuration = getEffectiveDuration();
+    if (!isDraggingRef.current || effDuration <= 0) return;
+    const pct = calculateScrubPercentage(e.clientX, e.clientY);
+    setDragPercentage(pct);
+    setCurrentTime(pct * effDuration);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current) return;
     
-    setCurrentTime(newTime);
-    if(isYoutube){ playerRef.current?.seekTo(newTime, true); } 
-    else { if(videoRef.current) videoRef.current.currentTime = newTime; }
+    if (progressBarRef.current?.releasePointerCapture) {
+      try { progressBarRef.current.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
+    
+    setIsDragging(false);
+    isDraggingRef.current = false;
+    
+    const pct = calculateScrubPercentage(e.clientX, e.clientY);
+    setDragPercentage(null);
+    applySeek(pct);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    const effDuration = getEffectiveDuration();
+    if (!progressBarRef.current || effDuration <= 0 || e.touches.length === 0) return;
+    setIsDragging(true);
+    isDraggingRef.current = true;
+    const touch = e.touches[0];
+    const pct = calculateScrubPercentage(touch.clientX, touch.clientY);
+    setDragPercentage(pct);
+    setCurrentTime(pct * effDuration);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    const effDuration = getEffectiveDuration();
+    if (!isDraggingRef.current || effDuration <= 0 || e.touches.length === 0) return;
+    const touch = e.touches[0];
+    const pct = calculateScrubPercentage(touch.clientX, touch.clientY);
+    setDragPercentage(pct);
+    setCurrentTime(pct * effDuration);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (!isDraggingRef.current) return;
+    setIsDragging(false);
+    isDraggingRef.current = false;
+    const touch = e.changedTouches[0];
+    if (touch) {
+      const pct = calculateScrubPercentage(touch.clientX, touch.clientY);
+      setDragPercentage(null);
+      applySeek(pct);
+    } else {
+      setDragPercentage(null);
+    }
+  };
+
+  const applySeek = (percentage: number) => {
+    const effDuration = getEffectiveDuration();
+    if (!effDuration || effDuration <= 0) return;
+    const targetTime = percentage * effDuration;
+
+    if (isLive) {
+      // If user released within 15 seconds of duration or at >= 97% of the bar -> Jump to live head
+      if (percentage >= 0.97 || (effDuration - targetTime) <= 15) {
+        handleJumpToLive();
+        return;
+      }
+
+      // In live stream: available DVR buffer is typically last 4 hours (14400s)
+      const minSeek = Math.max(0, effDuration - 14400);
+      const clampedTime = Math.max(minSeek, Math.min(effDuration, targetTime));
+
+      seekGraceUntilRef.current = Date.now() + 1500;
+      targetSeekTimeRef.current = clampedTime;
+      setCurrentTime(clampedTime);
+
+      if (isYoutube && playerRef.current?.seekTo) {
+        playerRef.current.seekTo(clampedTime, true);
+        if (typeof playerRef.current.playVideo === 'function') playerRef.current.playVideo();
+      } else if (videoRef.current) {
+        videoRef.current.currentTime = clampedTime;
+      }
+    } else {
+      // Recorded video seek
+      const clampedTime = Math.max(0, Math.min(effDuration, targetTime));
+      seekGraceUntilRef.current = Date.now() + 1500;
+      targetSeekTimeRef.current = clampedTime;
+      setCurrentTime(clampedTime);
+
+      if (isYoutube && playerRef.current?.seekTo) {
+        playerRef.current.seekTo(clampedTime, true);
+        if (typeof playerRef.current.playVideo === 'function') playerRef.current.playVideo();
+      } else if (videoRef.current) {
+        videoRef.current.currentTime = clampedTime;
+      }
+    }
   };
   // HANDLE ORIENTATION & VIEWPORT (Debounced for stability)
   useEffect(() => {
@@ -173,7 +316,14 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
 
     // Sync fullscreen state with browser fullscreen change (e.g. user presses back)
     const handleFullscreenChange = () => {
-      if (!document.fullscreenElement) {
+      const isFs = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+
+      if (!isFs) {
         setIsFullscreen(false);
         if ((screen.orientation as any)?.unlock) {
           (screen.orientation as any).unlock();
@@ -188,12 +338,21 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
     
     window.addEventListener('resize', handleResize);
     document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
     return () => {
       window.removeEventListener('resize', handleResize);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
       clearTimeout(timeoutId);
-      if (document.fullscreenElement && document.exitFullscreen) {
-        document.exitFullscreen().catch(() => {});
+      const doc: any = document;
+      const isFs = !!(doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement);
+      const exitFs = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
+      if (isFs && exitFs) {
+        try { exitFs.call(doc); } catch (e) {}
       }
       if ((screen.orientation as any)?.unlock) {
         try {
@@ -279,42 +438,66 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
 
   // Professional fullscreen toggle (like YouTube)
   const toggleFullscreen = () => {
-    if (!document.fullscreenElement && !isFullscreen) {
-      // Enter fullscreen + lock landscape if mobile
-      const el = document.documentElement;
-      if (el.requestFullscreen) {
-        el.requestFullscreen().then(() => {
+    const doc: any = document;
+    const isCurrentlyFullscreen = !!(
+      doc.fullscreenElement ||
+      doc.webkitFullscreenElement ||
+      doc.mozFullScreenElement ||
+      doc.msFullscreenElement ||
+      isFullscreen
+    );
+
+    if (!isCurrentlyFullscreen) {
+      // 1. If on iOS and standard video element can enter native fullscreen (hides status bar on iPhone)
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (isIOS && videoRef.current && (videoRef.current as any).webkitEnterFullscreen) {
+        try {
+          (videoRef.current as any).webkitEnterFullscreen();
+          setIsFullscreen(true);
+          return;
+        } catch (e) {
+          console.warn('[Player] iOS webkitEnterFullscreen failed, falling back:', e);
+        }
+      }
+
+      // 2. Enter fullscreen + lock landscape if mobile
+      const el: any = document.documentElement;
+      const requestFs = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+
+      if (requestFs) {
+        requestFs.call(el).then(() => {
           if (isMobile && (screen.orientation as any)?.lock) {
             (screen.orientation as any).lock('landscape').catch(() => {});
           }
           setIsFullscreen(true);
           if (isMobile) setOrientation('landscape');
         }).catch(() => {
-          // Fallback if requestFullscreen is blocked (e.g. Incognito mode)
           setIsFullscreen(true);
           if (isMobile) setOrientation('landscape');
         });
       } else {
-        // Fallback if requestFullscreen is not supported
         setIsFullscreen(true);
         if (isMobile) setOrientation('landscape');
       }
     } else {
       // Exit fullscreen + unlock orientation
-      if (document.exitFullscreen) {
-        document.exitFullscreen().then(() => {
+      const exitFs = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
+
+      if (exitFs && (doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement)) {
+        exitFs.call(doc).then(() => {
           if (isMobile && (screen.orientation as any)?.unlock) {
             (screen.orientation as any).unlock();
           }
           setIsFullscreen(false);
           if (isMobile) setOrientation('portrait');
         }).catch(() => {
-          // Fallback if exitFullscreen is blocked
           setIsFullscreen(false);
           if (isMobile) setOrientation('portrait');
         });
       } else {
-        // Fallback if not supported
+        if (isMobile && (screen.orientation as any)?.unlock) {
+          try { (screen.orientation as any).unlock(); } catch (e) {}
+        }
         setIsFullscreen(false);
         if (isMobile) setOrientation('portrait');
       }
@@ -374,10 +557,24 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
               setDuration(total);
               setAvailableQualities(e.target.getAvailableQualityLevels() || []);
               
-              // RESUME PLAYBACK
-              const resumeTime = getSavedProgress();
-              if (resumeTime > 0) {
-                e.target.seekTo(resumeTime, true);
+              // RESUME PLAYBACK (Only for non-live videos)
+              if (!isLive) {
+                const resumeTime = getSavedProgress();
+                if (resumeTime > 0) {
+                  e.target.seekTo(resumeTime, true);
+                }
+              } else {
+                // Ensure live stream starts at the live edge
+                try {
+                  const liveDur = e.target.getDuration();
+                  if (liveDur > 0) {
+                    setDuration(liveDur);
+                    setCurrentTime(liveDur);
+                    e.target.seekTo(liveDur + 3600, true);
+                  } else {
+                    e.target.seekTo(Number.MAX_SAFE_INTEGER, true);
+                  }
+                } catch (err) {}
               }
               
               // Apply saved speed
@@ -509,12 +706,26 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
         if (isYoutube && playerRef.current?.getCurrentTime) {
           time = playerRef.current.getCurrentTime();
           total = playerRef.current.getDuration() || duration;
+          if (total > 0 && Math.abs(total - duration) > 1) {
+            setDuration(total);
+          }
         } else if ((isHls || isDirect) && videoRef.current) {
           time = videoRef.current.currentTime;
           total = videoRef.current.duration || duration;
+          if (total > 0 && Math.abs(total - duration) > 1) {
+            setDuration(total);
+          }
         }
         if (!isDraggingRef.current) {
-          setCurrentTime(time);
+          const now = Date.now();
+          if (now < seekGraceUntilRef.current) {
+            if (Math.abs(time - targetSeekTimeRef.current) <= 2) {
+              seekGraceUntilRef.current = 0;
+              setCurrentTime(time);
+            }
+          } else {
+            setCurrentTime(time);
+          }
         }
         
         // Auto-save every 30 seconds (throttled to once per second)
@@ -581,18 +792,66 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   };
 
   const skip = (s: number) => {
-    if (isYoutube) {
-      if (!playerRef.current) return;
-      const currentTime = playerRef.current.getCurrentTime() || 0;
-      const totalDuration = playerRef.current.getDuration() || duration;
-      const t = Math.max(0, Math.min(totalDuration, currentTime + s));
-      playerRef.current.seekTo(t, true);
-      setCurrentTime(t); // Instant progress bar update
-    } else {
-      if (!videoRef.current) return;
-      const t = Math.max(0, Math.min(duration, videoRef.current.currentTime + s));
-      videoRef.current.currentTime = t;
+    const totalDuration = (isYoutube && playerRef.current?.getDuration ? playerRef.current.getDuration() : 0) || duration;
+    const cur = (isYoutube && playerRef.current?.getCurrentTime ? playerRef.current.getCurrentTime() : 0) || currentTime;
+
+    if (isLive) {
+      if (s > 0 && cur + s >= totalDuration - 10) {
+        handleJumpToLive();
+        return;
+      }
+      const minSeek = Math.max(0, totalDuration - 14400);
+      const t = Math.max(minSeek, Math.min(totalDuration, cur + s));
+      if (isYoutube && playerRef.current?.seekTo) {
+        playerRef.current.seekTo(t, true);
+        if (typeof playerRef.current.playVideo === 'function') playerRef.current.playVideo();
+      } else if (videoRef.current) {
+        videoRef.current.currentTime = t;
+      }
       setCurrentTime(t);
+    } else {
+      const t = Math.max(0, Math.min(totalDuration, cur + s));
+      if (isYoutube && playerRef.current?.seekTo) {
+        playerRef.current.seekTo(t, true);
+      } else if (videoRef.current) {
+        videoRef.current.currentTime = t;
+      }
+      setCurrentTime(t);
+    }
+  };
+
+  const handleJumpToLive = () => {
+    if (isYoutube && playerRef.current) {
+      try {
+        const liveDuration = (typeof playerRef.current.getDuration === 'function' ? playerRef.current.getDuration() : 0) || duration || 0;
+        const seekTarget = liveDuration > 0 ? (liveDuration + 3600) : Number.MAX_SAFE_INTEGER;
+        
+        if (typeof playerRef.current.seekTo === 'function') {
+          playerRef.current.seekTo(seekTarget, true);
+        }
+        if (typeof playerRef.current.playVideo === 'function') {
+          playerRef.current.playVideo();
+        }
+        if (liveDuration > 0) {
+          setCurrentTime(liveDuration);
+          setDuration(liveDuration);
+        }
+      } catch (err) {
+        console.warn('Jump to live error:', err);
+      }
+    } else if (videoRef.current) {
+      let targetTime = duration;
+      if (hlsRef.current && (hlsRef.current as any).liveSyncPosition) {
+        targetTime = (hlsRef.current as any).liveSyncPosition;
+      } else if (videoRef.current.seekable && videoRef.current.seekable.length > 0) {
+        targetTime = videoRef.current.seekable.end(videoRef.current.seekable.length - 1);
+      } else if (videoRef.current.duration && isFinite(videoRef.current.duration)) {
+        targetTime = videoRef.current.duration;
+      }
+      if (targetTime > 0) {
+        videoRef.current.currentTime = targetTime;
+        setCurrentTime(targetTime);
+      }
     }
   };
 
@@ -707,10 +966,21 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
     return () => window.removeEventListener('app:video-back', handleVideoBack);
   }, [showSettingsMenu, showQualityMenu, showChat, isFullscreen, onClose, toggleFullscreen, onChatVisibilityChange]);
 
-  const formatTime = (s: number) => {
-    const min = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
+  const formatTime = (s: number, forceHours = false) => {
+    if (!s || isNaN(s) || s < 0) return forceHours ? '00:00:00' : '0:00';
+    const totalSecs = Math.floor(s);
+    const hrs = Math.floor(totalSecs / 3600);
+    const min = Math.floor((totalSecs % 3600) / 60);
+    const sec = totalSecs % 60;
+    if (hrs > 0 || forceHours) {
+      return `${hrs.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+    }
     return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+  };
+
+  const openPdf = (url: string, pdfTitle: string) => {
+    const returnPath = window.location.hash.replace(/^#/, '') || window.location.pathname;
+    window.location.hash = `#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent(pdfTitle)}&returnTo=${encodeURIComponent(returnPath)}`;
   };
 
   const mapQuality = (q: string) => {
@@ -838,75 +1108,67 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                      <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Admin Preview</span>
                   </div>
                 ) : null}
-                
-                {(pdf1 || pdf2 || studyMaterial) && (
-                  <button 
-                    onClick={() => {
-                      const url = pdf1 || pdf2 || studyMaterial;
-                      if (url) window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent('Lesson Material')}`, '_blank');
-                    }}
-                    className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 flex items-center justify-center text-white active:scale-90 transition-all pointer-events-auto"
-                    title="View Materials"
-                  >
-                    <span className="material-symbols-rounded text-xl">description</span>
-                  </button>
-                )}
+                {/* PDF buttons removed from inside player top bar per user request - available outside on course screen */}
             </div>
         </div>
 
         {/* Bottom Controls - Increased Contrast and Area */}
-        <div className={`absolute bottom-0 left-0 right-0 p-6 pt-24 pb-8 bg-gradient-to-t from-black/95 via-black/70 to-transparent z-50 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+        <div className={`absolute bottom-0 left-0 right-0 p-3 sm:p-6 pb-6 sm:pb-8 pt-16 sm:pt-24 bg-gradient-to-t from-black/95 via-black/70 to-transparent z-50 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
             {/* Progress Bar (Custom Pointer-based Scrubber) */}
             <div 
               ref={progressBarRef}
-              className="relative w-full h-8 flex items-center mb-6 cursor-pointer group pointer-events-auto touch-none"
-              onPointerDown={(e) => {
-                setIsDragging(true); 
-                isDraggingRef.current = true;
-                (e.target as HTMLElement).setPointerCapture(e.pointerId);
-                handleProgressBarScrub(e);
-              }}
-              onPointerMove={(e) => {
-                if (isDraggingRef.current) {
-                  handleProgressBarScrub(e);
-                }
-              }}
-              onPointerUp={(e) => {
-                setIsDragging(false); 
-                isDraggingRef.current = false;
-                try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch(err){}
-              }}
-              onPointerCancel={(e) => {
-                setIsDragging(false); 
-                isDraggingRef.current = false;
-                try { (e.target as HTMLElement).releasePointerCapture(e.pointerId); } catch(err){}
-              }}
+              className="relative w-full h-10 sm:h-8 flex items-center mb-4 sm:mb-6 cursor-pointer select-none group pointer-events-auto touch-none py-3"
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerUp}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchEnd}
             >
-               {/* Background Track */}
-               <div className="absolute left-0 right-0 h-1 bg-white/20 rounded-full" />
-               {/* Filled Track */}
-               <div className="absolute left-0 h-1 bg-white rounded-full transition-all duration-75" style={{ width: `${(currentTime/(duration||1))*100}%` }} />
-               {/* Thumb */}
-               <div className="absolute h-4 w-4 bg-white rounded-full transform -translate-x-1/2 transition-all duration-75 shadow-[0_0_10px_rgba(255,255,255,0.8)]" style={{ left: `${(currentTime/(duration||1))*100}%` }} />
+            {(() => {
+              const isAtLiveEdge = isLive && (!duration || (duration - currentTime) <= 10);
+              const liveProgress = isAtLiveEdge ? 100 : (duration > 0 ? (currentTime / duration) * 100 : 100);
+              const currentProgressPercent = isLive ? liveProgress : (duration > 0 ? (currentTime / duration) * 100 : 0);
+              const scrubberPercent = Math.min(100, Math.max(0, dragPercentage !== null ? dragPercentage * 100 : currentProgressPercent));
+
+              return (
+                <>
+                   {/* Background Track */}
+                   <div className="absolute left-0 right-0 h-1 sm:h-1 bg-white/25 rounded-full transition-all group-hover:h-1.5" />
+                   {/* Filled Track */}
+                   <div 
+                     className={`absolute left-0 h-1 sm:h-1 rounded-full ${isDragging ? '' : 'transition-all duration-75'} ${isLive ? 'bg-red-600' : 'bg-white'}`} 
+                     style={{ width: `${scrubberPercent}%` }} 
+                   />
+                   {/* Thumb */}
+                   <div 
+                     className={`absolute h-4.5 w-4.5 sm:h-3.5 sm:w-3.5 rounded-full transform -translate-x-1/2 ${isDragging ? 'scale-125' : 'transition-all duration-75'} ${isLive ? 'bg-red-600 shadow-[0_0_12px_rgba(239,68,68,1)]' : 'bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]'}`} 
+                     style={{ left: `${scrubberPercent}%` }} 
+                   />
+                </>
+              );
+            })()}
             </div>
 
-            <div className="flex items-center justify-between pointer-events-auto">
+            <div className="flex items-center justify-between pointer-events-auto gap-2">
                {/* Left Controls */}
-               <div className="flex items-center gap-4 sm:gap-6">
-                  <button onClick={togglePlay} className="text-white hover:scale-110 active:scale-90 transition-all flex items-center justify-center">
-                     <span className="material-symbols-rounded text-[32px] fill-current">{isPlaying ? 'pause' : 'play_arrow'}</span>
+               <div className="flex items-center gap-2 sm:gap-6 min-w-0 flex-1 overflow-hidden">
+                  <button onClick={togglePlay} className="text-white hover:scale-110 active:scale-90 transition-all flex items-center justify-center shrink-0">
+                     <span className="material-symbols-rounded text-[28px] sm:text-[32px] fill-current">{isPlaying ? 'pause' : 'play_arrow'}</span>
                   </button>
                   
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
                      <button onClick={() => skip(-10)} className="text-white/70 hover:text-white transition-all active:scale-90 flex items-center">
-                        <span className="material-symbols-rounded text-[26px]">replay_10</span>
+                        <span className="material-symbols-rounded text-[22px] sm:text-[26px]">replay_10</span>
                      </button>
                      <button onClick={() => skip(10)} className="text-white/70 hover:text-white transition-all active:scale-90 flex items-center">
-                        <span className="material-symbols-rounded text-[26px]">forward_10</span>
+                        <span className="material-symbols-rounded text-[22px] sm:text-[26px]">forward_10</span>
                      </button>
                   </div>
 
-                  <div className="flex items-center gap-3 sm:ml-2">
+                  <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                      <button 
                        onClick={() => { 
                          if(isYoutube && playerRef.current){ 
@@ -917,24 +1179,54 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                            setIsMuted(videoRef.current.muted); 
                          } 
                        }} 
-                       className="text-white/70 hover:text-white transition-all"
+                       className="text-white/70 hover:text-white transition-all hidden xs:flex items-center"
                      >
-                        <span className="material-symbols-rounded text-2xl">{isMuted ? 'volume_off' : 'volume_up'}</span>
+                        <span className="material-symbols-rounded text-xl sm:text-2xl">{isMuted ? 'volume_off' : 'volume_up'}</span>
                      </button>
-                     <div className="text-white/90 text-xs font-medium font-mono whitespace-nowrap opacity-60">
-                        {formatTime(currentTime)} <span className="opacity-40 mx-0.5">/</span> {formatTime(duration)}
-                     </div>
+                     {isLive ? (() => {
+                        const isAtLiveEdge = !duration || (duration - currentTime) <= 10;
+                        const forceHrs = duration >= 3600 || currentTime >= 3600;
+                        return (
+                          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                             <button
+                               onClick={handleJumpToLive}
+                               onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); handleJumpToLive(); }}
+                               className={`flex items-center gap-1 px-2 py-0.5 sm:px-2.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-all shadow-md cursor-pointer active:scale-95 ${
+                                 isAtLiveEdge 
+                                   ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-600/30' 
+                                   : 'bg-zinc-800 hover:bg-red-600 text-gray-200 hover:text-white border border-white/20 hover:border-red-500'
+                               }`}
+                               title={isAtLiveEdge ? "Currently watching LIVE" : "Behind live - Click to return to LIVE point"}
+                             >
+                                <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${isAtLiveEdge ? 'bg-white animate-pulse' : 'bg-gray-400'}`} />
+                                {isAtLiveEdge ? 'LIVE' : 'GO LIVE'}
+                             </button>
+                             <span className="text-white text-[10px] sm:text-xs font-bold font-mono whitespace-nowrap flex items-center gap-1">
+                                <span>{formatTime(currentTime, forceHrs)}</span>
+                                {!isAtLiveEdge && duration > currentTime && (
+                                  <span className="text-red-400 text-[9px] sm:text-[10px] font-medium font-mono">
+                                    (-{formatTime(Math.max(0, duration - currentTime), (duration - currentTime) >= 3600)})
+                                  </span>
+                                )}
+                             </span>
+                          </div>
+                        );
+                     })() : (
+                        <div className="text-white/90 text-[10px] sm:text-xs font-medium font-mono whitespace-nowrap opacity-60">
+                           {formatTime(currentTime, duration >= 3600)} <span className="opacity-40 mx-0.5">/</span> {formatTime(duration, duration >= 3600)}
+                        </div>
+                     )}
                   </div>
                </div>
 
                {/* Right Controls */}
-               <div className="flex items-center gap-4">
+               <div className="flex items-center gap-1.5 sm:gap-4 shrink-0 ml-2">
                   <div className="relative">
                      <button 
                        onClick={() => { setShowSettingsMenu(!showSettingsMenu); setSettingsView('main'); }} 
-                       className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${showSettingsMenu ? 'bg-white text-black' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
+                       className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center transition-all ${showSettingsMenu ? 'bg-white text-black' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
                      >
-                        <span className="material-symbols-rounded text-[22px]">settings</span>
+                        <span className="material-symbols-rounded text-[20px] sm:text-[22px]">settings</span>
                      </button>
                      
                      {showSettingsMenu && (
@@ -1016,9 +1308,9 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                   <button 
                     onClick={toggleFullscreen}
                     title="Toggle Fullscreen"
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all flex"
+                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all shrink-0"
                   >
-                     <span className="material-symbols-rounded text-[24px]">{isFullscreen ? 'fullscreen_exit' : 'fullscreen'}</span>
+                     <span className="material-symbols-rounded text-[22px] sm:text-[24px]">{isFullscreen ? 'fullscreen_exit' : 'fullscreen'}</span>
                   </button>
                </div>
             </div>

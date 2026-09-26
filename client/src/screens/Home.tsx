@@ -643,19 +643,30 @@ const Home: React.FC = () => {
     
     if (isYT) {
       const videoId = lc.id || lc._id || 'live';
-      navigate(`/watch/${videoId}`, {
+      navigate(`/watch/${videoId}?returnTo=/`, {
         state: {
           video: {
             ...lc,
             title: lc.title || lc.name || 'Live Class',
             embedUrl: getEmbedUrl(url)
-          }
+          },
+          returnTo: '/'
         }
       });
     } else {
-      // Fallback for Zoom, Google Meet, etc.
       window.open(url, '_blank');
     }
+  };
+
+  const openPdf = (url: string, title: string) => {
+    const currentPath = window.location.hash.replace(/^#/, '') || window.location.pathname;
+    navigate(`/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent(title)}&returnTo=${encodeURIComponent(currentPath)}`, {
+      state: {
+        pdf: { fileUrl: getPdfUrl(url) },
+        title,
+        returnTo: currentPath
+      }
+    });
   };
 
   // Tick every 30s for client-side auto-promotion
@@ -959,7 +970,7 @@ const Home: React.FC = () => {
                             <div className="px-3 pb-3 -mt-1 flex flex-wrap gap-2 relative z-10">
                               {lc.pdf1 && (
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.pdf1))}&title=${encodeURIComponent('PDF 1')}`, '_blank'); }}
+                                  onClick={(e) => { e.stopPropagation(); openPdf(lc.pdf1, 'PDF 1'); }}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 text-red-600 text-[10px] font-bold border border-red-100 hover:bg-white transition-all shadow-sm"
                                 >
                                   <span className="material-symbols-rounded text-sm">picture_as_pdf</span>
@@ -968,7 +979,7 @@ const Home: React.FC = () => {
                               )}
                               {lc.pdf2 && (
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.pdf2))}&title=${encodeURIComponent('PDF 2')}`, '_blank'); }}
+                                  onClick={(e) => { e.stopPropagation(); openPdf(lc.pdf2, 'PDF 2'); }}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 text-red-600 text-[10px] font-bold border border-red-100 hover:bg-white transition-all shadow-sm"
                                 >
                                   <span className="material-symbols-rounded text-sm">picture_as_pdf</span>
@@ -977,7 +988,7 @@ const Home: React.FC = () => {
                               )}
                               {lc.studyMaterial && (
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.studyMaterial))}&title=${encodeURIComponent('Study Material')}`, '_blank'); }}
+                                  onClick={(e) => { e.stopPropagation(); openPdf(lc.studyMaterial, 'Study Material'); }}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 text-blue-600 text-[10px] font-bold border border-blue-100 hover:bg-white transition-all shadow-sm"
                                 >
                                   <span className="material-symbols-rounded text-sm">auto_stories</span>

@@ -82,7 +82,7 @@ export const useLiveContentSubmit = ({
           return;
         }
 
-        if (scheduledDateObj.getTime() < Date.now()) {
+        if (!editingYoutubeZoom && scheduledDateObj.getTime() < Date.now()) {
           showToast('Schedule time cannot be in the past.', 'error');
           return;
         }

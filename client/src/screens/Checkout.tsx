@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getImageUrl } from '../lib/utils';
 import { getAuthHeaders, API_BASE_URL } from '../services/apiClient';
 import { Capacitor } from '@capacitor/core';
+import { useAuthStore } from '../store/authStore';
 
 declare global {
   interface Window {
@@ -313,7 +314,7 @@ const Checkout: React.FC = () => {
     }
     setProcessing(true);
     try {
-      const orderRes = await fetch(`${API_BASE_URL}/razorpay/create-order`, {
+      let orderRes = await fetch(`${API_BASE_URL}/razorpay/create-order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
@@ -323,76 +324,148 @@ const Checkout: React.FC = () => {
           coinsUsed: useCoins ? coinsToUse : 0
         })
       });
-      const orderData = await orderRes.json();
-      if (!orderRes.ok) throw new Error(orderData.error || 'Failed to create order');
 
-      const options = {
-        key: orderData.keyId,
-        amount: orderData.amount,
-        currency: orderData.currency,
-        name: 'Aone Target Institute',
-        description: course?.name || course?.title || 'Course Purchase',
-        order_id: orderData.orderId,
-        handler: async function (response: any) {
-          try {
-            const verifyRes = await fetch(`${API_BASE_URL}/razorpay/verify`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                courseId: course?.id || course?._id || id,
-                studentId: getResolvedStudentId(student),
-                referralCode: referralCode || undefined,
-                couponCode: breakdown?.couponCode || undefined,
-                coinsUsed: useCoins ? coinsToUse : 0
-              })
-            });
-            const verifyData = await verifyRes.json();
-            if (verifyData.success) {
-              navigate('/purchase-success', { state: { course, purchase: verifyData.purchase } });
-            } else {
-              alert('Payment verification failed. Please contact support.');
-              setProcessing(false);
+      if (orderRes.status === 401) {
+        const refreshed = await useAuthStore.getState().refreshToken();
+        if (refreshed) {
+          orderRes = await fetch(`${API_BASE_URL}/razorpay/create-order`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+            body: JSON.stringify({
+              courseId: course?.id || course?._id || id,
+              studentId: getResolvedStudentId(student),
+              couponCode: breakdown?.couponCode || undefined,
+              coinsUsed: useCoins ? coinsToUse : 0
+            })
+          });
+        }
+      }
+
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) {
+        if (orderRes.status === 401) {
+          sessionStorage.setItem('postLoginRedirect', location.pathname + location.search);
+          alert('Your session has expired. Please login again to complete the purchase.');
+          navigate('/student-login', { state: { from: location.pathname + location.search } });
+          setProcessing(false);
+          return;
+        }
+        throw new Error(orderData.error || 'Failed to create order');
+      }
+
+      const handlePaymentSuccess = async (response: any) => {
+        try {
+          let verifyRes = await fetch(`${API_BASE_URL}/razorpay/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+            body: JSON.stringify({
+              razorpay_order_id: response.razorpay_order_id || orderData.orderId,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              courseId: course?.id || course?._id || id,
+              studentId: getResolvedStudentId(student),
+              referralCode: referralCode || undefined,
+              couponCode: breakdown?.couponCode || undefined,
+              coinsUsed: useCoins ? coinsToUse : 0
+            })
+          });
+
+          if (verifyRes.status === 401) {
+            const refreshed = await useAuthStore.getState().refreshToken();
+            if (refreshed) {
+              verifyRes = await fetch(`${API_BASE_URL}/razorpay/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                body: JSON.stringify({
+                  razorpay_order_id: response.razorpay_order_id || orderData.orderId,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                  courseId: course?.id || course?._id || id,
+                  studentId: getResolvedStudentId(student),
+                  referralCode: referralCode || undefined,
+                  couponCode: breakdown?.couponCode || undefined,
+                  coinsUsed: useCoins ? coinsToUse : 0
+                })
+              });
             }
-          } catch {
-            alert('Payment verification failed. Please contact support.');
+          }
+          const verifyData = await verifyRes.json();
+          if (verifyData.success) {
+            try {
+              const courseIdToEnroll = String(course?.id || course?._id || id);
+              const currentStudent = getStudentData();
+              if (currentStudent) {
+                const currentEnrolled = Array.isArray(currentStudent.enrolledCourses) ? currentStudent.enrolledCourses : [];
+                if (!currentEnrolled.map(String).includes(courseIdToEnroll)) {
+                  currentStudent.enrolledCourses = [...currentEnrolled, courseIdToEnroll];
+                  localStorage.setItem('studentData', JSON.stringify(currentStudent));
+                }
+              }
+              useAuthStore.getState().checkAuth().catch(() => {});
+            } catch (e) {
+              console.error('[Checkout] Local state sync error:', e);
+            }
+            navigate('/purchase-success', { state: { course, purchase: verifyData.purchase } });
+          } else {
+            alert(verifyData.error || 'Payment verification failed. Please contact support.');
             setProcessing(false);
           }
-        },
-        prefill: {
-          name: student.name || '',
-          email: student.email || '',
-          contact: student.phone || ''
-        },
-        theme: { color: '#1A237E' },
-        modal: { ondismiss: () => setProcessing(false) },
-        config: {
-          display: {
-            sequence: ['block.upi', 'card', 'netbanking', 'wallet'],
-            preferences: { show_default_blocks: true }
-          }
+        } catch {
+          alert('Payment verification failed. Please contact support.');
+          setProcessing(false);
         }
       };
+
+      const prefillData: Record<string, string> = {
+        name: student.name || 'Student'
+      };
+      if (student.email && student.email.trim() && student.email.includes('@')) {
+        prefillData.email = student.email.trim();
+      }
+      if (student.phone && student.phone.trim()) {
+        prefillData.contact = student.phone.trim();
+      }
 
       if (Capacitor.isNativePlatform()) {
         const razorpay = (window as any).RazorpayCheckout;
         const errorCallback = (error: any) => {
+          console.warn('[Razorpay Native Cancel/Error]', error);
           alert(`Payment failed: ${error?.description || 'Please try again'}`);
           setProcessing(false);
         };
         
         if (razorpay) {
-          razorpay.on('payment.success', options.handler);
+          const nativeOptions = {
+            key: orderData.keyId,
+            amount: orderData.amount,
+            currency: orderData.currency || 'INR',
+            name: 'Aone Target Institute',
+            description: (course?.name || course?.title || 'Course Purchase').slice(0, 40),
+            order_id: orderData.orderId,
+            prefill: prefillData,
+            theme: { color: '#1A237E' }
+          };
+          razorpay.on('payment.success', handlePaymentSuccess);
           razorpay.on('payment.cancel', errorCallback);
-          razorpay.open(options);
+          razorpay.open(nativeOptions);
         } else {
           alert('Payment plugin not initialized. Please restart the app.');
           setProcessing(false);
         }
       } else {
-        const razorpay = new window.Razorpay(options);
+        const webOptions = {
+          key: orderData.keyId,
+          amount: orderData.amount,
+          currency: orderData.currency || 'INR',
+          name: 'Aone Target Institute',
+          description: (course?.name || course?.title || 'Course Purchase').slice(0, 40),
+          order_id: orderData.orderId,
+          handler: handlePaymentSuccess,
+          prefill: prefillData,
+          theme: { color: '#1A237E' },
+          modal: { ondismiss: () => setProcessing(false) }
+        };
+        const razorpay = new window.Razorpay(webOptions);
         razorpay.on('payment.failed', (response: any) => {
           alert(`Payment failed: ${response.error?.description || 'Please try again'}`);
           setProcessing(false);
@@ -551,17 +624,18 @@ const Checkout: React.FC = () => {
               </div>
             ) : (
               <>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2.5">
                   <input
-                    className={`flex-1 bg-gray-50 border ${couponError ? 'border-red-300' : 'border-gray-200'} rounded-xl text-sm px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#303F9F]/10 font-bold uppercase`}
+                    className={`flex-1 w-full bg-gray-50 border ${couponError ? 'border-red-300' : 'border-gray-200'} rounded-xl text-sm px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#303F9F]/10 font-bold uppercase`}
                     placeholder="Enter coupon code"
                     value={couponCode}
                     onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); if (couponError) setCouponError(''); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleApplyCoupon(); } }}
                   />
                   <button
                     onClick={handleApplyCoupon}
                     disabled={isApplyingCoupon || !couponCode.trim()}
-                    className="bg-[#1A237E] text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md active:scale-95 disabled:opacity-50 transition-all"
+                    className="w-full sm:w-auto bg-[#1A237E] text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-md active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center shrink-0"
                   >
                     {isApplyingCoupon ? '...' : 'Apply'}
                   </button>

@@ -17,11 +17,21 @@ const TestTaking: React.FC = () => {
   // Capture location.state once in a ref — prevents reset when popstate fires during back-button trap
   const locationStateRef = useRef(location.state);
   const launchedSeriesId = locationStateRef.current?.seriesId;
+  const guardPushedRef = useRef(false);
+  const isNavigatingAwayRef = useRef(false);
 
   const [test, setTest] = useState<any>(null);
   const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [errorState, setErrorState] = useState<{
+    code?: string;
+    message: string;
+    courseId?: string;
+    courseTitle?: string;
+    coursePrice?: number;
+    courseImage?: string;
+  } | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
@@ -35,6 +45,7 @@ const TestTaking: React.FC = () => {
   const [student, setStudent] = useState<any>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef<number>(Date.now());
+  const targetEndTimeRef = useRef<number>(0);
   const [reportModal, setReportModal] = useState<{ isOpen: boolean, question: any } | null>(null);
   const [reportIssue, setReportIssue] = useState('');
   const [reportComment, setReportComment] = useState('');
@@ -55,9 +66,11 @@ const TestTaking: React.FC = () => {
     setResult(null);
     setLoading(true);
     setError('');
+    setErrorState(null);
     setReportModal(null);
     setHasAcceptedTerms(false);
     setActiveSectionId(null);
+    targetEndTimeRef.current = 0;
 
     const storedStudent = localStorage.getItem('studentData');
     if (storedStudent && storedStudent !== 'undefined') {
@@ -176,10 +189,22 @@ const TestTaking: React.FC = () => {
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         if (res.status === 403 && errData.code === 'EXPIRED') {
-          throw new Error('Your access to this test series has expired. Please renew your subscription to continue.');
+          setErrorState({
+            code: 'EXPIRED',
+            message: 'Your access to this test series has expired. Please renew your subscription to continue.'
+          });
+          return;
         }
         if (res.status === 403 && errData.code === 'ENROLLMENT_REQUIRED') {
-          throw new Error('You need to enroll in this course to access this test.');
+          setErrorState({
+            code: 'ENROLLMENT_REQUIRED',
+            message: errData.error || 'You need to enroll in this course to access this test.',
+            courseId: errData.courseId,
+            courseTitle: errData.courseTitle || 'Related Course',
+            coursePrice: errData.coursePrice,
+            courseImage: errData.courseImage
+          });
+          return;
         }
         throw new Error(errData.error || 'Test not found');
       }
@@ -217,6 +242,7 @@ const TestTaking: React.FC = () => {
 
       setTimeLeft(finalTimeLeft);
       startTimeRef.current = Date.now();
+      targetEndTimeRef.current = Date.now() + finalTimeLeft * 1000;
 
       if (testData?.enableSectionSelector && Array.isArray(testData?.sections) && testData.sections.length > 0) {
         setActiveSectionId(testData.sections[0].id.toString());
@@ -224,6 +250,7 @@ const TestTaking: React.FC = () => {
 
     } catch (err: any) {
       setError(err.message || 'Failed to load test');
+      setErrorState({ message: err.message || 'Failed to load test' });
     } finally {
       setLoading(false);
     }
@@ -303,81 +330,156 @@ const TestTaking: React.FC = () => {
     }
   }, [submitted, submitting, testId, student, answers, questions, test, launchedSeriesId]);
 
+  const handleSubmitRef = useRef(handleSubmit);
+  useEffect(() => {
+    handleSubmitRef.current = handleSubmit;
+  });
+
   useEffect(() => {
     const needsTerms = test?.termsAndConditions && test?.termsAndConditions.trim() !== '' && test?.termsAndConditions !== '<p><br></p>';
-    if (questions.length > 0 && !submitted && timeLeft > 0 && (!needsTerms || hasAcceptedTerms)) {
-      timerRef.current = setInterval(() => {
-        setTimeLeft(prev => {
-          // Hard Expiry Real-time Protection
-          const hardExpiryStr = test?.closeDate || test?.endDate || test?.validity;
-          if (hardExpiryStr) {
-            const hardExpiryDate = new Date(hardExpiryStr);
-            if (!isNaN(hardExpiryDate.getTime()) && new Date() > hardExpiryDate) {
-              console.log('[Timer] Hard expiry reached! Auto-submitting...');
-              if (timerRef.current) clearInterval(timerRef.current);
-              handleSubmit(true);
-              return 0;
-            }
-          }
+    if (questions.length > 0 && !submitted && (!needsTerms || hasAcceptedTerms)) {
+      if (!targetEndTimeRef.current || targetEndTimeRef.current <= Date.now()) {
+        targetEndTimeRef.current = Date.now() + Math.max(0, timeLeft) * 1000;
+      }
 
-          if (prev <= 1) {
+      const checkAndTick = () => {
+        // Hard Expiry Real-time Protection
+        const hardExpiryStr = test?.closeDate || test?.endDate || test?.validity;
+        if (hardExpiryStr) {
+          const hardExpiryDate = new Date(hardExpiryStr);
+          if (!isNaN(hardExpiryDate.getTime()) && Date.now() >= hardExpiryDate.getTime()) {
+            console.log('[Timer] Hard expiry reached! Auto-submitting...');
             if (timerRef.current) clearInterval(timerRef.current);
-            handleSubmit(true);
-            return 0;
+            setTimeLeft(0);
+            handleSubmitRef.current(true);
+            return;
           }
-          return prev - 1;
-        });
-      }, 1000);
+        }
+
+        const remaining = Math.max(0, Math.ceil((targetEndTimeRef.current - Date.now()) / 1000));
+        setTimeLeft(remaining);
+
+        if (remaining <= 0) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          handleSubmitRef.current(true);
+        }
+      };
+
+      checkAndTick();
+      timerRef.current = setInterval(checkAndTick, 1000);
+
+      const handleVisibilityChange = () => {
+        if (!document.hidden) {
+          checkAndTick();
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      return () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
     }
+
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [questions.length, submitted, hasAcceptedTerms, timeLeft > 0, test?.termsAndConditions, test?.closeDate, test?.endDate, handleSubmit]);
+  }, [questions.length, submitted, hasAcceptedTerms, !!test?.termsAndConditions]);
 
+  // Setup single exam guard when active exam starts
   useEffect(() => {
     const needsTerms = test?.termsAndConditions && test?.termsAndConditions.trim() !== '' && test?.termsAndConditions !== '<p><br></p>';
     
-    // Only trap back button if the test is actively running (terms accepted or not needed)
-    if (submitted || loading || questions.length === 0 || (needsTerms && !hasAcceptedTerms)) return;
+    // Only guard if active test is in progress (not submitted, not loading, questions exist, terms accepted)
+    if (submitted || loading || questions.length === 0 || (needsTerms && !hasAcceptedTerms)) {
+      return;
+    }
     
-    // Capture the existing React Router state so we don't break location.state
-    const currentState = window.history.state;
+    if (!guardPushedRef.current) {
+      window.history.pushState({ isExamGuard: true }, '', window.location.href);
+      guardPushedRef.current = true;
+    }
     
-    // Push TWO entries so the first swipe back stays on test page and fires popstate
-    window.history.pushState(currentState, '', window.location.href);
-    window.history.pushState(currentState, '', window.location.href);
-    
-    const handlePopState = () => {
+    const handleExamPopState = () => {
+      // Browser popped the guard entry
+      guardPushedRef.current = false;
       setShowBackModal(true);
-      // Re-push to keep user on test page
-      window.history.pushState(currentState, '', window.location.href);
     };
-    window.addEventListener('popstate', handlePopState);
-    window.addEventListener('app:backbutton', handlePopState);
+
+    const handleAppBack = (e: Event) => {
+      e.preventDefault();
+      setShowBackModal(true);
+    };
+
+    window.addEventListener('popstate', handleExamPopState);
+    window.addEventListener('app:backbutton', handleAppBack);
     return () => {
-      window.removeEventListener('popstate', handlePopState);
-      window.removeEventListener('app:backbutton', handlePopState);
+      window.removeEventListener('popstate', handleExamPopState);
+      window.removeEventListener('app:backbutton', handleAppBack);
     };
   }, [submitted, loading, questions.length, hasAcceptedTerms, test?.termsAndConditions]);
 
-  // Handle browser back button on Result Page
+  const handleResumeTest = () => {
+    setShowBackModal(false);
+    if (!guardPushedRef.current && !submitted) {
+      window.history.pushState({ isExamGuard: true }, '', window.location.href);
+      guardPushedRef.current = true;
+    }
+  };
+
+  const handleResultBack = useCallback(() => {
+    if (isNavigatingAwayRef.current) return;
+    isNavigatingAwayRef.current = true;
+
+    const origin = locationStateRef.current?.from;
+    const seriesId = launchedSeriesId || locationStateRef.current?.seriesId;
+    const fallbackTarget = origin || (seriesId ? `/mock-tests?seriesId=${seriesId}` : '/mock-tests');
+
+    // How many steps to unwind out of /test/:testId
+    const stepsToUnwind = guardPushedRef.current ? -2 : -1;
+    guardPushedRef.current = false;
+
+    // Try to unwind the browser history so /test/... is completely removed from the stack
+    if (window.history.length > 2) {
+      try {
+        window.history.go(stepsToUnwind);
+        return;
+      } catch (e) {
+        // Fallback below
+      }
+    }
+    navigate(fallbackTarget, { replace: true });
+  }, [launchedSeriesId, navigate]);
+
+  // Handle back button on Result Page (when test is submitted)
   useEffect(() => {
     if (!submitted) return;
 
-    // Push a state so popstate fires
-    window.history.pushState(null, '', window.location.href);
-
-    const handlePopState = () => {
-      if (launchedSeriesId) {
-        navigate(`/mock-tests/${launchedSeriesId}`, { replace: true });
-      } else {
-        navigate('/mock-tests', { replace: true });
+    const handleResultPopState = () => {
+      if (guardPushedRef.current) {
+        guardPushedRef.current = false;
+        if (window.history.length > 1) {
+          try {
+            window.history.go(-1);
+            return;
+          } catch (e) { }
+        }
       }
+      handleResultBack();
     };
 
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
-  }, [submitted, launchedSeriesId, navigate]);
+    const handleAppResultBack = (e: Event) => {
+      e.preventDefault();
+      handleResultBack();
+    };
+
+    window.addEventListener('popstate', handleResultPopState);
+    window.addEventListener('app:backbutton', handleAppResultBack);
+    return () => {
+      window.removeEventListener('popstate', handleResultPopState);
+      window.removeEventListener('app:backbutton', handleAppResultBack);
+    };
+  }, [submitted, handleResultBack]);
 
   const formatTime = (secs: number) => {
     const h = Math.floor(secs / 3600);
@@ -461,13 +563,78 @@ const TestTaking: React.FC = () => {
     );
   }
 
-  if (error) {
+  if (errorState || error) {
+    if (errorState?.code === 'ENROLLMENT_REQUIRED') {
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl max-w-md w-full border border-gray-100 text-center animate-fade-in-up">
+            <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto mb-4 border border-amber-100 shadow-inner">
+              <span className="material-symbols-rounded text-3xl">lock</span>
+            </div>
+
+            <h2 className="text-lg font-black text-gray-900 tracking-tight mb-2">
+              Course Enrollment Required
+            </h2>
+            <p className="text-xs text-gray-500 mb-6 leading-relaxed">
+              This mock test is part of a premium batch. Enroll in the course to unlock access to this test and its comprehensive study material.
+            </p>
+
+            {/* Linked Course Card Preview */}
+            <div className="bg-gray-50 border border-gray-200/80 rounded-2xl p-3.5 mb-6 text-left flex items-center gap-3.5">
+              {errorState.courseImage ? (
+                <img
+                  src={getImageUrl(errorState.courseImage)}
+                  alt="Course"
+                  className="w-14 h-14 rounded-xl object-cover border border-gray-200 shrink-0"
+                />
+              ) : (
+                <div className="w-14 h-14 rounded-xl bg-[#1A237E]/10 text-[#1A237E] flex items-center justify-center shrink-0">
+                  <span className="material-symbols-rounded text-2xl">school</span>
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <span className="text-[9px] font-black uppercase tracking-wider text-[#1A237E] bg-blue-50 px-2 py-0.5 rounded-full inline-block mb-1 border border-blue-100">
+                  Linked Batch
+                </span>
+                <h4 className="font-bold text-gray-900 text-xs sm:text-sm truncate">
+                  {errorState.courseTitle}
+                </h4>
+                {errorState.coursePrice !== undefined && errorState.coursePrice > 0 ? (
+                  <p className="text-xs font-black text-green-600 mt-0.5">
+                    ₹{errorState.coursePrice}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              {errorState.courseId && (
+                <button
+                  onClick={() => navigate(`/course/${errorState.courseId}`)}
+                  className="w-full py-3.5 px-4 bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white rounded-2xl text-xs font-black uppercase tracking-wider shadow-lg shadow-indigo-900/20 hover:shadow-xl transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-rounded text-base">shopping_cart</span>
+                  View Course & Enroll Now
+                </button>
+              )}
+              <button
+                onClick={handleResultBack}
+                className="w-full py-3 px-4 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-2xl text-xs font-bold transition-all active:scale-[0.98]"
+              >
+                Back to Tests
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="text-center bg-white rounded-xl p-8 shadow-sm max-w-sm w-full">
+        <div className="text-center bg-white rounded-2xl p-8 shadow-sm max-w-sm w-full border border-gray-100">
           <span className="material-symbols-rounded text-5xl text-[#D32F2F]">error</span>
-          <p className="text-sm text-gray-600 mt-3">{error}</p>
-          <button onClick={() => navigate(-1)} className="mt-4 bg-[#1A237E] text-white px-6 py-2 rounded-lg text-sm font-bold">
+          <p className="text-sm text-gray-600 mt-3">{errorState?.message || error}</p>
+          <button onClick={handleResultBack} className="mt-4 bg-[#1A237E] text-white px-6 py-2.5 rounded-xl text-xs font-bold">
             Back to Tests
           </button>
         </div>
@@ -482,8 +649,8 @@ const TestTaking: React.FC = () => {
         <header className="bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white pt-10 pb-4 px-4">
           <div className="flex items-center gap-3">
             <button
-              onClick={() => navigate(-1)}
-              className="p-2 rounded-full hover:bg-white/20"
+              onClick={handleResultBack}
+              className="p-2 rounded-full hover:bg-white/20 active:scale-95"
             >
               <span className="material-symbols-rounded">arrow_back</span>
             </button>
@@ -856,7 +1023,10 @@ const TestTaking: React.FC = () => {
   if (!loading && !error && !submitted && needsTerms && !hasAcceptedTerms) {
     return (
       <div className="fixed inset-0 bg-gray-50 flex flex-col">
-        <header className="bg-[#1A237E] text-white pt-10 pb-3 px-4 sticky top-0 z-30 shadow-md">
+        <header 
+          className="bg-[#1A237E] text-white px-4 flex items-center justify-between flex-shrink-0 z-30 shadow-md"
+          style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 14px)', paddingBottom: '12px' }}
+        >
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate(-1)}
@@ -869,39 +1039,43 @@ const TestTaking: React.FC = () => {
           </div>
         </header>
 
-        <div className="flex-1 overflow-y-auto p-4 max-w-4xl mx-auto w-full">
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col h-full">
-            <div className="p-4 md:p-6 border-b border-gray-100 bg-blue-50/30 flex items-center justify-between">
+        <div className="flex-1 overflow-hidden p-3 sm:p-4 max-w-3xl mx-auto w-full flex flex-col min-h-0">
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden flex flex-col flex-1 min-h-0">
+            <div className="p-4 sm:p-5 border-b border-gray-100 bg-blue-50/40 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-[#1A237E]/10 flex items-center justify-center text-[#1A237E]">
+                <div className="w-10 h-10 rounded-xl bg-[#1A237E]/10 flex items-center justify-center text-[#1A237E] flex-shrink-0">
                   <span className="material-symbols-rounded text-xl">gavel</span>
                 </div>
                 <div>
-                  <h2 className="text-lg font-black text-gray-800 tracking-tight">Terms &amp; Conditions</h2>
+                  <h2 className="text-base sm:text-lg font-black text-gray-800 tracking-tight">Terms &amp; Conditions</h2>
                   <p className="text-xs text-gray-500 font-medium">Please read carefully before starting the test</p>
                 </div>
               </div>
             </div>
 
-            <div className="p-5 md:p-8 flex-1 overflow-y-auto prose max-w-none text-[14.5px] leading-relaxed text-gray-700 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li]:mb-2 [&>ol]:list-decimal [&>ol]:pl-5 [&>ol>li]:mb-2 [&>p]:mb-4" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(test.termsAndConditions || '') }} />
+            <div className="p-4 sm:p-6 flex-1 overflow-y-auto prose max-w-none text-[14px] sm:text-[14.5px] leading-relaxed text-gray-700 [&>ul]:list-disc [&>ul]:pl-5 [&>ul>li]:mb-2 [&>ol]:list-decimal [&>ol]:pl-5 [&>ol>li]:mb-2 [&>p]:mb-4" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(test.termsAndConditions || '') }} />
 
-            <div className="p-5 md:p-6 border-t border-gray-100 bg-gray-50 flex flex-col gap-3">
-              <div className="text-xs text-center text-gray-500 mb-1">
+            <div 
+              className="p-4 sm:p-5 border-t border-gray-100 bg-gray-50 flex flex-col gap-2.5 flex-shrink-0"
+              style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 16px)' }}
+            >
+              <div className="text-[11px] sm:text-xs text-center text-gray-500">
                 By clicking start, you agree to all the terms listed above. The timer will start immediately.
               </div>
               <button
                 onClick={() => {
                   setHasAcceptedTerms(true);
                   startTimeRef.current = Date.now();
+                  targetEndTimeRef.current = Date.now() + (timeLeft > 0 ? timeLeft : (test?.duration || 60) * 60) * 1000;
                 }}
-                className="w-full py-4 bg-[#1A237E] text-white rounded-xl text-[14px] font-bold uppercase tracking-wider hover:bg-[#283593] transition-all shadow-md hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
+                className="w-full py-3.5 sm:py-4 bg-[#1A237E] text-white rounded-xl text-[14px] font-bold uppercase tracking-wider hover:bg-[#283593] transition-all shadow-md hover:shadow-lg active:scale-[0.98] flex items-center justify-center gap-2"
               >
                 I Accept &amp; Start Test
                 <span className="material-symbols-rounded text-[20px]">arrow_forward</span>
               </button>
               <button
                 onClick={() => navigate(-1)}
-                className="w-full py-3 bg-white text-gray-600 rounded-xl text-[13px] font-bold border border-gray-200 hover:bg-gray-50 transition-all"
+                className="w-full py-2.5 sm:py-3 bg-white text-gray-600 rounded-xl text-[13px] font-bold border border-gray-200 hover:bg-gray-50 transition-all"
               >
                 Cancel
               </button>
@@ -914,7 +1088,10 @@ const TestTaking: React.FC = () => {
 
   return (
     <div className="fixed inset-0 bg-gray-50 flex flex-col">
-      <header className="bg-[#1A237E] text-white px-4 pt-10 pb-3 flex items-center justify-between sticky top-0 z-30">
+      <header 
+        className="bg-[#1A237E] text-white px-4 flex items-center justify-between flex-shrink-0 z-30"
+        style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 14px)', paddingBottom: '12px' }}
+      >
         <div className="flex items-center gap-2 flex-1 min-w-0">
           <button
             onClick={() => {
@@ -934,7 +1111,7 @@ const TestTaking: React.FC = () => {
       </header>
 
       {isSectionEnabled && (
-        <div className="bg-white border-b border-gray-100 overflow-x-auto hide-scrollbar flex items-center px-4 py-2 shadow-sm sticky top-[60px] z-20">
+        <div className="bg-white border-b border-gray-100 overflow-x-auto hide-scrollbar flex items-center px-4 py-2 shadow-sm flex-shrink-0 z-20">
           {test.sections.map((sec: any) => {
             const secQCount = questions.filter(
               (q: any) => String(q.sectionId) === String(sec.id)
@@ -964,7 +1141,7 @@ const TestTaking: React.FC = () => {
         </div>
       )}
 
-      <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center justify-between">
+      <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center justify-between flex-shrink-0">
         <div className="flex items-center gap-3 text-[10px] text-gray-500">
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-green-500"></span>
@@ -1142,7 +1319,10 @@ const TestTaking: React.FC = () => {
         )}
       </div>
 
-      <div className="bg-white border-t border-gray-200 px-4 py-3 flex items-center justify-between sticky bottom-0">
+      <div 
+        className="bg-white border-t border-gray-200 px-4 pt-3 flex items-center justify-between flex-shrink-0 z-20"
+        style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}
+      >
         <button
           onClick={() => setCurrentIndex(prev => Math.max(0, prev - 1))}
           disabled={currentIndex === 0}
@@ -1191,7 +1371,7 @@ const TestTaking: React.FC = () => {
             </div>
             <div className="flex flex-col gap-3">
               <button
-                onClick={() => setShowBackModal(false)}
+                onClick={handleResumeTest}
                 className="w-full py-3 rounded-xl bg-green-600 text-white text-sm font-bold"
               >
                 Resume Test

@@ -60,6 +60,28 @@ export async function syncLiveStream(id, data, operation = 'update') {
       syncData.type = 'recorded';
       syncData.streamStatus = 'recorded';
       syncData.status = 'active'; // In main videos collection, recorded is active
+      syncData.isLive = false;
+      if (!syncData.endedAt) syncData.endedAt = data.endedAt || new Date().toISOString();
+      if (!syncData.endTime) syncData.endTime = syncData.endedAt;
+
+      // Auto-compute duration from start/end times if duration is empty or "00:00"
+      if (!syncData.duration || syncData.duration === '00:00' || syncData.duration === '0:00' || syncData.duration === '0') {
+        const startVal = syncData.startedAt || syncData.startTime || syncData.scheduledAt || data.startedAt || data.startTime || data.scheduledAt || syncData.createdAt || data.createdAt;
+        const endVal = syncData.endedAt || syncData.endTime || data.endedAt || data.endTime;
+        if (startVal && endVal) {
+          const diffMs = Math.max(0, new Date(endVal).getTime() - new Date(startVal).getTime());
+          const totalSecs = Math.floor(diffMs / 1000);
+          if (totalSecs > 0) {
+            const hours = Math.floor(totalSecs / 3600);
+            const mins = Math.floor((totalSecs % 3600) / 60);
+            const secs = totalSecs % 60;
+            const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
+            syncData.duration = hours > 0 
+              ? `${pad(hours)}:${pad(mins)}:${pad(secs)}`
+              : `${pad(mins)}:${pad(secs)}`;
+          }
+        }
+      }
     } else {
       syncData.contentType = 'live_stream';
       syncData.type = 'live';
@@ -68,6 +90,14 @@ export async function syncLiveStream(id, data, operation = 'update') {
       if (!syncData.status || syncData.status === 'upcoming' || syncData.status === 'live' || syncData.status === 'ended') {
         if (!syncData.streamStatus) syncData.streamStatus = syncData.status || 'upcoming';
         syncData.status = 'active'; 
+      }
+
+      if (syncData.streamStatus === 'live' || data.isLive === true) {
+        syncData.isLive = true;
+        if (!syncData.startedAt) syncData.startedAt = data.startedAt || new Date().toISOString();
+      } else if (syncData.streamStatus === 'ended' || data.isLive === false) {
+        syncData.isLive = false;
+        if (!syncData.endedAt) syncData.endedAt = data.endedAt || new Date().toISOString();
       }
     }
 

@@ -100,13 +100,14 @@ function handleSmartJoin(cls: any, onJoinLive?: (cls: any) => void, navigate?: a
 
   if (isYT && navigate) {
     const videoId = cls.id || cls._id || 'live';
-    navigate(`/watch/${videoId}`, {
+    navigate(`/watch/${videoId}?returnTo=/live-classes`, {
       state: {
         streamUrl: url,
         title: cls.title,
         id: videoId,
         platform: 'youtube',
-        isLive: !isRecordedNow
+        isLive: !isRecordedNow,
+        returnTo: '/live-classes'
       }
     });
   } else if (onJoinLive) {

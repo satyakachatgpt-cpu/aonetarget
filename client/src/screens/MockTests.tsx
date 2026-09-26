@@ -123,20 +123,20 @@ const MockTests: React.FC = () => {
 
   useEffect(() => {
     if (!loading && testSeries.length > 0) {
+      const searchParams = new URLSearchParams(location.search);
+      const querySeriesId = searchParams.get('seriesId');
       const stateSeries = location.state?.series;
       const stateSeriesId = location.state?.seriesId;
+      const targetId = querySeriesId || stateSeriesId || stateSeries?._id || stateSeries?.id;
       
-      if (stateSeries || stateSeriesId) {
-        const targetId = stateSeriesId || stateSeries?._id || stateSeries?.id;
-        const found = testSeries.find(ts => (ts._id || ts.id) === targetId);
+      if (targetId) {
+        const found = testSeries.find(ts => String(ts._id || ts.id) === String(targetId));
         if (found) {
-          handleSeriesClick(found);
-          // Clear state so it doesn't trigger again on refresh/back
-          window.history.replaceState({}, document.title);
+          handleSeriesClick(found, false);
         }
       }
     }
-  }, [loading, testSeries, location.state]);
+  }, [loading, testSeries, location.search, location.state]);
 
   const checkEnrollment = async (series: any) => {
     if (!student) return;
@@ -172,7 +172,7 @@ const MockTests: React.FC = () => {
     }
   };
 
-  const handleSeriesClick = async (series: any) => {
+  const handleSeriesClick = async (series: any, updateUrl: boolean = true) => {
     const isActuallyExpired = getSeriesExpiryStatus(series);
     if (isActuallyExpired) {
       toast.error('This test series has expired.');
@@ -180,6 +180,9 @@ const MockTests: React.FC = () => {
     }
     setActiveSeries(series);
     const seriesId = String(series.id || series._id);
+    if (updateUrl) {
+      navigate(`/mock-tests?seriesId=${seriesId}`, { replace: true });
+    }
     const preEnrolled = enrolledSeriesIds.has(seriesId);
     
     // --- Robust Free Series Detection ---
@@ -272,10 +275,26 @@ const MockTests: React.FC = () => {
     if (currentView === 'tests') {
       setCurrentView('series');
       setActiveSeries(null);
+      navigate('/mock-tests', { replace: true });
     } else {
-      navigate(-1);
+      if (window.history.length > 1) {
+        navigate(-1);
+      } else {
+        navigate('/', { replace: true });
+      }
     }
   };
+
+  useEffect(() => {
+    const handleMockBackEvent = (e: CustomEvent) => {
+      if (currentView === 'tests') {
+        e.preventDefault();
+        handleBack();
+      }
+    };
+    window.addEventListener('app:mocktests-back' as any, handleMockBackEvent);
+    return () => window.removeEventListener('app:mocktests-back' as any, handleMockBackEvent);
+  }, [currentView]);
 
   const getSeriesTests = (series: any) => {
     if (!series) return [];
@@ -451,7 +470,13 @@ const MockTests: React.FC = () => {
                               return;
                             }
                             if (status !== 'upcoming') {
-                              navigate(`/test/${test.id || test._id}`, { state: { seriesId: activeSeries?.id || activeSeries?._id } });
+                              const sId = activeSeries?.id || activeSeries?._id;
+                              navigate(`/test/${test.id || test._id}`, { 
+                                state: { 
+                                  seriesId: sId,
+                                  from: sId ? `/mock-tests?seriesId=${sId}` : '/mock-tests'
+                                } 
+                              });
                             }
                           }}
                           disabled={status === 'upcoming'}

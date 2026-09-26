@@ -176,12 +176,14 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true, courseId, showToast 
                 ...session,
                 status: 'active', // Ensure visibility remains enabled
                 streamStatus: newLifecycle,
+                isLive: newLifecycle === 'live',
+                startedAt: newLifecycle === 'live' ? new Date().toISOString() : undefined,
                 contentType: 'live_stream',
                 type: 'live'
             });
             setSessions(prev => prev.map(s => 
                 (s.id === session.id) 
-                ? { ...s, streamStatus: newLifecycle, status: 'active' } 
+                ? { ...s, streamStatus: newLifecycle, status: 'active', isLive: newLifecycle === 'live' } 
                 : s
             ));
             if (showToast) showToast(`Stream is now ${newLifecycle.toUpperCase()}`, 'success');
@@ -248,11 +250,17 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true, courseId, showToast 
                     }
                     // @ts-ignore
                     uploadData[`${field}Url`] = result.url;
+                    // @ts-ignore
+                    uploadData[field] = result.url;
                 }
             }
 
-            // Clean up raw files
-            fileFields.forEach(f => delete (uploadData as any)[f]);
+            // Clean up raw files only
+            fileFields.forEach(f => {
+                if ((uploadData as any)[f] instanceof File) {
+                    delete (uploadData as any)[f];
+                }
+            });
 
             // Resolve course name for the session
             const course = courses.find((c: any) => (c.id === editingSession.courseId || c._id === editingSession.courseId));
@@ -275,15 +283,6 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true, courseId, showToast 
                 
                 if (isNaN(scheduledDateObj.getTime())) {
                     throw new Error('Invalid Schedule Date or Time.');
-                }
-
-                // If date/time changed and it's in the past, block
-                // Note: We check if it's different from original or if it's a new schedule
-                if (scheduledDateObj.getTime() < Date.now()) {
-                    // Only block if it's being changed to a past time. 
-                    // If it was already in the past, we allow saving other fields.
-                    // But for simplicity and safety, we block any save if schedule is in past.
-                    throw new Error('Schedule time cannot be in the past.');
                 }
 
                 scheduledAt = scheduledDateObj.toISOString();
@@ -314,17 +313,22 @@ const LiveSessions: React.FC<Props> = ({ showHeader = true, courseId, showToast 
             // Handle file uploads sequentially
             const fileFields = ['pdf1', 'pdf2', 'studyMaterial'];
             for (const field of fileFields) {
-                if (data[field]) {
+                if (data[field] instanceof File) {
                     const result = await uploadAPI.uploadPDF(data[field]);
                     if (!result || !result.url) {
                         throw new Error(`Failed to upload ${field === 'studyMaterial' ? 'Study Material' : 'PDF'}. Please try again.`);
                     }
                     uploadData[`${field}Url`] = result.url;
+                    uploadData[field] = result.url;
                 }
             }
 
             // Remove raw file objects before sending to metadata API
-            fileFields.forEach(f => delete uploadData[f]);
+            fileFields.forEach(f => {
+                if (uploadData[f] instanceof File) {
+                    delete uploadData[f];
+                }
+            });
 
             // Resolve course name for the new session
             const course = courses.find((c: any) => (c.id === data.courseId || c._id === data.courseId));

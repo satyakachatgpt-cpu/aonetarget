@@ -55,6 +55,21 @@ export const useLiveStreamActions = ({
       const videoId = (video as any)._id || video.id;
       const adminToken = localStorage.getItem('adminToken');
       const url = video.meetingLink || video.link || video.url || video.videoUrl;
+      const nowIso = new Date().toISOString();
+      const startTime = video.startedAt || video.startTime || video.scheduledAt;
+      let computedDuration = video.duration;
+      if (startTime && (!computedDuration || computedDuration === '00:00' || computedDuration === '0:00')) {
+        const diffMs = Math.max(0, new Date(nowIso).getTime() - new Date(startTime).getTime());
+        const totalSecs = Math.floor(diffMs / 1000);
+        if (totalSecs > 30) {
+          const hours = Math.floor(totalSecs / 3600);
+          const mins = Math.floor((totalSecs % 3600) / 60);
+          const secs = totalSecs % 60;
+          const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+          computedDuration = hours > 0 ? `${pad(hours)}:${pad(mins)}:${pad(secs)}` : `${pad(mins)}:${pad(secs)}`;
+        }
+      }
+
       const response = await fetch(`${API_BASE_URL}/courses/${courseId}/videos/${videoId}`, {
         method: 'PUT',
         headers: {
@@ -65,15 +80,18 @@ export const useLiveStreamActions = ({
           ...video, 
           status: 'active', 
           streamStatus: 'recorded', 
+          isLive: false,
           recordedLink: url,
-          endTime: new Date().toISOString() 
+          endedAt: nowIso,
+          endTime: nowIso,
+          duration: computedDuration
         })
       });
       if (!response.ok) throw new Error('Failed to end stream');
 
       setVideos(prev => prev.map(v =>
         ((v as any)._id || v.id) === videoId
-          ? { ...v, streamStatus: 'recorded', contentType: 'recorded', type: 'recorded', recordedLink: url } as any
+          ? { ...v, streamStatus: 'recorded', isLive: false, contentType: 'recorded', type: 'recorded', recordedLink: url } as any
           : v
       ));
       showToast('Live stream ended and converted to recorded class', 'success');
@@ -86,18 +104,19 @@ export const useLiveStreamActions = ({
       const courseId = normalizeId((selectedCourse as any)?._id || selectedCourse?.id);
       const videoId = normalizeId((video as any)._id || video.id);
       const adminToken = localStorage.getItem('adminToken');
+      const nowIso = new Date().toISOString();
       const response = await fetch(`${API_BASE_URL}/courses/${courseId}/videos/${videoId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${adminToken}`
         },
-        body: JSON.stringify({ ...video, status: 'active', streamStatus: 'live' })
+        body: JSON.stringify({ ...video, status: 'active', streamStatus: 'live', isLive: true, startedAt: nowIso })
       });
       if (!response.ok) throw new Error('Failed to start live stream');
       setVideos(prev => prev.map(v =>
         normalizeId((v as any)._id || v.id) === videoId
-          ? { ...v, streamStatus: 'live', status: 'active' } as any
+          ? { ...v, streamStatus: 'live', status: 'active', isLive: true, startedAt: nowIso } as any
           : v
       ));
       showToast('Live stream started successfully', 'success');

@@ -599,7 +599,10 @@ export const deleteGenericPdf = async (req, res) => {
         { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
       ].filter(v => v.id || v._id)
     };
-    const result = await db.collection('pdfs').deleteOne(query);
+    let result = await db.collection('pdfs').deleteOne(query);
+    if (result.deletedCount === 0) {
+      result = await db.collection('notes').deleteOne(query);
+    }
     if (result.deletedCount === 0) return res.status(404).json({ error: 'PDF not found' });
     res.json({ success: true, message: 'PDF deleted' });
   } catch (error) {

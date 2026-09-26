@@ -107,6 +107,71 @@ const ProtectedRedirect = () => {
 declare const __APP_VERSION__: string;
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev-version';
 
+export const isAdminRoute = () => {
+  if (typeof window === 'undefined') return false;
+  const hash = window.location.hash || '';
+  const pathname = window.location.pathname || '';
+  const href = window.location.href || '';
+  return (
+    hash.startsWith('#/admin') || 
+    hash.includes('admin') || 
+    pathname.startsWith('/admin') || 
+    pathname.includes('admin') ||
+    href.includes('admin')
+  );
+};
+
+// Instant URL Normalization for admin routes when visited without hash
+if (typeof window !== 'undefined' && !window.location.hash && (window.location.pathname.startsWith('/admin') || window.location.pathname === '/admin' || window.location.pathname === '/admin-login')) {
+  window.location.replace(`/#${window.location.pathname}${window.location.search}`);
+}
+
+// Student Auth Modal wrapper that uses useLocation inside Router
+const StudentAuthModal: React.FC<{
+  isOpen: boolean;
+  onClose: () => void;
+  isStudentLoggedIn: boolean;
+  isAdminLoggedIn: boolean;
+  setIsStudentLoggedIn: (student: any, token: string, devId: string, refresh: string) => void;
+}> = ({ isOpen, onClose, isStudentLoggedIn, isAdminLoggedIn, setIsStudentLoggedIn }) => {
+  const location = useLocation();
+
+  const isAdmin = 
+    isAdminLoggedIn || 
+    (typeof window !== 'undefined' && localStorage.getItem('isAdminAuthenticated') === 'true') ||
+    isAdminRoute() ||
+    location.pathname.startsWith('/admin') ||
+    location.pathname.startsWith('/admin-login');
+
+  const isExcluded = 
+    isAdmin ||
+    isStudentLoggedIn ||
+    location.pathname.startsWith('/student-login');
+
+  if (!isOpen || isExcluded) {
+    return null;
+  }
+
+  return (
+    <div 
+      data-auth-popup="true"
+      className="fixed inset-0 z-[100] bg-black/65 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200"
+    >
+      <div className="w-full max-w-[420px] h-full sm:h-auto sm:max-h-[90vh] bg-white sm:rounded-[28px] overflow-hidden shadow-2xl relative flex flex-col">
+        <Suspense fallback={<PageLoader />}>
+          <StudentLogin 
+            setAuth={(student, token, devId, refresh) => {
+              setIsStudentLoggedIn(student, token, devId, refresh);
+              onClose();
+            }}
+            onClose={onClose}
+          />
+        </Suspense>
+      </div>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
   useEffect(() => {
     // Apply safe area fallback padding ONLY for native Android/iOS apps
@@ -147,12 +212,14 @@ const App: React.FC = () => {
   const { isAuthenticated: isStudentLoggedIn, isLoading, checkAuth, setAuth: setIsStudentLoggedIn } = useAuthStore();
 
   useEffect(() => {
-    checkAuth();
+    if (!isAdminRoute()) {
+      checkAuth();
+    }
   }, [checkAuth]);
 
   const [showSplash, setShowSplash] = useState(() => {
     // Do not show splash screen on admin routes
-    if (window.location.hash.startsWith('#/admin')) {
+    if (isAdminRoute()) {
       return false;
     }
     // Do not show splash screen on desktop/laptop
@@ -163,7 +230,8 @@ const App: React.FC = () => {
   });
 
   const [showAuthPopup, setShowAuthPopup] = useState(() => {
-    if (window.location.hash.startsWith('#/admin')) return false;
+    if (typeof window === 'undefined') return false;
+    if (isAdminRoute() || localStorage.getItem('isAdminAuthenticated') === 'true') return false;
     const dismissed = sessionStorage.getItem('auth_popup_dismissed') === 'true';
     return !dismissed;
   });
@@ -178,6 +246,31 @@ const App: React.FC = () => {
     window.addEventListener('app:close-auth-popup', handleClose);
     return () => window.removeEventListener('app:close-auth-popup', handleClose);
   }, [handleCloseAuthPopup]);
+
+  // Keep auth popup dismissed if admin is authenticated or on admin route
+  useEffect(() => {
+    const isAuth = isAdminLoggedIn || (typeof window !== 'undefined' && localStorage.getItem('isAdminAuthenticated') === 'true');
+    if (isAuth || isAdminRoute()) {
+      setShowAuthPopup(false);
+      sessionStorage.setItem('auth_popup_dismissed', 'true');
+    }
+  }, [isAdminLoggedIn]);
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const isAuth = localStorage.getItem('isAdminAuthenticated') === 'true';
+      if (isAuth || isAdminRoute()) {
+        setShowAuthPopup(false);
+        sessionStorage.setItem('auth_popup_dismissed', 'true');
+      }
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    window.addEventListener('popstate', handleHashChange);
+    return () => {
+      window.removeEventListener('hashchange', handleHashChange);
+      window.removeEventListener('popstate', handleHashChange);
+    };
+  }, []);
 
   // Proactive Admin Session Monitor
   useEffect(() => {
@@ -201,7 +294,7 @@ const App: React.FC = () => {
 
   // Security Measures (Anti-Piracy, Screenshot & Recording Deterrent)
   useEffect(() => {
-    const isAdmin = () => window.location.hash.startsWith('#/admin');
+    const isAdmin = () => isAdminRoute();
 
     const handleContextMenu = (e: MouseEvent) => {
       if (!isAdmin()) e.preventDefault();
@@ -259,24 +352,13 @@ const App: React.FC = () => {
       ) : (
         <Router>
           <BackButtonHandler />
-          {showAuthPopup && !isStudentLoggedIn && !window.location.hash.startsWith('#/admin') && !window.location.hash.startsWith('#/student-login') && (
-            <div 
-              data-auth-popup="true"
-              className="fixed inset-0 z-[100] bg-black/65 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200"
-            >
-              <div className="w-full max-w-[420px] h-full sm:h-auto sm:max-h-[90vh] bg-white sm:rounded-[28px] overflow-hidden shadow-2xl relative flex flex-col">
-                <Suspense fallback={<PageLoader />}>
-                  <StudentLogin 
-                    setAuth={(student, token, devId, refresh) => {
-                      setIsStudentLoggedIn(student, token, devId, refresh);
-                      handleCloseAuthPopup();
-                    }}
-                    onClose={handleCloseAuthPopup}
-                  />
-                </Suspense>
-              </div>
-            </div>
-          )}
+          <StudentAuthModal
+            isOpen={showAuthPopup}
+            onClose={handleCloseAuthPopup}
+            isStudentLoggedIn={isStudentLoggedIn}
+            isAdminLoggedIn={isAdminLoggedIn}
+            setIsStudentLoggedIn={setIsStudentLoggedIn}
+          />
           <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/admin-login" element={isAdminLoggedIn ? <Navigate to="/admin" replace /> : <AdminLogin setAuth={setIsAdminLoggedIn} />} />

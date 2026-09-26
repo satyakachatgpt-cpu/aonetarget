@@ -530,7 +530,13 @@ export const banStudent = async (req, res) => {
     if (!userId) return res.status(400).json({ error: 'userId is required' });
 
     const student = await Student.findOneAndUpdate(
-      { id: userId },
+      { 
+        $or: [
+          { id: userId },
+          { userId: userId },
+          ...(ObjectId.isValid(userId) ? [{ _id: new ObjectId(userId) }] : [])
+        ]
+      },
       { 
         $set: { 
           isBanned: true, 
@@ -550,6 +556,14 @@ export const banStudent = async (req, res) => {
       return res.status(404).json({ error: 'Student not found' });
     }
 
+    try {
+      const db = getDb ? getDb() : mongoose.connection.db;
+      const studentIds = [student.id, String(student._id), student.userId].filter(Boolean);
+      await db.collection('refresh_tokens').deleteMany({ studentId: { $in: studentIds } });
+    } catch (e) {
+      console.error('Error clearing tokens on ban:', e);
+    }
+
     console.log('Student banned and sessions cleared:', userId);
     res.json({ success: true, message: 'User has been banned and sessions cleared' });
   } catch (error) {
@@ -566,7 +580,13 @@ export const unbanStudent = async (req, res) => {
     if (!userId) return res.status(400).json({ error: 'userId is required' });
 
     const student = await Student.findOneAndUpdate(
-      { id: userId },
+      { 
+        $or: [
+          { id: userId },
+          { userId: userId },
+          ...(ObjectId.isValid(userId) ? [{ _id: new ObjectId(userId) }] : [])
+        ]
+      },
       { 
         $set: { 
           isBanned: false, 
@@ -710,6 +730,21 @@ export const getCurrentUser = async (req, res) => {
       return res.status(401).json({ error: 'Student not found' });
     }
 
+    if (student.isBanned || student.status === 'blocked' || student.status === 'inactive') {
+      return res.status(403).json({
+        error: student.banReason || 'Your account has been blocked by administrator.',
+        code: 'USER_BLOCKED'
+      });
+    }
+
+    // Enforce logout if device was unlinked / reset by admin
+    if (!student.isReviewer && student.deviceLocked && !student.activeDeviceId && !student.deviceId) {
+      return res.status(401).json({ 
+        error: 'Your device has been unlinked by administrator. Please log in again.', 
+        code: 'DEVICE_UNLINKED' 
+      });
+    }
+
     const { sessionToken: __, password: _pw, ...studentData } = student.toObject();
     return res.json({ student: studentData });
   } catch (err) {
@@ -806,8 +841,18 @@ export const deleteDownload = async (req, res) => {
 export const getWatchHistory = async (req, res) => {
   try {
     const db = getDb();
+    const id = req.params.id;
+    const student = await db.collection('students').findOne({
+      $or: [
+        { id: id },
+        { userId: id },
+        ...(ObjectId.isValid(id) ? [{ _id: new ObjectId(id) }] : [])
+      ]
+    });
+    const studentIds = student ? [student.id, String(student._id), student.userId].filter(Boolean) : [id];
+
     const history = await db.collection('watchHistory')
-      .find({ studentId: req.params.id })
+      .find({ studentId: { $in: studentIds } })
       .sort({ updatedAt: -1, watchedAt: -1 })
       .limit(100)
       .toArray();

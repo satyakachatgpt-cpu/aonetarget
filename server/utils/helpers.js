@@ -206,3 +206,59 @@ export const isTestExpired = (test) => {
   return new Date() > expiryDate;
 };
 
+/**
+ * Extract YouTube 11-char ID from various URL formats
+ */
+export const extractYouTubeId = (url) => {
+  if (!url) return null;
+  const regExp = /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/;
+  const match = url.match(regExp);
+  return match ? match[1] : null;
+};
+
+/**
+ * Fetch video duration (format: MM:SS or H:MM:SS) from YouTube metadata
+ */
+export const fetchYouTubeDuration = async (url) => {
+  try {
+    const videoId = extractYouTubeId(url);
+    if (!videoId) return null;
+    const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0' },
+      signal: AbortSignal.timeout(5000)
+    });
+    const html = await res.text();
+    const m = html.match(/"lengthSeconds":"(\d+)"/);
+    if (m) {
+      const secs = parseInt(m[1], 10);
+      if (secs > 0) {
+        const hours = Math.floor(secs / 3600);
+        const mins = Math.floor((secs % 3600) / 60);
+        const remSecs = secs % 60;
+        const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
+        if (hours > 0) {
+          return `${pad(hours)}:${pad(mins)}:${pad(remSecs)}`;
+        }
+        return `${pad(mins)}:${pad(remSecs)}`;
+      }
+    }
+    const meta = html.match(/itemprop="duration" content="PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?"/);
+    if (meta) {
+      const h = parseInt(meta[1] || '0', 10);
+      const m = parseInt(meta[2] || '0', 10);
+      const s = parseInt(meta[3] || '0', 10);
+      const totalSecs = h * 3600 + m * 60 + s;
+      if (totalSecs > 0) {
+        const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
+        if (h > 0) {
+          return `${pad(h)}:${pad(m)}:${pad(s)}`;
+        }
+        return `${pad(m)}:${pad(s)}`;
+      }
+    }
+  } catch (e) {
+    // Non-blocking fallback
+  }
+  return null;
+};
+

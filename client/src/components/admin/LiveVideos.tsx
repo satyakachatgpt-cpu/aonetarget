@@ -474,13 +474,14 @@ const LiveVideos: React.FC<Props> = ({ showToast }) => {
                           const url = session.streamUrl;
                           const isYT = url.includes('youtube.com') || url.includes('youtu.be');
                           if (isYT) {
-                            navigate(`/watch/${session.id || 'live'}`, {
+                            navigate(`/watch/${session.id || 'live'}?adminPreview=1&returnTo=/admin/live-videos`, {
                               state: {
                                 video: {
                                   ...session,
                                   title: session.title,
                                   embedUrl: getEmbedUrl(url)
-                                }
+                                },
+                                returnTo: '/admin/live-videos'
                               }
                             });
                           } else {

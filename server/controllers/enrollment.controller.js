@@ -262,13 +262,43 @@ export const enrollStudent = async (req, res) => {
       });
     }
 
+    const db = mongoose.connection.db;
+    const directLinkedSeriesIds = (course.content?.testSeries || []).filter(id => id && typeof id === 'string');
+    const batchVariants = await getRelatedCourseIds(course, canonicalId);
+    const [reverseSeriesColl, reverseSeriesTests] = await Promise.all([
+      db.collection('testSeries').find({
+        $or: [
+          { courseId: { $in: batchVariants } },
+          { courseIds: { $in: batchVariants } }
+        ]
+      }).toArray(),
+      db.collection('tests').find({
+        isSeries: true,
+        $or: [
+          { courseId: { $in: batchVariants } },
+          { courseIds: { $in: batchVariants } }
+        ]
+      }).toArray()
+    ]);
+    const reverseLinkedSeriesIds = [
+      ...reverseSeriesColl.map(ts => ts.id || ts._id.toString()),
+      ...reverseSeriesTests.map(ts => ts.id || ts._id.toString())
+    ];
+    const allEnrollmentIds = [
+      canonicalId,
+      String(course._id),
+      ...(course.id ? [String(course.id)] : []),
+      ...batchVariants,
+      ...directLinkedSeriesIds,
+      ...reverseLinkedSeriesIds
+    ].filter(Boolean);
+
     await Student.updateOne(
       { _id: student._id },
-      { $addToSet: { enrolledCourses: canonicalId } }
+      { $addToSet: { enrolledCourses: { $each: allEnrollmentIds } } }
     );
 
     // Update course enrollment count
-    const db = mongoose.connection.db;
     await db.collection('courses').updateOne(
       { _id: course._id },
       { $inc: { studentsEnrolled: 1 } }

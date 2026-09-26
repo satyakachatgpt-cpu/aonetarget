@@ -324,13 +324,27 @@ const PDFViewerScreen: React.FC = () => {
     (title || '').toLowerCase().endsWith('.docx') ||
     (title || '').toLowerCase().endsWith('.doc');
 
+  const returnTo = location.state?.returnTo || queryParams.get('returnTo');
+
   const handleExit = useCallback(() => {
-    if (window.history.length <= 1) {
-      navigate('/courses', { replace: true });
-    } else {
-      navigate(-1);
+    if (window.opener && !window.opener.closed) {
+      try {
+        window.close();
+        return;
+      } catch (e) {}
     }
-  }, [navigate]);
+
+    if (returnTo) {
+      navigate(returnTo, { replace: true });
+      return;
+    }
+
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate('/courses', { replace: true });
+    }
+  }, [navigate, returnTo]);
 
   // Load Document
   const loadDocument = useCallback(async () => {
@@ -386,10 +400,9 @@ const PDFViewerScreen: React.FC = () => {
       // Load PDF into Mozilla PDF.js
       const loadingTask = pdfjsLib.getDocument({
         data: new Uint8Array(arrayBuffer),
-        cMapUrl: '/cmaps/',
+        cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.7.284/cmaps/',
         cMapPacked: true,
         useWorkerFetch: false,
-        maxImageSize: 1024 * 1024, // Prevents giant scanned images from causing OOM crashes
       });
 
       const loadedPdf = await loadingTask.promise;

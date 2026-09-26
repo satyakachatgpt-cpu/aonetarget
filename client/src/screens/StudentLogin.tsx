@@ -291,6 +291,11 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess, onClose
   const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
     if (e.key === 'Backspace' && !otp[index] && index > 0) {
       otpRefs.current[index - 1]?.focus();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (step === 'otp') verifyOtpAndLogin();
+      else if (step === 'reset-otp') verifyResetOtp();
+      else if (step === 'signup-otp') verifySignupOtp();
     }
   };
 
@@ -527,8 +532,10 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess, onClose
       });
       if (response.ok) {
         toast.success('Password updated! Please login.');
+        setResetPhone('');
+        setNewPasswordData({ password: '', confirm: '' });
+        setPasswordFormData({ loginId: '', password: '' });
         setStep('login');
-        setPasswordFormData({ loginId: resetPhone, password: '' });
       } else {
         const data = await response.json();
         toast.error(data.error || 'Failed to reset password');
@@ -572,7 +579,11 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess, onClose
       setShowPassword={setShowPassword}
       handlePasswordLogin={handlePasswordLogin}
       onSignupClick={() => setStep('signup')}
-      onForgotPasswordClick={() => setStep('forgot-password')}
+      onForgotPasswordClick={() => {
+        setResetPhone('');
+        setPasswordFormData(prev => ({ ...prev, password: '' }));
+        setStep('forgot-password');
+      }}
     />
   );
 
@@ -582,14 +593,22 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess, onClose
       resetPhone={resetPhone}
       setResetPhone={setResetPhone}
       handleForgotStep1={handleForgotStep1}
-      onBackToLogin={() => setStep('login')}
+      onBackToLogin={() => {
+        setResetPhone('');
+        setPasswordFormData(prev => ({ ...prev, password: '' }));
+        setNewPasswordData({ password: '', confirm: '' });
+        setStep('login');
+      }}
     />
   );
 
   const renderResetOtpStep = () => (
     <div className="p-8">
       <AuthBackButton 
-        onClick={() => setStep('forgot-password')} 
+        onClick={() => {
+          setResetPhone('');
+          setStep('forgot-password');
+        }} 
         label="Go Back" 
         variant="gray" 
         className="mb-8" 

@@ -1,4 +1,4 @@
-import { API_BASE_URL, apiRequest, getAdminHeaders, invalidateCache } from './baseService';
+import { API_BASE_URL, apiRequest, getAdminHeaders, getAuthHeaders, invalidateCache } from './baseService';
 
 // Users API
 export const usersAPI = {
@@ -222,3 +222,74 @@ export const referralsAdminAPI = {
     return response.json();
   }
 };
+
+/**
+ * Get synchronously cached enrolled courses for zero-delay instant render
+ */
+export const getCachedStudentCourses = (studentId: string): any[] => {
+  if (!studentId) return [];
+  try {
+    const cached = localStorage.getItem(`enrolled_courses_${studentId}`);
+    if (cached) return JSON.parse(cached);
+  } catch (e) {}
+  return [];
+};
+
+/**
+ * Robust fetch for student courses with automatic 401 token refresh,
+ * stale-while-revalidate local caching, and defensive shape normalization.
+ */
+export const fetchStudentCoursesWithAuth = async (studentId: string): Promise<any[]> => {
+  if (!studentId) return [];
+  const cacheKey = `enrolled_courses_${studentId}`;
+
+  const doFetch = async () => {
+    let res = await fetch(`${API_BASE_URL}/students/${studentId}/courses`, {
+      headers: getAuthHeaders()
+    });
+
+    if (res.status === 401) {
+      try {
+        const { useAuthStore } = await import('../store/authStore');
+        const refreshed = await useAuthStore.getState().refreshToken();
+        if (refreshed) {
+          res = await fetch(`${API_BASE_URL}/students/${studentId}/courses`, {
+            headers: getAuthHeaders()
+          });
+        }
+      } catch (e) {
+        console.warn('[fetchStudentCoursesWithAuth] Token refresh error:', e);
+      }
+    }
+    return res;
+  };
+
+  try {
+    const res = await doFetch();
+    if (res.ok) {
+      const data = await res.json();
+      const list: any[] = Array.isArray(data) ? data : (data.courses || data.enrolledCourses || data.data || []);
+      const formatted = list.map((c: any) => ({
+        ...c,
+        progress: c.progressPercent ?? c.progress ?? 0,
+        progressPercent: c.progressPercent ?? c.progress ?? 0,
+        lessons: c.totalVideos ?? c.lessons ?? 0
+      }));
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify(formatted));
+      } catch (e) {}
+      return formatted;
+    }
+  } catch (err) {
+    console.error('[fetchStudentCoursesWithAuth] Fetch error:', err);
+  }
+
+  // Fallback to cache if network failed or error occurred
+  try {
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) return JSON.parse(cached);
+  } catch (e) {}
+
+  return [];
+};
+
