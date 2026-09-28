@@ -142,7 +142,7 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
         { key: 'changePassword', label: 'Change Password', icon: 'lock' },
         { key: 'terms', label: 'Terms of Service', icon: 'description' },
         { key: 'refund', label: 'Refund & Return Policy', icon: 'assignment_return' },
-        { key: 'about', label: 'About App', icon: 'info', value: 'v1.0.0' }
+        { key: 'about', label: 'About App', icon: 'info', value: 'v1.3.2' }
       ]
     }
   ];
@@ -220,7 +220,7 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
         </button>
 
         <p className="text-center text-[10px] text-gray-300 mt-4">
-          Aone Target Institute Pvt. Ltd. | Version 1.3.1
+          Aone Target Institute Pvt. Ltd. | Version 1.3.2
         </p>
       </div>
 
