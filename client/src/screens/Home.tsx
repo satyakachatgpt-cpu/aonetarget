@@ -6,6 +6,7 @@ import { coursesAPI, blogAPI, newsAPI, categoriesAPI, bannersAPI, testsAPI, test
 import StudentSidebar from '../components/StudentSidebar';
 import { useAuthStore } from '../store/authStore';
 import { Course, Student } from '../types';
+import { Capacitor } from '@capacitor/core';
 
 
 interface NewsItem {
@@ -525,37 +526,25 @@ const Home: React.FC = () => {
     return window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
   };
 
+  const isNativeApp = () => {
+    return Capacitor.isNativePlatform() || isStandalone();
+  };
+
+  const PLAYSTORE_URL = 'https://play.google.com/store/apps/details?id=com.aonetarget.education';
+
   const handleDownloadAPK = () => {
-    if (isStandalone()) {
-      alert('App is already installed!');
+    if (isNativeApp()) {
       return;
     }
     setShowDownloadModal(true);
     setInstallSuccess(false);
     setIsInstalling(false);
     setShowIOSSteps(false);
+    setShowAndroidSteps(false);
   };
 
-  const handleInstallAndroid = async () => {
-    // If PWA install prompt is available (HTTPS + Chrome + not yet installed)
-    if (deferredPrompt) {
-      setIsInstalling(true);
-      try {
-        await deferredPrompt.prompt();
-        const choiceResult = await deferredPrompt.userChoice;
-        if (choiceResult.outcome === 'accepted') {
-          setInstallSuccess(true);
-          setDeferredPrompt(null);
-        }
-      } catch (err) {
-        console.error('Install prompt failed:', err);
-      }
-      setIsInstalling(false);
-    } else {
-      // No native prompt available — show Android manual steps
-      setShowIOSSteps(false);
-      setShowAndroidSteps(true);
-    }
+  const handleInstallAndroid = () => {
+    window.open(PLAYSTORE_URL, '_blank');
   };
 
   const handleInstallIOS = () => {
@@ -1545,43 +1534,45 @@ const Home: React.FC = () => {
           </div>
         </button>
 
-        <button
-          onClick={handleDownloadAPK}
-          className="w-full bg-[#F3F6F3] rounded-[32px] p-6 flex items-center justify-between active:scale-[0.98] transition-all duration-300 border border-white group overflow-hidden relative shadow-sm"
-        >
-          {/* Material You blur effects */}
-          <div className="absolute -right-4 -top-4 w-32 h-32 bg-[#3DDC84]/15 rounded-full blur-2xl group-hover:bg-[#3DDC84]/25 transition-all duration-500"></div>
-          <div className="absolute -left-4 -bottom-4 w-32 h-32 bg-[#1A237E]/5 rounded-full blur-2xl"></div>
+        {!isNativeApp() && (
+          <button
+            onClick={handleDownloadAPK}
+            className="w-full bg-[#F3F6F3] rounded-[32px] p-6 flex items-center justify-between active:scale-[0.98] transition-all duration-300 border border-white group overflow-hidden relative shadow-sm"
+          >
+            {/* Material You blur effects */}
+            <div className="absolute -right-4 -top-4 w-32 h-32 bg-[#3DDC84]/15 rounded-full blur-2xl group-hover:bg-[#3DDC84]/25 transition-all duration-500"></div>
+            <div className="absolute -left-4 -bottom-4 w-32 h-32 bg-[#1A237E]/5 rounded-full blur-2xl"></div>
 
-          <div className="flex items-center gap-5 relative z-10">
-            {/* Premium Icon Container */}
-            <div className="w-16 h-16 bg-white/80 backdrop-blur-md rounded-[24px] flex items-center justify-center shrink-0 shadow-sm border border-white/50 group-hover:scale-105 transition-transform duration-500">
-              <svg className="w-10 h-10" viewBox="0 0 24 24" fill="#3DDC84">
-                <path d="M17.523 15.3414C17.0232 15.3414 16.6179 14.9362 16.6179 14.4363C16.6179 13.9365 17.0232 13.5312 17.523 13.5312C18.0229 13.5312 18.4281 13.9365 18.4281 14.4363C18.4281 14.9362 18.0229 15.3414 17.523 15.3414ZM6.47702 15.3414C5.9772 15.3414 5.57195 14.9362 5.57195 14.4363C5.57195 13.9365 5.9772 13.5312 6.47702 13.5312C6.97684 13.5312 7.38209 13.9365 7.38209 14.4363C7.38209 14.9362 6.97684 15.3414 6.47702 15.3414ZM17.9616 10.0571L19.7289 7.00041C19.8217 6.83979 19.7663 6.6353 19.6057 6.54252C19.445 6.44975 19.2405 6.50518 19.1478 6.6658L17.3468 9.77884C15.8239 9.08889 14.0734 8.71875 12.2039 8.71875C10.3344 8.71875 8.58394 9.08889 7.06105 9.77884L5.26006 6.6658C5.16728 6.50518 4.96279 6.44975 4.80217 6.54252C4.64155 6.6353 4.58612 6.83979 4.6789 7.00041L6.44621 10.0571C3.12004 11.8385 0.887207 15.1438 0.887207 19.0062H23.5206C23.5206 15.1438 21.2878 11.8385 17.9616 10.0571Z" />
-              </svg>
+            <div className="flex items-center gap-5 relative z-10">
+              {/* Premium Icon Container */}
+              <div className="w-16 h-16 bg-white/80 backdrop-blur-md rounded-[24px] flex items-center justify-center shrink-0 shadow-sm border border-white/50 group-hover:scale-105 transition-transform duration-500">
+                <svg className="w-10 h-10" viewBox="0 0 24 24" fill="#3DDC84">
+                  <path d="M17.523 15.3414C17.0232 15.3414 16.6179 14.9362 16.6179 14.4363C16.6179 13.9365 17.0232 13.5312 17.523 13.5312C18.0229 13.5312 18.4281 13.9365 18.4281 14.4363C18.4281 14.9362 18.0229 15.3414 17.523 15.3414ZM6.47702 15.3414C5.9772 15.3414 5.57195 14.9362 5.57195 14.4363C5.57195 13.9365 5.9772 13.5312 6.47702 13.5312C6.97684 13.5312 7.38209 13.9365 7.38209 14.4363C7.38209 14.9362 6.97684 15.3414 6.47702 15.3414ZM17.9616 10.0571L19.7289 7.00041C19.8217 6.83979 19.7663 6.6353 19.6057 6.54252C19.445 6.44975 19.2405 6.50518 19.1478 6.6658L17.3468 9.77884C15.8239 9.08889 14.0734 8.71875 12.2039 8.71875C10.3344 8.71875 8.58394 9.08889 7.06105 9.77884L5.26006 6.6658C5.16728 6.50518 4.96279 6.44975 4.80217 6.54252C4.64155 6.6353 4.58612 6.83979 4.6789 7.00041L6.44621 10.0571C3.12004 11.8385 0.887207 15.1438 0.887207 19.0062H23.5206C23.5206 15.1438 21.2878 11.8385 17.9616 10.0571Z" />
+                </svg>
+              </div>
+
+              <div className="text-left">
+                <h4 className="text-[19px] font-semibold text-gray-900 tracking-tight leading-none mb-1.5 flex items-center gap-2">
+                  Get Android App
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3DDC84] opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#3DDC84]"></span>
+                  </span>
+                </h4>
+                <p className="text-[12px] text-gray-500 font-medium">Compatible with Android 8.0+</p>
+              </div>
             </div>
 
-            <div className="text-left">
-              <h4 className="text-[19px] font-semibold text-gray-900 tracking-tight leading-none mb-1.5 flex items-center gap-2">
-                Get Android App
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3DDC84] opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#3DDC84]"></span>
-                </span>
-              </h4>
-              <p className="text-[12px] text-gray-500 font-medium">Compatible with Android 8.0+</p>
+            <div className="flex items-center gap-4 relative z-10">
+              <span className="bg-white/80 backdrop-blur-sm py-1.5 px-3 rounded-full text-[10px] font-bold text-[#2E7D32] border border-[#3DDC84]/20 shadow-sm uppercase tracking-wider hidden sm:block">
+                Free
+              </span>
+              <div className="w-14 h-14 bg-gray-900 text-white rounded-[20px] flex items-center justify-center shadow-lg group-hover:bg-[#3DDC84] group-hover:shadow-[#3DDC84]/30 transition-all duration-500 group-hover:translate-x-1">
+                <span className="material-symbols-rounded text-[28px]">download_for_offline</span>
+              </div>
             </div>
-          </div>
-
-          <div className="flex items-center gap-4 relative z-10">
-            <span className="bg-white/80 backdrop-blur-sm py-1.5 px-3 rounded-full text-[10px] font-bold text-[#2E7D32] border border-[#3DDC84]/20 shadow-sm uppercase tracking-wider hidden sm:block">
-              Free
-            </span>
-            <div className="w-14 h-14 bg-gray-900 text-white rounded-[20px] flex items-center justify-center shadow-lg group-hover:bg-[#3DDC84] group-hover:shadow-[#3DDC84]/30 transition-all duration-500 group-hover:translate-x-1">
-              <span className="material-symbols-rounded text-[28px]">download_for_offline</span>
-            </div>
-          </div>
-        </button>
+          </button>
+        )}
       </div>
     </div>
 
@@ -1635,17 +1626,13 @@ const Home: React.FC = () => {
                     </div>
                     <div className="text-left flex-1 relative z-10">
                       <h4 className="text-[16px] font-semibold text-gray-900 flex items-center gap-2">
-                        {isInstalling ? 'Installing...' : 'Get Android App'}
+                        Get Android App
                         <span className="bg-[#E8F5E9] py-0.5 px-2 rounded-full text-[10px] font-bold text-[#2E7D32] uppercase">Free</span>
                       </h4>
-                      <p className="text-[12px] text-gray-500 mt-0.5">Compatible with Android 8.0+</p>
+                      <p className="text-[12px] text-gray-500 mt-0.5">Install from Google Play Store</p>
                     </div>
                     <div className="w-12 h-12 bg-gray-900 text-white rounded-2xl flex items-center justify-center shadow-md group-hover:bg-[#3DDC84] transition-all duration-300 relative z-10 shrink-0">
-                      {isInstalling ? (
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      ) : (
-                        <span className="material-symbols-rounded text-xl">download</span>
-                      )}
+                      <span className="material-symbols-rounded text-xl">open_in_new</span>
                     </div>
                   </button>
 
