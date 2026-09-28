@@ -361,7 +361,8 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess, onClose
 
       setAuth(data.student, data.accessToken, data.deviceId, data.refreshToken);
       toast.success('Login successful!');
-      const redirect = getPostLoginRedirect() || '/student-dashboard';
+      const postLoginRedirect = getPostLoginRedirect();
+      const redirect = (postLoginRedirect && postLoginRedirect !== '/student-dashboard') ? postLoginRedirect : '/';
       navigate(redirect, { replace: true });
     } catch (err: any) {
       toast.error(err.message);
@@ -441,7 +442,8 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess, onClose
         toast.success('Login successful!');
         setAuth(data.student, data.accessToken, data.deviceId, data.refreshToken);
         if (onSuccess) onSuccess();
-        const redirect = getPostLoginRedirect() || '/student-dashboard';
+        const postLoginRedirect = getPostLoginRedirect();
+        const redirect = (postLoginRedirect && postLoginRedirect !== '/student-dashboard') ? postLoginRedirect : '/';
         navigate(redirect, { replace: true });
       } else {
         if (data.code === 'DEVICE_APPROVAL_REQUIRED') {
