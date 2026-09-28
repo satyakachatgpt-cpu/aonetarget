@@ -137,7 +137,6 @@ const LiveClasses: React.FC = () => {
       const studentId = student?.id || student?._id || student?.studentId;
       if (!studentId) return;
       try {
-        setIsClassesLoading(true);
         const data = await liveVideosAPI.getByStudentId(studentId);
         setLiveClasses(Array.isArray(data) ? data : []);
       } catch (error) {
@@ -146,7 +145,31 @@ const LiveClasses: React.FC = () => {
         setIsClassesLoading(false);
       }
     };
-    if (student) fetchAllLiveClasses();
+    if (student) {
+      setIsClassesLoading(true);
+      fetchAllLiveClasses();
+
+      const handleUpdate = () => {
+        fetchAllLiveClasses();
+      };
+
+      window.addEventListener('app:content-updated', handleUpdate);
+      window.addEventListener('app:live-status-changed', handleUpdate);
+      window.addEventListener('focus', handleUpdate);
+
+      const poll = setInterval(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          fetchAllLiveClasses();
+        }
+      }, 6000);
+
+      return () => {
+        window.removeEventListener('app:content-updated', handleUpdate);
+        window.removeEventListener('app:live-status-changed', handleUpdate);
+        window.removeEventListener('focus', handleUpdate);
+        clearInterval(poll);
+      };
+    }
   }, [student]);
 
 

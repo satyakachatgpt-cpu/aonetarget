@@ -10,11 +10,15 @@ const { ObjectId } = mongoose.Types;
  */
 export async function syncLiveStream(id, data, operation = 'update') {
   try {
+    const validOid = ObjectId.isValid(id) ? new ObjectId(id) : null;
     const query = {
       $or: [
         { id: id },
-        { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
-      ].filter(f => f.id || f._id)
+        { id: String(id) },
+        validOid ? { _id: validOid } : null,
+        { sourceVideoId: id },
+        { sourceVideoId: String(id) }
+      ].filter(Boolean)
     };
 
     if (operation === 'delete') {
@@ -23,6 +27,7 @@ export async function syncLiveStream(id, data, operation = 'update') {
         db.collection('videos').deleteOne(query),
         db.collection('liveClasses').deleteOne(query)
       ]);
+      global.latestContentVersion = Date.now();
       return { success: true };
     }
 
@@ -53,7 +58,6 @@ export async function syncLiveStream(id, data, operation = 'update') {
       syncData.scheduledTime = syncData.scheduledAt; // Some components use this variant
     }
 
-    
     // Force Correct Classification
     if (data.status === 'recorded' || data.streamStatus === 'recorded') {
       syncData.contentType = 'recorded';
@@ -82,22 +86,50 @@ export async function syncLiveStream(id, data, operation = 'update') {
           }
         }
       }
+    } else if (data.streamStatus === 'ended' || data.status === 'ended') {
+      syncData.contentType = 'live_stream';
+      syncData.type = 'live';
+      syncData.streamStatus = 'ended';
+      syncData.status = 'active';
+      syncData.isLive = false; // Strictly false when ended!
+      if (!syncData.endedAt) syncData.endedAt = data.endedAt || new Date().toISOString();
+      if (!syncData.endTime) syncData.endTime = syncData.endedAt;
+
+      // Auto-compute duration from start/end times if duration is empty or "00:00"
+      if (!syncData.duration || syncData.duration === '00:00' || syncData.duration === '0:00' || syncData.duration === '0') {
+        const startVal = syncData.startedAt || syncData.startTime || syncData.scheduledAt || data.startedAt || data.startTime || data.scheduledAt || syncData.createdAt || data.createdAt;
+        const endVal = syncData.endedAt || syncData.endTime || data.endedAt || data.endTime;
+        if (startVal && endVal) {
+          const diffMs = Math.max(0, new Date(endVal).getTime() - new Date(startVal).getTime());
+          const totalSecs = Math.floor(diffMs / 1000);
+          if (totalSecs > 0) {
+            const hours = Math.floor(totalSecs / 3600);
+            const mins = Math.floor((totalSecs % 3600) / 60);
+            const secs = totalSecs % 60;
+            const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
+            syncData.duration = hours > 0 
+              ? `${pad(hours)}:${pad(mins)}:${pad(secs)}`
+              : `${pad(mins)}:${pad(secs)}`;
+          }
+        }
+      }
     } else {
       syncData.contentType = 'live_stream';
       syncData.type = 'live';
       
       // Visibility vs Lifecycle Split
-      if (!syncData.status || syncData.status === 'upcoming' || syncData.status === 'live' || syncData.status === 'ended') {
+      if (!syncData.status || syncData.status === 'upcoming' || syncData.status === 'live') {
         if (!syncData.streamStatus) syncData.streamStatus = syncData.status || 'upcoming';
         syncData.status = 'active'; 
       }
 
       if (syncData.streamStatus === 'live' || data.isLive === true) {
         syncData.isLive = true;
+        syncData.streamStatus = 'live';
         if (!syncData.startedAt) syncData.startedAt = data.startedAt || new Date().toISOString();
-      } else if (syncData.streamStatus === 'ended' || data.isLive === false) {
+      } else {
         syncData.isLive = false;
-        if (!syncData.endedAt) syncData.endedAt = data.endedAt || new Date().toISOString();
+        syncData.streamStatus = 'upcoming';
       }
     }
 
@@ -121,6 +153,8 @@ export async function syncLiveStream(id, data, operation = 'update') {
     if (data.batchId) syncData.batchId = data.batchId;
 
     syncData.updatedAt = new Date().toISOString();
+
+    global.latestContentVersion = Date.now();
 
     if (operation === 'create') {
       const result = await db.collection('liveVideos').insertOne(syncData);

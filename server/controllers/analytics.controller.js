@@ -94,7 +94,9 @@ export const saveProgress = async (req, res) => {
             { duration: '' },
             { duration: '00:00' },
             { duration: '0:00' },
-            { duration: '0' }
+            { duration: '0' },
+            { duration: 'Video' },
+            { duration: 'video' }
           ]
         },
         { $set: { duration: formattedDur } }

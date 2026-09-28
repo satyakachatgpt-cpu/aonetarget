@@ -195,48 +195,75 @@ const WatchPage: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Load Content
-  useEffect(() => {
-    const loadContent = async () => {
-      // Priority 1: Check if video is passed via state (e.g. from Live Classes)
-      if (location.state?.video && (location.state.video.videoUrl || location.state.video.youtubeUrl || location.state.video.url || location.state.video.recordedLink || location.state.video.link)) {
-        setCurrentVideo(location.state.video);
-        setLoading(false);
-        return;
-      }
+  // Load Content & Auto-Sync
+  const loadContent = useCallback(async (isBackground = false) => {
+    // If video passed via location state, use it as initial view immediately
+    if (location.state?.video && !currentVideo && !isBackground) {
+      setCurrentVideo(location.state.video);
+      setLoading(false);
+    }
 
-      if (!batchId) {
-        setLoading(false);
-        return;
-      }
-      try {
-        setLoading(true);
-        const headers = (isAdminPreview || isUserAdmin) ? { ...getAdminHeaders() } : { ...getAuthHeaders() };
-        const response = await fetch(`${API_BASE_URL}/courses/${batchId}/videos`, {
-          headers
+    const targetBatchId = batchId && batchId !== 'live' && batchId !== 'undefined' ? batchId : (currentVideo?.courseId || (location.state as any)?.courseId);
+
+    if (!targetBatchId) {
+      if (!isBackground && !currentVideo) setLoading(false);
+      return;
+    }
+
+    try {
+      if (!isBackground && !currentVideo) setLoading(true);
+      const headers = (isAdminPreview || isUserAdmin) ? { ...getAdminHeaders() } : { ...getAuthHeaders() };
+      const response = await fetch(`${API_BASE_URL}/courses/${targetBatchId}/videos`, { headers });
+      const videos = await response.json();
+
+      if (Array.isArray(videos) && videos.length > 0) {
+        setPlaylist(videos);
+        const targetId = normalizeId(videoId || currentVideo?._id || currentVideo?.id);
+
+        let current = videos.find((v: any) => {
+          const ids = [v._id, v.id, v.videoId].filter(Boolean).map(normalizeId);
+          return ids.includes(targetId);
         });
-        const videos = await response.json();
 
-        if (Array.isArray(videos) && videos.length > 0) {
-          setPlaylist(videos);
-          const targetId = normalizeId(videoId);
-
-          let current = videos.find((v: any) => {
-            const ids = [v._id, v.id, v.videoId].filter(Boolean).map(normalizeId);
-            return ids.includes(targetId);
-          });
-
-          if (!current && videos.length > 0) current = videos[0];
-          setCurrentVideo(current || null);
+        if (!current && videos.length > 0 && !videoId) current = videos[0];
+        if (current) {
+          setCurrentVideo(current);
         }
-      } catch (err) {
-        console.error('Failed to load playlist:', err);
-      } finally {
-        setLoading(false);
       }
-    };
-    loadContent();
+    } catch (err) {
+      console.error('Failed to load playlist:', err);
+    } finally {
+      if (!isBackground) setLoading(false);
+    }
+  }, [batchId, videoId, currentVideo, location.state, isAdminPreview, isUserAdmin]);
+
+  useEffect(() => {
+    loadContent(false);
   }, [batchId, videoId]);
+
+  // Real-time listener & 6s live polling so admin actions auto-update without refresh
+  useEffect(() => {
+    const handleSync = () => {
+      loadContent(true);
+    };
+
+    window.addEventListener('app:content-updated', handleSync);
+    window.addEventListener('app:live-status-changed', handleSync);
+
+    let intervalId: any = null;
+    const isLiveTarget = currentVideo?.contentType === 'live_stream' || currentVideo?.type === 'live' || currentVideo?.isLive;
+    if (isLiveTarget) {
+      intervalId = setInterval(() => {
+        loadContent(true);
+      }, 6000);
+    }
+
+    return () => {
+      window.removeEventListener('app:content-updated', handleSync);
+      window.removeEventListener('app:live-status-changed', handleSync);
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [loadContent, currentVideo?.contentType, currentVideo?.type, currentVideo?.isLive]);
 
   const handleVideoSelect = (vId: string) => {
     navigate(`/watch/${batchId}/${vId}`, { replace: true });
@@ -299,11 +326,9 @@ const WatchPage: React.FC = () => {
     );
   }
 
-  const streamStatus = (currentVideo?.effectiveStatus === 'live' || currentVideo?.streamStatus === 'live' || currentVideo?.status === 'live') 
-    ? 'live' 
-    : computeEffectiveStatus(currentVideo);
-  const isUpcomingStream = currentVideo.contentType === 'live_stream' && streamStatus === 'upcoming';
-  const isEndedStream = currentVideo.contentType === 'live_stream' && streamStatus === 'ended';
+  const streamStatus = computeEffectiveStatus(currentVideo);
+  const isUpcomingStream = (currentVideo.contentType === 'live_stream' || currentVideo.type === 'live') && streamStatus === 'upcoming';
+  const isEndedStream = (currentVideo.contentType === 'live_stream' || currentVideo.type === 'live') && streamStatus === 'ended';
 
   const replaySource = currentVideo.recordedLink || 
                       currentVideo.recordingUrl || 
@@ -363,8 +388,8 @@ const WatchPage: React.FC = () => {
     );
   }
 
-  const isLive = (currentVideo.contentType === 'live_stream' || currentVideo.type === 'live') && 
-                 (streamStatus === 'live' || currentVideo.streamStatus === 'live' || currentVideo.status === 'live');
+  const isLive = (currentVideo.contentType === 'live_stream' || currentVideo.type === 'live' || currentVideo.platform === 'youtube_live') && 
+                 streamStatus === 'live';
   
   // STABLE VIDEO ID FOR PROGRESS SYNC
   const stableVideoId = String(currentVideo.id || currentVideo._id || currentVideo.sourceVideoId || `v-${currentVideo.title}`);

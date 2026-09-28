@@ -6,6 +6,7 @@ import {
   ping,
   health,
   heartbeat,
+  getContentVersion,
   getSplashScreen,
   updateSplashScreen,
   generateDocx,
@@ -29,6 +30,7 @@ router.get('/dashboard/stats', adminMiddleware, getDashboardStats);
 router.get('/ping', ping);
 router.get('/health', health);
 router.post('/heartbeat', heartbeat);
+router.get('/content-version', getContentVersion);
 
 // Splash Screen (Phase 19E)
 router.get('/splash-screen', getSplashScreen);

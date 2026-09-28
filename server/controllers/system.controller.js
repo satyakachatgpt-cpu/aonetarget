@@ -173,10 +173,18 @@ export const heartbeat = async (req, res) => {
 
     const latestNotificationTime = latestNotif ? new Date(latestNotif.createdAt || latestNotif.updatedAt).getTime() : null;
 
-    return res.json({ valid: true, latestNotificationTime });
+    return res.json({ 
+      valid: true, 
+      latestNotificationTime,
+      contentVersion: global.latestContentVersion || 0
+    });
   } catch (error) {
-    return res.json({ valid: true });
+    return res.json({ valid: true, contentVersion: global.latestContentVersion || 0 });
   }
+};
+
+export const getContentVersion = (req, res) => {
+  res.json({ contentVersion: global.latestContentVersion || 0 });
 };
 
 // --- Splash Screen (Phase 19E) ---

@@ -319,7 +319,7 @@ export const parseDurationToSeconds = (dur: string | number | undefined | null):
  */
 export const formatDurationBadge = (dur: string | number | undefined | null): string => {
   const totalSeconds = parseDurationToSeconds(dur);
-  if (!totalSeconds || totalSeconds <= 0) return 'Video';
+  if (!totalSeconds || totalSeconds <= 0) return '--:--';
 
   const hours = Math.floor(totalSeconds / 3600);
   const mins = Math.floor((totalSeconds % 3600) / 60);
@@ -338,7 +338,7 @@ export const formatDurationBadge = (dur: string | number | undefined | null): st
  */
 export const formatDurationLabel = (dur: string | number | undefined | null): string => {
   const totalSeconds = parseDurationToSeconds(dur);
-  if (!totalSeconds || totalSeconds <= 0) return 'Video';
+  if (!totalSeconds || totalSeconds <= 0) return 'Class';
 
   const hours = Math.floor(totalSeconds / 3600);
   const mins = Math.floor((totalSeconds % 3600) / 60);

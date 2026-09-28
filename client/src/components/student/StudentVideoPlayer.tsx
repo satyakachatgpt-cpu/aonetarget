@@ -5,6 +5,29 @@ import { updateProgress, setPlaybackSpeed as setReduxSpeed } from '../../store/s
 import { getImageUrl, extractYouTubeId, isYouTubeUrl, toYouTubeEmbed, getPdfUrl, parseDurationToSeconds } from '../../lib/utils';
 import { useAuthStore } from '../../store/authStore';
 import { getAuthHeaders, API_BASE_URL } from '../../services/apiClient';
+import { StatusBar } from '@capacitor/status-bar';
+import { Capacitor } from '@capacitor/core';
+
+// Helper to reliably hide/show native status bar on mobile app (Capacitor)
+const hideMobileStatusBar = async () => {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await StatusBar.hide();
+    } catch (e) {
+      console.warn('[Player] StatusBar.hide failed:', e);
+    }
+  }
+};
+
+const showMobileStatusBar = async () => {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await StatusBar.show();
+    } catch (e) {
+      console.warn('[Player] StatusBar.show failed:', e);
+    }
+  }
+};
 
 declare global {
   interface Window {
@@ -79,6 +102,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
 
   const seekGraceUntilRef = useRef<number>(0);
   const targetSeekTimeRef = useRef<number>(0);
+  const initialLiveSeekDoneRef = useRef(false);
   const [showControls, setShowControls] = useState(true);
   const [isReady, setIsReady] = useState(false);
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
@@ -129,8 +153,20 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
         return p;
       }
     }
+    if (isLive && currentTime > 0) {
+      return currentTime;
+    }
     return 0;
-  }, [duration, propDuration]);
+  }, [duration, propDuration, isLive, currentTime]);
+
+  const getLiveWindow = useCallback(() => {
+    const effDuration = getEffectiveDuration();
+    const liveEnd = Math.max(effDuration, currentTime, 1);
+    // YouTube live DVR window is maximum 4 hours (14400s). For shorter streams, window is from 0 to liveEnd.
+    const dvrWindow = Math.min(liveEnd, 14400);
+    const dvrStart = Math.max(0, liveEnd - dvrWindow);
+    return { liveEnd, dvrStart, dvrWindow };
+  }, [getEffectiveDuration, currentTime]);
 
   const calculateScrubPercentage = (clientX: number, clientY: number): number => {
     if (!progressBarRef.current) return 0;
@@ -157,9 +193,12 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
     return Math.max(0, Math.min(1, percentage));
   };
 
+  const isPointerInteractingRef = useRef(false);
+
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const effDuration = getEffectiveDuration();
     if (!progressBarRef.current || effDuration <= 0) return;
+    isPointerInteractingRef.current = true;
     setIsDragging(true);
     isDraggingRef.current = true;
     
@@ -169,7 +208,12 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
     
     const pct = calculateScrubPercentage(e.clientX, e.clientY);
     setDragPercentage(pct);
-    setCurrentTime(pct * effDuration);
+    if (isLive) {
+      const { liveEnd, dvrStart } = getLiveWindow();
+      setCurrentTime(dvrStart + pct * (liveEnd - dvrStart));
+    } else {
+      setCurrentTime(pct * effDuration);
+    }
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -177,10 +221,16 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
     if (!isDraggingRef.current || effDuration <= 0) return;
     const pct = calculateScrubPercentage(e.clientX, e.clientY);
     setDragPercentage(pct);
-    setCurrentTime(pct * effDuration);
+    if (isLive) {
+      const { liveEnd, dvrStart } = getLiveWindow();
+      setCurrentTime(dvrStart + pct * (liveEnd - dvrStart));
+    } else {
+      setCurrentTime(pct * effDuration);
+    }
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    isPointerInteractingRef.current = false;
     if (!isDraggingRef.current) return;
     
     if (progressBarRef.current?.releasePointerCapture) {
@@ -195,7 +245,19 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
     applySeek(pct);
   };
 
+  const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    isPointerInteractingRef.current = false;
+    if (!isDraggingRef.current) return;
+    if (progressBarRef.current?.releasePointerCapture) {
+      try { progressBarRef.current.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
+    setIsDragging(false);
+    isDraggingRef.current = false;
+    setDragPercentage(null);
+  };
+
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (isPointerInteractingRef.current) return;
     const effDuration = getEffectiveDuration();
     if (!progressBarRef.current || effDuration <= 0 || e.touches.length === 0) return;
     setIsDragging(true);
@@ -203,19 +265,31 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
     const touch = e.touches[0];
     const pct = calculateScrubPercentage(touch.clientX, touch.clientY);
     setDragPercentage(pct);
-    setCurrentTime(pct * effDuration);
+    if (isLive) {
+      const { liveEnd, dvrStart } = getLiveWindow();
+      setCurrentTime(dvrStart + pct * (liveEnd - dvrStart));
+    } else {
+      setCurrentTime(pct * effDuration);
+    }
   };
 
   const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (isPointerInteractingRef.current) return;
     const effDuration = getEffectiveDuration();
     if (!isDraggingRef.current || effDuration <= 0 || e.touches.length === 0) return;
     const touch = e.touches[0];
     const pct = calculateScrubPercentage(touch.clientX, touch.clientY);
     setDragPercentage(pct);
-    setCurrentTime(pct * effDuration);
+    if (isLive) {
+      const { liveEnd, dvrStart } = getLiveWindow();
+      setCurrentTime(dvrStart + pct * (liveEnd - dvrStart));
+    } else {
+      setCurrentTime(pct * effDuration);
+    }
   };
 
   const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (isPointerInteractingRef.current) return;
     if (!isDraggingRef.current) return;
     setIsDragging(false);
     isDraggingRef.current = false;
@@ -232,20 +306,20 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const applySeek = (percentage: number) => {
     const effDuration = getEffectiveDuration();
     if (!effDuration || effDuration <= 0) return;
-    const targetTime = percentage * effDuration;
 
     if (isLive) {
+      const { liveEnd, dvrStart } = getLiveWindow();
+      const targetTime = dvrStart + percentage * (liveEnd - dvrStart);
+
       // If user released within 15 seconds of duration or at >= 97% of the bar -> Jump to live head
-      if (percentage >= 0.97 || (effDuration - targetTime) <= 15) {
+      if (percentage >= 0.97 || (liveEnd - targetTime) <= 15) {
         handleJumpToLive();
         return;
       }
 
-      // In live stream: available DVR buffer is typically last 4 hours (14400s)
-      const minSeek = Math.max(0, effDuration - 14400);
-      const clampedTime = Math.max(minSeek, Math.min(effDuration, targetTime));
+      const clampedTime = Math.max(dvrStart, Math.min(liveEnd, targetTime));
 
-      seekGraceUntilRef.current = Date.now() + 1500;
+      seekGraceUntilRef.current = Date.now() + 4000;
       targetSeekTimeRef.current = clampedTime;
       setCurrentTime(clampedTime);
 
@@ -256,9 +330,10 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
         videoRef.current.currentTime = clampedTime;
       }
     } else {
+      const targetTime = percentage * effDuration;
       // Recorded video seek
       const clampedTime = Math.max(0, Math.min(effDuration, targetTime));
-      seekGraceUntilRef.current = Date.now() + 1500;
+      seekGraceUntilRef.current = Date.now() + 4000;
       targetSeekTimeRef.current = clampedTime;
       setCurrentTime(clampedTime);
 
@@ -288,6 +363,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
 
       // Physical landscape on mobile: auto enter fullscreen + lock orientation (immersive mode)
       if (isMobileView && isLandscapeView && !isAdmin) {
+        hideMobileStatusBar();
         const el = document.documentElement;
         if (!document.fullscreenElement && el.requestFullscreen) {
           el.requestFullscreen().then(() => {
@@ -299,6 +375,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
         }
       } else if (isMobileView && !isLandscapeView) {
         // Portrait on mobile: exit fullscreen
+        showMobileStatusBar();
         if (document.fullscreenElement && document.exitFullscreen) {
           document.exitFullscreen().catch(() => {});
         }
@@ -325,11 +402,13 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
 
       if (!isFs) {
         setIsFullscreen(false);
+        showMobileStatusBar();
         if ((screen.orientation as any)?.unlock) {
           (screen.orientation as any).unlock();
         }
       } else {
         setIsFullscreen(true);
+        hideMobileStatusBar();
       }
     };
 
@@ -342,6 +421,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
     document.addEventListener('mozfullscreenchange', handleFullscreenChange);
     document.addEventListener('MSFullscreenChange', handleFullscreenChange);
     return () => {
+      showMobileStatusBar();
       window.removeEventListener('resize', handleResize);
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
@@ -448,6 +528,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
     );
 
     if (!isCurrentlyFullscreen) {
+      hideMobileStatusBar();
       // 1. If on iOS and standard video element can enter native fullscreen (hides status bar on iPhone)
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       if (isIOS && videoRef.current && (videoRef.current as any).webkitEnterFullscreen) {
@@ -480,6 +561,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
         if (isMobile) setOrientation('landscape');
       }
     } else {
+      showMobileStatusBar();
       // Exit fullscreen + unlock orientation
       const exitFs = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
 
@@ -519,6 +601,10 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const isHls = activeProvider === 'hls';
   const isDirect = activeProvider === 'direct';
   const [isYoutubeUnplayable, setIsYoutubeUnplayable] = useState(false);
+
+  useEffect(() => {
+    initialLiveSeekDoneRef.current = false;
+  }, [propVideoId, activeSrc, youtubeId]);
 
   // INITIALIZE YT SDK
   useEffect(() => {
@@ -564,15 +650,16 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                   e.target.seekTo(resumeTime, true);
                 }
               } else {
-                // Ensure live stream starts at the live edge
+                // Ensure live stream starts at the live edge safely
                 try {
                   const liveDur = e.target.getDuration();
                   if (liveDur > 0) {
+                    initialLiveSeekDoneRef.current = true;
                     setDuration(liveDur);
                     setCurrentTime(liveDur);
-                    e.target.seekTo(liveDur + 3600, true);
-                  } else {
-                    e.target.seekTo(Number.MAX_SAFE_INTEGER, true);
+                    seekGraceUntilRef.current = Date.now() + 4000;
+                    targetSeekTimeRef.current = liveDur;
+                    e.target.seekTo(liveDur, true);
                   }
                 } catch (err) {}
               }
@@ -588,7 +675,19 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
               if (s === 1) { 
                  setIsPlaying(true); 
                  setAvailableQualities(e.target.getAvailableQualityLevels() || []);
-                 setDuration(e.target.getDuration());
+                 const total = e.target.getDuration();
+                 if (total > 0) setDuration(total);
+
+                 // Auto-jump to live edge on initial play of live stream
+                 if (isLive && !initialLiveSeekDoneRef.current && total > 0) {
+                   initialLiveSeekDoneRef.current = true;
+                   seekGraceUntilRef.current = Date.now() + 4000;
+                   targetSeekTimeRef.current = total;
+                   setCurrentTime(total);
+                   if (typeof e.target.seekTo === 'function') {
+                     e.target.seekTo(total, true);
+                   }
+                 }
               }
               else if (s === 2) {
                 setIsPlaying(false);
@@ -709,11 +808,43 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
           if (total > 0 && Math.abs(total - duration) > 1) {
             setDuration(total);
           }
+          if (isLive && !initialLiveSeekDoneRef.current && total > 0) {
+            if (total - time > 10) {
+              initialLiveSeekDoneRef.current = true;
+              seekGraceUntilRef.current = Date.now() + 4000;
+              targetSeekTimeRef.current = total;
+              setCurrentTime(total);
+              if (typeof playerRef.current.seekTo === 'function') {
+                playerRef.current.seekTo(total, true);
+              }
+              time = total;
+            } else {
+              initialLiveSeekDoneRef.current = true;
+            }
+          }
         } else if ((isHls || isDirect) && videoRef.current) {
           time = videoRef.current.currentTime;
           total = videoRef.current.duration || duration;
           if (total > 0 && Math.abs(total - duration) > 1) {
             setDuration(total);
+          }
+          if (isLive && !initialLiveSeekDoneRef.current && total > 0) {
+            let targetTime = total;
+            if (hlsRef.current && (hlsRef.current as any).liveSyncPosition) {
+              targetTime = (hlsRef.current as any).liveSyncPosition;
+            } else if (videoRef.current.seekable && videoRef.current.seekable.length > 0) {
+              targetTime = videoRef.current.seekable.end(videoRef.current.seekable.length - 1);
+            }
+            if (targetTime - time > 10) {
+              initialLiveSeekDoneRef.current = true;
+              seekGraceUntilRef.current = Date.now() + 4000;
+              targetSeekTimeRef.current = targetTime;
+              videoRef.current.currentTime = targetTime;
+              setCurrentTime(targetTime);
+              time = targetTime;
+            } else {
+              initialLiveSeekDoneRef.current = true;
+            }
           }
         }
         if (!isDraggingRef.current) {
@@ -796,12 +927,14 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
     const cur = (isYoutube && playerRef.current?.getCurrentTime ? playerRef.current.getCurrentTime() : 0) || currentTime;
 
     if (isLive) {
-      if (s > 0 && cur + s >= totalDuration - 10) {
+      const { liveEnd, dvrStart } = getLiveWindow();
+      if (s > 0 && cur + s >= liveEnd - 10) {
         handleJumpToLive();
         return;
       }
-      const minSeek = Math.max(0, totalDuration - 14400);
-      const t = Math.max(minSeek, Math.min(totalDuration, cur + s));
+      const t = Math.max(dvrStart, Math.min(liveEnd, cur + s));
+      seekGraceUntilRef.current = Date.now() + 3500;
+      targetSeekTimeRef.current = t;
       if (isYoutube && playerRef.current?.seekTo) {
         playerRef.current.seekTo(t, true);
         if (typeof playerRef.current.playVideo === 'function') playerRef.current.playVideo();
@@ -823,11 +956,13 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const handleJumpToLive = () => {
     if (isYoutube && playerRef.current) {
       try {
-        const liveDuration = (typeof playerRef.current.getDuration === 'function' ? playerRef.current.getDuration() : 0) || duration || 0;
-        const seekTarget = liveDuration > 0 ? (liveDuration + 3600) : Number.MAX_SAFE_INTEGER;
+        const liveDuration = (typeof playerRef.current.getDuration === 'function' ? playerRef.current.getDuration() : 0) || duration || currentTime || 0;
         
-        if (typeof playerRef.current.seekTo === 'function') {
-          playerRef.current.seekTo(seekTarget, true);
+        seekGraceUntilRef.current = Date.now() + 4000;
+        targetSeekTimeRef.current = liveDuration;
+
+        if (liveDuration > 0 && typeof playerRef.current.seekTo === 'function') {
+          playerRef.current.seekTo(liveDuration, true);
         }
         if (typeof playerRef.current.playVideo === 'function') {
           playerRef.current.playVideo();
@@ -849,6 +984,8 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
         targetTime = videoRef.current.duration;
       }
       if (targetTime > 0) {
+        seekGraceUntilRef.current = Date.now() + 4000;
+        targetSeekTimeRef.current = targetTime;
         videoRef.current.currentTime = targetTime;
         setCurrentTime(targetTime);
       }
@@ -1081,7 +1218,10 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
         <div className={`absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/95 via-black/40 to-transparent z-40 p-6 flex items-start justify-between transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
           style={{ paddingTop: `max(1.5rem, env(safe-area-inset-top))` }}>
             <button 
-              onClick={onClose} 
+              onClick={() => {
+                showMobileStatusBar();
+                onClose();
+              }} 
               data-video-back-btn="true"
               className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 flex items-center justify-center text-white active:scale-90 transition-all pointer-events-auto shadow-xl"
             >
@@ -1121,15 +1261,16 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
               onPointerDown={handlePointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
-              onPointerCancel={handlePointerUp}
+              onPointerCancel={handlePointerCancel}
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
               onTouchCancel={handleTouchEnd}
             >
             {(() => {
-              const isAtLiveEdge = isLive && (!duration || (duration - currentTime) <= 10);
-              const liveProgress = isAtLiveEdge ? 100 : (duration > 0 ? (currentTime / duration) * 100 : 100);
+              const { liveEnd, dvrStart } = getLiveWindow();
+              const isAtLiveEdge = isLive && (!duration || (liveEnd - currentTime) <= 10);
+              const liveProgress = isAtLiveEdge ? 100 : (liveEnd > dvrStart ? Math.max(0, Math.min(100, ((currentTime - dvrStart) / (liveEnd - dvrStart)) * 100)) : 100);
               const currentProgressPercent = isLive ? liveProgress : (duration > 0 ? (currentTime / duration) * 100 : 0);
               const scrubberPercent = Math.min(100, Math.max(0, dragPercentage !== null ? dragPercentage * 100 : currentProgressPercent));
 
@@ -1184,14 +1325,14 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                         <span className="material-symbols-rounded text-xl sm:text-2xl">{isMuted ? 'volume_off' : 'volume_up'}</span>
                      </button>
                      {isLive ? (() => {
-                        const isAtLiveEdge = !duration || (duration - currentTime) <= 10;
-                        const forceHrs = duration >= 3600 || currentTime >= 3600;
+                        const { liveEnd } = getLiveWindow();
+                        const isAtLiveEdge = !duration || (liveEnd - currentTime) <= 10;
+                        const forceHrs = liveEnd >= 3600 || currentTime >= 3600;
                         return (
                           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                              <button
                                onClick={handleJumpToLive}
-                               onTouchEnd={(e) => { e.preventDefault(); e.stopPropagation(); handleJumpToLive(); }}
-                               className={`flex items-center gap-1 px-2 py-0.5 sm:px-2.5 rounded-full text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-all shadow-md cursor-pointer active:scale-95 ${
+                               className={`flex items-center gap-1.5 px-3 py-1 sm:px-2.5 sm:py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all shadow-md cursor-pointer active:scale-95 touch-manipulation ${
                                  isAtLiveEdge 
                                    ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-600/30' 
                                    : 'bg-zinc-800 hover:bg-red-600 text-gray-200 hover:text-white border border-white/20 hover:border-red-500'
@@ -1203,9 +1344,9 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                              </button>
                              <span className="text-white text-[10px] sm:text-xs font-bold font-mono whitespace-nowrap flex items-center gap-1">
                                 <span>{formatTime(currentTime, forceHrs)}</span>
-                                {!isAtLiveEdge && duration > currentTime && (
+                                {!isAtLiveEdge && liveEnd > currentTime && (
                                   <span className="text-red-400 text-[9px] sm:text-[10px] font-medium font-mono">
-                                    (-{formatTime(Math.max(0, duration - currentTime), (duration - currentTime) >= 3600)})
+                                    (-{formatTime(Math.max(0, liveEnd - currentTime), (liveEnd - currentTime) >= 3600)})
                                   </span>
                                 )}
                              </span>

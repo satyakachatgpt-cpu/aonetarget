@@ -486,6 +486,20 @@ const Home: React.FC = () => {
     };
 
     fetchAll();
+
+    const handleContentUpdate = () => {
+      fetchAll();
+    };
+
+    window.addEventListener('app:content-updated', handleContentUpdate);
+    window.addEventListener('app:live-status-changed', handleContentUpdate);
+    window.addEventListener('focus', fetchAll);
+
+    return () => {
+      window.removeEventListener('app:content-updated', handleContentUpdate);
+      window.removeEventListener('app:live-status-changed', handleContentUpdate);
+      window.removeEventListener('focus', fetchAll);
+    };
   }, [isAuthenticated, student]);
 
   const dismissNewsModal = () => {

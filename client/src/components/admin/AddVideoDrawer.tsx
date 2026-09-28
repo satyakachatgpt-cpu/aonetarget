@@ -29,7 +29,7 @@ const AddVideoDrawer: React.FC<AddVideoDrawerProps> = ({
 
     const [showAdvanced, setShowAdvanced] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
-
+    const lastDetectedIdRef = useRef<string | null>(null);
 
     useEffect(() => {
         if (isOpen) {
@@ -44,6 +44,7 @@ const AddVideoDrawer: React.FC<AddVideoDrawerProps> = ({
                     order: editingVideo.order?.toString() || '0',
                     isDemo: editingVideo.isDemo === true || editingVideo.isDemo === 'true' || editingVideo.isDemo === 1
                 });
+                lastDetectedIdRef.current = extractYouTubeId(editingVideo.youtubeUrl || '');
             } else {
                 setFormData({
                     title: '',
@@ -55,11 +56,78 @@ const AddVideoDrawer: React.FC<AddVideoDrawerProps> = ({
                     order: '0',
                     isDemo: false
                 });
+                lastDetectedIdRef.current = null;
             }
         }
     }, [isOpen, editingVideo]);
 
     const youtubeId = extractYouTubeId(formData.youtubeUrl);
+
+    // Auto-detect YouTube duration and auto-fill if not manually provided or when link changes
+    useEffect(() => {
+        if (!youtubeId) return;
+        // If this video ID was already detected and we have a valid duration, don't duplicate
+        if (youtubeId === lastDetectedIdRef.current && formData.duration && formData.duration !== '00:00' && formData.duration !== '0:00') {
+            return;
+        }
+
+        let tempPlayer: any = null;
+        const containerId = `yt-dur-detect-${youtubeId}`;
+
+        const detectDuration = () => {
+            if (!window.YT || !window.YT.Player) return;
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            try {
+                tempPlayer = new window.YT.Player(containerId, {
+                    videoId: youtubeId,
+                    events: {
+                        onReady: (e: any) => {
+                            try {
+                                const dur = e.target.getDuration();
+                                if (dur > 0) {
+                                    const hours = Math.floor(dur / 3600);
+                                    const mins = Math.floor((dur % 3600) / 60);
+                                    const secs = Math.floor(dur % 60);
+                                    const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+                                    const formatted = hours > 0 
+                                        ? `${pad(hours)}:${pad(mins)}:${pad(secs)}`
+                                        : `${pad(mins)}:${pad(secs)}`;
+                                    lastDetectedIdRef.current = youtubeId;
+                                    setFormData(prev => ({ ...prev, duration: formatted }));
+                                }
+                            } catch (err) {}
+                            try { e.target.destroy(); } catch (err) {}
+                        }
+                    }
+                });
+            } catch (err) {}
+        };
+
+        if (window.YT && window.YT.Player) {
+            // Small delay to ensure hidden container mounted in DOM
+            setTimeout(detectDuration, 100);
+        } else {
+            if (!document.getElementById('yt-sdk-scr')) {
+                const tag = document.createElement('script');
+                tag.id = 'yt-sdk-scr';
+                tag.src = "https://www.youtube.com/iframe_api";
+                document.body.appendChild(tag);
+            }
+            const prevReady = window.onYouTubeIframeAPIReady;
+            window.onYouTubeIframeAPIReady = () => {
+                if (prevReady) prevReady();
+                setTimeout(detectDuration, 100);
+            };
+        }
+
+        return () => {
+            if (tempPlayer) {
+                try { tempPlayer.destroy(); } catch (e) {}
+            }
+        };
+    }, [youtubeId]);
 
     return (
         <RightSideDrawer isOpen={isOpen} onClose={onClose} width="500px">
@@ -86,7 +154,15 @@ const AddVideoDrawer: React.FC<AddVideoDrawerProps> = ({
                                 type="text"
                                 placeholder="Paste YouTube link: https://youtube.com/watch?v=..."
                                 value={formData.youtubeUrl}
-                                onChange={(e) => setFormData({ ...formData, youtubeUrl: e.target.value })}
+                                onChange={(e) => {
+                                    const val = e.target.value;
+                                    const newId = extractYouTubeId(val);
+                                    if (newId && newId !== lastDetectedIdRef.current) {
+                                        setFormData(prev => ({ ...prev, youtubeUrl: val, duration: '' }));
+                                    } else {
+                                        setFormData(prev => ({ ...prev, youtubeUrl: val }));
+                                    }
+                                }}
                                 className="w-full h-[54px] px-5 border border-gray-200 rounded-2xl text-[15px] font-medium outline-none focus:border-blue-500 transition-all placeholder:text-gray-300 bg-white shadow-sm"
                             />
                         </div>
@@ -106,6 +182,7 @@ const AddVideoDrawer: React.FC<AddVideoDrawerProps> = ({
                                         allowFullScreen
                                     ></iframe>
                                 </div>
+                                <div id={`yt-dur-detect-${youtubeId}`} style={{ display: 'none' }} key={youtubeId} />
                             </div>
                         ) : formData.youtubeUrl ? (
                             <div className="flex items-center justify-center gap-2 py-3 bg-red-50 rounded-2xl border border-red-100 border-dashed">

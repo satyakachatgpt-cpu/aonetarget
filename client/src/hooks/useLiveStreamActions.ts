@@ -79,7 +79,7 @@ export const useLiveStreamActions = ({
         body: JSON.stringify({ 
           ...video, 
           status: 'active', 
-          streamStatus: 'recorded', 
+          streamStatus: 'ended', 
           isLive: false,
           recordedLink: url,
           endedAt: nowIso,
@@ -91,7 +91,7 @@ export const useLiveStreamActions = ({
 
       setVideos(prev => prev.map(v =>
         ((v as any)._id || v.id) === videoId
-          ? { ...v, streamStatus: 'recorded', isLive: false, contentType: 'recorded', type: 'recorded', recordedLink: url } as any
+          ? { ...v, streamStatus: 'ended', isLive: false, contentType: 'recorded', type: 'recorded', recordedLink: url, endedAt: nowIso, endTime: nowIso } as any
           : v
       ));
       showToast('Live stream ended and converted to recorded class', 'success');

@@ -250,6 +250,11 @@ const CourseDetails: React.FC = () => {
       return;
     }
 
+    if (status === 'live') {
+      video.streamStatus = 'live';
+      video.isLive = true;
+    }
+
     const isFirstVideoInRoot = navigationHistory.length === 0 && filteredVideos[0] === video;
 
     const canPlay = (isEnrolled && !isCourseExpired) || video.isFree || video.isDemo || isFirstVideoInRoot;
@@ -550,9 +555,41 @@ const CourseDetails: React.FC = () => {
   useEffect(() => {
     fetchCourseData();
     fetchCourseProgress(); // Force initial sync
+
+    const handleContentUpdate = () => {
+      fetchCourseData();
+      fetchCourseProgress();
+    };
+
     window.addEventListener('focus', fetchCourseProgress);
-    return () => window.removeEventListener('focus', fetchCourseProgress);
-  }, [id, location.pathname, student?.id]);
+    window.addEventListener('app:content-updated', handleContentUpdate);
+    window.addEventListener('app:live-status-changed', handleContentUpdate);
+
+    // Auto-poll stream status if on live tab or player is active
+    const pollInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible' && (activeTab === 'live' || showVideoPlayer)) {
+        fetchCourseData();
+      }
+    }, 6000);
+
+    return () => {
+      window.removeEventListener('focus', fetchCourseProgress);
+      window.removeEventListener('app:content-updated', handleContentUpdate);
+      window.removeEventListener('app:live-status-changed', handleContentUpdate);
+      clearInterval(pollInterval);
+    };
+  }, [id, location.pathname, student?.id, activeTab, showVideoPlayer]);
+
+  // Keep selected video in sync with latest videos list for real-time live status updates
+  useEffect(() => {
+    if (selectedVideo && videos.length > 0) {
+      const vId = selectedVideo.id || selectedVideo._id;
+      const updated = videos.find(v => (v.id && v.id === vId) || (v._id && v._id === vId));
+      if (updated && (updated.streamStatus !== selectedVideo.streamStatus || updated.isLive !== selectedVideo.isLive)) {
+        setSelectedVideo(updated);
+      }
+    }
+  }, [videos]);
 
   useEffect(() => {
     if (course) {
@@ -1041,7 +1078,10 @@ const CourseDetails: React.FC = () => {
                 ? String(Math.floor((new Date(selectedVideo.endedAt || selectedVideo.endTime).getTime() - new Date(selectedVideo.startedAt || selectedVideo.startTime).getTime()) / 1000))
                 : undefined
           }
-          isLive={selectedVideo.contentType === 'live_stream'}
+          isLive={
+            (selectedVideo.contentType === 'live_stream' || selectedVideo.type === 'live' || selectedVideo.platform === 'youtube_live') &&
+            computeEffectiveStatus(selectedVideo) === 'live'
+          }
           onClose={closeVideoPlayer}
           onMarkComplete={() => {
             const vId = selectedVideo.id || selectedVideo._id;

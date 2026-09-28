@@ -51,7 +51,7 @@ const RecordedTab: React.FC<RecordedTabProps> = ({
   };
 
   const resolveVideoDuration = (video: any) => {
-    if (video.duration && video.duration !== '00:00' && video.duration !== '0:00' && video.duration !== '0') {
+    if (video.duration && video.duration !== '00:00' && video.duration !== '0:00' && video.duration !== '0' && video.duration.toLowerCase() !== 'video') {
       return video.duration;
     }
     const start = video.startedAt || video.startTime || video.scheduledAt;
@@ -62,6 +62,15 @@ const RecordedTab: React.FC<RecordedTabProps> = ({
         return Math.floor(diffMs / 1000);
       }
     }
+    try {
+      const vid = String(video.id || video._id || '');
+      if (vid) {
+        const progressData = JSON.parse(localStorage.getItem('player_progress') || '{}');
+        if (progressData[vid]?.duration > 0) {
+          return progressData[vid].duration;
+        }
+      }
+    } catch (e) {}
     return video.duration;
   };
 

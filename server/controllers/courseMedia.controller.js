@@ -436,6 +436,8 @@ export const createCourseVideo = async (req, res) => {
       if (dur) video.duration = dur;
     }
 
+    global.latestContentVersion = Date.now();
+
     if (isLiveStream) {
       const syncResult = await syncLiveStream(null, video, 'create');
       res.status(201).json({ _id: syncResult._id, ...video });
@@ -561,6 +563,8 @@ export const updateCourseVideo = async (req, res) => {
       }
     }
 
+    global.latestContentVersion = Date.now();
+
     if (isLiveStream) {
       await syncLiveStream(videoId, finalUpdate, 'update');
       res.json({ success: true, message: 'Live stream updated and synced' });
@@ -596,6 +600,8 @@ export const deleteCourseVideo = async (req, res) => {
 
     const video = await db.collection('videos').findOne(query);
     const isLiveStream = video && (video.contentType === 'live_stream' || video.type === 'live' || video.platform);
+
+    global.latestContentVersion = Date.now();
 
     if (isLiveStream) {
       await syncLiveStream(videoId, null, 'delete');

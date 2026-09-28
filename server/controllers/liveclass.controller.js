@@ -66,6 +66,7 @@ export const getLiveVideos = async (req, res) => {
         _id: item._id,
         id: (item.id || item._id)?.toString(),
         status,
+        streamStatus: status,
         isLive: status === 'live'
       };
     }).sort((a, b) => new Date(a.publishOn || a.date || a.createdAt) - new Date(b.publishOn || b.date || b.createdAt));
@@ -212,6 +213,7 @@ export const getCourseLiveClasses = async (req, res) => {
       }
 
       item.status = calculateStreamStatus(item);
+      item.streamStatus = item.status;
       item.isLive = item.status === 'live';
       if (!item.pdf1 && item.pdf1Url) item.pdf1 = item.pdf1Url;
       if (!item.pdf2 && item.pdf2Url) item.pdf2 = item.pdf2Url;
@@ -482,6 +484,7 @@ export const getStudentLiveClasses = async (req, res) => {
 
       // Step 6: Dynamic Status
       item.status = calculateStreamStatus(item);
+      item.streamStatus = item.status;
       item.isLive = item.status === 'live';
 
       // Ensure stable ID for client-side navigation

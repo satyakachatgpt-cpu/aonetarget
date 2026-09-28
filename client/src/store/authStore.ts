@@ -225,6 +225,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                         set({ unreadNotificationsCount: 0 });
                     }
                 }
+
+                if (data.contentVersion) {
+                    const lastVersion = (window as any).__last_content_version__ || 0;
+                    if (data.contentVersion !== lastVersion && lastVersion !== 0) {
+                        (window as any).__last_content_version__ = data.contentVersion;
+                        window.dispatchEvent(new CustomEvent('app:content-updated', { detail: { version: data.contentVersion } }));
+                    } else if (lastVersion === 0) {
+                        (window as any).__last_content_version__ = data.contentVersion;
+                    }
+                }
             } catch (e) { }
         };
 

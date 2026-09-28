@@ -211,9 +211,17 @@ export const isTestExpired = (test) => {
  */
 export const extractYouTubeId = (url) => {
   if (!url) return null;
-  const regExp = /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/;
-  const match = url.match(regExp);
-  return match ? match[1] : null;
+  const str = String(url).trim();
+  const patterns = [
+    /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/|v\/)|youtu\.be\/)([\w-]{11})/,
+    /youtube\.com\/watch\?.*v=([\w-]{11})/,
+    /youtu\.be\/([\w-]{11})/
+  ];
+  for (const p of patterns) {
+    const m = str.match(p);
+    if (m && m[1]) return m[1];
+  }
+  return null;
 };
 
 /**
@@ -224,7 +232,7 @@ export const fetchYouTubeDuration = async (url) => {
     const videoId = extractYouTubeId(url);
     if (!videoId) return null;
     const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-      headers: { 'User-Agent': 'Mozilla/5.0' },
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
       signal: AbortSignal.timeout(5000)
     });
     const html = await res.text();
