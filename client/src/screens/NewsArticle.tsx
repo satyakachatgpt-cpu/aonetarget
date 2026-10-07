@@ -76,28 +76,6 @@ const NewsArticle: React.FC = () => {
           Back
         </button>
 
-        {/* Play Store App Banner for Website Visitors */}
-        {!Capacitor.isNativePlatform() && (
-          <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/70 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-[#204a8e] rounded-xl flex items-center justify-center text-white shadow-sm shrink-0">
-                <span className="material-symbols-rounded text-2xl">smartphone</span>
-              </div>
-              <div>
-                <p className="text-[13px] font-bold text-gray-900 leading-tight">Get the full experience on AONE Target App</p>
-                <p className="text-[11px] font-medium text-gray-500">Read news, watch videos & attempt tests on the mobile app</p>
-              </div>
-            </div>
-            <button
-              onClick={() => openPlayStoreForNews(news.id || news._id || id)}
-              className="w-full sm:w-auto px-4 py-2.5 bg-[#204a8e] text-white rounded-xl text-xs font-bold shrink-0 hover:bg-[#1a3c75] transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-sm"
-            >
-              <span>Open on Google Play</span>
-              <span className="material-symbols-rounded text-sm">open_in_new</span>
-            </button>
-          </div>
-        )}
-
         {/* Title */}
         <h1 className="text-[26px] font-bold text-[#204a8e] leading-[1.3] mb-5 tracking-tight">
           {news.title}
@@ -124,12 +102,56 @@ const NewsArticle: React.FC = () => {
         )}
 
         {/* Content Section */}
-        <div className="space-y-10">
-          <div 
-            className="text-[17px] leading-[1.8] text-gray-700 tracking-normal font-normal rich-text-content"
-            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(news.content || '') }}
-          />
-        </div>
+        {Capacitor.isNativePlatform() ? (
+          /* Native App View: Full news content without any restriction */
+          <div className="space-y-10">
+            <div 
+              className="text-[17px] leading-[1.8] text-gray-700 tracking-normal font-normal rich-text-content"
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(news.content || '') }}
+            />
+          </div>
+        ) : (
+          /* Website View: Half preview with fade overlay and Play Store download prompt */
+          <div className="space-y-6">
+            <div className="relative max-h-[240px] sm:max-h-[300px] overflow-hidden select-none">
+              <div 
+                className="text-[17px] leading-[1.8] text-gray-700 tracking-normal font-normal rich-text-content"
+                dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(news.content || '') }}
+              />
+              {/* Fade out gradient overlay */}
+              <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-white via-white/85 to-transparent pointer-events-none" />
+            </div>
+
+            {/* App Download Paywall Card */}
+            <div className="bg-gradient-to-b from-blue-50/80 via-white to-indigo-50/60 border border-blue-200/80 rounded-3xl p-6 sm:p-8 text-center shadow-xl shadow-blue-900/5 relative overflow-hidden">
+              <div className="w-14 h-14 bg-gradient-to-br from-[#204a8e] to-[#142e5c] text-white rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-md shadow-blue-900/20">
+                <span className="material-symbols-rounded text-3xl">auto_stories</span>
+              </div>
+
+              <span className="inline-block px-3 py-1 bg-blue-100/90 text-[#204a8e] text-[11px] font-bold uppercase tracking-wider rounded-full mb-2">
+                Continue Reading in App
+              </span>
+
+              <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2 tracking-tight">
+                Read the Full Article on AONE Target App
+              </h3>
+
+              <p className="text-[13px] sm:text-sm text-gray-600 max-w-md mx-auto mb-6 leading-relaxed">
+                Download the official AONE Target app to read complete articles, access study notes, watch classes and attempt test series.
+              </p>
+
+              <button
+                onClick={() => openPlayStoreForNews(news.id || news._id || id)}
+                className="w-full sm:w-auto px-7 py-3.5 bg-gradient-to-r from-[#204a8e] to-[#1a3c75] text-white rounded-2xl font-bold text-sm hover:shadow-lg hover:shadow-blue-900/25 transition-all active:scale-95 inline-flex items-center justify-center gap-2.5 mx-auto"
+              >
+                <svg className="w-5 h-5 fill-current shrink-0" viewBox="0 0 24 24">
+                  <path d="M3.609 1.814L13.793 12 3.61 22.186a1.996 1.996 0 0 1-.61-1.428V3.242c0-.55.226-1.047.609-1.428zm11.603 11.604l2.56 2.56-11.83 6.815 9.27-9.375zm0-2.836l-9.27-9.375 11.83 6.815-2.56 2.56zm1.415 1.418l3.774 2.176c.725.418.725 1.1 0 1.518l-3.774 2.176-2.029-2.03 2.029-2.03z"/>
+                </svg>
+                <span>Read More</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Share Section */}
         <div className="mt-12 pt-8 border-t border-gray-100 flex justify-center">

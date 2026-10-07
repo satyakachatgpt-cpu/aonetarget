@@ -76,14 +76,7 @@ const AllNews: React.FC = () => {
           news.map((n: any, i: number) => (
             <div 
               key={n.id || n._id || i}
-              onClick={() => {
-                const id = n.id || n._id || i;
-                if (Capacitor.isNativePlatform()) {
-                  navigate(`/news/${id}`);
-                } else {
-                  openPlayStoreForNews(id);
-                }
-              }}
+              onClick={() => navigate(`/news/${n.id || n._id || i}`)}
               className="bg-white rounded-[16px] p-3 border border-gray-100 flex items-center justify-between gap-4 cursor-pointer hover:shadow-md transition-all duration-300 group"
             >
               <div className="flex-1 min-w-0">
