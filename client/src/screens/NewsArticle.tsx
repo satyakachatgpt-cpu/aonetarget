@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { blogAPI } from '../services/apiClient';
-import { getImageUrl } from '../lib/utils';
+import { getImageUrl, openPlayStoreForNews } from '../lib/utils';
 import DOMPurify from 'dompurify';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
@@ -75,6 +75,28 @@ const NewsArticle: React.FC = () => {
           <span className="material-symbols-rounded text-[20px]">arrow_back</span>
           Back
         </button>
+
+        {/* Play Store App Banner for Website Visitors */}
+        {!Capacitor.isNativePlatform() && (
+          <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/70 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-sm">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-[#204a8e] rounded-xl flex items-center justify-center text-white shadow-sm shrink-0">
+                <span className="material-symbols-rounded text-2xl">smartphone</span>
+              </div>
+              <div>
+                <p className="text-[13px] font-bold text-gray-900 leading-tight">Get the full experience on AONE Target App</p>
+                <p className="text-[11px] font-medium text-gray-500">Read news, watch videos & attempt tests on the mobile app</p>
+              </div>
+            </div>
+            <button
+              onClick={() => openPlayStoreForNews(news.id || news._id || id)}
+              className="w-full sm:w-auto px-4 py-2.5 bg-[#204a8e] text-white rounded-xl text-xs font-bold shrink-0 hover:bg-[#1a3c75] transition-all active:scale-95 flex items-center justify-center gap-1.5 shadow-sm"
+            >
+              <span>Open on Google Play</span>
+              <span className="material-symbols-rounded text-sm">open_in_new</span>
+            </button>
+          </div>
+        )}
 
         {/* Title */}
         <h1 className="text-[26px] font-bold text-[#204a8e] leading-[1.3] mb-5 tracking-tight">

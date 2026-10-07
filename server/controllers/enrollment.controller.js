@@ -645,14 +645,20 @@ export const unenrollStudent = async (req, res) => {
       return res.status(404).json({ error: 'Student not found' });
     }
 
+    const course = await findCourse(courseId);
+    const idVariants = [
+      courseId,
+      ...(course?._id ? [String(course._id)] : []),
+      ...(course?.id ? [String(course.id)] : [])
+    ].filter(Boolean);
+
     // Pull from enrolledCourses array
     await Student.updateOne(
       { _id: student._id },
-      { $pull: { enrolledCourses: courseId } }
+      { $pull: { enrolledCourses: { $in: idVariants } } }
     );
 
     // Update course enrollment count
-    const course = await findCourse(courseId);
     if (course) {
       const db = mongoose.connection.db;
       await db.collection(course._collection || 'courses').updateOne(

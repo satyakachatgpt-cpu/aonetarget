@@ -268,13 +268,49 @@ export const deleteTestSeries = async (req, res) => {
     const seriesId = req.params.id;
     console.log('DELETE /api/test-series/:id - Deleting series:', seriesId);
 
+    // Find the item first to get identifiers
+    const existing = await db.collection('testSeries').findOne({ 
+      $or: [
+        { id: seriesId }, 
+        { _id: ObjectId.isValid(seriesId) ? new ObjectId(seriesId) : null }
+      ].filter(f => f.id || f._id) 
+    }) || await db.collection('tests').findOne({ 
+      $or: [
+        { id: seriesId }, 
+        { _id: ObjectId.isValid(seriesId) ? new ObjectId(seriesId) : null }
+      ].filter(f => f.id || f._id),
+      isSeries: true 
+    });
+
     // Try deleting from both collections
-    const result1 = await db.collection('testSeries').deleteOne({ id: seriesId });
-    const result2 = await db.collection('tests').deleteOne({ id: seriesId, isSeries: true });
+    const result1 = await db.collection('testSeries').deleteOne({ 
+      $or: [
+        { id: seriesId }, 
+        { _id: ObjectId.isValid(seriesId) ? new ObjectId(seriesId) : null }
+      ].filter(f => f.id || f._id) 
+    });
+    const result2 = await db.collection('tests').deleteOne({ 
+      $or: [
+        { id: seriesId }, 
+        { _id: ObjectId.isValid(seriesId) ? new ObjectId(seriesId) : null }
+      ].filter(f => f.id || f._id), 
+      isSeries: true 
+    });
 
     if (result1.deletedCount === 0 && result2.deletedCount === 0) {
       return res.status(404).json({ error: 'Test series not found' });
     }
+
+    const idVariants = [
+      seriesId,
+      ...(existing?._id ? [String(existing._id)] : []),
+      ...(existing?.id ? [String(existing.id)] : [])
+    ].filter(Boolean);
+
+    await db.collection('students').updateMany(
+      { enrolledCourses: { $in: idVariants } },
+      { $pull: { enrolledCourses: { $in: idVariants } } }
+    );
 
     res.json({ message: 'Series deleted successfully' });
   } catch (error) {

@@ -13,6 +13,7 @@ import AdminLiveChatPanel from './AdminLiveChatPanel';
 
 interface LiveSessionReal {
     id: string;
+    _id?: string;
     title: string;
     courseId: string;
     courseName?: string;

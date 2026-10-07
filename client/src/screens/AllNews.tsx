@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { blogAPI, newsAPI } from '../services/apiClient';
-import { getImageUrl } from '../lib/utils';
+import { getImageUrl, openPlayStoreForNews } from '../lib/utils';
+import { Capacitor } from '@capacitor/core';
 
 const AllNews: React.FC = () => {
   const navigate = useNavigate();
@@ -75,7 +76,14 @@ const AllNews: React.FC = () => {
           news.map((n: any, i: number) => (
             <div 
               key={n.id || n._id || i}
-              onClick={() => navigate(`/news/${n.id || n._id || i}`)}
+              onClick={() => {
+                const id = n.id || n._id || i;
+                if (Capacitor.isNativePlatform()) {
+                  navigate(`/news/${id}`);
+                } else {
+                  openPlayStoreForNews(id);
+                }
+              }}
               className="bg-white rounded-[16px] p-3 border border-gray-100 flex items-center justify-between gap-4 cursor-pointer hover:shadow-md transition-all duration-300 group"
             >
               <div className="flex-1 min-w-0">

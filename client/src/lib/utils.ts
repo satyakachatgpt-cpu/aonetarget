@@ -351,4 +351,31 @@ export const formatDurationLabel = (dur: string | number | undefined | null): st
   if (mins > 0) return `${mins} min`;
   return `${secs} sec`;
 };
+
+/**
+ * Play Store App Redirection & Deep Link Helper for News
+ */
+export const PLAYSTORE_PACKAGE_ID = 'com.aonetarget.education';
+export const PLAYSTORE_URL = `https://play.google.com/store/apps/details?id=${PLAYSTORE_PACKAGE_ID}`;
+
+export const openPlayStoreForNews = (newsId?: string | number) => {
+  const nId = newsId ? String(newsId).trim() : '';
+  const referrerParam = nId ? `&referrer=utm_source%3Dwebsite%26news_id%3D${encodeURIComponent(nId)}` : '';
+  const fullPlayStoreUrl = `${PLAYSTORE_URL}${referrerParam}`;
+
+  const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+  if (isAndroid) {
+    // On Android devices:
+    // Try opening native app with custom scheme, or fall back to Play Store directly
+    const fallback = encodeURIComponent(fullPlayStoreUrl);
+    const intentUrl = nId
+      ? `intent://news/${encodeURIComponent(nId)}#Intent;scheme=aonetarget;package=${PLAYSTORE_PACKAGE_ID};S.browser_fallback_url=${fallback};end`
+      : `market://details?id=${PLAYSTORE_PACKAGE_ID}`;
+    window.location.href = intentUrl;
+  } else {
+    // Desktop / non-Android browser: open Play Store in new tab
+    window.open(fullPlayStoreUrl, '_blank', 'noopener,noreferrer');
+  }
+};
+
 

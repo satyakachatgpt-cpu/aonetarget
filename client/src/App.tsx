@@ -178,6 +178,33 @@ const App: React.FC = () => {
     // This prevents double-padding and ensures older phones get at least 24px space
     if (Capacitor.isNativePlatform()) {
       document.body.style.paddingTop = 'max(env(safe-area-inset-top), 24px)';
+
+      // Handle deep links (e.g. aonetarget://news/{id} or https://aonetarget.in/news/{id})
+      import('@capacitor/app').then(({ App: CapApp }) => {
+        const handleDeepUrl = (urlStr?: string) => {
+          if (!urlStr) return;
+          try {
+            if (urlStr.includes('news')) {
+              const match = urlStr.match(/news[\/:]([^\/?#&]+)/);
+              if (match && match[1]) {
+                window.location.hash = `/news/${match[1]}`;
+              }
+            }
+          } catch (e) {
+            console.error('Deep link handling error:', e);
+          }
+        };
+
+        // Cold start URL
+        CapApp.getLaunchUrl().then((launch) => {
+          if (launch?.url) handleDeepUrl(launch.url);
+        }).catch(() => {});
+
+        // Warm start / app already running
+        CapApp.addListener('appUrlOpen', (event) => {
+          if (event?.url) handleDeepUrl(event.url);
+        });
+      }).catch(() => {});
     }
   }, []);
 

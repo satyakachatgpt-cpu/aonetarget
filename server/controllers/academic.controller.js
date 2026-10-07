@@ -693,9 +693,32 @@ export const deletePackage = async (req, res) => {
         { _id: ObjectId.isValid(req.params.id) ? new ObjectId(req.params.id) : null }
       ].filter(f => f.id || f._id)
     };
-    let result = await db.collection('packages').deleteOne(filter);
-    if (result.deletedCount === 0) result = await db.collection('courses').deleteOne(filter);
-    if (result.deletedCount === 0) return res.status(404).json({ error: 'Package not found' });
+
+    let existing = await db.collection('packages').findOne(filter);
+    let collectionName = 'packages';
+    if (!existing) {
+      existing = await db.collection('courses').findOne(filter);
+      collectionName = 'courses';
+    }
+
+    if (!existing) return res.status(404).json({ error: 'Package not found' });
+
+    await db.collection(collectionName).deleteOne({ _id: existing._id });
+
+    // Collect all possible ID variants of this package/course
+    const idVariants = [
+      req.params.id,
+      String(existing._id),
+      ...(existing.id ? [String(existing.id)] : []),
+      ...(existing.slug ? [String(existing.slug)] : [])
+    ].filter(Boolean);
+
+    // Automatically remove this package from all students' enrolledCourses
+    await db.collection('students').updateMany(
+      { enrolledCourses: { $in: idVariants } },
+      { $pull: { enrolledCourses: { $in: idVariants } } }
+    );
+
     res.json({ success: true, message: 'Package/Course deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete package' });

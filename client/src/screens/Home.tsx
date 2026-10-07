@@ -7,6 +7,7 @@ import StudentSidebar from '../components/StudentSidebar';
 import { useAuthStore } from '../store/authStore';
 import { Course, Student } from '../types';
 import { Capacitor } from '@capacitor/core';
+import { openPlayStoreForNews } from '../lib/utils';
 
 
 interface NewsItem {
@@ -1326,9 +1327,13 @@ const Home: React.FC = () => {
                 <div
                   key={news.id || news._id || i}
                   onClick={() => {
-                    sessionStorage.setItem('returnToNews', 'true');
                     const id = news.id || news._id || i;
-                    navigate(`/news/${id}`);
+                    if (Capacitor.isNativePlatform()) {
+                      sessionStorage.setItem('returnToNews', 'true');
+                      navigate(`/news/${id}`);
+                    } else {
+                      openPlayStoreForNews(id);
+                    }
                   }}
                   className="bg-white rounded-[16px] p-3 border border-gray-100 flex items-center justify-between gap-4 cursor-pointer hover:shadow-md transition-all duration-300 group"
                 >
