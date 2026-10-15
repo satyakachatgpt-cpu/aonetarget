@@ -56,8 +56,16 @@ const AllNews: React.FC = () => {
         <header className="sticky top-0 z-40 shadow-sm bg-white border-b border-gray-100">
         <div className="px-4 py-3 flex items-center gap-3">
           <button
-            onClick={() => navigate(-1)}
-            className="w-10 h-10 rounded-xl bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-colors text-gray-700"
+            type="button"
+            onClick={() => {
+              if (window.history.state && typeof window.history.state.idx === 'number' && window.history.state.idx > 0) {
+                navigate(-1);
+              } else {
+                navigate('/', { replace: true });
+              }
+            }}
+            className="w-10 h-10 rounded-xl bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-colors text-gray-700 active:scale-95"
+            aria-label="Go back"
           >
             <span className="material-symbols-rounded">arrow_back</span>
           </button>

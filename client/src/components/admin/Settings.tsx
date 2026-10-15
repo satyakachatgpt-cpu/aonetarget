@@ -9,6 +9,13 @@ interface Settings {
   razorpayKeyId?: string;
   contactEmail?: string;
   supportPhone?: string;
+  appVersion?: string;
+  appVersionCode?: number | string;
+  forceUpdate?: boolean;
+  updateTitle?: string;
+  updateMessage?: string;
+  releaseNotes?: string[];
+  playStoreUrl?: string;
 }
 
 interface SplashSettings {
@@ -28,14 +35,25 @@ const SettingsComponent: React.FC<Props> = ({ showToast }) => {
     maintenanceMode: false,
     razorpayKeyId: '',
     contactEmail: '',
-    supportPhone: ''
+    supportPhone: '',
+    appVersion: '1.3.3',
+    appVersionCode: 7,
+    forceUpdate: false,
+    updateTitle: 'Update Available!',
+    updateMessage: 'A new version of A One Target is now available on Google Play Store with latest features & performance enhancements.',
+    releaseNotes: [
+      'Enhanced video player performance & stability',
+      'Faster mock test evaluation & auto-save',
+      'Important bug fixes and overall performance improvements'
+    ],
+    playStoreUrl: 'https://play.google.com/store/apps/details?id=com.aonetarget.education'
   });
   const [splash, setSplash] = useState<SplashSettings>({
     imageUrl: '/attached_assets/ChatGPT_Image_Feb_8,_2026,_05_51_58_PM_1770553325908.png',
     isActive: true,
     duration: 3000
   });
-  const [activeTab, setActiveTab] = useState<'global' | 'splash'>('splash');
+  const [activeTab, setActiveTab] = useState<'splash' | 'appUpdate'>('splash');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [savingSplash, setSavingSplash] = useState(false);
@@ -111,13 +129,10 @@ const SettingsComponent: React.FC<Props> = ({ showToast }) => {
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">Configurations</h1>
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-1">System & Visual Controls</p>
         </div>
-
-        {/* Action Tabs Removed as per request */}
       </div>
 
       <div className="max-w-6xl mx-auto">
-        {activeTab === 'splash' && (
-          <div className="bg-white rounded-[2rem] shadow-[0_8px_40px_rgba(0,0,0,0.03)] border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-700">
+        <div className="bg-white rounded-[2rem] shadow-[0_8px_40px_rgba(0,0,0,0.03)] border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-bottom-6 duration-700">
             <div className="p-8 border-b border-slate-50 flex items-center justify-between bg-slate-50/30">
               <div>
                 <h3 className="text-lg font-black text-slate-900 tracking-tight">Visual Onboarding</h3>
@@ -224,7 +239,6 @@ const SettingsComponent: React.FC<Props> = ({ showToast }) => {
               </div>
             </div>
           </div>
-        )}
       </div>
     </div>
   );

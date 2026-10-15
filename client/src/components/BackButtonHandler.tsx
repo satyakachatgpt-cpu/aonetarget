@@ -108,8 +108,8 @@ export const BackButtonHandler: React.FC = () => {
           return;
         }
 
-        // 5. Any other inner screen -> Go back in history
-        if (window.history.length > 1) {
+        // 5. Any other inner screen -> Go back in history if internal stack exists, else navigate to Home
+        if (window.history.state && typeof window.history.state.idx === 'number' && window.history.state.idx > 0) {
           navigate(-1);
         } else {
           navigate('/', { replace: true });

@@ -231,13 +231,38 @@ export const enrollStudent = async (req, res) => {
 
     const enrolledCourses = (student.enrolledCourses || []).map(id => String(id));
 
-    // 1. Comprehensive Idempotency Check
+    const db = mongoose.connection.db;
+    const isAdmin = !!(req.admin || req.user?.isAdmin || req.user?.role === 'admin');
+    const studentIdVariants = [String(student._id), student.id, student.userId].filter(Boolean);
+
+    // 1. Comprehensive Idempotency Check & Admin Renewal
     if (idVariants.some(id => enrolledCourses.includes(String(id)))) {
+      if (isAdmin) {
+        // Admin re-assigning: Refresh/reset the validity start date with a fresh purchase record
+        await db.collection('purchases').deleteMany({
+          studentId: { $in: studentIdVariants },
+          courseId: { $in: idVariants }
+        });
+        await db.collection('purchases').insertOne({
+          id: `manual_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          studentId: student.id || String(student._id),
+          studentName: student.name || 'Student',
+          courseId: canonicalId,
+          courseMongoId: course._id ? String(course._id) : undefined,
+          courseName: course.name || course.title || courseId,
+          amount: 0,
+          basePrice: 0,
+          gstAmount: 0,
+          gstPercentage: 0,
+          discountAmount: 0,
+          paymentMethod: 'admin_assigned',
+          status: 'completed',
+          createdAt: new Date()
+        });
+        return res.status(200).json({ success: true, message: 'Enrollment renewed successfully' });
+      }
       return res.status(200).json({ success: true, message: 'Already enrolled' });
     }
-
-    // 2. Security Check: Only allow free courses (Price = 0) via this endpoint
-    const isAdmin = !!(req.admin || req.user?.isAdmin || req.user?.role === 'admin');
     
     // Robust Price Verification (Server-side ground truth)
     const breakdown = calculatePriceBreakdown(course, null);
@@ -262,7 +287,6 @@ export const enrollStudent = async (req, res) => {
       });
     }
 
-    const db = mongoose.connection.db;
     const directLinkedSeriesIds = (course.content?.testSeries || []).filter(id => id && typeof id === 'string');
     const batchVariants = await getRelatedCourseIds(course, canonicalId);
     const [reverseSeriesColl, reverseSeriesTests] = await Promise.all([
@@ -297,6 +321,28 @@ export const enrollStudent = async (req, res) => {
       { _id: student._id },
       { $addToSet: { enrolledCourses: { $each: allEnrollmentIds } } }
     );
+
+    // Record purchase so validity starts from NOW (assignment date), not account creation date
+    await db.collection('purchases').deleteMany({
+      studentId: { $in: studentIdVariants },
+      courseId: { $in: idVariants }
+    });
+    await db.collection('purchases').insertOne({
+      id: `manual_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      studentId: student.id || String(student._id),
+      studentName: student.name || 'Student',
+      courseId: canonicalId,
+      courseMongoId: course._id ? String(course._id) : undefined,
+      courseName: course.name || course.title || courseId,
+      amount: 0,
+      basePrice: 0,
+      gstAmount: 0,
+      gstPercentage: 0,
+      discountAmount: 0,
+      paymentMethod: 'admin_assigned',
+      status: 'completed',
+      createdAt: new Date()
+    });
 
     // Update course enrollment count
     await db.collection('courses').updateOne(
@@ -407,11 +453,30 @@ export const checkEnrollment = async (req, res) => {
 
       // Identify student and fetch most recent valid purchase
       const studentIdVariants = [String(student._id), student.id, student.userId].filter(Boolean);
-      const purchase = await db.collection('purchases').findOne({
+      let purchase = await db.collection('purchases').findOne({
         studentId: { $in: studentIdVariants },
         courseId: { $in: idVariants },
         status: { $in: ['completed', 'success', 'captured', 'paid'] }
       }, { sort: { createdAt: -1 } });
+
+      if (!purchase && isEnrolled) {
+        // Auto-heal manual enrollment: record an assignment purchase starting from student assignment date
+        purchase = {
+          id: `manual_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          studentId: student.id || String(student._id),
+          studentName: student.name || 'Student',
+          courseId: String(course._id || course.id || courseId),
+          courseMongoId: course._id ? String(course._id) : undefined,
+          courseName: course.name || course.title || courseId,
+          amount: 0,
+          basePrice: 0,
+          gstAmount: 0,
+          paymentMethod: 'admin_assigned',
+          status: 'completed',
+          createdAt: new Date()
+        };
+        await db.collection('purchases').insertOne(purchase);
+      }
 
       if (currentMode === 'End Date' && validityVal) {
         // End Date mode: Absolute cutoff, no purchase required
@@ -433,10 +498,10 @@ export const checkEnrollment = async (req, res) => {
         }
       } else if (currentMode === 'Validity' && validityVal) {
         // Validity mode: Relative to enrollment/purchase date
-        // Priority: Purchase Date > Admission Date > Student Account Creation Date
+        // Priority: Purchase Date > Last Assigned/Updated Date > Current Date
         const startDate = purchase?.createdAt 
-          || student.admission?.admissionDate 
-          || student.createdAt;
+          || student.updatedAt 
+          || new Date();
         
         if (startDate) {
           const value = parseInt(validityVal);
@@ -658,9 +723,15 @@ export const unenrollStudent = async (req, res) => {
       { $pull: { enrolledCourses: { $in: idVariants } } }
     );
 
+    const studentIdVariants = [String(student._id), student.id, student.userId].filter(Boolean);
+    const db = mongoose.connection.db;
+    await db.collection('purchases').deleteMany({
+      studentId: { $in: studentIdVariants },
+      courseId: { $in: idVariants }
+    });
+
     // Update course enrollment count
     if (course) {
-      const db = mongoose.connection.db;
       await db.collection(course._collection || 'courses').updateOne(
         { _id: course._id },
         { $inc: { studentsEnrolled: -1 } }

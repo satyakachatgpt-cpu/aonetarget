@@ -42,6 +42,14 @@ const NewsArticle: React.FC = () => {
     if (container) container.scrollTo(0, 0);
   }, [id]);
 
+  const handleBack = () => {
+    if (window.history.state && typeof window.history.state.idx === 'number' && window.history.state.idx > 0) {
+      navigate(-1);
+    } else {
+      navigate('/', { replace: true });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-white">
@@ -60,21 +68,33 @@ const NewsArticle: React.FC = () => {
         <div className="max-w-4xl mx-auto flex items-center gap-2 overflow-x-auto whitespace-nowrap hide-scrollbar uppercase tracking-wider">
           <span className="cursor-pointer hover:text-[#204a8e] transition-colors" onClick={() => navigate('/')}>AONE TARGET INSTITUTE</span>
           <span className="text-gray-300 font-light">&gt;</span>
-          <span className="cursor-pointer hover:text-[#204a8e] transition-colors">{news.category || 'Current Affairs'}</span>
+          <span className="cursor-pointer hover:text-[#204a8e] transition-colors" onClick={() => navigate('/news')}>{news.category || 'Current Affairs'}</span>
           <span className="text-gray-300 font-light">&gt;</span>
           <span className="truncate text-gray-400 font-normal lowercase first-letter:uppercase italic">{news.title}</span>
         </div>
       </div>
 
-      <main className="max-w-4xl mx-auto px-5 pt-8 animate-fade-in">
-        {/* Back Button */}
-        <button 
-          onClick={() => navigate(-1)} 
-          className="flex items-center gap-1 text-gray-500 hover:text-[#204a8e] transition-colors mb-4 font-medium text-[15px]"
-        >
-          <span className="material-symbols-rounded text-[20px]">arrow_back</span>
-          Back
-        </button>
+      <main className="max-w-4xl mx-auto px-5 pt-6 animate-fade-in">
+        {/* Back Button & Navigation Controls */}
+        <div className="flex items-center justify-between gap-3 mb-5">
+          <button 
+            type="button"
+            onClick={handleBack} 
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 hover:text-[#204a8e] transition-all font-semibold text-[14px] active:scale-95 shadow-sm"
+          >
+            <span className="material-symbols-rounded text-[18px]">arrow_back</span>
+            Back
+          </button>
+          
+          <button 
+            type="button"
+            onClick={() => navigate('/')} 
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-gray-500 hover:text-[#204a8e] hover:bg-blue-50/60 transition-all text-xs font-semibold"
+          >
+            <span className="material-symbols-rounded text-base">home</span>
+            Home
+          </button>
+        </div>
 
         {/* Title */}
         <h1 className="text-[26px] font-bold text-[#204a8e] leading-[1.3] mb-5 tracking-tight">
