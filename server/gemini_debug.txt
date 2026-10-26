@@ -1,0 +1,1502 @@
+[
+  {
+    "questionNumber": 1,
+    "questionEn": "What is the most common site of injury from blunt chest trauma?",
+    "questionHi": "Blunt chest trauma में चोट लगने का सबसे सामान्य स्थान कौन-सा है?",
+    "options": [
+      "Aorta / महाधमनी",
+      "SVC (Superior Vena Cava) / सुपीरियर वेना कावा",
+      "Left ventricle / बायाँ निलय",
+      "Right ventricle / दायाँ निलय"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 2,
+    "questionEn": "What is the main reason for morbidity and mortality in children under five years of age?",
+    "questionHi": "पाँच वर्ष से कम आयु के बच्चों में रुग्णता एवं मृत्यु का प्रमुख कारण क्या है?",
+    "options": [
+      "Malnutrition / कुपोषण",
+      "Diarrheal disease / अतिसार रोग",
+      "Asphyxia / श्वासावरोध",
+      "Leukemia / ल्यूकेमिया"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 3,
+    "questionEn": "Which of the following grips is also known as the umbilical grip?",
+    "questionHi": "निम्नलिखित में से किस ग्रिप को अम्बिलिकल ग्रिप भी कहा जाता है?",
+    "options": [
+      "Fundal grip / फंडल ग्रिप",
+      "Lateral grip / लेटरल ग्रिप",
+      "Pawlik’s grip / पावलिक ग्रिप",
+      "Pelvic grip / पेल्विक ग्रिप"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 4,
+    "questionEn": "Which of the following drugs used in DOTS therapy can cause deafness?",
+    "questionHi": "DOTS थेरेपी में उपयोग की जाने वाली निम्नलिखित में से कौन-सी दवा बहरापन उत्पन्न कर सकती है?",
+    "options": [
+      "Ethambutol / एथाम्बुटोल",
+      "Isoniazid / आइसोनियाज़िड",
+      "Rifampicin / रिफैम्पिसिन",
+      "Streptomycin / स्ट्रेप्टोमाइसिन"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 5,
+    "questionEn": "Sharp instruments should not be sterilized by:",
+    "questionHi": "धारदार उपकरणों को निम्नलिखित में से किस विधि द्वारा स्टेरिलाइज़ नहीं करना चाहिए?",
+    "options": [
+      "Cooling / शीतलन",
+      "Boiling / उबालना",
+      "Hot air oven / हॉट एयर ओवन",
+      "Antiseptic solution / एंटीसेप्टिक घोल"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 6,
+    "questionEn": "Which of the following infections of animals can primarily be transmitted through milk?",
+    "questionHi": "निम्नलिखित में से पशुओं का कौन-सा संक्रमण मुख्य रूप से दूध के माध्यम से फैल सकता है?",
+    "options": [
+      "Tuberculosis / क्षय रोग",
+      "Dengue / डेंगू",
+      "Plague / प्लेग",
+      "Leptospirosis / लेप्टोस्पायरोसिस"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 7,
+    "questionEn": "During which week of pregnancy can breast milk be squeezed for the first time?",
+    "questionHi": "गर्भावस्था के किस सप्ताह में पहली बार स्तन से स्राव को दबाकर निकाला जा सकता है?",
+    "options": [
+      "6th week / छठा सप्ताह",
+      "12th week / बारहवाँ सप्ताह",
+      "18th week / अठारहवाँ सप्ताह",
+      "24th week / चौबीसवाँ सप्ताह"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 8,
+    "questionEn": "What is the common cause of constipation during pregnancy?",
+    "questionHi": "गर्भावस्था के दौरान कब्ज का सामान्य कारण क्या है?",
+    "options": [
+      "Lack of fluid intake / तरल पदार्थों का कम सेवन",
+      "Decreased fiber intake / फाइबर का कम सेवन",
+      "Reduced intestinal motility / आंतों की गतिशीलता में कमी",
+      "Lack of activity / शारीरिक गतिविधि की कमी"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 9,
+    "questionEn": "Which is the most important route of excretion of drugs?",
+    "questionHi": "दवाओं के उत्सर्जन का सबसे महत्वपूर्ण मार्ग कौन-सा है?",
+    "options": [
+      "Kidney / गुर्दे",
+      "Saliva and sweat / लार एवं पसीना",
+      "Exhaled air / उच्छ्वसित वायु",
+      "Feces / मल"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 10,
+    "questionEn": "As per RCH, which one is the first referral unit?",
+    "questionHi": "RCH के अनुसार निम्नलिखित में से कौन-सी प्रथम रेफरल इकाई (First Referral Unit) है?",
+    "options": [
+      "Sub-centre / उप-केंद्र",
+      "Primary Health Centre / प्राथमिक स्वास्थ्य केंद्र",
+      "Community Health Centre / सामुदायिक स्वास्थ्य केंद्र",
+      "District Hospital / ज़िला अस्पताल"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 11,
+    "questionEn": "A person who is aloof, isolated, and does not socialize falls into which of the following categories?",
+    "questionHi": "एक व्यक्ति जो अलग-थलग रहता है, एकांत में रहता है तथा सामाजिक मेल-जोल नहीं करता, वह निम्नलिखित में से किस श्रेणी में आता है?",
+    "options": [
+      "Withdrawn / सामाजिक रूप से अलग-थलग",
+      "Anxious / चिंतित",
+      "Aggressive / आक्रामक",
+      "Obsessive / बाध्यकारी"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 12,
+    "questionEn": "All of the following are organs of the lymphatic system EXCEPT:",
+    "questionHi": "निम्नलिखित सभी लसीका तंत्र के अंग हैं, सिवाय:",
+    "options": [
+      "Tonsils / टॉन्सिल",
+      "Thymus / थाइमस",
+      "Spleen / प्लीहा",
+      "None of these / इनमें से कोई नहीं"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 13,
+    "questionEn": "Who is considered the first psychiatric nurse?",
+    "questionHi": "प्रथम मनोरोग नर्स किसे माना जाता है?",
+    "options": [
+      "Hildegard Peplau / हिल्डेगार्ड पेप्लाउ",
+      "Linda Richards / लिंडा रिचर्ड्स",
+      "Sigmund Freud / सिगमंड फ्रायड",
+      "Jean Watson / जीन वॉटसन"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 14,
+    "questionEn": "What will be the attitude of the head during face and brow presentation?",
+    "questionHi": "फेस एवं ब्रो प्रेजेंटेशन में भ्रूण के सिर की स्थिति कैसी होती है?",
+    "options": [
+      "Flexion / फ्लेक्शन",
+      "Complete extension / पूर्ण एक्सटेंशन",
+      "Adduction / एडडक्शन",
+      "Abduction / एबडक्शन"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 15,
+    "questionEn": "During an infection, what usually happens to the WBC count?",
+    "questionHi": "संक्रमण के दौरान सामान्यतः WBC की संख्या में क्या परिवर्तन होता है?",
+    "options": [
+      "Increased / बढ़ जाती है",
+      "Decreased / घट जाती है",
+      "Remains unchanged / अपरिवर्तित रहती है",
+      "Fluctuating / उतार-चढ़ाव होता है"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 16,
+    "questionEn": "What is the total score in the Mini-Mental State Examination (MMSE)?",
+    "questionHi": "मिनी-मेंटल स्टेट एग्ज़ामिनेशन (MMSE) का कुल स्कोर कितना होता है?",
+    "options": [
+      "25",
+      "30",
+      "32",
+      "35"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 17,
+    "questionEn": "Which among the following suggests a problem with the hematological system?",
+    "questionHi": "निम्नलिखित में से कौन-सा हेमेटोलॉजिकल तंत्र की समस्या का संकेत देता है?",
+    "options": [
+      "Jaundice / पीलिया",
+      "Asthma / अस्थमा",
+      "Renal calculi / गुर्दे की पथरी",
+      "None of these / इनमें से कोई नहीं"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 18,
+    "questionEn": "What is the priority need that must be included in the care of a child with pneumonia?",
+    "questionHi": "निमोनिया से पीड़ित बच्चे की देखभाल में प्राथमिक आवश्यकता क्या है?",
+    "options": [
+      "Rest / आराम",
+      "Respiratory exercises / श्वसन व्यायाम",
+      "Nutrition / पोषण",
+      "Tricycle riding / ट्राइसाइकिल चलाना"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 19,
+    "questionEn": "Which of the following is NOT an element of a research statement?",
+    "questionHi": "निम्नलिखित में से कौन-सा शोध कथन (Research Statement) का तत्व नहीं है?",
+    "options": [
+      "Research design / शोध अभिकल्प",
+      "Research instrument / शोध उपकरण",
+      "Population / जनसंख्या",
+      "Setting / अध्ययन स्थल"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 20,
+    "questionEn": "Which of the following clinical findings indicates that the patient is experiencing hypokalemia?",
+    "questionHi": "निम्नलिखित में से कौन-सा नैदानिक लक्षण रोगी में हाइपोकैलिसिया का संकेत देता है?",
+    "options": [
+      "Edema / शोफ",
+      "Muscle spasms / मांसपेशियों में ऐंठन",
+      "Kussmaul breathing / कुसमॉल श्वसन",
+      "Abdominal distension / पेट फूलना"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 21,
+    "questionEn": "Which of the following is a projected visual aid?",
+    "questionHi": "निम्नलिखित में से कौन-सा प्रक्षेपित दृश्य-श्रव्य साधन (Projected Visual Aid) है?",
+    "options": [
+      "Film strip / फिल्म स्ट्रिप",
+      "Chart / चार्ट",
+      "Graph / ग्राफ",
+      "Radio / रेडियो"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 22,
+    "questionEn": "Which food items need to be avoided in a child with celiac disease?",
+    "questionHi": "सीलिएक रोग से पीड़ित बच्चे में निम्नलिखित में से किन खाद्य पदार्थों से बचना चाहिए?",
+    "options": [
+      "Wheat / गेहूँ",
+      "Rye / राई",
+      "Oats / जई",
+      "All of these / ये सभी"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 23,
+    "questionEn": "Which is a common risk in a patient with severe depression?",
+    "questionHi": "गंभीर अवसाद से पीड़ित रोगी में निम्नलिखित में से कौन-सा सामान्य जोखिम है?",
+    "options": [
+      "Fatigability / शीघ्र थकान",
+      "Hallucinations / मतिभ्रम",
+      "Agitation / उत्तेजना",
+      "Suicidal tendency / आत्महत्या की प्रवृत्ति"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 24,
+    "questionEn": "What is the length of the female urethra?",
+    "questionHi": "महिला मूत्रमार्ग की लंबाई कितनी होती है?",
+    "options": [
+      "18 cm / 18 सेमी",
+      "4 cm / 4 सेमी",
+      "10 cm / 10 सेमी",
+      "18 inches / 18 इंच"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 25,
+    "questionEn": "Response from a receiver to a sender is known as:",
+    "questionHi": "प्राप्तकर्ता द्वारा प्रेषक को दी गई प्रतिक्रिया को क्या कहा जाता है?",
+    "options": [
+      "Message / संदेश",
+      "Context / संदर्भ",
+      "Feedback / प्रतिपुष्टि",
+      "Stimulus / उद्दीपन"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 26,
+    "questionEn": "A client who smokes two packs of cigarettes per day is most at risk postoperatively for:",
+    "questionHi": "प्रतिदिन दो पैकेट सिगरेट पीने वाले रोगी में ऑपरेशन के बाद किस जटिलता का जोखिम सबसे अधिक होता है?",
+    "options": [
+      "Infection / संक्रमण",
+      "Pneumonia / निमोनिया",
+      "Hypotension / निम्न रक्तचाप",
+      "Cardiac dysrhythmias / हृदय की असामान्य लय"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 27,
+    "questionEn": "Which drug is given to prevent HIV transmission from mother to child?",
+    "questionHi": "माँ से बच्चे में HIV के संचरण को रोकने के लिए कौन-सी दवा दी जाती है?",
+    "options": [
+      "Nevirapine / नेविरापीन",
+      "Lamivudine / लैमिवुडीन",
+      "Stavudine / स्टैवूडीन",
+      "Abacavir / अबाकाविर"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 28,
+    "questionEn": "The stool discharge from an ostomy is called:",
+    "questionHi": "ओस्टोमी से निकलने वाले मल-स्राव को क्या कहा जाता है?",
+    "options": [
+      "Effluent / एफ्लुएंट",
+      "Cathartics / कैथार्टिक्स",
+      "Colonic fluid / कोलोनिक द्रव",
+      "Mucosa / म्यूकोसा"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 29,
+    "questionEn": "Which of the following blood pressure readings should be reported immediately to the physician?",
+    "questionHi": "निम्नलिखित में से किस रक्तचाप रीडिंग की सूचना चिकित्सक को तुरंत देनी चाहिए?",
+    "options": [
+      "138/98 mmHg",
+      "140/88 mmHg",
+      "110/70 mmHg",
+      "138/82 mmHg"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 30,
+    "questionEn": "The activities a person engages in when believing himself/herself to be ill are characteristic of:",
+    "questionHi": "स्वयं को बीमार मानने पर व्यक्ति द्वारा की जाने वाली गतिविधियाँ किस व्यवहार की विशेषता हैं?",
+    "options": [
+      "Health behaviour / स्वास्थ्य व्यवहार",
+      "Illness behaviour / बीमारी संबंधी व्यवहार",
+      "Sick-role behaviour / रोगी-भूमिका व्यवहार",
+      "Wellness behaviour / आरोग्य व्यवहार"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 31,
+    "questionEn": "The cardinal signs of the body include the following, EXCEPT:",
+    "questionHi": "शरीर के प्रमुख जीवन-संकेतों में निम्नलिखित सभी शामिल हैं, सिवाय:",
+    "options": [
+      "Temperature / तापमान",
+      "Blood pressure level / रक्तचाप",
+      "Blood glucose level / रक्त शर्करा स्तर",
+      "Heartbeat / हृदय गति"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 32,
+    "questionEn": "In the fetal skull, the bregma is found:",
+    "questionHi": "भ्रूण की खोपड़ी में ब्रेग्मा कहाँ पाया जाता है?",
+    "options": [
+      "At the junction of the sagittal, coronal and frontal sutures / सैजिटल, कोरोनल तथा फ्रंटल स्यूचर के संगम पर",
+      "At the junction of the lambdoidal and sagittal sutures / लैम्बडॉइड तथा सैजिटल स्यूचर के संगम पर",
+      "Between the two halves of the frontal bone / फ्रंटल अस्थि के दोनों भागों के बीच",
+      "Between the frontal bones and parietal bones / फ्रंटल तथा पैराइटल अस्थियों के बीच"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 33,
+    "questionEn": "The type of pelvis having a heart-shaped brim, narrow forepelvis, narrow sciatic notch, prominent ischial spines and a subpubic angle less than 90° is:",
+    "questionHi": "हृदयाकार पेल्विक ब्रिम, संकीर्ण अग्र श्रोणि, संकीर्ण सायटिक नॉच, उभरी हुई इस्किअल स्पाइन तथा 90° से कम सबप्यूबिक एंगल किस प्रकार की श्रोणि की विशेषताएँ हैं?",
+    "options": [
+      "Gynecoid pelvis / गायनेकोइड श्रोणि",
+      "Android pelvis / एंड्रॉइड श्रोणि",
+      "Anthropoid pelvis / एन्थ्रोपॉइड श्रोणि",
+      "Platypelloid pelvis / प्लेटिपेलॉइड श्रोणि"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 34,
+    "questionEn": "The mode of transmission of trachoma from one person to another is:",
+    "questionHi": "ट्रेकोमा का एक व्यक्ति से दूसरे व्यक्ति में संचरण किस प्रकार होता है?",
+    "options": [
+      "Direct contact / प्रत्यक्ष संपर्क",
+      "Indirect contact / अप्रत्यक्ष संपर्क",
+      "Inoculation / इनोक्यूलेशन",
+      "Iatrogenic / चिकित्साजनित"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 35,
+    "questionEn": "The primary role of the pediatric nurse is to provide nursing care as:",
+    "questionHi": "बाल चिकित्सा नर्स की प्राथमिक भूमिका किस रूप में नर्सिंग देखभाल प्रदान करना है?",
+    "options": [
+      "A collaborator, care coordinator and consultant / सहयोगी, देखभाल समन्वयक एवं परामर्शदाता",
+      "An advocate, educator and manager / अधिवक्ता, शिक्षिका एवं प्रबंधक",
+      "An independent and autonomous practitioner / स्वतंत्र एवं स्वायत्त चिकित्सकीय कार्यकर्ता",
+      "Clinical specialist and case manager / क्लिनिकल विशेषज्ञ एवं केस मैनेजर"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 36,
+    "questionEn": "The agent factors responsible for the occurrence of a disease include:\na. Biological and physical agents\nb. Mechanical and chemical agents\nc. Vertical and inoculation agents\nd. Nutrient and living agents",
+    "questionHi": "रोग उत्पन्न होने के लिए उत्तरदायी कारक में शामिल हैं:\na. जैविक एवं भौतिक कारक\nb. यांत्रिक एवं रासायनिक कारक\nc. वर्टिकल एवं इनोक्यूलेशन कारक\nd. पोषण एवं जीवित कारक",
+    "options": [
+      "a, b, c",
+      "b, c, d",
+      "a, b, d",
+      "a, c, d"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 37,
+    "questionEn": "The immunity transferred from maternal antibodies to the fetus through the placenta and to the infant through breast milk is a type of:",
+    "questionHi": "माता की एंटीबॉडी का प्लेसेंटा के माध्यम से भ्रूण तथा स्तनपान के माध्यम से शिशु में स्थानांतरण किस प्रकार की प्रतिरक्षा है?",
+    "options": [
+      "Innate immunity / जन्मजात प्रतिरक्षा",
+      "Acquired immunity / अर्जित प्रतिरक्षा",
+      "Active immunity / सक्रिय प्रतिरक्षा",
+      "Passive immunity / निष्क्रिय प्रतिरक्षा"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 38,
+    "questionEn": "The largest volume of air that can be expelled from the lungs during maximal expiration is called:",
+    "questionHi": "अधिकतम उच्छ्वास के दौरान फेफड़ों से बाहर निकाली जा सकने वाली वायु की मात्रा को क्या कहा जाता है?",
+    "options": [
+      "Tidal volume / टाइडल वॉल्यूम",
+      "Residual volume / रेजिडुअल वॉल्यूम",
+      "Inspiratory reserve volume / इंस्पायरेटरी रिजर्व वॉल्यूम",
+      "Expiratory reserve volume / एक्सपायरेटरी रिजर्व वॉल्यूम"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 39,
+    "questionEn": "The premature closure of the sagittal suture is called:",
+    "questionHi": "सैजिटल स्यूचर के समय से पहले बंद होने को क्या कहा जाता है?",
+    "options": [
+      "Scaphocephaly / स्कैफोसेफली",
+      "Oxycephaly / ऑक्सीसेफली",
+      "Acrocephaly / एक्रोसेफली",
+      "Anencephaly / एनेन्सेफली"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 40,
+    "questionEn": "The artery that supplies blood to the diaphragm is called:",
+    "questionHi": "डायफ्राम को रक्त की आपूर्ति करने वाली धमनी को क्या कहा जाता है?",
+    "options": [
+      "Inferior mesenteric artery / इन्फीरियर मेसेंटेरिक आर्टरी",
+      "Suprarenal artery / सुप्रारेनल आर्टरी",
+      "Inferior phrenic arteries / इन्फीरियर फ्रेनिक आर्टरीज़",
+      "Coeliac arteries / सीलिएक आर्टरीज़"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 41,
+    "questionEn": "Thinking containing erroneous conclusions and internal contradictions is called:",
+    "questionHi": "ऐसा चिंतन जिसमें गलत निष्कर्ष तथा आंतरिक विरोधाभास होते हैं, क्या कहलाता है?",
+    "options": [
+      "Autistic thinking / ऑटिस्टिक चिंतन",
+      "Critical thinking / आलोचनात्मक चिंतन",
+      "Illogical thinking / अतार्किक चिंतन",
+      "Logical thinking / तार्किक चिंतन"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 42,
+    "questionEn": "The plexus that supplies nerves to the skin and muscles of the upper limbs and some of the chest muscles is:",
+    "questionHi": "वह तंत्रिका जाल जो ऊपरी अंगों की त्वचा एवं मांसपेशियों तथा छाती की कुछ मांसपेशियों को तंत्रिका आपूर्ति प्रदान करता है, कहलाता है:",
+    "options": [
+      "Cervical plexus / सर्वाइकल प्लेक्सस",
+      "Brachial plexus / ब्रैकिअल प्लेक्सस",
+      "Lumbar plexus / लम्बर प्लेक्सस",
+      "Sacral plexus / सैक्रल प्लेक्सस"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 43,
+    "questionEn": "Temporary loss of muscle tone and weakness precipitated by various emotional states is called:",
+    "questionHi": "विभिन्न भावनात्मक अवस्थाओं के कारण अचानक होने वाली मांसपेशियों की टोन की अस्थायी कमी एवं कमजोरी को क्या कहा जाता है?",
+    "options": [
+      "Cataplexy / कैटाप्लेक्सी",
+      "Catharsis / कैथार्सिस",
+      "Compulsion / बाध्यता",
+      "Confabulation / कॉन्फैब्यूलेशन"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 44,
+    "questionEn": "A hormone that prevents menstruation and maintains pregnancy by sustaining the function of the corpus luteum is:",
+    "questionHi": "वह हार्मोन जो कॉर्पस ल्यूटियम के कार्य को बनाए रखकर मासिक धर्म को रोकता है तथा गर्भावस्था को बनाए रखने में सहायता करता है:",
+    "options": [
+      "Follicle-stimulating hormone (FSH) / फॉलिकल स्टिमुलेटिंग हार्मोन",
+      "Luteinizing hormone (LH) / ल्यूटिनाइज़िंग हार्मोन",
+      "Gonadotropin-releasing hormone (GnRH) / गोनाडोट्रोपिन रिलीज़िंग हार्मोन",
+      "Human chorionic gonadotropin (hCG) / ह्यूमन कोरियोनिक गोनाडोट्रोपिन"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 45,
+    "questionEn": "In the stages of growth and development, infancy extends from:",
+    "questionHi": "वृद्धि एवं विकास की अवस्थाओं में शैशवावस्था (Infancy) की अवधि कब से कब तक होती है?",
+    "options": [
+      "Birth to 4 weeks / जन्म से 4 सप्ताह तक",
+      "Birth to 1 year / जन्म से 1 वर्ष तक",
+      "4 weeks to 1 year / 4 सप्ताह से 1 वर्ष तक",
+      "1 to 3 years / 1 से 3 वर्ष तक"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 46,
+    "questionEn": "A low-pitched, continuous gurgling sound caused by secretions in the large airways is called:",
+    "questionHi": "बड़े वायुमार्गों में स्राव के कारण उत्पन्न कम तीव्रता वाली लगातार घरघराहट जैसी ध्वनि को क्या कहा जाता है?",
+    "options": [
+      "Wheezes / व्हीज़",
+      "Rhonchi / रॉन्काई",
+      "Coughing / खाँसी",
+      "Stertor / स्टर्टर"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 47,
+    "questionEn": "When a nurse enters the patient's room to administer medication, she notices that the patient's food remains on the table. Helping the patient to eat first and then administering the medication is an act of:",
+    "questionHi": "जब नर्स रोगी को दवा देने के लिए उसके कमरे में प्रवेश करती है और देखती है कि रोगी का भोजन मेज पर रखा हुआ है, तो पहले रोगी को भोजन करने में सहायता करना और उसके बाद दवा देना किस नैतिक सिद्धांत का उदाहरण है?",
+    "options": [
+      "Beneficence / हितकारिता",
+      "Normal efficiency / सामान्य दक्षता",
+      "Maleficence / अहितकारिता",
+      "Accountability / उत्तरदायित्व"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 48,
+    "questionEn": "During physical examination, a “fruity” odor of the client's breath would lead you to suspect:",
+    "questionHi": "शारीरिक परीक्षण के दौरान रोगी की साँस से “फलों जैसी” गंध आने पर किस स्थिति का संदेह होना चाहिए?",
+    "options": [
+      "Albuminuria / एल्ब्यूमिनियम",
+      "Ketoacidosis / कीटोएसिडोसिस",
+      "Acidity / अम्लता",
+      "Proteinuria / प्रोटीन्यूरिया"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 49,
+    "questionEn": "The hallucination in which the content is consistent with either a depressed or manic mood is called:",
+    "questionHi": "वह मतिभ्रम जिसमें विषय-वस्तु अवसादग्रस्त या उन्मत्त मनोदशा के अनुरूप होती है, कहलाता है:",
+    "options": [
+      "Somatic hallucination / सोमैटिक मतिभ्रम",
+      "Mood-congruent hallucination / मूड-कॉन्ग्रुएंट मतिभ्रम",
+      "Mood-incongruent hallucination / मूड-इनकॉन्ग्रुएंट मतिभ्रम",
+      "Haptic hallucination / हैप्टिक मतिभ्रम"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 50,
+    "questionEn": "The approximate weight gain of the fetus between 32 and 40 weeks of gestation is:",
+    "questionHi": "गर्भावस्था के 32 से 40 सप्ताह के बीच भ्रूण का लगभग प्रतिदिन वजन कितना बढ़ता है?",
+    "options": [
+      "10 g/day / 10 ग्राम प्रतिदिन",
+      "20 g/day / 20 ग्राम प्रतिदिन",
+      "25 g/day / 25 ग्राम प्रतिदिन",
+      "50 g/day / 50 ग्राम प्रतिदिन"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 51,
+    "questionEn": "The functions of amniotic fluid are:\na. Protects fetus from jarring and injury\nb. Maintains intrauterine temperature\nc. Provides nutrients to fetus\nd. Protects the placenta and umbilical cord",
+    "questionHi": "एम्नियोटिक द्रव के कार्य हैं:\na. भ्रूण को झटके एवं चोट से बचाता है\nb. गर्भाशय के अंदर तापमान बनाए रखता है\nc. भ्रूण को पोषक तत्व प्रदान करता है\nd. प्लेसेंटा एवं गर्भनाल की सुरक्षा करता है",
+    "options": [
+      "a, b, c",
+      "b, c, d",
+      "a, c, d",
+      "a, b, c, d"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 52,
+    "questionEn": "The contraindications of induction of labour include the following, EXCEPT:",
+    "questionHi": "प्रसव प्रेरण (Induction of Labour) के निम्नलिखित सभी निषेध (Contraindications) हैं, सिवाय:",
+    "options": [
+      "Placenta previa / प्लेसेंटा प्रीविया",
+      "Fetal macrosomia / भ्रूण मैक्रोसोमिया",
+      "Cord presentation / गर्भनाल प्रस्तुति",
+      "Cephalopelvic disproportion / सेफेलोपेल्विक डिसप्रोपोर्शन"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 53,
+    "questionEn": "In which of the following situations can elevation in jugular venous pressure be observed?",
+    "questionHi": "निम्नलिखित में से किस स्थिति में जुगुलर वेनस प्रेशर (JVP) बढ़ा हुआ पाया जा सकता है?",
+    "options": [
+      "Normal physical examination / सामान्य शारीरिक परीक्षण",
+      "Cardiac tamponade / कार्डियक टैम्पोनाड",
+      "Constrictive pericarditis / कंस्ट्रिक्टिव पेरीकार्डाइटिस",
+      "Myocarditis / मायोकार्डाइटिस"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 54,
+    "questionEn": "A clinical entity in which the process of abortion has started but has not progressed to a state from which recovery is impossible is:",
+    "questionHi": "वह नैदानिक स्थिति जिसमें गर्भपात की प्रक्रिया शुरू हो गई है, लेकिन ऐसी अवस्था तक नहीं पहुँची है जहाँ से गर्भावस्था को बचाना असंभव हो, कहलाती है:",
+    "options": [
+      "Spontaneous abortion / स्वतः गर्भपात",
+      "Threatened abortion / थ्रेटेड गर्भपात",
+      "Inevitable abortion / अपरिहार्य गर्भपात",
+      "Missed abortion / मिस्ड गर्भपात"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 55,
+    "questionEn": "Which among the following can be seen in a partial mole?",
+    "questionHi": "निम्नलिखित में से कौन-सी स्थिति पार्शियल मोल (Partial Mole) में पाई जाती है?",
+    "options": [
+      "Triploidy / ट्रिप्लॉइडी",
+      "Haploidy / हैप्लॉइडी",
+      "Polyploidy / पॉलीप्लॉइडी",
+      "Diploidy / डिप्लोइडी"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 56,
+    "questionEn": "The serological reaction which sensitizes bacteria for phagocytosis is called:",
+    "questionHi": "वह सीरोलॉजिकल अभिक्रिया जो बैक्टीरिया को फागोसाइटोसिस के लिए संवेदनशील बनाती है, कहलाती है:",
+    "options": [
+      "Co-agglutination / को-एग्लूटिनेशन",
+      "Neutralization / न्यूट्रलाइज़ेशन",
+      "Opsonization / ऑप्सोनाइजेशन",
+      "Complement fixation / कॉम्प्लीमेंट फिक्सेशन"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 57,
+    "questionEn": "The clinical features of a patient with major depression include:\na. Agitation\nb. Behaviour variation\nc. Increased appetite\nd. Panic attack",
+    "questionHi": "मेजर डिप्रेशन वाले रोगी की नैदानिक विशेषताओं में शामिल हैं:\na. उत्तेजना\nb. व्यवहार में परिवर्तन\nc. भूख में वृद्धि\nd. पैनिक अटैक",
+    "options": [
+      "a, b, c",
+      "b, c, d",
+      "a, b, d",
+      "a, c, d"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 58,
+    "questionEn": "Retaining a dead fetus in the uterus for a few weeks is known as:",
+    "questionHi": "मृत भ्रूण का कुछ सप्ताह तक गर्भाशय में बने रहना कहलाता है:",
+    "options": [
+      "Complete abortion / पूर्ण गर्भपात",
+      "Incomplete abortion / अपूर्ण गर्भपात",
+      "Missed abortion / मिस्ड गर्भपात",
+      "Recurrent abortion / बार-बार होने वाला गर्भपात"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 59,
+    "questionEn": "A state of diminished consciousness in which the patient remains mute and still with the eyes open is called:",
+    "questionHi": "चेतना की कम हुई अवस्था जिसमें रोगी आँखें खुली रखते हुए चुप एवं स्थिर रहता है, कहलाती है:",
+    "options": [
+      "Catatonia / कैटाटोनिया",
+      "Stupor / स्टूपर",
+      "Panic / पैनिक",
+      "Hysteria / हिस्टीरिया"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 60,
+    "questionEn": "Accountable Care Organizations and other programs help doctors and other healthcare providers work together to deliver better care. This overview of healthcare law was proposed in:",
+    "questionHi": "Accountable Care Organizations तथा अन्य कार्यक्रम डॉक्टरों एवं अन्य स्वास्थ्य सेवा प्रदाताओं को बेहतर देखभाल प्रदान करने के लिए मिलकर कार्य करने में सहायता करते हैं। यह स्वास्थ्य सेवा कानून किस वर्ष प्रस्तावित किया गया था?",
+    "options": [
+      "2010",
+      "2011",
+      "2012",
+      "2013"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 61,
+    "questionEn": "The following are the purposes of bulletin boards, EXCEPT:",
+    "questionHi": "निम्नलिखित सभी बुलेटिन बोर्ड के उद्देश्य हैं, सिवाय:",
+    "options": [
+      "Facilitate comparison of data / आँकड़ों की तुलना को सुविधाजनक बनाना",
+      "Broaden the sensory experience / संवेदी अनुभव को व्यापक बनाना",
+      "Intensify impressions / प्रभाव को तीव्र बनाना",
+      "Vitalize instructions / शिक्षण को जीवंत बनाना"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 62,
+    "questionEn": "Which among the following is an excitatory amino acid receptor antagonist?",
+    "questionHi": "निम्नलिखित में से कौन-सा excitatory amino acid receptor antagonist है?",
+    "options": [
+      "Phencyclidine / फेन्साइक्लिडीन",
+      "Quisqualate / क्विस्क्वालेट",
+      "Homocysteate / होमोसिस्टिएट",
+      "Kainate / काइनेट"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 63,
+    "questionEn": "The placental abnormality in which a thin fibrous ring is present at the margin of the chorionic plate where the fetal vessels appear to terminate is:",
+    "questionHi": "प्लेसेंटा की वह असामान्यता जिसमें कोरियोनिक प्लेट के किनारे पर एक पतली फाइब्रस रिंग होती है और भ्रूणीय रक्त वाहिकाएँ वहीं समाप्त होती हुई दिखाई देती हैं, कहलाती है:",
+    "options": [
+      "Circumvallate placenta / सर्कमवैलेट प्लेसेंटा",
+      "Placenta membranacea / प्लेसेंटा मेम्ब्रेनेशिया",
+      "Placenta marginata / प्लेसेंटा मार्जिनाटा",
+      "Placenta spuria / प्लेसेंटा स्प्यूरिया"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 64,
+    "questionEn": "The average submentovertical diameter is:",
+    "questionHi": "औसत Submentovertical diameter कितना होता है?",
+    "options": [
+      "9.5 cm",
+      "10 cm",
+      "11.5 cm",
+      "13.5 cm"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 65,
+    "questionEn": "The cartilage that completely encircles the larynx, with the narrow part anteriorly and the broad part posteriorly, is called:",
+    "questionHi": "वह उपास्थि (cartilage) जो लैरिंक्स को पूरी तरह घेरती है तथा जिसका संकरा भाग आगे और चौड़ा भाग पीछे होता है, कहलाती है:",
+    "options": [
+      "Thyroid cartilage / थायरॉइड कार्टिलेज",
+      "Cricoid cartilage / क्रिकॉइड कार्टिलेज",
+      "Arytenoid cartilage / एरिटीनॉइड कार्टिलेज",
+      "Epiglottis / एपिग्लोटिस"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 66,
+    "questionEn": "At 8 weeks of gestation, the uterus looks like:",
+    "questionHi": "गर्भावस्था के 8 सप्ताह में गर्भाशय किसके समान दिखाई देता है?",
+    "options": [
+      "Small unripe pear / छोटा कच्चा नाशपाती",
+      "Large orange / बड़ा संतरा",
+      "Size of grapefruit / ग्रेपफ्रूट के आकार का",
+      "Cricket ball / क्रिकेट बॉल"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 67,
+    "questionEn": "The type of fever in which the temperature fluctuates more than 2°C, but remains above normal throughout a 24-hour period, is:",
+    "questionHi": "वह बुखार जिसमें 24 घंटे के दौरान तापमान में 2°C से अधिक उतार-चढ़ाव होता है, लेकिन तापमान सामान्य स्तर से ऊपर ही रहता है, कहलाता है:",
+    "options": [
+      "Intermittent fever",
+      "Remittent fever",
+      "Recurrent fever",
+      "Relapsing fever"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 68,
+    "questionEn": "The use of the sense of smell to gather data during physical examination is called:",
+    "questionHi": "शारीरिक परीक्षण के दौरान जानकारी एकत्र करने के लिए सूंघने की इंद्रिय के उपयोग को क्या कहा जाता है?",
+    "options": [
+      "Auscultation / ऑस्कल्टेशन",
+      "Olfaction / ओल्फैक्शन",
+      "Percussion / परकशन",
+      "Palpation / पैल्पेशन"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 69,
+    "questionEn": "The main substance excreted from the fetus is:",
+    "questionHi": "भ्रूण द्वारा उत्सर्जित मुख्य पदार्थ कौन-सा है?",
+    "options": [
+      "Bilirubin / बिलीरुबिन",
+      "Carbon dioxide / कार्बन डाइऑक्साइड",
+      "Uric acid / यूरिक एसिड",
+      "Tissues / ऊतक"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 70,
+    "questionEn": "Which phase of the Korotkoff sounds is defined as the diastolic pressure?",
+    "questionHi": "कोरोटकॉफ ध्वनि का कौन-सा चरण डायस्टोलिक रक्तचाप को दर्शाता है?",
+    "options": [
+      "The pressure level at which the first faint, consistent tapping sounds are heard / वह दबाव स्तर जिस पर पहली हल्की एवं नियमित टैपिंग ध्वनि सुनाई देती है",
+      "The time during cuff deflation when a number of swishing sounds are heard / कफ को डिफ्लेट करते समय जब स्विशिंग ध्वनियाँ सुनाई देती हैं",
+      "The time when a distinct, abrupt muffling of sound is heard / वह समय जब ध्वनि स्पष्ट रूप से अचानक मंद हो जाती है",
+      "The pressure level when the last regular blood pressure sound is heard, after which all sounds disappear / वह दबाव स्तर जिस पर अंतिम नियमित ध्वनि सुनाई देती है और उसके बाद सभी ध्वनियाँ समाप्त हो जाती हैं"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 71,
+    "questionEn": "The 20th meeting of the Council of Heads of Government of the Shanghai Cooperation Organisation (SCO) member states, which concluded on 23 September 2022, was held where?",
+    "questionHi": "शंघाई सहयोग संगठन (SCO) सदस्य राज्यों के शासनाध्यक्ष परिषद की 23 सितंबर, 2022 को सम्पन्न होने वाली 20वीं बैठक कहाँ आयोजित की गई थी?",
+    "options": [
+      "Tashkent / ताशकंद",
+      "Goa / गोवा",
+      "Astana / अस्ताना",
+      "Tokyo / टोक्यो"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 72,
+    "questionEn": "Which of the following lakes was formed as a result of tectonic activity?",
+    "questionHi": "निम्नलिखित में से कौन-सी झील टेक्टोनिक गतिविधि के परिणामस्वरूप उत्पन्न हुई है?",
+    "options": [
+      "Chilika Lake",
+      "Wular Lake",
+      "Kolleru Lake",
+      "Sambhar Lake"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 73,
+    "questionEn": "A milkman added some water to milk and earned a profit of 25% by selling the mixture at the cost price. What is the ratio of water to milk in the mixture?",
+    "questionHi": "एक दूध वाले ने दूध में कुछ पानी मिलाया, जिससे उसे मिश्रण को क्रय मूल्य पर बेचने पर 25% लाभ हुआ। मिश्रण में क्रमशः पानी तथा दूध की मात्रा का अनुपात क्या है?",
+    "options": [
+      "4 : 5",
+      "1 : 5",
+      "1 : 4",
+      "5 : 4"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 74,
+    "questionEn": "In which of the following options is the figure of speech and its related example NOT correctly matched?",
+    "questionHi": "निम्नलिखित में से किस विकल्प में अलंकार व उससे संबंधित उदाहरण सही रूप से सुमेलित नहीं हैं?",
+    "options": [
+      "Metaphor (रूपक) – “नील परिधान बीच सुकुमार, खुल रहा मृदुल-अधखुला अंग।”",
+      "Simile (उपमा) – “पीपर पात सरिस मन डोला।”",
+      "Pun (श्लेष) – “सुवरन को ढूँढ़त फिरत, कवि, व्यभिचारी, चोर।”",
+      "Personification (मानवीकरण) – “संध्या घनमाला की सुंदर ओढ़े रंग-बिरंगी छींटा।”"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 75,
+    "questionEn": "The eastern longitudinal extent of Haryana is:",
+    "questionHi": "हरियाणा का पूर्वी देशांतर विस्तार है:",
+    "options": [
+      "74°27′8″ to 77°36′5″",
+      "77°28′ to 84°38′",
+      "71°28′ to 77°36′",
+      "70°28′ to 77°36′"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 76,
+    "questionEn": "By whom was the “Beti Bachao, Beti Padhao” campaign launched in Panipat?",
+    "questionHi": "पानीपत में “बेटी बचाओ, बेटी पढ़ाओ” अभियान का शुभारंभ किसके द्वारा किया गया?",
+    "options": [
+      "श्री मनोहर लाल खट्टर",
+      "श्री कप्तान सिंह सोलंकी",
+      "श्री राम नाथ कोविंद",
+      "श्री नरेंद्र मोदी"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 77,
+    "questionEn": "In 1960, the bilingual state of Bombay was divided to create Gujarat and Maharashtra. Which of the following was divided into two parts for this purpose?",
+    "questionHi": "वर्ष 1960 में गुजरात और महाराष्ट्र नामक दो नए राज्यों का सृजन करने के लिए निम्नलिखित में से किसे दो भागों में बाँटा गया था?",
+    "options": [
+      "Ahmedabad",
+      "Daman / दमन",
+      "Nagpur / नागपुर",
+      "Bombay / बॉम्बे"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 78,
+    "questionEn": "Which of the following countries was the last to grant women the right to vote?",
+    "questionHi": "निम्नलिखित देशों में से महिलाओं को मतदान का अधिकार देने वाला अंतिम देश कौन-सा था?",
+    "options": [
+      "Pakistan / पाकिस्तान",
+      "Mexico / मैक्सिको",
+      "Saudi Arabia",
+      "China / चीन"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 79,
+    "questionEn": "Where are the Cash Reserve Ratio (CRR) reserves kept?",
+    "questionHi": "नकद आरक्षित अनुपात (CRR) को किसके पास रखा जाता है?",
+    "options": [
+      "Reserve Bank of India / भारतीय रिज़र्व बैंक",
+      "International Monetary Fund / अंतर्राष्ट्रीय मुद्रा कोष",
+      "Finance Commission of India / भारत का वित्त आयोग",
+      "Comptroller and Auditor General of India / भारत के नियंत्रक एवं महालेखा परीक्षक"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 80,
+    "questionEn": "Which country ranked first in the Ease of Doing Business Index in 2021?",
+    "questionHi": "निम्नलिखित में से किस देश ने वर्ष 2021 में “व्यापार करने की सरलता” के सूचकांक पर सर्वोच्च स्थान प्राप्त किया?",
+    "options": [
+      "China",
+      "New Zealand",
+      "Portugal",
+      "India"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 81,
+    "questionEn": "Pick out the antonym of the underlined word in the following sentence: “A little learning is a dangerous thing.”",
+    "questionHi": "",
+    "options": [
+      "Devilish",
+      "Plain",
+      "Smooth",
+      "Innocuous"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 82,
+    "questionEn": "“Ladli Social Security Allowance Scheme” was launched on:",
+    "questionHi": "“लाडली सामाजिक सुरक्षा भत्ता योजना” कब शुरू की गई?",
+    "options": [
+      "1 March 2006",
+      "1 March 2005",
+      "1 January 2006",
+      "1 January 2005"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 83,
+    "questionEn": "Morni Hills, a tourist attraction in Haryana, is located in which district?",
+    "questionHi": "पर्यटकों का आकर्षण क्षेत्र मोरनी हिल्स, हरियाणा के किस ज़िले में स्थित है?",
+    "options": [
+      "Jind / जींद",
+      "Ambala / अंबाला",
+      "Charkhi Dadri",
+      "Panchkula / पंचकूला"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 84,
+    "questionEn": "Where is Rajiv Gandhi Renewable Energy Park located in Haryana?",
+    "questionHi": "राजीव गांधी अक्षय ऊर्जा पार्क हरियाणा में कहाँ स्थित है?",
+    "options": [
+      "Gurugram",
+      "Faridabad",
+      "Sonipat / सोनीपत",
+      "Panipat / पानीपत"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 85,
+    "questionEn": "Which is the highest region of the Aravalli Hills in Haryana?",
+    "questionHi": "हरियाणा में अरावली की पहाड़ियों का सबसे ऊँचा क्षेत्र कौन-सा है?",
+    "options": [
+      "Karoh Peak / करोह चोटी",
+      "Tipra Hills / टिपरा की पहाड़ियाँ",
+      "Mewat Hills / मेवात की पहाड़ियाँ",
+      "Dhosi Hills / धोसी की पहाड़ियाँ"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 86,
+    "questionEn": "Pick out the correctly spelt word.",
+    "questionHi": "",
+    "options": [
+      "Institutionalize",
+      "Institutionalice",
+      "Intitutionalize",
+      "Intutionalize"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 87,
+    "questionEn": "Which number will replace the question mark (?) in the following number series?\n14, 19, 35, 59, ?, 179, 299",
+    "questionHi": "निम्नलिखित संख्यात्मक श्रृंखला में प्रश्न चिह्न (?) के स्थान पर कौन-सी संख्या आएगी?\n14, 19, 35, 59, ?, 179, 299",
+    "options": [
+      "130",
+      "132",
+      "129",
+      "131"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 88,
+    "questionEn": "Which of the following is different from the others?",
+    "questionHi": "निम्नलिखित में से कौन-सा अन्य से भिन्न है?",
+    "options": [
+      "7, 14, 21",
+      "8, 16, 24",
+      "9, 18, 27",
+      "6, 9, 18"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 89,
+    "questionEn": "Pointing towards a woman, a king said, “She is the daughter of the woman who is the mother of my mother’s husband.” How is the king related to that woman?",
+    "questionHi": "एक औरत की ओर इशारा करते हुए राजा ने कहा, “वह उस महिला की पुत्री है जो मेरी माता के पति की माँ है।” राजा का उस औरत से क्या संबंध है?",
+    "options": [
+      "Daughter / पुत्री",
+      "Nephew / भतीजा",
+      "Sister / बहन",
+      "Son / पुत्र"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 90,
+    "questionEn": "In which district was Haryana’s first grain ATM established?",
+    "questionHi": "हरियाणा राज्य के पहले अनाज एटीएम (अन्नपूर्ति) की स्थापना किस ज़िले में हुई?",
+    "options": [
+      "Gurugram",
+      "Yamunanagar",
+      "Panchkula",
+      "Sonipat"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 91,
+    "questionEn": "Which language does a computer directly understand?",
+    "questionHi": "कंप्यूटर सीधे किस भाषा को समझता है?",
+    "options": [
+      "English / अंग्रेज़ी",
+      "Hindi / हिंदी",
+      "Machine Language",
+      "BASIC"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 92,
+    "questionEn": "Who is regarded as the world's first computer programmer?",
+    "questionHi": "विश्व की प्रथम कंप्यूटर प्रोग्रामर किसे माना जाता है?",
+    "options": [
+      "Charles Babbage",
+      "Ada Lovelace",
+      "Lady Pascal",
+      "Susan Wojcicki"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 93,
+    "questionEn": "What is an Operating System?",
+    "questionHi": "ऑपरेटिंग सिस्टम क्या है?",
+    "options": [
+      "Application Software / एप्लीकेशन सॉफ्टवेयर",
+      "System Software / सिस्टम सॉफ्टवेयर",
+      "Programming Language / प्रोग्रामिंग भाषा",
+      "Utility Hardware / यूटिलिटी हार्डवेयर"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 94,
+    "questionEn": "What is the full form of USB?",
+    "questionHi": "USB का पूर्ण रूप क्या है?",
+    "options": [
+      "Universal System Bus",
+      "Universal Serial Bus",
+      "Unified Serial Board",
+      "Universal Storage Bus"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 95,
+    "questionEn": "What is the shortcut key to insert a new slide in PowerPoint?",
+    "questionHi": "PowerPoint में नई Slide insert करने की Shortcut Key क्या है?",
+    "options": [
+      "Ctrl + N",
+      "Ctrl + M",
+      "Ctrl + L",
+      "Ctrl + Shift + S"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 96,
+    "questionEn": "Which Excel function finds the largest value?",
+    "questionHi": "Excel में सबसे बड़ी value ज्ञात करने के लिए कौन-सा Function प्रयोग किया जाता है?",
+    "options": [
+      "MIN",
+      "MAX",
+      "SUM",
+      "COUNT"
+    ],
+    "correctAnswer": "B",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 97,
+    "questionEn": "Which of the following is a wireless networking technology?",
+    "questionHi": "निम्न में से कौन Wireless Network Technology है?",
+    "options": [
+      "Ethernet cable",
+      "Optical fiber",
+      "Wi-Fi",
+      "Coaxial cable"
+    ],
+    "correctAnswer": "C",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 98,
+    "questionEn": "In which year did Tim Berners-Lee propose the World Wide Web?",
+    "questionHi": "WWW का प्रस्ताव Tim Berners-Lee ने किस वर्ष दिया था?",
+    "options": [
+      "1985",
+      "1991",
+      "1995",
+      "1989"
+    ],
+    "correctAnswer": "D",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 99,
+    "questionEn": "What is the unique address of a website/resource commonly called?",
+    "questionHi": "किसी website के unique address को सामान्यतः क्या कहा जाता है?",
+    "options": [
+      "URL",
+      "HTML",
+      "HTTP",
+      "ISP"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  },
+  {
+    "questionNumber": 100,
+    "questionEn": "Which markup language is primarily used to create web pages?",
+    "questionHi": "Web pages बनाने के लिए मुख्यतः किस markup language का उपयोग किया जाता है?",
+    "options": [
+      "HTML",
+      "FTP",
+      "SMTP",
+      "HTTP"
+    ],
+    "correctAnswer": "A",
+    "solution": "",
+    "questionImageBase64": "",
+    "optionImagesBase64": ["", "", "", ""]
+  }
+]

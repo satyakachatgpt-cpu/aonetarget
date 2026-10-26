@@ -1201,7 +1201,12 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
 
         {/* Watermark Overlay - DRM Protection */}
         <div
-          className="absolute bottom-20 right-3 z-30 pointer-events-none select-none"
+          className="absolute right-3 z-30 pointer-events-none select-none"
+          style={{
+            bottom: (isLandscape || isPhysicalLandscape || needsRotation)
+              ? 'max(5rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem))'
+              : 'max(7rem, calc(env(safe-area-inset-bottom, 0px) + 5.5rem))'
+          }}
           aria-hidden="true"
         >
           <span
@@ -1252,8 +1257,15 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
             </div>
         </div>
 
-        {/* Bottom Controls - Increased Contrast and Area */}
-        <div className={`absolute bottom-0 left-0 right-0 p-3 sm:p-6 pb-6 sm:pb-8 pt-16 sm:pt-24 bg-gradient-to-t from-black/95 via-black/70 to-transparent z-50 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+        {/* Bottom Controls - Increased Contrast and Area with Safe Area / Navigation Bar Protection */}
+        <div 
+          className={`absolute bottom-0 left-0 right-0 p-3 sm:p-6 pt-16 sm:pt-24 bg-gradient-to-t from-black/95 via-black/70 to-transparent z-50 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}
+          style={{
+            paddingBottom: (isLandscape || isPhysicalLandscape || needsRotation)
+              ? 'max(1.5rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem))'
+              : 'max(3.75rem, calc(env(safe-area-inset-bottom, 0px) + 2rem))'
+          }}
+        >
             {/* Progress Bar (Custom Pointer-based Scrubber) */}
             <div 
               ref={progressBarRef}
@@ -1490,7 +1502,12 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                 )}
               </div>
 
-              <div className="p-4 bg-black/40 border-t border-white/10 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+              <div 
+                className="p-4 bg-black/40 border-t border-white/10"
+                style={{
+                  paddingBottom: 'max(2rem, calc(env(safe-area-inset-bottom, 0px) + 1.25rem))'
+                }}
+              >
                   <div className="relative flex items-center">
                     <input
                       type="text"
