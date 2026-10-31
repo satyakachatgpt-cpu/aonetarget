@@ -287,7 +287,7 @@
   {
     "questionNumber": 20,
     "questionEn": "Which of the following clinical findings indicates that the patient is experiencing hypokalemia?",
-    "questionHi": "निम्नलिखित में से कौन-सा नैदानिक लक्षण रोगी में हाइपोकैलिसिया का संकेत देता है?",
+    "questionHi": "निम्नलिखित में से कौन-सा नैदानिक लक्षण रोगी में हाइपोकैलिसिमिया का संकेत देता है?",
     "options": [
       "Edema / शोफ",
       "Muscle spasms / मांसपेशियों में ऐंठन",
@@ -395,7 +395,7 @@
     "questionHi": "माँ से बच्चे में HIV के संचरण को रोकने के लिए कौन-सी दवा दी जाती है?",
     "options": [
       "Nevirapine / नेविरापीन",
-      "Lamivudine / लैमिवुडीन",
+      "Lamivudine / लामिवुडीन",
       "Stavudine / स्टैवूडीन",
       "Abacavir / अबाकाविर"
     ],
@@ -487,7 +487,7 @@
       "Gynecoid pelvis / गायनेकोइड श्रोणि",
       "Android pelvis / एंड्रॉइड श्रोणि",
       "Anthropoid pelvis / एन्थ्रोपॉइड श्रोणि",
-      "Platypelloid pelvis / प्लेटिपेलॉइड श्रोणि"
+      "Platypelloid pelvis / प्लैटिपेलॉइड श्रोणि"
     ],
     "correctAnswer": "B",
     "solution": "",
@@ -526,8 +526,8 @@
   },
   {
     "questionNumber": 36,
-    "questionEn": "The agent factors responsible for the occurrence of a disease include:\na. Biological and physical agents\nb. Mechanical and chemical agents\nc. Vertical and inoculation agents\nd. Nutrient and living agents",
-    "questionHi": "रोग उत्पन्न होने के लिए उत्तरदायी कारक में शामिल हैं:\na. जैविक एवं भौतिक कारक\nb. यांत्रिक एवं रासायनिक कारक\nc. वर्टिकल एवं इनोक्यूलेशन कारक\nd. पोषण एवं जीवित कारक",
+    "questionEn": "The agent factors responsible for the occurrence of a disease include: a. Biological and physical agents b. Mechanical and chemical agents c. Vertical and inoculation agents d. Nutrient and living agents",
+    "questionHi": "रोग उत्पन्न होने के लिए उत्तरदायी कारक में शामिल हैं: a. जैविक एवं भौतिक कारक b. यांत्रिक एवं रासायनिक कारक c. वर्टिकल एवं इनोक्यूलेशन कारक d. पोषण एवं जीवित कारक",
     "options": [
       "a, b, c",
       "b, c, d",
@@ -709,7 +709,7 @@
     "questionEn": "During physical examination, a “fruity” odor of the client's breath would lead you to suspect:",
     "questionHi": "शारीरिक परीक्षण के दौरान रोगी की साँस से “फलों जैसी” गंध आने पर किस स्थिति का संदेह होना चाहिए?",
     "options": [
-      "Albuminuria / एल्ब्यूमिनियम",
+      "Albuminuria / एल्ब्यूमिन्यूरिया",
       "Ketoacidosis / कीटोएसिडोसिस",
       "Acidity / अम्लता",
       "Proteinuria / प्रोटीन्यूरिया"
@@ -751,8 +751,8 @@
   },
   {
     "questionNumber": 51,
-    "questionEn": "The functions of amniotic fluid are:\na. Protects fetus from jarring and injury\nb. Maintains intrauterine temperature\nc. Provides nutrients to fetus\nd. Protects the placenta and umbilical cord",
-    "questionHi": "एम्नियोटिक द्रव के कार्य हैं:\na. भ्रूण को झटके एवं चोट से बचाता है\nb. गर्भाशय के अंदर तापमान बनाए रखता है\nc. भ्रूण को पोषक तत्व प्रदान करता है\nd. प्लेसेंटा एवं गर्भनाल की सुरक्षा करता है",
+    "questionEn": "The functions of amniotic fluid are: a. Protects fetus from jarring and injury b. Maintains intrauterine temperature c. Provides nutrients to fetus d. Protects the placenta and umbilical cord",
+    "questionHi": "एम्नियोटिक द्रव के कार्य हैं: a. भ्रूण को झटके एवं चोट से बचाता है b. गर्भाशय के अंदर तापमान बनाए रखता है c. भ्रूण को पोषक तत्व प्रदान करता है d. प्लेसेंटा एवं गर्भनाल की सुरक्षा करता है",
     "options": [
       "a, b, c",
       "b, c, d",
@@ -817,7 +817,7 @@
       "Triploidy / ट्रिप्लॉइडी",
       "Haploidy / हैप्लॉइडी",
       "Polyploidy / पॉलीप्लॉइडी",
-      "Diploidy / डिप्लोइडी"
+      "Diploidy / डिप्लॉइडी"
     ],
     "correctAnswer": "A",
     "solution": "",
@@ -830,7 +830,7 @@
     "questionHi": "वह सीरोलॉजिकल अभिक्रिया जो बैक्टीरिया को फागोसाइटोसिस के लिए संवेदनशील बनाती है, कहलाती है:",
     "options": [
       "Co-agglutination / को-एग्लूटिनेशन",
-      "Neutralization / न्यूट्रलाइज़ेशन",
+      "Neutralization / न्यूट्रलाइजेशन",
       "Opsonization / ऑप्सोनाइजेशन",
       "Complement fixation / कॉम्प्लीमेंट फिक्सेशन"
     ],
@@ -841,8 +841,8 @@
   },
   {
     "questionNumber": 57,
-    "questionEn": "The clinical features of a patient with major depression include:\na. Agitation\nb. Behaviour variation\nc. Increased appetite\nd. Panic attack",
-    "questionHi": "मेजर डिप्रेशन वाले रोगी की नैदानिक विशेषताओं में शामिल हैं:\na. उत्तेजना\nb. व्यवहार में परिवर्तन\nc. भूख में वृद्धि\nd. पैनिक अटैक",
+    "questionEn": "The clinical features of a patient with major depression include: a. Agitation b. Behaviour variation c. Increased appetite d. Panic attack",
+    "questionHi": "मेजर डिप्रेशन वाले रोगी की नैदानिक विशेषताओं में शामिल हैं: a. उत्तेजना b. व्यवहार में परिवर्तन c. भूख में वृद्धि d. पैनिक अटैक",
     "options": [
       "a, b, c",
       "b, c, d",
@@ -967,7 +967,7 @@
       "Thyroid cartilage / थायरॉइड कार्टिलेज",
       "Cricoid cartilage / क्रिकॉइड कार्टिलेज",
       "Arytenoid cartilage / एरिटीनॉइड कार्टिलेज",
-      "Epiglottis / एपिग्लोटिस"
+      "Epiglottis / एपिग्लॉटिस"
     ],
     "correctAnswer": "B",
     "solution": "",
@@ -1126,7 +1126,7 @@
   },
   {
     "questionNumber": 76,
-    "questionEn": "By whom was the “Beti Bachao, Beti Padhao” campaign launched in Panipat?",
+    "questionEn": "पानीपत में “बेटी बचाओ, बेटी पढ़ाओ” अभियान का शुभारंभ किसके द्वारा किया गया?",
     "questionHi": "पानीपत में “बेटी बचाओ, बेटी पढ़ाओ” अभियान का शुभारंभ किसके द्वारा किया गया?",
     "options": [
       "श्री मनोहर लाल खट्टर",
@@ -1265,7 +1265,7 @@
     "questionHi": "हरियाणा में अरावली की पहाड़ियों का सबसे ऊँचा क्षेत्र कौन-सा है?",
     "options": [
       "Karoh Peak / करोह चोटी",
-      "Tipra Hills / टिपरा की पहाड़ियाँ",
+      "Tipra Hills / टिपरा की पहाड़ियाँ",
       "Mewat Hills / मेवात की पहाड़ियाँ",
       "Dhosi Hills / धोसी की पहाड़ियाँ"
     ],
@@ -1291,8 +1291,8 @@
   },
   {
     "questionNumber": 87,
-    "questionEn": "Which number will replace the question mark (?) in the following number series?\n14, 19, 35, 59, ?, 179, 299",
-    "questionHi": "निम्नलिखित संख्यात्मक श्रृंखला में प्रश्न चिह्न (?) के स्थान पर कौन-सी संख्या आएगी?\n14, 19, 35, 59, ?, 179, 299",
+    "questionEn": "Which number will replace the question mark (?) in the following number series?\n$14, 19, 35, 59, ?, 179, 299$",
+    "questionHi": "निम्नलिखित संख्यात्मक श्रृंखला में प्रश्न चिह्न (?) के स्थान पर कौन-सी संख्या आएगी?\n$14, 19, 35, 59, ?, 179, 299$",
     "options": [
       "130",
       "132",
@@ -1337,7 +1337,7 @@
   {
     "questionNumber": 90,
     "questionEn": "In which district was Haryana’s first grain ATM established?",
-    "questionHi": "हरियाणा राज्य के पहले अनाज एटीएम (अन्नपूर्ति) की स्थापना किस ज़िले में हुई?",
+    "questionHi": "हरियाणा राज्य के पहले अनाज एटीएम (अन्नपूर्ती) की स्थापना किस ज़िले में हुई?",
     "options": [
       "Gurugram",
       "Yamunanagar",
@@ -1354,7 +1354,7 @@
     "questionEn": "Which language does a computer directly understand?",
     "questionHi": "कंप्यूटर सीधे किस भाषा को समझता है?",
     "options": [
-      "English / अंग्रेज़ी",
+      "English / अंग्रेजी",
       "Hindi / हिंदी",
       "Machine Language",
       "BASIC"

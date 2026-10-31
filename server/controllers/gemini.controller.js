@@ -8,8 +8,8 @@ export const parsePDFWithGemini = async (req, res) => {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    // Reverted back to gemini-flash-latest because of free tier rate limits
-    const modelName = "gemini-flash-latest";
+    // Google's cheapest Lite model (matches Gemini 3.5 Flash Lite in AI Studio)
+    const modelName = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
     
     const safetySettings = [
       {
@@ -30,9 +30,14 @@ export const parsePDFWithGemini = async (req, res) => {
       },
     ];
 
-    const model = genAI.getGenerativeModel({ model: modelName, safetySettings });
+    const generationConfig = {
+      responseMimeType: "application/json",
+      temperature: 0.1,
+    };
 
-    console.log(`[Gemini] Starting AI analysis for: ${req.file.originalname}`);
+    const model = genAI.getGenerativeModel({ model: modelName, safetySettings, generationConfig });
+
+    console.log(`[Gemini] Starting AI analysis using ${modelName} for: ${req.file.originalname}`);
 
     const systemPrompt = `
 Act as an expert exam paper digitizer. Extract ALL questions from the provided PDF exam paper without missing any.
@@ -54,9 +59,7 @@ STRICT RULES:
   "questionHi": "full question text in Hindi if it exists separately in the PDF, otherwise empty string",
   "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
   "correctAnswer": "A" | "B" | "C" | "D",
-  "solution": "explanation or solution if provided in the PDF, otherwise empty string",
-  "questionImageBase64": "always empty string",
-  "optionImagesBase64": ["", "", "", ""]
+  "solution": "explanation or solution if provided in the PDF, otherwise empty string"
 }
 
 6. Option Labels: Do not include the primary option labels (A., B., (1), (2)) in the options text. However preserve internal statement labels like (a), (i), (I) if they appear inside the option text.
@@ -101,9 +104,7 @@ EXAMPLE for match-the-following — questionEn must look like:
 Adjust rows and columns to match the actual table. Options A/B/C/D stay as plain text outside the table.
 
 9. IMAGE RULE:
-- DO NOT extract any images.
-- Always set "questionImageBase64" to an empty string "".
-- Always set "optionImagesBase64" to ["", "", "", ""].
+- DO NOT extract any images. Focus only on high-accuracy text, equations, tables, and options.
 
 Combine multi-page questions logically. Ignore headers, footers, watermarks, and page numbers.
     `;
