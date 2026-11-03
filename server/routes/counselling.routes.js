@@ -1,6 +1,7 @@
 import express from 'express';
 import { 
     submitCounsellingLead, 
+    submitNewsLead,
     getCounsellingLeads, 
     updateCounsellingLeadStatus,
     deleteCounsellingLead 
@@ -9,8 +10,9 @@ import { adminMiddleware } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// Public submission route
+// Public submission routes
 router.post('/counselling-leads', submitCounsellingLead);
+router.post('/news-leads', submitNewsLead);
 
 // Admin protected routes
 router.get('/admin/counselling-leads', adminMiddleware, getCounsellingLeads);

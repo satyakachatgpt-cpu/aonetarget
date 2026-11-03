@@ -82,6 +82,52 @@ export const submitCounsellingLead = async (req, res) => {
     }
 };
 
+export const submitNewsLead = async (req, res) => {
+    try {
+        let { name, phone, email, newsId, newsTitle, source } = req.body;
+
+        name = name?.trim();
+        if (!name || name.length < 2) {
+            return res.status(400).json({ error: 'Please enter a valid name (min 2 characters)' });
+        }
+        if (name.length > 80) {
+            return res.status(400).json({ error: 'Name is too long (max 80 characters)' });
+        }
+
+        const rawPhone = String(phone || '').trim();
+        if (!/^[6-9]\d{9}$/.test(rawPhone) || /^(\d)\1{9}$/.test(rawPhone) || rawPhone === '1234567890') {
+            return res.status(400).json({ error: 'Please enter a valid 10-digit mobile number' });
+        }
+
+        if (email) {
+            email = email.trim().toLowerCase();
+            if (email.length > 120 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                return res.status(400).json({ error: 'Please enter a valid email address' });
+            }
+        }
+
+        const newLead = new CounsellingLead({
+            name,
+            phone: rawPhone,
+            email: email || undefined,
+            interestedCategory: 'News & Current Affairs',
+            message: newsTitle ? `Reader Lead: ${newsTitle}` : `News Reader (${newsId || 'General'})`,
+            source: source || 'news_reader_app'
+        });
+
+        await newLead.save();
+
+        res.status(201).json({ 
+            success: true, 
+            message: 'Lead captured successfully',
+            lead: newLead 
+        });
+    } catch (error) {
+        console.error('Error submitting news lead:', error);
+        res.status(500).json({ error: 'Internal Server Error' });
+    }
+};
+
 export const getCounsellingLeads = async (req, res) => {
     try {
         const leads = await CounsellingLead.find().sort({ createdAt: -1 });

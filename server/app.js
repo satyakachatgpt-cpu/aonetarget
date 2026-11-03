@@ -49,6 +49,7 @@ import adminRoutes from './routes/admin.routes.js';
 import leaderboardRoutes from './routes/leaderboard.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import counsellingRoutes from './routes/counselling.routes.js';
+import { shareNews } from './controllers/appContent.controller.js';
 
 import { errorMiddleware } from './middleware/error.middleware.js';
 
@@ -466,6 +467,11 @@ app.get('/.well-known/assetlinks.json', (req, res) => {
     res.status(404).json({ error: 'assetlinks.json not found' });
   }
 });
+
+// --- App Direct News Route ---
+app.get('/app/news/:id', shareNews);
+app.get('/share/news/:id', shareNews);
+app.get('/news/:id', shareNews);
 
 // --- React SPA Catch-all (Production) ---
 if (process.env.NODE_ENV === 'production') {

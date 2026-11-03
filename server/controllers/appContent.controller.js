@@ -133,10 +133,11 @@ export const shareNews = async (req, res) => {
     const id = req.params.id;
     const { ObjectId } = mongoose.Types;
     
-    let query = { id: id };
+    const conditions = [{ id: id }, { _id: id }];
     if (ObjectId.isValid(id)) {
-      query = { $or: [{ id: id }, { _id: new ObjectId(id) }] };
+      conditions.push({ _id: new ObjectId(id) });
     }
+    const query = { $or: conditions };
     
     // Check both blog and news collections
     let news = await db.collection('blog').findOne(query);
@@ -145,7 +146,7 @@ export const shareNews = async (req, res) => {
     }
     
     if (!news) {
-      return res.redirect('/#/');
+      return res.redirect('https://play.google.com/store/apps/details?id=com.aonetarget.education');
     }
 
     const title = news.title || 'Aone Target Institute News';
@@ -161,11 +162,15 @@ export const shareNews = async (req, res) => {
       image = 'https://aonetarget.in' + image;
     }
 
-    const redirectUrl = `/#/news/${id}`;
+    const playStoreUrl = `https://play.google.com/store/apps/details?id=com.aonetarget.education&referrer=utm_source%3Dwhatsapp%26news_id%3D${encodeURIComponent(id)}`;
+    const intentUrl = `intent://news/${encodeURIComponent(id)}#Intent;scheme=aonetarget;package=com.aonetarget.education;S.browser_fallback_url=${encodeURIComponent(playStoreUrl)};end`;
+
+    const safeTitle = (news.title || 'Aone Target Institute News').replace(/"/g, '&quot;');
+    const safeDesc = desc.replace(/"/g, '&quot;');
 
     const html = `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <title>${title}</title>
@@ -178,19 +183,269 @@ export const shareNews = async (req, res) => {
   <meta name="twitter:title" content="${title}">
   <meta name="twitter:description" content="${desc}">
   <meta name="twitter:image" content="${image}">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .card {
+      background: #ffffff;
+      max-width: 440px;
+      width: 100%;
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+      border: 1px solid #e2e8f0;
+    }
+    .thumb {
+      width: 100%;
+      max-height: 220px;
+      object-fit: cover;
+      display: block;
+    }
+    .content {
+      padding: 20px;
+    }
+    .title {
+      font-size: 17px;
+      font-weight: 700;
+      color: #204a8e;
+      line-height: 1.4;
+      margin-bottom: 8px;
+    }
+    .desc {
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.5;
+      margin-bottom: 18px;
+    }
+    .form-group {
+      margin-bottom: 12px;
+      text-align: left;
+    }
+    .form-group label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      font-size: 14px;
+      background: #f8fafc;
+      color: #0f172a;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .form-group input:focus {
+      border-color: #204a8e;
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(32, 74, 142, 0.12);
+    }
+    .phone-wrapper {
+      display: flex;
+    }
+    .phone-prefix {
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      background: #e2e8f0;
+      border: 1px solid #cbd5e1;
+      border-right: none;
+      border-radius: 12px 0 0 12px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #475569;
+    }
+    .phone-input {
+      border-radius: 0 12px 12px 0 !important;
+    }
+    .error-msg {
+      display: none;
+      padding: 10px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 10px;
+      color: #dc2626;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 14px 20px;
+      background: linear-gradient(135deg, #204a8e, #142e5c);
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 15px;
+      border-radius: 14px;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(32, 74, 142, 0.35);
+      transition: transform 0.15s;
+    }
+    .btn:active {
+      transform: scale(0.98);
+    }
+    .direct-link {
+      display: block;
+      margin-top: 14px;
+      text-align: center;
+      font-size: 12px;
+      color: #204a8e;
+      text-decoration: none;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .direct-link:hover {
+      text-decoration: underline;
+    }
+  </style>
 </head>
 <body>
-  <p>Redirecting to article...</p>
+  <div class="card">
+    <img src="${image}" class="thumb" alt="News" />
+    <div class="content">
+      <div class="title">${safeTitle}</div>
+      <div class="desc">${safeDesc}</div>
+
+      <div id="errorMsg" class="error-msg"></div>
+
+      <form id="readerForm" onsubmit="handleLeadSubmit(event)">
+        <div class="form-group">
+          <label>Full Name *</label>
+          <input type="text" id="name" required placeholder="Enter your full name" autocomplete="name" />
+        </div>
+
+        <div class="form-group">
+          <label>Mobile Number *</label>
+          <div class="phone-wrapper">
+            <span class="phone-prefix">🇮🇳 +91</span>
+            <input type="tel" id="phone" maxlength="10" required pattern="[6-9][0-9]{9}" placeholder="10-digit mobile number" class="phone-input" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Email ID (Optional)</label>
+          <input type="email" id="email" placeholder="name@example.com" autocomplete="email" />
+        </div>
+
+        <button type="submit" id="submitBtn" class="btn">
+          <span id="btnText">Read More</span>
+        </button>
+      </form>
+    </div>
+  </div>
+
   <script>
-    // Ensure we preserve the domain when redirecting
-    window.location.replace(window.location.origin + '${redirectUrl}');
+    var newsId = "${id}";
+    var playStoreUrl = "${playStoreUrl}";
+    var intentUrl = "${intentUrl}";
+
+    function openAppDirect() {
+      var isAndroid = /Android/i.test(navigator.userAgent);
+      if (isAndroid) {
+        window.location.href = intentUrl;
+        setTimeout(function() {
+          window.location.href = playStoreUrl;
+        }, 1500);
+      } else {
+        window.location.href = playStoreUrl;
+      }
+    }
+
+    // Auto-fill previous details if already submitted
+    try {
+      if (localStorage.getItem('aone_lead_name')) {
+        document.getElementById('name').value = localStorage.getItem('aone_lead_name');
+      }
+      if (localStorage.getItem('aone_lead_phone')) {
+        document.getElementById('phone').value = localStorage.getItem('aone_lead_phone');
+      }
+    } catch(e) {}
+
+    function handleLeadSubmit(event) {
+      event.preventDefault();
+      var err = document.getElementById('errorMsg');
+      err.style.display = 'none';
+
+      var name = document.getElementById('name').value.trim();
+      var rawPhone = document.getElementById('phone').value.replace(/[^0-9]/g, '');
+      var email = document.getElementById('email').value.trim();
+
+      var phone = rawPhone;
+      if (phone.length === 12 && phone.startsWith('91')) {
+        phone = phone.substring(2);
+      } else if (phone.length === 11 && phone.startsWith('0')) {
+        phone = phone.substring(1);
+      }
+
+      if (name.length < 2) {
+        err.innerText = 'Please enter your full name (minimum 2 characters)';
+        err.style.display = 'block';
+        return;
+      }
+
+      if (!/^[6-9][0-9]{9}$/.test(phone)) {
+        err.innerText = 'Please enter a valid 10-digit mobile number';
+        err.style.display = 'block';
+        return;
+      }
+
+      var btn = document.getElementById('submitBtn');
+      var btnText = document.getElementById('btnText');
+      btn.disabled = true;
+      btnText.innerText = 'Opening Article...';
+
+      // Send lead to backend
+      fetch('/api/news-leads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: name,
+          phone: phone,
+          email: email || undefined,
+          newsId: newsId,
+          newsTitle: "${safeTitle}",
+          source: 'news_share_link'
+        })
+      }).catch(function(e) {
+        console.warn('Lead submit background error:', e);
+      }).finally(function() {
+        try {
+          localStorage.setItem('aone_news_lead_submitted', 'true');
+          localStorage.setItem('aone_lead_name', name);
+          localStorage.setItem('aone_lead_phone', phone);
+        } catch(e) {}
+        window.location.replace('/#/news/' + newsId);
+      });
+    }
   </script>
 </body>
 </html>
     `;
     res.send(html);
   } catch (error) {
-    res.redirect('/#/');
+    res.redirect('https://play.google.com/store/apps/details?id=com.aonetarget.education');
   }
 };
 

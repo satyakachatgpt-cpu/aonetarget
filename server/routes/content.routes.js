@@ -75,6 +75,7 @@ router.post('/news', adminMiddleware, createNews);
 router.put('/news/:id', adminMiddleware, updateNews);
 router.delete('/news/:id', adminMiddleware, deleteNews);
 router.get('/share/news/:id', shareNews);
+router.get('/app/news/:id', shareNews);
 
 // Quick Links
 router.get('/quick-links', getQuickLinks);
