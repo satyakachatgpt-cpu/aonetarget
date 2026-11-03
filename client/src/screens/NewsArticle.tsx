@@ -153,7 +153,7 @@ const NewsArticle: React.FC = () => {
   const handleShare = async () => {
     const newsId = news?.id || news?._id || id;
     const shareUrl = `https://aonetarget.in/api/share/news/${newsId}`;
-    const shareText = `📰 *${news.title}*\n\n👉 *Read More on App / ऐप पर पढ़ें:*\n${shareUrl}`;
+    const shareText = `📰 *${news.title}*\n\n👉 *Read More:*\n${shareUrl}`;
 
     if (Capacitor.isNativePlatform()) {
       try {
@@ -177,9 +177,9 @@ const NewsArticle: React.FC = () => {
     } else {
       try {
         await navigator.clipboard.writeText(shareText);
-        alert('News link copied to clipboard! You can now paste and share it anywhere.');
+        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`, '_blank');
       } catch {
-        alert(`Share link:\n${shareText}`);
+        window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(shareText)}`, '_blank');
       }
     }
   };

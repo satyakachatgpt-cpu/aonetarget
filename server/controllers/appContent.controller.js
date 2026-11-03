@@ -165,18 +165,25 @@ export const shareNews = async (req, res) => {
     const playStoreUrl = `https://play.google.com/store/apps/details?id=com.aonetarget.education&referrer=utm_source%3Dwhatsapp%26news_id%3D${encodeURIComponent(id)}`;
     const intentUrl = `intent://news/${encodeURIComponent(id)}#Intent;scheme=aonetarget;package=com.aonetarget.education;S.browser_fallback_url=${encodeURIComponent(playStoreUrl)};end`;
 
-    const safeTitle = (news.title || 'Aone Target Institute News').replace(/"/g, '&quot;');
-    const safeDesc = desc.replace(/"/g, '&quot;');
+  const rawTitle = news.title || 'Aone Target Institute News';
+  const safeTitle = rawTitle.replace(/"/g, '&quot;');
+  const safeDesc = desc.replace(/"/g, '&quot;');
+  const jsonTitle = JSON.stringify(rawTitle);
 
-    const html = `
+  const html = `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <title>${title}</title>
+  <meta property="og:site_name" content="Aone Target Institute">
   <meta property="og:title" content="${title}">
   <meta property="og:description" content="${desc}">
   <meta property="og:image" content="${image}">
+  <meta property="og:image:secure_url" content="${image}">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
   <meta property="og:url" content="https://aonetarget.in/api/share/news/${id}">
   <meta property="og:type" content="article">
   <meta name="twitter:card" content="summary_large_image">
@@ -306,19 +313,7 @@ export const shareNews = async (req, res) => {
     .btn:active {
       transform: scale(0.98);
     }
-    .direct-link {
-      display: block;
-      margin-top: 14px;
-      text-align: center;
-      font-size: 12px;
-      color: #204a8e;
-      text-decoration: none;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .direct-link:hover {
-      text-decoration: underline;
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
@@ -330,115 +325,163 @@ export const shareNews = async (req, res) => {
 
       <div id="errorMsg" class="error-msg"></div>
 
-      <form id="readerForm" onsubmit="handleLeadSubmit(event)">
-        <div class="form-group">
-          <label>Full Name *</label>
-          <input type="text" id="name" required placeholder="Enter your full name" autocomplete="name" />
-        </div>
+      <div id="loadingBox" style="display:none; text-align:center; padding: 24px 0;">
+        <div style="width: 48px; height: 48px; border: 4px solid #e2e8f0; border-top-color: #204a8e; border-radius: 50%; margin: 0 auto 16px; animation: spin 0.8s linear infinite;"></div>
+        <div style="font-size: 16px; font-weight: 700; color: #204a8e; margin-bottom: 4px;">Opening News Article...</div>
+        <div style="font-size: 13px; color: #64748b;">Please wait a moment</div>
+      </div>
 
-        <div class="form-group">
-          <label>Mobile Number *</label>
-          <div class="phone-wrapper">
-            <span class="phone-prefix">🇮🇳 +91</span>
-            <input type="tel" id="phone" maxlength="10" required pattern="[6-9][0-9]{9}" placeholder="10-digit mobile number" class="phone-input" />
+      <form id="readerForm">
+        <div id="formBody">
+          <div class="form-group">
+            <label>Full Name *</label>
+            <input type="text" id="name" required placeholder="Enter your full name" autocomplete="name" />
           </div>
-        </div>
 
-        <div class="form-group">
-          <label>Email ID (Optional)</label>
-          <input type="email" id="email" placeholder="name@example.com" autocomplete="email" />
-        </div>
+          <div class="form-group">
+            <label>Mobile Number *</label>
+            <div class="phone-wrapper">
+              <span class="phone-prefix">🇮🇳 +91</span>
+              <input type="tel" id="phone" maxlength="10" required pattern="[6-9][0-9]{9}" placeholder="10-digit mobile number" class="phone-input" />
+            </div>
+          </div>
 
-        <button type="submit" id="submitBtn" class="btn">
-          <span id="btnText">Read More</span>
-        </button>
+          <div class="form-group">
+            <label>Email ID (Optional)</label>
+            <input type="email" id="email" placeholder="name@example.com" autocomplete="email" />
+          </div>
+
+          <button type="submit" id="submitBtn" class="btn">
+            <span id="btnText">Read More</span>
+          </button>
+        </div>
       </form>
     </div>
   </div>
 
   <script>
-    var newsId = "${id}";
-    var playStoreUrl = "${playStoreUrl}";
-    var intentUrl = "${intentUrl}";
+    (function() {
+      var newsId = "${id}";
+      var targetUrl = window.location.origin + '/#/news/' + encodeURIComponent(newsId);
+      var articleTitle = ${jsonTitle};
 
-    function openAppDirect() {
-      var isAndroid = /Android/i.test(navigator.userAgent);
-      if (isAndroid) {
-        window.location.href = intentUrl;
-        setTimeout(function() {
-          window.location.href = playStoreUrl;
-        }, 1500);
-      } else {
-        window.location.href = playStoreUrl;
-      }
-    }
+      // Auto-fill previous details if already submitted
+      try {
+        var savedName = localStorage.getItem('aone_lead_name');
+        var savedPhone = localStorage.getItem('aone_lead_phone');
+        if (savedName && document.getElementById('name')) {
+          document.getElementById('name').value = savedName;
+        }
+        if (savedPhone && document.getElementById('phone')) {
+          document.getElementById('phone').value = savedPhone;
+        }
+      } catch(e) {}
 
-    // Auto-fill previous details if already submitted
-    try {
-      if (localStorage.getItem('aone_lead_name')) {
-        document.getElementById('name').value = localStorage.getItem('aone_lead_name');
-      }
-      if (localStorage.getItem('aone_lead_phone')) {
-        document.getElementById('phone').value = localStorage.getItem('aone_lead_phone');
-      }
-    } catch(e) {}
+      var isSubmitting = false;
 
-    function handleLeadSubmit(event) {
-      event.preventDefault();
-      var err = document.getElementById('errorMsg');
-      err.style.display = 'none';
+      function handleLeadSubmit() {
+        if (isSubmitting) return;
 
-      var name = document.getElementById('name').value.trim();
-      var rawPhone = document.getElementById('phone').value.replace(/[^0-9]/g, '');
-      var email = document.getElementById('email').value.trim();
+        var err = document.getElementById('errorMsg');
+        if (err) err.style.display = 'none';
 
-      var phone = rawPhone;
-      if (phone.length === 12 && phone.startsWith('91')) {
-        phone = phone.substring(2);
-      } else if (phone.length === 11 && phone.startsWith('0')) {
-        phone = phone.substring(1);
-      }
+        var nameInput = document.getElementById('name');
+        var phoneInput = document.getElementById('phone');
+        var emailInput = document.getElementById('email');
 
-      if (name.length < 2) {
-        err.innerText = 'Please enter your full name (minimum 2 characters)';
-        err.style.display = 'block';
-        return;
-      }
+        var name = (nameInput ? nameInput.value : '').trim();
+        var rawPhone = (phoneInput ? phoneInput.value : '').replace(/[^0-9]/g, '');
+        var email = (emailInput ? emailInput.value : '').trim();
 
-      if (!/^[6-9][0-9]{9}$/.test(phone)) {
-        err.innerText = 'Please enter a valid 10-digit mobile number';
-        err.style.display = 'block';
-        return;
-      }
+        var phone = rawPhone;
+        if (phone.length === 12 && phone.startsWith('91')) {
+          phone = phone.substring(2);
+        } else if (phone.length === 11 && phone.startsWith('0')) {
+          phone = phone.substring(1);
+        }
 
-      var btn = document.getElementById('submitBtn');
-      var btnText = document.getElementById('btnText');
-      btn.disabled = true;
-      btnText.innerText = 'Opening Article...';
+        if (!name || name.length < 2) {
+          if (err) {
+            err.innerText = 'Please enter your full name (minimum 2 characters)';
+            err.style.display = 'block';
+          }
+          if (nameInput) nameInput.focus();
+          return;
+        }
 
-      // Send lead to backend
-      fetch('/api/news-leads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name,
-          phone: phone,
-          email: email || undefined,
-          newsId: newsId,
-          newsTitle: "${safeTitle}",
-          source: 'news_share_link'
+        if (!/^[6-9][0-9]{9}$/.test(phone)) {
+          if (err) {
+            err.innerText = 'Please enter a valid 10-digit mobile number';
+            err.style.display = 'block';
+          }
+          if (phoneInput) phoneInput.focus();
+          return;
+        }
+
+        isSubmitting = true;
+
+        // Immediately hide form and show loading animation
+        var formBody = document.getElementById('formBody');
+        var loadingBox = document.getElementById('loadingBox');
+        if (formBody) formBody.style.display = 'none';
+        if (loadingBox) loadingBox.style.display = 'block';
+
+        var redirected = false;
+        function doRedirect() {
+          if (redirected) return;
+          redirected = true;
+          try {
+            localStorage.setItem('aone_news_lead_submitted', 'true');
+            localStorage.setItem('aone_lead_name', name);
+            localStorage.setItem('aone_lead_phone', phone);
+          } catch(e) {}
+          window.location.href = targetUrl;
+        }
+
+        // Safety timeout: guaranteed redirect within 1.5s even if network is slow
+        var timer = setTimeout(doRedirect, 1500);
+
+        // Submit lead to backend
+        fetch('/api/news-leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: name,
+            phone: phone,
+            email: email || undefined,
+            newsId: newsId,
+            newsTitle: articleTitle,
+            source: 'news_share_link'
+          })
         })
-      }).catch(function(e) {
-        console.warn('Lead submit background error:', e);
-      }).finally(function() {
-        try {
-          localStorage.setItem('aone_news_lead_submitted', 'true');
-          localStorage.setItem('aone_lead_name', name);
-          localStorage.setItem('aone_lead_phone', phone);
-        } catch(e) {}
-        window.location.replace('/#/news/' + newsId);
-      });
-    }
+        .then(function(res) {
+          return res.json();
+        })
+        .catch(function(e) {
+          console.warn('Lead submit error:', e);
+        })
+        .finally(function() {
+          clearTimeout(timer);
+          doRedirect();
+        });
+      }
+
+      // Attach DOM listeners safely without any inline onclick / onsubmit attributes
+      var form = document.getElementById('readerForm');
+      if (form) {
+        form.addEventListener('submit', function(e) {
+          if (e && e.preventDefault) e.preventDefault();
+          handleLeadSubmit();
+        });
+      }
+      var btn = document.getElementById('submitBtn');
+      if (btn) {
+        btn.addEventListener('click', function(e) {
+          if (e && e.preventDefault) e.preventDefault();
+          handleLeadSubmit();
+        });
+      }
+    })();
   </script>
 </body>
 </html>

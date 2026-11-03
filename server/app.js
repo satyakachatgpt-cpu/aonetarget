@@ -65,11 +65,12 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com", "https://www.youtube.com"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com", "https://www.youtube.com", "https://static.cloudflareinsights.com"],
+        scriptSrcAttr: ["'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "https://img.youtube.com", "https://files.aonetarget.in"],
         frameSrc: ["https://www.youtube.com", "https://checkout.razorpay.com", "https://files.aonetarget.in"],
-        connectSrc: ["'self'", "https://api.razorpay.com", "https://files.aonetarget.in"],
+        connectSrc: ["'self'", "https://api.razorpay.com", "https://files.aonetarget.in", "https://cloudflareinsights.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
       },
     },
