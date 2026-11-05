@@ -162,6 +162,11 @@ const TestsDrawers: React.FC<Props> = ({
                 Array.isArray(testData.testSeries) && testData.testSeries.length > 0
                   ? testData.testSeries
                   : [effectiveCourseId],
+              categoryId: testData.categoryId || '',
+              categoryName: testData.categoryName || '',
+              category: testData.categoryName || testData.categoryId || '',
+              branch: testData.branch || '',
+              level1Branch: testData.branch || '',
               isSeries: false,
               status: "active",
               questions: 0,

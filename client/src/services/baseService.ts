@@ -10,7 +10,7 @@ console.log('[API_BASE_URL]', API_BASE_URL, window.location.href);
 
 export const apiCache: Record<string, { data: any; timestamp: number }> = {};
 export const pendingRequests: Record<string, Promise<any>> = {};
-export const CACHE_TTL = 30000;
+export const CACHE_TTL = 5000; // 5 seconds - ensures fresh data when switching tabs
 
 // Global Fetch Interceptor for automatic 401 & 403 handling (DEVICE_UNLINKED / USER_BLOCKED)
 if (typeof window !== 'undefined' && !(window as any).__fetch_intercepted__) {

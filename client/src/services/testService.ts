@@ -76,8 +76,13 @@ export const questionsAPI = {
 
 // Tests API
 export const testsAPI = {
-  getAll: async () => {
-    return cachedFetch(`${API_BASE_URL}/tests`);
+  getAll: async (params?: any) => {
+    let url = `${API_BASE_URL}/tests`;
+    if (params) {
+      const query = new URLSearchParams(params).toString();
+      url += `?${query}`;
+    }
+    return cachedFetch(url);
   },
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/tests`, {
@@ -90,6 +95,7 @@ export const testsAPI = {
     });
     if (!response.ok) throw new Error('Failed to create test');
     invalidateCache('tests');
+    invalidateCache('test-series');
     return response.json();
   },
   update: async (id: string, data: any) => {
@@ -103,6 +109,7 @@ export const testsAPI = {
     });
     if (!response.ok) throw new Error('Failed to update test');
     invalidateCache('tests');
+    invalidateCache('test-series');
     return response.json();
   },
   delete: async (id: string) => {
@@ -112,6 +119,7 @@ export const testsAPI = {
     });
     if (!response.ok) throw new Error('Failed to delete test');
     invalidateCache('tests');
+    invalidateCache('test-series');
     return response.json();
   },
   getById: async (id: string) => {
@@ -224,6 +232,7 @@ export const testSeriesAPI = {
         throw new Error(error.error || error.details || `Failed to create test series (${response.status})`);
       }
       invalidateCache('test-series');
+      invalidateCache('tests');
       const result = await response.json();
       console.log('Test series created successfully:', result);
       return result;

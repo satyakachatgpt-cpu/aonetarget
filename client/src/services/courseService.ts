@@ -313,8 +313,18 @@ export const liveVideosAPI = {
 
 // PDFs API
 export const pdfsAPI = {
-  getAll: async () => {
-    const response = await fetch(`${API_BASE_URL}/pdfs`);
+  getAll: async (params?: { courseId?: string; isFree?: boolean; categoryId?: string; branch?: string }) => {
+    let url = `${API_BASE_URL}/pdfs`;
+    if (params) {
+      const q = new URLSearchParams();
+      if (params.courseId) q.append('courseId', params.courseId);
+      if (params.isFree !== undefined) q.append('isFree', String(params.isFree));
+      if (params.categoryId) q.append('categoryId', params.categoryId);
+      if (params.branch) q.append('branch', params.branch);
+      const qs = q.toString();
+      if (qs) url += `?${qs}`;
+    }
+    const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to fetch PDFs');
     return response.json();
   },

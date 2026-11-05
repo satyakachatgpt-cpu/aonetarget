@@ -10,7 +10,7 @@ const { ObjectId } = mongoose.Types;
 // GET /api/test-series
 export const getAllTestSeries = async (req, res) => {
   try {
-    const { studentId } = req.query;
+    const { studentId, categoryId, branch } = req.query;
     const seriesFromCollection = await db.collection('testSeries').find({}).toArray();
     const seriesFromTests = await db.collection('tests').find({ isSeries: true }).toArray();
 
@@ -106,7 +106,7 @@ export const getAllTestSeries = async (req, res) => {
       // Fetch only necessary fields for mapping
       const allTestsLightweight = await db.collection('tests').find(
           { isSeries: { $ne: true }, status: { $ne: 'inactive' } },
-          { projection: { id: 1, _id: 1, seriesId: 1, courseId: 1, courseIds: 1, testSeries: 1 } }
+          { projection: { id: 1, _id: 1, seriesId: 1, testSeriesId: 1, courseId: 1, courseIds: 1, testSeries: 1 } }
       ).toArray();
       
       // Indexing Maps
@@ -120,6 +120,7 @@ export const getAllTestSeries = async (req, res) => {
         // Find all series this test belongs to
         const parentSeriesIds = new Set();
         if (t.seriesId) parentSeriesIds.add(String(t.seriesId));
+        if (t.testSeriesId) parentSeriesIds.add(String(t.testSeriesId));
         if (t.courseId) parentSeriesIds.add(String(t.courseId));
         if (Array.isArray(t.courseIds)) t.courseIds.forEach(id => parentSeriesIds.add(String(id)));
         if (Array.isArray(t.testSeries)) t.testSeries.forEach(id => parentSeriesIds.add(String(id)));
@@ -208,7 +209,24 @@ export const getAllTestSeries = async (req, res) => {
       console.error('Error calculating stats for series:', countError);
     }
 
-    res.json(combined);
+    let finalResult = combined;
+    if (categoryId) {
+      const normCat = String(categoryId).toLowerCase().trim();
+      finalResult = finalResult.filter(s => {
+        const sCatId = String(s.categoryId || '').toLowerCase().trim();
+        const sCatName = String(s.categoryName || s.category || '').toLowerCase().trim();
+        const matchesCat = sCatId === normCat || sCatName === normCat;
+        if (!matchesCat) return false;
+        if (branch) {
+          const normBranch = String(branch).toLowerCase().trim();
+          const sBranch = String(s.branch || s.level1Branch || '').toLowerCase().trim();
+          if (sBranch && sBranch !== normBranch) return false;
+        }
+        return true;
+      });
+    }
+
+    res.json(finalResult);
   } catch (error) {
     console.error('Error fetching test series:', error);
     res.status(500).json({ error: 'Failed to fetch test series' });
@@ -235,18 +253,31 @@ export const updateTestSeries = async (req, res) => {
     console.log('PUT /api/test-series/:id - Updating series:', seriesId, req.body);
     const { _id, ...updateData } = req.body;
 
-    // 1. Try updating in 'testSeries' collection
-    let result = await db.collection('testSeries').updateOne(
+    const orConditions = [
       { id: seriesId },
-      { $set: updateData }
+      { id: !isNaN(seriesId) ? Number(seriesId) : null },
+      { _id: seriesId },
+      { _id: ObjectId.isValid(seriesId) ? new ObjectId(seriesId) : null }
+    ].filter(v => v.id !== null && v.id !== undefined || v._id !== null && v._id !== undefined);
+    const query = { $or: orConditions };
+
+    // 1. Update in 'testSeries' collection
+    let result = await db.collection('testSeries').updateOne(
+      query,
+      { $set: { ...updateData, updatedAt: new Date().toISOString() } }
     );
 
-    // 2. If not found, try updating in 'tests' collection (for series stored there)
-    if (result.matchedCount === 0) {
-      console.log('Series not found in testSeries, trying tests collection...');
+    // 2. Also update in 'tests' collection (for series stored there)
+    const testResult = await db.collection('tests').updateOne(
+      query,
+      { $set: { ...updateData, updatedAt: new Date().toISOString() } }
+    );
+
+    if (result.matchedCount === 0 && testResult.matchedCount === 0) {
+      // Fallback try with { id: seriesId, isSeries: true }
       result = await db.collection('tests').updateOne(
         { id: seriesId, isSeries: true },
-        { $set: updateData }
+        { $set: { ...updateData, updatedAt: new Date().toISOString() } }
       );
     }
 

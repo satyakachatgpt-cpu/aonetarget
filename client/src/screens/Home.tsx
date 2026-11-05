@@ -860,13 +860,8 @@ const Home: React.FC = () => {
                   key={cat._id || cat.id || i}
                   onClick={() => {
                     const lTitle = (cat.title || '').toLowerCase();
-                    if (cat.id === 'mock-test' || lTitle.includes('mock test')) {
-                      navigate('/mock-tests');
-                    } else if (cat.id === 'ebooks' || lTitle.includes('ebook') || lTitle.includes('notes')) {
-                      navigate('/ebook-notes');
-                    } else {
-                      navigate(`/explore/${cat.id}`);
-                    }
+                    const targetCatId = cat.id || cat._id || encodeURIComponent(lTitle.replace(/\s+/g, '-'));
+                    navigate(`/explore/${targetCatId}`);
                   }}
                   className={`relative p-3 rounded-3xl h-[140px] flex flex-col justify-between text-white bg-gradient-to-br ${cat.gradient || CATEGORY_GRADIENTS[i % CATEGORY_GRADIENTS.length]} overflow-hidden cursor-pointer active:scale-[0.97] transition-all duration-200 shadow-elevated hover:shadow-card-hover hover:-translate-y-0.5 group`}
                 >

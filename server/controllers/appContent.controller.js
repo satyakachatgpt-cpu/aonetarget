@@ -859,10 +859,32 @@ export const deleteStandaloneNote = async (req, res) => {
 
 export const getGenericPdfs = async (req, res) => {
   try {
-    const { courseId, isFree } = req.query;
+    const { courseId, isFree, categoryId, branch } = req.query;
     const query = {};
     if (courseId) query.courseId = courseId;
     if (isFree === 'true') query.isFree = true;
+    
+    if (categoryId) {
+      query.$or = [
+        { categoryId: categoryId },
+        { category: categoryId },
+        { categoryName: categoryId }
+      ];
+    }
+    if (branch) {
+      const branchCond = {
+        $or: [
+          { branch: branch },
+          { level1Branch: branch }
+        ]
+      };
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, branchCond];
+        delete query.$or;
+      } else {
+        query.$or = branchCond.$or;
+      }
+    }
     
     const pdfs = await db.collection('pdfs').find(query).sort({ sortBy: 1 }).toArray();
     res.json(pdfs);

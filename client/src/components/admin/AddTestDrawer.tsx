@@ -3,7 +3,7 @@ import { RightSideDrawer, DrawerBody } from './DrawerSystem';
 import CustomDropdown from './CustomDropdown';
 import RichTextEditor from '../shared/RichTextEditor';
 import { validateImage } from '../../lib/utils';
-import { uploadAPI } from '../../services/apiClient';
+import { uploadAPI, categoriesAPI } from '../../services/apiClient';
 
 interface AddTestDrawerProps {
     isOpen: boolean;
@@ -33,8 +33,12 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
         expiryMode: 'Validity' as 'Validity' | 'End Date' | 'Lifetime Access',
         duration: '',
         noOfQuestions: '0',
+        categoryId: '',
+        categoryName: '',
+        branch: '',
     });
     const [imagePreview, setImagePreview] = useState<string | null>(null);
+    const [categories, setCategories] = useState<any[]>([]);
     const [showCategoryOptions, setShowCategoryOptions] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const imageInputRef = useRef<HTMLInputElement>(null);
@@ -50,11 +54,43 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
     });
 
 
+    const findMatchedCategory = (catList: any[], raw: any) => {
+        if (!raw || !catList || catList.length === 0) return null;
+        const str = String(raw).toLowerCase().trim();
+        return catList.find((c: any) => 
+            String(c.id || '').toLowerCase().trim() === str ||
+            String(c._id || '').toLowerCase().trim() === str ||
+            (c.title && String(c.title).toLowerCase().trim() === str) ||
+            (c.name && String(c.name).toLowerCase().trim() === str)
+        );
+    };
+
     useEffect(() => {
         if (isOpen) {
+            categoriesAPI.getAll().then(res => {
+                const catList = Array.isArray(res) ? res.filter((c: any) => c.isActive !== false) : [];
+                setCategories(catList);
+                if (editingTest) {
+                    const rawCat = editingTest.categoryId || editingTest.category || editingTest.categoryName || '';
+                    if (rawCat) {
+                        const found = findMatchedCategory(catList, rawCat);
+                        if (found) {
+                            setFormData(prev => ({
+                                ...prev,
+                                categoryId: String(found.id || found._id),
+                                categoryName: found.title || found.name || ''
+                            }));
+                        }
+                    }
+                }
+            }).catch(() => []);
             if (editingTest) {
                 const rawIds = editingTest.courseIds || (editingTest.courseId ? [editingTest.courseId] : []);
                 const normalizedIds = Array.isArray(rawIds) ? rawIds.map((id: any) => String(id)) : [];
+                const rawCat = editingTest.categoryId || editingTest.category || editingTest.categoryName || '';
+                const matched = findMatchedCategory(categories, rawCat);
+                const initialCatId = matched ? String(matched.id || matched._id) : (editingTest.categoryId || '');
+                const initialCatName = matched ? (matched.title || matched.name || '') : (editingTest.categoryName || editingTest.category || '');
                 
                 setFormData({
                     name: editingTest.seriesName || editingTest.name || editingTest.title || '',
@@ -80,6 +116,9 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
                     expiryMode: editingTest.expiryMode || 'Validity',
                     duration: editingTest.duration?.toString() || '',
                     noOfQuestions: editingTest.noOfQuestions?.toString() || editingTest.questions?.toString() || '0',
+                    categoryId: initialCatId,
+                    categoryName: initialCatName,
+                    branch: editingTest.branch || editingTest.level1Branch || '',
                 });
                 setImagePreview(editingTest.logo || null);
                 setAdvSettings({
@@ -106,6 +145,9 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
                     expiryMode: 'Validity',
                     duration: '180',
                     noOfQuestions: '0',
+                    categoryId: '',
+                    categoryName: '',
+                    branch: '',
                 });
                 setImagePreview(null);
                 setAdvSettings({
@@ -174,7 +216,7 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
             <div className="flex flex-col h-full bg-white font-sans overflow-hidden">
                 {/* Header */}
                 <div className="flex justify-between items-center px-10 py-6 border-b border-gray-100 shrink-0">
-                    <h2 className="text-[20px] font-bold text-[#1e1e1e]">Add Test</h2>
+                    <h2 className="text-[20px] font-bold text-[#1e1e1e]">{editingTest ? 'Edit Test' : 'Add Test'}</h2>
                     <button onClick={onClose} className="text-gray-400 hover:text-black transition-colors">
                         <span className="material-symbols-outlined text-[28px]">close</span>
                     </button>
@@ -235,6 +277,69 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
                                 content={formData.description}
                                 onChange={(val) => setFormData(prev => ({ ...prev, description: val }))}
                             />
+                        </div>
+
+                        {/* Target Category Selection */}
+                        <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
+                            <div className="flex items-center gap-2">
+                                <span className="material-symbols-rounded text-[#283593] text-[20px]">category</span>
+                                <label className="text-[13px] font-bold text-gray-800 uppercase tracking-wider">
+                                    Target Category
+                                </label>
+                            </div>
+                            <p className="text-[11px] text-gray-500 -mt-1 font-medium">
+                                Choose which category this test series will appear in on the student app/website.
+                            </p>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                                <div className="space-y-1">
+                                    <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider ml-0.5">Category</label>
+                                    <select
+                                        className="w-full h-[50px] px-4 bg-white border border-gray-200 rounded-xl text-[14px] font-medium text-gray-800 outline-none focus:border-[#283593] shadow-sm transition-all"
+                                        value={formData.categoryId}
+                                        onChange={(e) => {
+                                            const catId = e.target.value;
+                                            const catObj = categories.find(c => String(c.id || c._id) === catId);
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                categoryId: catId,
+                                                categoryName: catObj ? (catObj.title || catObj.name) : '',
+                                                branch: ''
+                                            }));
+                                        }}
+                                    >
+                                        <option value="">None / Unassigned</option>
+                                        {categories.map(cat => (
+                                            <option key={String(cat.id || cat._id)} value={String(cat.id || cat._id)}>
+                                                {cat.title || cat.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {(() => {
+                                    const selectedCat = categories.find(c => String(c.id || c._id) === String(formData.categoryId));
+                                    const branches = selectedCat?.branchesL1 || [];
+                                    if (branches.length === 0) return null;
+                                    return (
+                                        <div className="space-y-1">
+                                            <label className="text-[11px] font-bold text-gray-600 uppercase tracking-wider ml-0.5">Branch / Tab</label>
+                                            <select
+                                                className="w-full h-[50px] px-4 bg-white border border-gray-200 rounded-xl text-[14px] font-medium text-gray-800 outline-none focus:border-[#283593] shadow-sm transition-all"
+                                                value={formData.branch}
+                                                onChange={(e) => setFormData(prev => ({ ...prev, branch: e.target.value }))}
+                                            >
+                                                <option value="">All Branches</option>
+                                                {branches.map((b: any) => (
+                                                    <option key={b.slug} value={b.slug}>
+                                                        {b.label}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
                         </div>
 
                         {/* Linked Batches */}
@@ -459,7 +564,12 @@ const AddTestDrawer: React.FC<AddTestDrawerProps> = ({ isOpen, onClose, onSubmit
                         <button
                             onClick={() => {
                                 if (!formData.name.trim()) return alert("Please enter a test title.");
-                                onSubmit({ ...formData, ...advSettings });
+                                onSubmit({
+                                    ...formData,
+                                    category: formData.categoryName || formData.categoryId || '',
+                                    level1Branch: formData.branch || '',
+                                    ...advSettings
+                                });
                             }}
                             className="flex-[2] h-[60px] rounded-[20px] bg-[#1a1c1e] hover:bg-black text-white text-[16px] font-bold uppercase tracking-[0.1em] transition-all active:scale-[0.99] shadow-lg shadow-black/5">
                             {editingTest ? 'Save Changes' : 'Submit Test'}

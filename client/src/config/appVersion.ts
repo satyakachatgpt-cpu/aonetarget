@@ -1,6 +1,6 @@
 export const APP_VERSION_CONFIG = {
-  version: '1.3.4',
-  versionCode: 8,
+  version: '1.3.5',
+  versionCode: 9,
   appName: 'A One Target',
   packageName: 'com.aonetarget.education',
   playStoreUrl: 'https://play.google.com/store/apps/details?id=com.aonetarget.education',

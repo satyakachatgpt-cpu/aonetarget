@@ -19,6 +19,9 @@ export const getCategories = async (req, res) => {
 export const createCategory = async (req, res) => {
   try {
     const { _id, ...categoryData } = req.body;
+    if (!categoryData.id && categoryData.title) {
+      categoryData.id = categoryData.title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `cat_${Date.now()}`;
+    }
     const result = await db.collection('categories').insertOne(categoryData);
     res.status(201).json({ _id: result.insertedId, ...categoryData });
   } catch (error) {
@@ -174,7 +177,14 @@ export const getSubcategories = async (req, res) => {
   try {
     const { categoryId, level1Branch, level2Branch } = req.query;
     const query = {};
-    if (categoryId) query.categoryId = categoryId;
+    if (categoryId) {
+      const lower = String(categoryId).toLowerCase();
+      if (lower.includes('nursing')) {
+        query.categoryId = { $in: [categoryId, 'nursing', 'nursing-cet', 'Nursing', 'NURSING', 'bsc-nursing', 'nursing_cet'] };
+      } else {
+        query.categoryId = categoryId;
+      }
+    }
     if (level1Branch) query.level1Branch = level1Branch;
     if (level2Branch) query.level2Branch = level2Branch;
     
@@ -277,7 +287,14 @@ export const getSubjects = async (req, res) => {
   try {
     const { categoryId, subcategoryId, level1Branch, level2Branch } = req.query;
     const query = {};
-    if (categoryId) query.categoryId = categoryId;
+    if (categoryId) {
+      const lower = String(categoryId).toLowerCase();
+      if (lower.includes('nursing')) {
+        query.categoryId = { $in: [categoryId, 'nursing', 'nursing-cet', 'Nursing', 'NURSING', 'bsc-nursing', 'nursing_cet'] };
+      } else {
+        query.categoryId = categoryId;
+      }
+    }
     if (subcategoryId) query.subcategoryId = subcategoryId;
     if (level1Branch) query.level1Branch = level1Branch;
     if (level2Branch) query.level2Branch = level2Branch;

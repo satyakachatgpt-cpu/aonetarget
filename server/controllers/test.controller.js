@@ -162,8 +162,27 @@ export const getAllTests = async (req, res, next) => {
     const courseId = req.query.courseId ? String(req.query.courseId) : undefined;
     const seriesId = req.query.seriesId ? String(req.query.seriesId) : undefined;
     const testType = req.query.testType ? String(req.query.testType) : undefined;
+    const categoryId = req.query.categoryId ? String(req.query.categoryId) : undefined;
+    const branch = req.query.branch ? String(req.query.branch) : undefined;
 
     let matchConditions = [];
+    if (categoryId) {
+      matchConditions.push({
+        $or: [
+          { categoryId: categoryId },
+          { categoryName: categoryId },
+          { category: categoryId }
+        ]
+      });
+      if (branch) {
+        matchConditions.push({
+          $or: [
+            { branch: branch },
+            { level1Branch: branch }
+          ]
+        });
+      }
+    }
 
     // Robust ID/Series matching
     const searchId = seriesId || courseId;
@@ -648,6 +667,13 @@ export const updateTest = async (req, res) => {
       { $set: { ...updateData, updatedAt: new Date().toISOString() } }, 
       { upsert: true }
     );
+
+    if (updateData.isSeries || updateData.seriesName) {
+      await db.collection('testSeries').updateOne(
+        query,
+        { $set: { ...updateData, updatedAt: new Date().toISOString() } }
+      ).catch(() => {});
+    }
     
     res.json({ success: true, message: result.upsertedCount > 0 ? 'Test created' : 'Test updated' });
   } catch (error) {

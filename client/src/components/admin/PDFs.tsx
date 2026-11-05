@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getPdfUrl } from '../../lib/utils';
-import { pdfsAPI, coursesAPI, uploadAPI } from '../../services/apiClient';
+import { pdfsAPI, coursesAPI, uploadAPI, categoriesAPI } from '../../services/apiClient';
 import {
   RightSideDrawer,
   DrawerBody,

@@ -118,6 +118,11 @@ const TestSeries: React.FC<Props> = ({ showToast }) => {
         courseIds: data.courseIds || (data.courseId ? [data.courseId] : []),
         courseName: selectedCourse ? (selectedCourse.name || selectedCourse.title) : '',
         course: selectedCourse ? (selectedCourse.name || selectedCourse.title) : '',
+        categoryId: data.categoryId || '',
+        categoryName: data.categoryName || '',
+        category: data.categoryName || data.categoryId || '',
+        branch: data.branch || '',
+        level1Branch: data.branch || '',
         description: data.description,
         price: parseFloat(data.price) || 0,
         mrp: parseFloat(data.mrp) || 0,
@@ -328,8 +333,16 @@ const TestSeries: React.FC<Props> = ({ showToast }) => {
                       {(currentPage - 1) * itemsPerPage + index + 1}
                     </td>
                     <td className="px-4 py-4">
-                      <span className="text-sm font-semibold text-navy">{item.seriesName}</span>
-                      <p className="text-xs text-gray-400 mt-0.5">{item.description}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-semibold text-navy">{item.seriesName}</span>
+                        {(item as any).categoryName && (
+                          <span className="text-[10px] bg-indigo-50 text-indigo-700 font-bold px-2 py-0.5 rounded-md">
+                            {(item as any).categoryName}
+                            {(item as any).branch ? ` • ${(item as any).branch}` : ''}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-gray-400 mt-0.5 line-clamp-1">{item.description}</p>
                     </td>
                     <td className="px-4 py-4">
                       <span className="text-sm text-gray-600">{getCourseName(item)}</span>

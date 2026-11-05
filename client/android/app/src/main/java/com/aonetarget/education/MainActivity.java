@@ -97,30 +97,6 @@ public class MainActivity extends BridgeActivity {
                     } catch (Exception e) {
                         Log.e(TAG, "Resume update error: " + e.getMessage());
                     }
-                } else if (appUpdateInfo.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE) {
-                    if (appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.FLEXIBLE)) {
-                        try {
-                            appUpdateManager.startUpdateFlowForResult(
-                                appUpdateInfo,
-                                this,
-                                AppUpdateOptions.newBuilder(AppUpdateType.FLEXIBLE).build(),
-                                UPDATE_REQUEST_CODE
-                            );
-                        } catch (Exception e) {
-                            Log.e(TAG, "Failed flexible update on resume: " + e.getMessage());
-                        }
-                    } else if (appUpdateInfo.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)) {
-                        try {
-                            appUpdateManager.startUpdateFlowForResult(
-                                appUpdateInfo,
-                                this,
-                                AppUpdateOptions.newBuilder(AppUpdateType.IMMEDIATE).build(),
-                                UPDATE_REQUEST_CODE
-                            );
-                        } catch (Exception e) {
-                            Log.e(TAG, "Failed immediate update on resume: " + e.getMessage());
-                        }
-                    }
                 }
             });
         }
