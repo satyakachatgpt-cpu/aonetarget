@@ -199,7 +199,7 @@ const SortablePackageRow = ({
           </div>
           <div className="flex flex-col min-w-0">
             <span className="text-[14px] font-bold text-gray-900 group-hover:text-black transition-colors truncate">{pkg.name}</span>
-            <span className="text-[11px] font-medium text-gray-400 mt-0.5 truncate uppercase tracking-tight">{pkg.categoryId || 'General'}</span>
+            <span className="text-[11px] font-medium text-gray-400 mt-0.5 truncate uppercase tracking-tight">{pkg.category || (Array.isArray(pkg.categories) && pkg.categories[0]) || pkg.categoryName || pkg.categoryId || 'General'}</span>
           </div>
         </div>
       </td>

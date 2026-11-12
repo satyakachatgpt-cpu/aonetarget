@@ -89,9 +89,16 @@ const CoursesScreen: React.FC = () => {
   const enrolledCourseIds = enrolledCourses.map(c => c.id);
 
   const filteredCourses = courses.filter(course => {
-    const matchesCategory = activeCategory === 'all' || 
-      course.category?.toLowerCase().includes(activeCategory) ||
-      course.name?.toLowerCase().includes(activeCategory);
+    const matchesCategory = activeCategory === 'all' || (() => {
+      const catObj = categories.find(cat => cat.key === activeCategory);
+      const targetKeys = [
+        activeCategory,
+        catObj?.label?.toLowerCase().trim()
+      ].filter(Boolean);
+      const cCat = (course.category || '').toLowerCase().trim();
+      const cCatId = (course.categoryId || '').toLowerCase().trim();
+      return targetKeys.includes(cCat) || targetKeys.includes(cCatId);
+    })();
     const matchesSearch = !searchQuery || 
       course.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       course.title?.toLowerCase().includes(searchQuery.toLowerCase());

@@ -179,8 +179,10 @@ export const getSubcategories = async (req, res) => {
     const query = {};
     if (categoryId) {
       const lower = String(categoryId).toLowerCase();
-      if (lower.includes('nursing')) {
-        query.categoryId = { $in: [categoryId, 'nursing', 'nursing-cet', 'Nursing', 'NURSING', 'bsc-nursing', 'nursing_cet'] };
+      if (lower.includes('bsc') && lower.includes('nursing')) {
+        query.categoryId = { $in: [categoryId, 'bsc-nursing', 'bsc_nursing', 'BSC NURSING', 'ENTRANCE EXAM'] };
+      } else if (lower.includes('nursing')) {
+        query.categoryId = { $in: [categoryId, 'nursing', 'nursing-cet', 'Nursing', 'NURSING', 'nursing_cet', 'Govt. Competition '] };
       } else {
         query.categoryId = categoryId;
       }
@@ -289,8 +291,10 @@ export const getSubjects = async (req, res) => {
     const query = {};
     if (categoryId) {
       const lower = String(categoryId).toLowerCase();
-      if (lower.includes('nursing')) {
-        query.categoryId = { $in: [categoryId, 'nursing', 'nursing-cet', 'Nursing', 'NURSING', 'bsc-nursing', 'nursing_cet'] };
+      if (lower.includes('bsc') && lower.includes('nursing')) {
+        query.categoryId = { $in: [categoryId, 'bsc-nursing', 'bsc_nursing', 'BSC NURSING', 'ENTRANCE EXAM'] };
+      } else if (lower.includes('nursing')) {
+        query.categoryId = { $in: [categoryId, 'nursing', 'nursing-cet', 'Nursing', 'NURSING', 'nursing_cet', 'Govt. Competition '] };
       } else {
         query.categoryId = categoryId;
       }

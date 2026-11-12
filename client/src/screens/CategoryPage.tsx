@@ -120,6 +120,8 @@ export function normalizeSubcategoryId(val: string = "") {
 export const normalizeKey = (val: any) => String(val || "").toLowerCase().trim().replace(/[-_]/g, " ");
 
 export const getCourseCategoryKey = (c: any) => {
+  if (!c) return [];
+  if (typeof c === 'string') return [normalizeKey(c)].filter(Boolean);
   const ids = [c.categoryId, c.category, c.categoryName, c.primaryCategory];
   if (Array.isArray(c.categories)) ids.push(...c.categories);
   return ids.map(normalizeKey).filter(Boolean);
@@ -132,24 +134,26 @@ export const getCourseSubKey = (c: any) => normalizeKey(c.subcategoryId || c.con
 export function isCategoryMatch(course: any, targetCategory: any) {
   if (!course || !targetCategory) return false;
   
-  const targetId = normalizeKey(targetCategory.id || targetCategory._id);
-  const targetTitle = normalizeKey(targetCategory.title);
+  const targetId = typeof targetCategory === 'string' ? normalizeKey(targetCategory) : normalizeKey(targetCategory.id);
+  const targetMongoId = typeof targetCategory === 'string' ? '' : normalizeKey(targetCategory._id);
+  const targetTitle = typeof targetCategory === 'string' ? '' : normalizeKey(targetCategory.title);
+  const targetKeys = [targetId, targetMongoId, targetTitle].filter(Boolean);
   const courseKeys = getCourseCategoryKey(course);
 
-  // 1. Direct match with target ID or Title
-  if (courseKeys.includes(targetId) || courseKeys.includes(targetTitle)) return true;
-  
-  // 2. Special Case: Nursing (inclusive)
-  const isNursingTarget = targetId.includes('nursing') || targetTitle.includes('nursing');
-  if (isNursingTarget) {
-     return courseKeys.some(k => k.includes('nursing') || k.includes('norcet'));
-  }
+  // 1. Direct match with target ID, Mongo ID, or Title
+  if (courseKeys.some(k => targetKeys.includes(k))) return true;
 
-  // 3. Special Case: NEET/IIT-JEE (slug mapping)
-  if (targetId.includes('neet') || targetId.includes('jee') || targetTitle.includes('neet') || targetTitle.includes('jee')) {
-    const isNeet = courseKeys.some(k => k.includes('neet'));
-    const isJee = courseKeys.some(k => k.includes('jee') || k.includes('iit'));
-    return isNeet || isJee;
+  // 2. Special Case: NEET/IIT-JEE (slug mapping)
+  const isNeetTarget = targetKeys.some(k => k.includes('neet'));
+  const isJeeTarget = targetKeys.some(k => k.includes('jee') || k.includes('iit'));
+  if (isNeetTarget && !isJeeTarget) {
+    return courseKeys.some(k => k.includes('neet'));
+  }
+  if (isJeeTarget && !isNeetTarget) {
+    return courseKeys.some(k => k.includes('jee') || k.includes('iit'));
+  }
+  if (isNeetTarget && isJeeTarget) {
+    return courseKeys.some(k => k.includes('neet') || k.includes('jee') || k.includes('iit'));
   }
   
   return false;
@@ -1363,137 +1367,152 @@ const Class11_12Page: React.FC<{
 
 
 
-const NursingPage: React.FC<{ category: Category; subcategories: SubCategory[]; courses: Course[]; loading: boolean; enrolledCourseIds: string[] }> = ({ category, subcategories, courses, loading, enrolledCourseIds }) => {
-  const categoryId = category.id || category._id || 'nursing';
+const DynamicCategoryPage: React.FC<{
+  category: Category;
+  subcategories: SubCategory[];
+  courses: Course[];
+  loading: boolean;
+  enrolledCourseIds: string[];
+}> = ({ category, subcategories, courses, loading, enrolledCourseIds }) => {
   const navigate = useNavigate();
+  const headerGradient = category.gradient || 'from-blue-600 to-indigo-700';
 
   return (
     <div className="flex flex-col w-full min-h-screen bg-gray-50 pb-20">
-      <header className="bg-gradient-to-br from-teal-600 to-emerald-700 text-white pt-8 pb-12 px-4 rounded-b-[2.5rem] relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
-        <div className="relative z-10">
-          <div className="flex items-center gap-3 mb-6">
-            <button onClick={() => navigate(-1)} className="p-2 rounded-xl bg-white/20 backdrop-blur-md">
-              <span className="material-symbols-rounded">arrow_back</span>
-            </button>
-            <div>
-              <h1 className="text-xl font-black tracking-tight">{category.title}</h1>
-              <p className="text-white/60 text-xs">{category.subtitle || 'Aone Target Institute'}</p>
+      {/* Compact Clean Header */}
+      <header className={`bg-gradient-to-br ${headerGradient} text-white pt-4 pb-4 px-4 rounded-b-2xl shadow-sm relative overflow-hidden`}>
+        <div className="flex items-center gap-3 relative z-10">
+          <button
+            onClick={() => navigate(-1)}
+            className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-md hover:bg-white/30 transition-all active:scale-95 text-white flex items-center justify-center flex-shrink-0"
+            aria-label="Back"
+          >
+            <span className="material-symbols-rounded text-xl leading-none">arrow_back</span>
+          </button>
+
+          {category.icon && (
+            <div className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center flex-shrink-0">
+              <span className="material-symbols-rounded text-white text-lg leading-none">{category.icon}</span>
             </div>
+          )}
+
+          <div className="flex-1 min-w-0">
+            <h1 className="text-base font-black tracking-tight text-white leading-tight truncate">
+              {category.title}
+            </h1>
+            {category.subtitle && (
+              <p className="text-white/80 text-[11px] font-bold uppercase tracking-wider truncate mt-0.5">
+                {category.subtitle}
+              </p>
+            )}
           </div>
-          <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 border border-white/20">
-            <div className="flex items-center gap-3">
-              {category.icon && (
-                <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center shadow-lg transform rotate-3">
-                  <span className="material-symbols-rounded text-teal-600 text-2xl">{category.icon}</span>
-                </div>
-              )}
-              <div>
-                <h2 className="font-bold text-sm">Specialized Coaching</h2>
-                <p className="text-white/70 text-[10px]">{category.description || 'Preparation with expert medical faculty'}</p>
-              </div>
-            </div>
+
+          <div className="bg-white/20 backdrop-blur-md px-2.5 py-1 rounded-full text-[11px] font-bold text-white flex-shrink-0">
+            {courses.length} {courses.length === 1 ? 'Course' : 'Courses'}
           </div>
         </div>
       </header>
 
-      <main className="px-4 -mt-6">
-        <div className="grid grid-cols-2 gap-3 pb-8">
-          {subcategories.map((item) => {
-            const count = courses.filter(c => 
-              isCategoryMatch(c, category) && 
-              (c.subcategoryId === item.id || (c.name || '').toLowerCase().includes(item.title.toLowerCase()) || (c.subcategoryId || '').toLowerCase().includes(item.id.toLowerCase()))
-            ).length;
+      {/* Main Content Area */}
+      <main className="px-4 pt-4 space-y-4">
+        {/* Optional Subcategories (only if created for this category) */}
+        {subcategories.length > 0 && (
+          <div className="grid grid-cols-2 gap-2.5 pb-2">
+            {subcategories.map((item) => {
+              const count = courses.filter(c => 
+                isCategoryMatch(c, category) && 
+                (c.subcategoryId === item.id || (c.name || '').toLowerCase().includes(item.title.toLowerCase()) || (c.subcategoryId || '').toLowerCase().includes(item.id.toLowerCase()))
+              ).length;
 
-            return (
-              <button
-                key={item.id}
-                onClick={() => {
-                  if (item.id === 'ebooks') navigate('/ebook-notes');
-                  else if (item.id === 'mock-tests') navigate('/mock-tests');
-                  else navigate(`/explore/${category.id || category._id || categoryId}/${item.id}?label=${encodeURIComponent(item.title)}`);
-                }}
-                className={`group bg-white rounded-3xl p-4 shadow-sm border border-gray-100 flex flex-col justify-between h-40 text-left active:scale-[0.97] transition-all hover:shadow-card-hover hover:-translate-y-1 relative overflow-hidden ${item.id === 'mock-tests' || item.id === 'ebooks' ? 'col-span-1' : ''}`}
-              >
-                <div className={`absolute top-0 right-0 w-16 h-16 bg-gradient-to-br ${getVisualGradient(item)} opacity-[0.03] rounded-bl-full`}></div>
-                
-                {item.icon && (
-                  <div className={`w-11 h-11 rounded-2xl bg-gradient-to-br ${getVisualGradient(item)} flex items-center justify-center text-white shadow-lg group-hover:scale-110 transition-transform duration-300`}>
-                    <span className="material-symbols-rounded text-[22px]">{item.icon}</span>
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    if (item.id === 'ebooks') navigate('/ebook-notes');
+                    else if (item.id === 'mock-tests') navigate('/mock-tests');
+                    else navigate(`/explore/${category.id || category._id}/${item.id}?label=${encodeURIComponent(item.title)}`);
+                  }}
+                  className="group bg-white rounded-2xl p-3 shadow-sm border border-gray-100 flex items-center gap-3 text-left active:scale-[0.98] transition-all hover:shadow-md"
+                >
+                  {item.icon && (
+                    <div className={`w-9 h-9 rounded-xl bg-gradient-to-br ${getVisualGradient(item)} flex items-center justify-center text-white shadow-sm flex-shrink-0`}>
+                      <span className="material-symbols-rounded text-lg">{item.icon}</span>
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-[12px] text-gray-800 truncate leading-tight">{item.title}</h3>
+                    <p className="text-[10px] text-gray-400 mt-0.5 font-medium truncate">{count > 0 ? `${count} Batches` : 'Explore'}</p>
                   </div>
-                )}
-                
-                <div className="relative z-10">
-                  <h3 className="font-black text-[13px] text-gray-800 leading-tight">{item.title}</h3>
-                  <p className="text-[9px] text-gray-400 mt-1 font-medium leading-tight">{item.description || 'Professional Course'}</p>
-                  <div className="mt-3 flex items-center justify-between">
-                     <span className="text-[8px] font-bold text-teal-600 bg-teal-50 px-2 py-0.5 rounded-md">
-                       {count > 0 ? `${count} Courses` : 'New Batches'}
-                     </span>
-                     <span className="material-symbols-rounded text-teal-200 text-sm group-hover:text-teal-500 transition-colors">arrow_forward</span>
-                  </div>
-                </div>
-              </button>
-    
-            );
-          })}
-        </div>
+                  <span className="material-symbols-rounded text-gray-300 text-sm group-hover:text-gray-600 transition-colors">arrow_forward</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
 
-        <div className="mt-8 space-y-4">
+        {/* Available Courses Section */}
+        <div className="space-y-3">
           <div className="flex items-center justify-between px-1">
-            <h3 className="text-xs font-semibold text-gray-400 tracking-wide">
+            <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">
               {courses.length} {courses.length === 1 ? 'Available Course' : 'Available Courses'}
             </h3>
           </div>
           
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {courses.length > 0 ? (
               courses.map((course, idx) => {
                 const cId = course.id || course._id || '';
                 const courseName = course.name || course.title || 'Course';
                 const coursePrice = course.price || 0;
                 const isFree = coursePrice === 0;
+                const badgeLabel = course.category || (Array.isArray(course.categories) && course.categories[0]) || category.title;
 
                 return (
                   <button
                     key={cId || idx}
                     onClick={() => navigate(`/course/${cId}`)}
-                    className="flex items-center gap-3 p-3 rounded-xl bg-white shadow-sm border border-gray-100 hover:shadow-md transition-all active:scale-[0.98] text-left w-full group"
+                    className="flex items-center gap-3 p-3 rounded-2xl bg-white shadow-sm border border-gray-100 hover:shadow-md transition-all active:scale-[0.98] text-left w-full group"
                   >
-                    <div className="w-14 h-14 rounded-lg bg-gray-100 flex-shrink-0 overflow-hidden relative border border-gray-50">
+                    <div className="w-14 h-14 rounded-xl bg-gray-100 flex-shrink-0 overflow-hidden relative border border-gray-100">
                       {(course.imageUrl || course.thumbnail) ? (
                         <img 
                           src={getImageUrl(course.imageUrl || course.thumbnail)} 
                           alt="" 
-                          className="w-full h-full object-cover" 
+                          className="w-14 h-14 object-cover rounded-xl" 
                           loading="lazy" 
                         />
                       ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-teal-600 to-emerald-700 flex items-center justify-center">
-                          <span className="text-white/50 text-xl font-bold">{(courseName).charAt(0).toUpperCase()}</span>
+                        <div className={`w-14 h-14 bg-gradient-to-br ${headerGradient} flex items-center justify-center text-white rounded-xl`}>
+                          <span className="text-lg font-bold">{courseName.charAt(0).toUpperCase()}</span>
                         </div>
                       )}
                     </div>
                     
                     <div className="flex-1 min-w-0">
-                      <h4 className="text-sm font-semibold text-gray-900 line-clamp-2 leading-tight group-hover:text-teal-600 transition-colors">{courseName}</h4>
-                      <div className="flex items-center gap-2 mt-1.5">
+                      <h4 className="text-[13px] font-bold text-gray-900 line-clamp-2 leading-snug group-hover:text-blue-600 transition-colors">
+                        {courseName}
+                      </h4>
+                      <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                         {enrolledCourseIds.some(eid => String(eid) === String(course.id) || String(eid) === String(course._id)) ? (
-                          <span className="px-2 py-0.5 text-[10px] bg-teal-50 text-teal-600 rounded-full font-bold">Enrolled</span>
+                          <span className="px-2 py-0.5 text-[10px] bg-emerald-50 text-emerald-700 rounded-full font-bold">Enrolled</span>
                         ) : (
-                          <span className="text-sm font-bold text-teal-600">{isFree ? 'Free' : `₹${coursePrice}`}</span>
+                          <span className="text-xs font-bold text-gray-900">{isFree ? 'Free' : `₹${coursePrice}`}</span>
                         )}
-                        <span className="px-2 py-0.5 text-[10px] bg-teal-50 text-teal-600 rounded-full font-bold uppercase">{category.title}</span>
+                        <span className="px-2 py-0.5 text-[9px] bg-gray-100 text-gray-600 rounded-full font-bold uppercase truncate max-w-[120px]">
+                          {badgeLabel}
+                        </span>
                       </div>
                     </div>
                     
-                    <span className="material-symbols-rounded text-gray-300 text-lg group-hover:text-teal-600 transition-colors">chevron_right</span>
+                    <span className="material-symbols-rounded text-gray-300 text-base group-hover:text-blue-600 transition-colors">chevron_right</span>
                   </button>
-                  );
-                })
+                );
+              })
             ) : (
-              <div className="text-center py-10">
-                <p className="text-sm text-gray-400 font-medium">No batches available</p>
+              <div className="text-center py-12 bg-white rounded-2xl border border-gray-100 p-6">
+                <span className="material-symbols-rounded text-4xl text-gray-300 mb-2">school</span>
+                <p className="text-sm font-bold text-gray-500">No courses available</p>
+                <p className="text-xs text-gray-400 mt-1">No batches assigned to this category yet</p>
               </div>
             )}
           </div>
@@ -1564,22 +1583,37 @@ const CategoryPage: React.FC = () => {
             (cSlug && cSlug === targetParam)
           );
         });
-        if (!resolvedCat && (targetParam.includes('nursing') || targetParam === 'undefined')) {
-          resolvedCat = allCats.find((c: Category) => {
-            const cTitle = String(c.title || '').toLowerCase();
-            const cId = String(c.id || '').toLowerCase();
-            return cTitle.includes('nursing') || cId.includes('nursing');
-          });
+        if (!resolvedCat && targetParam.includes('nursing')) {
+          if (targetParam.includes('bsc')) {
+            resolvedCat = allCats.find((c: Category) => {
+              const cTitle = String(c.title || '').toLowerCase();
+              const cId = String(c.id || '').toLowerCase();
+              return (cTitle.includes('bsc') && cTitle.includes('nursing')) || (cId.includes('bsc') && cId.includes('nursing'));
+            });
+          } else {
+            resolvedCat = allCats.find((c: Category) => {
+              const cTitle = String(c.title || '').toLowerCase();
+              const cId = String(c.id || '').toLowerCase();
+              return (cTitle === 'nursing' || (!cTitle.includes('bsc') && cTitle.includes('nursing'))) ||
+                     (cId === 'nursing' || (!cId.includes('bsc') && cId.includes('nursing')));
+            });
+          }
         }
         setCategory(resolvedCat || null);
         let resolvedSubs = Array.isArray(subs) ? subs : [];
-        if (resolvedSubs.length === 0 && (targetParam.includes('nursing') || (resolvedCat?.title && resolvedCat.title.toLowerCase().includes('nursing')))) {
+        if (resolvedSubs.length === 0 && resolvedCat) {
           try {
             const allSubs = await subcategoriesAPI.getAll().catch(() => []);
             if (Array.isArray(allSubs)) {
+              const catKeys = [
+                resolvedCat.id,
+                resolvedCat._id,
+                resolvedCat.title
+              ].map(k => String(k || '').toLowerCase().trim()).filter(Boolean);
+
               resolvedSubs = allSubs.filter((s: SubCategory) => {
-                const sCat = String(s.categoryId || '').toLowerCase();
-                return sCat.includes('nursing') || sCat === 'nursing-cet' || (resolvedCat?._id && sCat === String(resolvedCat._id).toLowerCase());
+                const sCat = String(s.categoryId || '').toLowerCase().trim();
+                return catKeys.includes(sCat);
               });
             }
           } catch (e) { }
@@ -1751,7 +1785,7 @@ const CategoryPage: React.FC = () => {
   const isJeeId = categoryId?.toLowerCase().includes('iit') || categoryId?.toLowerCase().includes('jee');
   const isBoardId = categoryId?.toLowerCase().includes('11') || categoryId?.toLowerCase().includes('12');
   const isGeneralId = categoryId?.toLowerCase().includes('general') || categoryId?.toLowerCase().includes('9') || categoryId?.toLowerCase().includes('10') || categoryId?.toLowerCase().includes('foundation');
-  const isNursingId = categoryId?.toLowerCase().includes('nursing') || (category?.title && category.title.toLowerCase().includes('nursing')) || (category?.id && category.id.toLowerCase().includes('nursing'));
+
   const hasGroups = parentGroups.length > 0;
 
   const handleSubClick = (sub: SubCategory) => {
@@ -1810,8 +1844,8 @@ const CategoryPage: React.FC = () => {
     );
   }
 
-  // Specialized Layout Returns
-  if (isNeetId || category.hierarchyMode === 'exam-branch') {
+  // Specialized Layout Returns (Only for categories with configured branches)
+  if ((category.hierarchyMode === 'exam-branch' || isNeetId) && category.branchesL1 && category.branchesL1.length > 0) {
      return <NeetIitJeePage 
        category={category} 
        courses={categoryCourses} 
@@ -1826,293 +1860,19 @@ const CategoryPage: React.FC = () => {
      />;
   }
 
-  if (isJeeId || isBoardId || category.hierarchyMode === 'board-class') {
+  if ((category.hierarchyMode === 'board-class' || isBoardId) && category.branchesL1 && category.branchesL1.length > 0) {
      return <GeneralClassPage category={category} courses={categoryCourses} loading={loading} subcategories={subcategories} subjects={subjects} enrolledCourseIds={enrolledCourseIds} />;
   }
 
-  if (isGeneralId) {
-    return <GeneralClassPage category={category} courses={categoryCourses} loading={loading} subcategories={subcategories} subjects={subjects} enrolledCourseIds={enrolledCourseIds} />;
-  }
-
-  if (isNursingId) {
-    return <NursingPage category={category} subcategories={subcategories} courses={categoryCourses} loading={loading} enrolledCourseIds={enrolledCourseIds} />;
-  }
-
+  // Default clean layout for all categories (Nursing, Bsc Nursing, ACADEMIC CLASSES, and ANY admin-created category)
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      <header className={`bg-gradient-to-br ${category.gradient} text-white pt-6 pb-8 px-4 rounded-b-[2rem]`}>
-        <div className="flex items-center gap-3 mb-4">
-          <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-white/20 transition-all">
-            <span className="material-symbols-rounded">arrow_back</span>
-          </button>
-          <div className="flex items-center gap-3">
-            {category.icon && (
-              <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
-                <span className="material-icons-outlined text-2xl">{category.icon}</span>
-              </div>
-            )}
-            <div>
-              <h1 className="text-xl font-black tracking-tight">{category.title}</h1>
-              <p className="text-white/70 text-xs">{category.subtitle}</p>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 mt-2 flex-wrap">
-          {categoryCourses.length > 0 && (
-            <div className="flex items-center gap-1 bg-white/15 px-2.5 py-1 rounded-full text-xs font-medium">
-              <span className="material-symbols-rounded text-sm">school</span>
-              <span>{categoryCourses.length} Courses</span>
-            </div>
-          )}
-          {subcategories.length > 0 && (
-            <div className="flex items-center gap-1 bg-white/15 px-2.5 py-1 rounded-full text-xs font-medium">
-              <span className="material-symbols-rounded text-sm">category</span>
-              <span>{subcategories.length} Subcategories</span>
-            </div>
-          )}
-          {(categoryTestSeries.length + categoryTests.length) > 0 && (
-            <div className="flex items-center gap-1 bg-white/15 px-2.5 py-1 rounded-full text-xs font-medium">
-              <span className="material-symbols-rounded text-sm">quiz</span>
-              <span>{categoryTestSeries.length + categoryTests.length} Tests</span>
-            </div>
-          )}
-          {categoryPdfs.length > 0 && (
-            <div className="flex items-center gap-1 bg-white/15 px-2.5 py-1 rounded-full text-xs font-medium">
-              <span className="material-symbols-rounded text-sm">description</span>
-              <span>{categoryPdfs.length} PDFs</span>
-            </div>
-          )}
-        </div>
-      </header>
-
-      <main className="px-4 mt-4 relative z-10 space-y-5">
-        {hasGroups && (
-          <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
-            {parentGroups.map((group) => {
-              if (typeof group !== 'string') return null;
-              const parts = group.split(' > ');
-              const shortLabel = parts[parts.length - 1] || group;
-              return (
-                <button
-                  key={group}
-                  onClick={() => setSelectedGroup(selectedGroup === group ? null : group)}
-                  className={`rounded-2xl px-5 py-3 text-center transition-all active:scale-95 whitespace-nowrap shrink-0 ${selectedGroup === group
-                    ? 'bg-white shadow-lg border-2 border-[#303F9F] text-[#303F9F]'
-                    : 'bg-white shadow-sm border border-gray-100 text-gray-700'
-                    }`}
-                >
-                  <p className="text-xs font-bold">{shortLabel}</p>
-                  <p className="text-[9px] text-gray-400 mt-0.5">{group !== shortLabel ? group : ''}</p>
-                </button>
-      
-            );
-          })}
-          </div>
-        )}
-
-        {selectedGroup && filteredGroupSubs.length > 0 && (
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 animate-fade-in">
-             <h3 className="text-sm font-black text-gray-800 mb-4 flex items-center gap-2">
-               <span className="material-icons-outlined text-[#303F9F] text-lg">category</span>
-               {selectedGroup}
-             </h3>
-             <div className="grid grid-cols-2 gap-3">
-               {filteredGroupSubs.map(sub => (
-                 <button
-                   key={sub.id}
-                   onClick={() => handleSubClick(sub)}
-                   className="bg-gradient-to-br from-gray-50 to-white hover:from-gray-100 hover:to-gray-50 rounded-xl p-4 text-left transition-all active:scale-95 flex items-center gap-3 border border-gray-100 hover:border-gray-200 hover:shadow-md"
-                 >
-                   {sub.icon && (
-                     <div className={`w-11 h-11 bg-gradient-to-br ${getVisualGradient(sub)} rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm`}>
-                       <span className="material-icons-outlined text-white text-lg">{sub.icon}</span>
-                     </div>
-                   )}
-                   <div className="min-w-0">
-                     <span className="text-xs font-bold text-gray-700 line-clamp-2">{sub.title.replace(sub.parentPath + ' - ', '').replace(sub.parentPath + ' ', '')}</span>
-                     <p className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
-                       <span className="material-icons-outlined" style={{ fontSize: '10px' }}>menu_book</span>
-                       {subcategoryCounts[sub.id] || 0} {subcategoryCounts[sub.id] === 1 ? 'Course' : 'Courses'}
-                     </p>
-                   </div>
-                 </button>
-               ))}
-             </div>
-          </div>
-        )}
-
-        {directSubs.length > 0 && (
-          <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-            <h3 className="text-sm font-black text-gray-800 mb-4 flex items-center gap-2">
-              <span className="material-icons-outlined text-[#303F9F] text-lg">category</span>
-              Course Categories
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              {directSubs.map(sub => (
-                <button
-                  key={sub.id}
-                  onClick={() => handleSubClick(sub)}
-                  className="bg-gradient-to-br from-gray-50 to-white hover:from-gray-100 hover:to-gray-50 rounded-xl p-4 text-left transition-all active:scale-95 border border-gray-100 hover:border-gray-200 hover:shadow-md group"
-                >
-                  {sub.icon && (
-                    <div className={`w-12 h-12 bg-gradient-to-br ${getVisualGradient(sub)} rounded-xl flex items-center justify-center mb-3 shadow-sm group-hover:shadow-md transition-shadow`}>
-                      <span className="material-icons-outlined text-white text-xl">{sub.icon}</span>
-                    </div>
-                  )}
-                  <p className="text-xs font-bold text-gray-800">{sub.title}</p>
-                  <div className="flex items-center gap-1 mt-1">
-                    <span className="material-icons-outlined text-gray-400" style={{ fontSize: '10px' }}>menu_book</span>
-                    <p className="text-[10px] text-gray-400">{subcategoryCounts[sub.id] || 0} {subcategoryCounts[sub.id] === 1 ? 'Course' : 'Courses'}</p>
-                  </div>
-                  {sub.description && (
-                    <p className="text-[10px] text-gray-400 mt-1 line-clamp-2">{sub.description}</p>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {categoryCourses.length > 0 && (
-          <div className="space-y-4">
-            <h3 className="text-sm font-black text-gray-700 uppercase tracking-wider">Available Courses</h3>
-
-            {subcategories.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-3 hide-scrollbar">
-                <button
-                  onClick={() => setSelectedSubFilter(null)}
-                  className={`rounded-full px-4 py-2 text-xs font-bold whitespace-nowrap shrink-0 transition-all active:scale-95 ${!selectedSubFilter
-                    ? 'bg-[#1A237E] text-white shadow-md'
-                    : 'bg-white text-gray-600 border border-gray-200'
-                    }`}
-                >
-                  All Courses ({categoryCourses.length})
-                </button>
-                {subcategories.map(sub => (
-                  <button
-                    key={sub.id}
-                    onClick={() => setSelectedSubFilter(selectedSubFilter === sub.id ? null : sub.id)}
-                    className={`rounded-full px-4 py-2 text-xs font-bold whitespace-nowrap shrink-0 transition-all active:scale-95 flex items-center gap-1.5 ${selectedSubFilter === sub.id
-                      ? 'bg-[#303F9F] text-white shadow-md'
-                      : 'bg-white text-gray-600 border border-gray-200'
-                      }`}
-                  >
-                    {sub.icon && <span className="material-icons-outlined" style={{ fontSize: '14px' }}>{sub.icon}</span>}
-                    <span className="truncate">{sub.title.replace(sub.parentPath ? sub.parentPath + ' - ' : '', '').replace(sub.parentPath ? sub.parentPath + ' ' : '', '')}</span>
-                    {(subcategoryCounts[sub.id] || 0) > 0 && <span className="opacity-70">({subcategoryCounts[sub.id]})</span>}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <div className="space-y-3">
-              {filteredCourses.map((course: any, idx: number) => (
-                <button
-                  key={idx}
-                  onClick={() => navigate(`/course/${course._id || course.id}`)}
-                  className="w-full bg-white rounded-xl p-4 shadow-sm flex gap-4 text-left active:scale-[0.98] transition-all border border-gray-100 hover:shadow-md group"
-                >
-                  <div className={`w-16 h-16 bg-gradient-to-br ${category.gradient} rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden relative shadow-inner`}>
-                    {(course.imageUrl || course.thumbnail) ? (
-                      <img src={getImageUrl(course.imageUrl || course.thumbnail)} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" />
-                    ) : (
-                      <span className="text-white text-xl font-bold opacity-60">{(course.name || course.title || '?').charAt(0).toUpperCase()}</span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0 flex flex-col justify-center">
-                    <h4 className="text-sm font-bold text-gray-800 line-clamp-2 leading-tight group-hover:text-brandBlue transition-colors">{course.name || course.title}</h4>
-                    <div className="flex items-center gap-3 mt-2 text-[10px] text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <span className="material-icons-outlined text-xs">{(course.contentType === 'mock_test' || course.categoryId === 'mock-test') ? 'quiz' : 'play_circle'}</span>
-                        {(course.contentType === 'mock_test' || course.categoryId === 'mock-test') ? `${course.tests || 0} Tests` : `${course.videos || 0} Videos`}
-                      </span>
-                      {enrolledCourseIds.some(eid => String(eid) === String(course.id) || String(eid) === String(course._id)) ? (
-                        <span className="font-black text-brandBlue uppercase tracking-widest flex items-center gap-1">
-                          <span className="material-icons-outlined text-xs">verified</span>
-                          Enrolled
-                        </span>
-                      ) : (
-                        <span className="font-bold text-[#303F9F]">{course.price ? `₹${course.price}` : 'Free'}</span>
-                      )}
-                    </div>
-                  </div>
-                  <span className="material-icons-outlined text-gray-300 self-center">chevron_right</span>
-                </button>
-              ))}
-              {filteredCourses.length === 0 && selectedSubFilter && (
-                <div className="text-center py-8 bg-white rounded-2xl border border-gray-100">
-                  <span className="material-icons-outlined text-5xl text-gray-200">search_off</span>
-                  <p className="text-sm font-bold text-gray-400 mt-3">No courses found</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Test Series assigned to this Category (matching Screenshot 2 2-column grid) */}
-        {categoryTestSeries.length > 0 && (
-          <div className="space-y-4 pt-2">
-            <h3 className="text-sm font-black text-gray-700 uppercase tracking-wider">Test Series</h3>
-            <div className="grid grid-cols-2 gap-3">
-              {categoryTestSeries.map((series, idx) => (
-                <SeriesGridCard
-                  key={series.id || series._id || idx}
-                  series={series}
-                  allTests={testsList}
-                  isEnrolled={enrolledSeriesIds.has(String(series.id || series._id)) || series.isEnrolled === true}
-                  categoryTitle={category.title}
-                  onSelect={() => setSelectedSeries(series)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Standalone Tests assigned to this Category */}
-        {categoryTests.length > 0 && (
-          <div className="space-y-4 pt-2">
-            <h3 className="text-sm font-black text-gray-700 uppercase tracking-wider">Practice Tests</h3>
-            <div className="space-y-3">
-              {categoryTests.map((t, idx) => (
-                <SingleTestCard
-                  key={t.id || t._id || idx}
-                  test={t}
-                  onStart={() => navigate(`/test/${t.id || t._id}`)}
-                  onBuy={() => navigate(`/checkout/${t.id || t._id}`)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Study Material & PDFs assigned to this Category */}
-        {categoryPdfs.length > 0 && (
-          <div className="space-y-4 pt-2">
-            <h3 className="text-sm font-black text-gray-700 uppercase tracking-wider">Study Material & PDFs</h3>
-            <div className="space-y-3">
-              {categoryPdfs.map((pdf, idx) => (
-                <PdfCard
-                  key={pdf.id || pdf._id || idx}
-                  pdf={pdf}
-                  onOpen={() => navigate('/pdf-viewer', { state: { pdf: { ...pdf, fileUrl: getPdfUrl(pdf.fileUrl) }, title: pdf.title } })}
-                  onBuy={() => navigate(`/checkout/${pdf.id || pdf._id}`)}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {categoryCourses.length === 0 && subcategories.length === 0 && categoryTestSeries.length === 0 && categoryTests.length === 0 && categoryPdfs.length === 0 && (
-          <div className="text-center py-16 bg-white rounded-2xl border border-gray-100 shadow-sm mt-8 animate-fade-in">
-            <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="material-icons-outlined text-6xl text-gray-200">sentiment_satisfied</span>
-            </div>
-            <h3 className="text-base font-bold text-gray-700">Content Coming Soon</h3>
-            <p className="text-xs text-gray-400 mt-2 max-w-[250px] mx-auto font-medium">We are organizing the best materials for this section. Check back shortly!</p>
-          </div>
-        )}
-      </main>
-    </div>
+    <DynamicCategoryPage
+      category={category}
+      subcategories={subcategories}
+      courses={categoryCourses}
+      loading={loading}
+      enrolledCourseIds={enrolledCourseIds}
+    />
   );
 };
 

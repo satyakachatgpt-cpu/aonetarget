@@ -702,7 +702,12 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
 
                                      {/* Level 1 Chip */}
                                      {(() => {
-                                         const cat = categories.find(c => String(c.id || c._id) === String(selectedCategoryId));
+                                         const cat = categories.find(c => 
+    String(c.id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c._id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c.title || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    (Array.isArray(selectedCategories) && selectedCategories.some(sc => String(sc).toLowerCase().trim() === String(c.title || '').toLowerCase().trim()))
+);
                                          if (cat && cat.branchesL1 && cat.branchesL1.length > 0) {
                                              const branch = cat.branchesL1.find((b: any) => b.slug === level1Branch);
                                              return (
@@ -719,7 +724,12 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
 
                                      {/* Level 2 Chip */}
                                      {(() => {
-                                         const cat = categories.find(c => String(c.id || c._id) === String(selectedCategoryId));
+                                         const cat = categories.find(c => 
+    String(c.id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c._id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c.title || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    (Array.isArray(selectedCategories) && selectedCategories.some(sc => String(sc).toLowerCase().trim() === String(c.title || '').toLowerCase().trim()))
+);
                                          if (cat && cat.hierarchyMode === 'board-class' && cat.branchesL2 && cat.branchesL2.length > 0) {
                                              const branch = cat.branchesL2.find((b: any) => b.slug === level2Branch);
                                              return (
@@ -736,7 +746,12 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
 
                                      {/* Subcategory Chip */}
                                      {(() => {
-                                         const cat = categories.find(c => String(c.id || c._id) === String(selectedCategoryId));
+                                         const cat = categories.find(c => 
+    String(c.id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c._id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c.title || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    (Array.isArray(selectedCategories) && selectedCategories.some(sc => String(sc).toLowerCase().trim() === String(c.title || '').toLowerCase().trim()))
+);
                                          if (!cat) return null;
 
                                          const hasL1 = cat.branchesL1 && cat.branchesL1.length > 0;
@@ -769,7 +784,12 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
                                      {/* Subject Chip */}
                                      {(() => {
                                          const subObj = allSubCategories.find(s => String(s.id || s._id) === String(selectedSubCategoryId));
-                                         const cat = categories.find(c => String(c.id || c._id) === String(selectedCategoryId));
+                                         const cat = categories.find(c => 
+    String(c.id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c._id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c.title || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    (Array.isArray(selectedCategories) && selectedCategories.some(sc => String(sc).toLowerCase().trim() === String(c.title || '').toLowerCase().trim()))
+);
                                          if (!cat) return null;
 
                                          const hasL1 = cat?.branchesL1 && cat?.branchesL1.length > 0;
@@ -837,8 +857,8 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
                                                                          setSelectedSubCategoryId('');
                                                                          setSelectedSubjectId('');
                                                                          setShowCategories(false);
-                                                                     }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-slate-50 flex items-center justify-between ${String(selectedCategoryId) === String(catId) ? 'text-blue-600 bg-blue-50 font-bold' : 'text-slate-600'}`}>
-                                                                         {catName} {String(selectedCategoryId) === String(catId) && <span className="material-symbols-outlined text-[16px]">check_circle</span>}
+                                                                     }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-slate-50 flex items-center justify-between ${(String(selectedCategoryId) === String(catId) || String(selectedCategoryId) === String(catObj._id) || String(selectedCategoryId).toLowerCase() === String(catName).toLowerCase() || (Array.isArray(selectedCategories) && selectedCategories.includes(catName))) ? 'text-blue-600 bg-blue-50 font-bold' : 'text-slate-600'}`}>
+                                                                          {catName} {(String(selectedCategoryId) === String(catId) || String(selectedCategoryId) === String(catObj._id) || String(selectedCategoryId).toLowerCase() === String(catName).toLowerCase() || (Array.isArray(selectedCategories) && selectedCategories.includes(catName))) && <span className="material-symbols-outlined text-[16px]">check_circle</span>}
                                                                      </div>
                                                                  );
                                                              })}
@@ -851,7 +871,12 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
 
                                      {/* Dynamic Steps Block */}
                                      {selectedCategoryId && (() => {
-                                         const selectedCatObj = categories.find(c => String(c.id || c._id) === String(selectedCategoryId));
+                                         const selectedCatObj = categories.find(c => 
+    String(c.id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c._id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c.title || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    (Array.isArray(selectedCategories) && selectedCategories.some(sc => String(sc).toLowerCase().trim() === String(c.title || '').toLowerCase().trim()))
+);
                                          if (!selectedCatObj) return null;
 
                                          const mode = selectedCatObj.hierarchyMode || 'simple';
