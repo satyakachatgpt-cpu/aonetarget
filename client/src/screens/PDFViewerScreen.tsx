@@ -550,10 +550,7 @@ const PDFViewerScreen: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentPage, totalPages, scale]);
 
-  if (!pdfUrl && !location.state) {
-    navigate(-1);
-    return null;
-  }
+  if (!pdfUrl && !location.state) { navigate(-1); return null; }
 
   return (
     <div
@@ -807,3 +804,4 @@ const PDFViewerScreen: React.FC = () => {
 };
 
 export default PDFViewerScreen;
+
