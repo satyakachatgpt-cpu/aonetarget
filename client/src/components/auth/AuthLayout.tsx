@@ -18,18 +18,18 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, onBack }) => {
   };
 
   return (
-    <div className="w-full h-full max-w-md mx-auto flex flex-col relative overflow-hidden bg-white shadow-2xl">
+    <div className="w-full h-full flex flex-col relative overflow-hidden bg-white sm:max-w-md sm:mx-auto">
       {/* Top Header Section with safe-area spacing */}
       <div 
         className="w-full bg-gradient-to-b from-[#1A237E] to-[#283593] shrink-0 relative z-10"
-        style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 16px)' }}
+        style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 20px)' }}
       >
         <div className="px-4 pt-2 pb-5 flex items-center justify-between relative">
           {/* Back Button */}
           <button
             type="button"
             onClick={handleBack}
-            className="w-10 h-10 rounded-full flex items-center justify-center bg-white/15 hover:bg-white/25 text-white active:scale-95 transition-all shadow-sm border border-white/20 cursor-pointer shrink-0"
+            className="w-10 h-10 rounded-full flex items-center justify-center bg-white/15 hover:bg-white/25 active:bg-white/30 text-white active:scale-95 transition-all shadow-sm border border-white/20 cursor-pointer shrink-0"
             aria-label="Back to Home"
             title="Back to Home"
           >
@@ -54,8 +54,8 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({ children, onBack }) => {
       </div>
 
       {/* Main Form Container - Edge to Edge without side gaps */}
-      <div className="flex-1 w-full bg-white relative z-20 -mt-3 rounded-t-[24px] flex flex-col overflow-hidden shadow-lg">
-        <div className="flex-1 overflow-y-auto relative flex flex-col hide-scrollbar">
+      <div className="flex-1 w-full bg-white relative z-20 -mt-3 rounded-t-[24px] flex flex-col overflow-hidden shadow-sm">
+        <div className="flex-1 overflow-y-auto relative flex flex-col hide-scrollbar overscroll-contain">
           {children}
         </div>
       </div>

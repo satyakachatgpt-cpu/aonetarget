@@ -155,9 +155,9 @@ const StudentAuthModal: React.FC<{
   return (
     <div 
       data-auth-popup="true"
-      className="fixed inset-0 z-[100] bg-black/65 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] bg-black/70 backdrop-blur-xs flex items-center justify-center p-0 sm:p-4 animate-in fade-in duration-200"
     >
-      <div className="w-full max-w-[420px] h-full sm:h-auto sm:max-h-[90vh] bg-white sm:rounded-[28px] overflow-hidden shadow-2xl relative flex flex-col">
+      <div className="w-full sm:max-w-[440px] h-[100dvh] sm:h-auto sm:max-h-[92vh] bg-white sm:rounded-[28px] overflow-hidden sm:shadow-2xl relative flex flex-col">
         <Suspense fallback={<PageLoader />}>
           <StudentLogin 
             setAuth={(student, token, devId, refresh) => {
@@ -394,7 +394,16 @@ const App: React.FC = () => {
               element={isAdminLoggedIn ? <AdminDashboard setAuth={setIsAdminLoggedIn} /> : <Navigate to="/admin-login" />}
             />
 
-            <Route path="/student-login" element={<div className="font-outfit"><StudentLogin setAuth={setIsStudentLoggedIn} /></div>} />
+            <Route 
+              path="/student-login" 
+              element={
+                <div className="font-outfit w-full min-h-[100dvh] flex items-center justify-center bg-slate-100 sm:p-4">
+                  <div className="w-full sm:max-w-[440px] h-[100dvh] sm:h-auto sm:max-h-[92vh] bg-white sm:rounded-[28px] overflow-hidden sm:shadow-2xl relative flex flex-col">
+                    <StudentLogin setAuth={setIsStudentLoggedIn} />
+                  </div>
+                </div>
+              } 
+            />
 
             <Route path="/news" element={<AllNews />} />
             <Route path="/news/:id" element={<NewsArticle />} />
