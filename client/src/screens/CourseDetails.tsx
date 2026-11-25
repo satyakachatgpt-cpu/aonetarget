@@ -1069,48 +1069,88 @@ const CourseDetails: React.FC = () => {
 
         {enrollmentStatus === 'expired' ? (
           <div className="mt-8 mb-24 px-4 sticky bottom-4 z-40">
-            <div className="bg-[#2D0D0D] p-5 rounded-[2.2rem] shadow-[0_20px_50px_rgba(220,38,38,0.3)] flex items-center justify-between border border-red-500/20 mx-auto max-w-sm animate-fade-in-up">
-              <div className="flex flex-col gap-1 ml-1">
-                <span className="text-[9px] font-black text-red-400 uppercase tracking-[0.15em]">Subscription Ended</span>
-                <div className="flex items-center gap-2.5">
-                  <span className="text-xl font-black text-white tracking-tight">EXPIRED</span>
-                </div>
+            <div className="relative mx-auto max-w-md rounded-2xl sm:rounded-3xl p-4 sm:p-5 bg-gradient-to-r from-[#2B0E14] via-[#3B1219] to-[#2B0E14] border border-red-500/25 shadow-[0_16px_40px_rgba(220,38,38,0.3)] backdrop-blur-xl flex items-center justify-between gap-4 animate-fade-in-up">
+              <div className="flex flex-col gap-0.5">
+                <span className="text-[10px] font-black text-red-400 uppercase tracking-widest">Subscription Ended</span>
+                <span className="text-lg sm:text-xl font-black text-white tracking-tight">Access Expired</span>
               </div>
+              <button
+                onClick={handleBuyNow}
+                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-black text-sm text-white bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 shadow-lg shadow-red-600/30 active:scale-95 transition-all cursor-pointer"
+              >
+                <span className="material-symbols-rounded text-lg">autorenew</span>
+                <span>Renew Course</span>
+              </button>
             </div>
           </div>
         ) : !isEnrolled ? (
           <div className="mt-8 mb-24 px-4 sticky bottom-4 z-40">
-            <div className="bg-[#0D1B2A] p-5 rounded-[2.2rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex items-center justify-between border border-white/10 mx-auto max-w-sm animate-fade-in-up">
-              <div className="flex flex-col gap-1 ml-1">
-                {(course.tsCount || 0) > 0 && (
-                   <div className="flex items-center gap-1.5 mb-1 animate-pulse">
-                      <span className="material-symbols-rounded text-green-400 text-[14px]">card_membership</span>
-                      <span className="text-green-400 text-[9px] font-black uppercase tracking-widest">Includes {course.tsCount} Test Series</span>
-                   </div>
+            <div className="relative mx-auto max-w-md rounded-2xl sm:rounded-3xl p-4 sm:p-5 bg-gradient-to-r from-[#0C1222] via-[#162044] to-[#0C1222] border border-white/15 shadow-[0_16px_45px_rgba(12,18,34,0.65)] backdrop-blur-xl flex items-center justify-between gap-3 sm:gap-4 animate-fade-in-up">
+              {/* Left Side: Pricing & Discount Info */}
+              <div className="flex flex-col gap-0.5 min-w-0">
+                {course.mrp && course.mrp > (course.price || 0) ? (
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-400 bg-emerald-500/15 border border-emerald-500/25 px-2 py-0.5 rounded-full tracking-wider uppercase">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      {Math.round(((course.mrp - course.price) / course.mrp) * 100)}% OFF
+                    </span>
+                    {(course.tsCount || 0) > 0 && (
+                      <span className="text-[9px] font-bold text-blue-200/80 truncate">
+                        +{course.tsCount} Tests
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    {(course.tsCount || 0) > 0 ? (
+                      <span className="text-emerald-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
+                        <span className="material-symbols-rounded text-xs">verified</span>
+                        Includes {course.tsCount} Tests
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                        Total Price
+                      </span>
+                    )}
+                  </div>
                 )}
-                <span className="text-[9px] font-black text-white/30 uppercase tracking-[0.15em]">ENROLLMENT FEE</span>
-                <div className="flex items-center gap-2.5">
-                  <span className="text-2xl font-[900] text-white tracking-tight">₹{course.price}</span>
+
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl sm:text-3xl font-[900] text-white tracking-tight">
+                    ₹{course.price}
+                  </span>
                   {course.mrp && course.mrp > (course.price || 0) && (
-                    <span className="text-xs text-white/20 line-through font-bold">₹{course.mrp}</span>
+                    <span className="text-xs sm:text-sm text-gray-400 line-through font-semibold">
+                      ₹{course.mrp}
+                    </span>
                   )}
                 </div>
               </div>
 
+              {/* Right Side: Redesigned Action CTA Button */}
               {isPaidCourse ? (
                 <button
                   onClick={handleBuyNow}
-                  className="px-8 py-3.5 bg-white text-[#0D1B2A] rounded-2xl text-[10px] font-black uppercase tracking-[0.1em] shadow-xl active:scale-[0.98] transition-all"
+                  className="group inline-flex items-center justify-center gap-2 px-6 sm:px-7 py-3.5 rounded-xl sm:rounded-2xl font-black text-sm tracking-wide text-white bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-500 shadow-[0_4px_20px_rgba(79,70,229,0.5)] hover:shadow-[0_6px_25px_rgba(79,70,229,0.7)] active:scale-95 transition-all cursor-pointer border border-white/20 shrink-0"
                 >
-                  PURCHASE COURSE
+                  <span className="material-symbols-rounded text-lg group-hover:scale-110 transition-transform">
+                    bolt
+                  </span>
+                  <span>Buy Now</span>
+                  <span className="material-symbols-rounded text-base group-hover:translate-x-1 transition-transform">
+                    arrow_forward
+                  </span>
                 </button>
               ) : (
                 <button
                   onClick={handleEnroll}
                   disabled={enrolling}
-                  className="px-8 py-3.5 bg-green-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.1em] shadow-xl active:scale-[0.98] transition-all"
+                  className="group inline-flex items-center justify-center gap-2 px-6 sm:px-7 py-3.5 rounded-xl sm:rounded-2xl font-black text-sm tracking-wide text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-[0_4px_20px_rgba(16,185,129,0.4)] active:scale-95 transition-all cursor-pointer border border-white/20 shrink-0 disabled:opacity-50"
                 >
-                  {enrolling ? 'ENROLLING...' : 'ENROLL FREE'}
+                  <span className="material-symbols-rounded text-lg">
+                    school
+                  </span>
+                  <span>{enrolling ? 'Enrolling...' : 'Enroll Free'}</span>
                 </button>
               )}
             </div>
@@ -1119,14 +1159,14 @@ const CourseDetails: React.FC = () => {
           <div className="mt-8 mb-24 px-4 sticky bottom-4 z-40">
             <button
                onClick={handleStartLearning}
-               className="w-full max-w-sm mx-auto flex items-center justify-center gap-3 bg-brandBlue text-white p-5 rounded-[2.2rem] shadow-[0_20px_50px_rgba(46,115,232,0.3)] border border-brandBlue/20 animate-fade-in-up active:scale-[0.98] transition-all"
+               className="w-full max-w-md mx-auto flex items-center justify-center gap-3 bg-gradient-to-r from-[#1A237E] to-[#303F9F] hover:from-[#151C65] hover:to-[#283593] text-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-[0_12px_40px_rgba(26,35,126,0.35)] border border-white/20 animate-fade-in-up active:scale-95 transition-all cursor-pointer"
             >
-               <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                  <span className="material-symbols-rounded text-white">play_arrow</span>
+               <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-rounded text-white text-xl">play_arrow</span>
                </div>
                <div className="flex flex-col items-start">
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">Success! Enrolled</span>
-                  <span className="text-sm font-black uppercase tracking-widest">START LEARNING</span>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-200">Enrolled & Active</span>
+                  <span className="text-sm sm:text-base font-black tracking-wide">Start Learning</span>
                </div>
             </button>
           </div>
