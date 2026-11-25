@@ -623,7 +623,26 @@ export const bulkCreateStudents = async (req, res) => {
     const db = getDb();
     const { students } = req.body;
     if (!Array.isArray(students) || students.length === 0) return res.status(400).json({ error: 'No students provided' });
-    const result = await Student.insertMany(students);
+
+    // Allowlist safe fields to prevent mass-assignment
+    const allowedFields = [
+      'name', 'phone', 'email', 'dob', 'city', 'state', 'course', 'class',
+      'gender', 'highQualification', 'registrationType', 'registrationDate',
+      'status', 'notes', 'paymentStatus'
+    ];
+
+    const sanitizedStudents = students.map(s => {
+      const clean = {};
+      allowedFields.forEach(f => {
+        if (s[f] !== undefined) clean[f] = typeof s[f] === 'string' ? s[f].trim() : s[f];
+      });
+      clean.id = s.id || `STU-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      clean.status = clean.status || 'active';
+      clean.paymentStatus = clean.paymentStatus || 'pending';
+      return clean;
+    });
+
+    const result = await Student.insertMany(sanitizedStudents);
     res.status(201).json({ success: true, inserted: result.length });
   } catch (error) {
     res.status(500).json({ error: 'Failed to bulk create students' });

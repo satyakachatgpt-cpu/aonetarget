@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 
 export const publicLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5000, // Limit each IP to 5000 requests per windowMs (Increased for 100+ concurrent students)
+  max: 600, // Limit each IP to 600 requests per 15 minutes (approx 40 req/min)
   message: { error: 'Too many requests from this IP, please try again after 15 minutes' }
 });
 
@@ -36,7 +36,7 @@ export const videoUploadLimiter = rateLimit({
 // Auth Rate Limiter
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5000, // Limit each IP to 5000 requests per windowMs (Increased for 100+ concurrent students)
+  max: 60, // Limit each IP to 60 auth requests per 15 minutes
   message: { error: 'Too many verify requests from this IP, please try again after 15 minutes' }
 });
 

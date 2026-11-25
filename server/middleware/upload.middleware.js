@@ -93,7 +93,15 @@ const apkStorage = multer.diskStorage({
 
 export const apkUpload = multer({
   storage: apkStorage,
-  limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext === '.apk' || file.mimetype === 'application/vnd.android.package-archive' || file.mimetype === 'application/octet-stream') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only Android .apk files are allowed'), false);
+    }
+  }
 });
 
 // 5. excelUpload (Standalone Memory Storage for parsing)

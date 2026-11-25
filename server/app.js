@@ -294,10 +294,6 @@ app.get('/api/proxy-resource', optionalAuth, async (req, res) => {
                   }
                 }
               }
-              // Authenticated student fallback for study materials
-              if (!hasAccess) {
-                hasAccess = true;
-              }
             }
           }
         }

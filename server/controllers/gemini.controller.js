@@ -136,10 +136,12 @@ Combine multi-page questions logically. Ignore headers, footers, watermarks, and
     const response = await result.response;
     const text = response.text();
 
-    // DEBUG: Save the raw text from Gemini to see what it actually returned
-    try {
-      fs.writeFileSync('gemini_debug.txt', text);
-    } catch(e) {}
+    // DEBUG: Save the raw text from Gemini in development only
+    if (process.env.NODE_ENV !== 'production') {
+      try {
+        fs.writeFileSync('gemini_debug.txt', text);
+      } catch(e) {}
+    }
 
     let questions = [];
     try {

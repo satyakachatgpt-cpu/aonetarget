@@ -222,7 +222,14 @@ export const updateInstituteSettings = async (req, res) => {
 export const approveDevice = async (req, res) => {
   try {
     const { studentId } = req.body;
-    const student = await Student.findById(studentId);
+    if (!studentId) return res.status(400).json({ error: 'studentId is required' });
+
+    const student = await Student.findOne({
+      $or: [
+        { id: studentId },
+        ...(ObjectId.isValid(studentId) ? [{ _id: new ObjectId(studentId) }] : [])
+      ]
+    });
     if (!student) return res.status(404).json({ error: 'Student not found' });
     
     if (!student.pendingDeviceId) {
@@ -267,7 +274,14 @@ export const approveDevice = async (req, res) => {
 export const rejectDevice = async (req, res) => {
   try {
     const { studentId } = req.body;
-    const student = await Student.findById(studentId);
+    if (!studentId) return res.status(400).json({ error: 'studentId is required' });
+
+    const student = await Student.findOne({
+      $or: [
+        { id: studentId },
+        ...(ObjectId.isValid(studentId) ? [{ _id: new ObjectId(studentId) }] : [])
+      ]
+    });
     if (!student) return res.status(404).json({ error: 'Student not found' });
     
     student.pendingDeviceId = null;

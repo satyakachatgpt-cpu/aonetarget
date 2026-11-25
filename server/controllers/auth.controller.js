@@ -817,7 +817,10 @@ export const forgotPasswordSendOtp = async (req, res) => {
 export const forgotPasswordVerifyOtp = async (req, res) => {
   try {
     const db = getDb();
-    const { phone, otp } = req.body;
+    const { phone, otp } = req.body || {};
+    if (!phone || typeof phone !== 'string' || !otp) {
+      return res.status(400).json({ error: 'Valid phone number and OTP are required' });
+    }
     const cleanPhone = phone.replace(/\D/g, '');
     
     const stored = await authService.getValidOtp(cleanPhone, 'reset');
@@ -838,7 +841,13 @@ export const forgotPasswordVerifyOtp = async (req, res) => {
 export const resetPasswordWithOtp = async (req, res) => {
   try {
     const db = getDb();
-    const { phone, newPassword } = req.body;
+    const { phone, newPassword } = req.body || {};
+    if (!phone || typeof phone !== 'string' || !newPassword) {
+      return res.status(400).json({ error: 'Valid phone number and new password are required' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
     const cleanPhone = phone.replace(/\D/g, '');
     const stored = await authService.getValidOtp(cleanPhone, 'reset');
 
