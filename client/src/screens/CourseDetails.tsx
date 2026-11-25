@@ -7,6 +7,7 @@ import { getImageUrl, getVideoUrl, getPdfUrl, getYouTubeThumbnail, getGradientPl
 import StudentVideoPlayer from '../components/student/StudentVideoPlayer';
 import CourseHero from './course-details/components/CourseHero';
 import CourseMetadata from './course-details/components/CourseMetadata';
+import CourseCheckoutBar from './course-details/components/CourseCheckoutBar';
 import NotesTab from './course-details/components/NotesTab';
 import TestsTab from './course-details/components/TestsTab';
 import LiveTab from './course-details/components/LiveTab';
@@ -872,7 +873,7 @@ const CourseDetails: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-surface-100 pb-32">
+    <div className="min-h-screen bg-surface-100 pb-48 sm:pb-52">
       <CourseHero 
         courseImage={courseImage}
         courseName={course.name || course.title}
@@ -1067,111 +1068,24 @@ const CourseDetails: React.FC = () => {
           </div>
         )}
 
-        {enrollmentStatus === 'expired' ? (
-          <div className="mt-8 mb-24 px-4 sticky bottom-4 z-40">
-            <div className="relative mx-auto max-w-md rounded-2xl sm:rounded-3xl p-4 sm:p-5 bg-gradient-to-r from-[#2B0E14] via-[#3B1219] to-[#2B0E14] border border-red-500/25 shadow-[0_16px_40px_rgba(220,38,38,0.3)] backdrop-blur-xl flex items-center justify-between gap-4 animate-fade-in-up">
-              <div className="flex flex-col gap-0.5">
-                <span className="text-[10px] font-black text-red-400 uppercase tracking-widest">Subscription Ended</span>
-                <span className="text-lg sm:text-xl font-black text-white tracking-tight">Access Expired</span>
-              </div>
-              <button
-                onClick={handleBuyNow}
-                className="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-black text-sm text-white bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 shadow-lg shadow-red-600/30 active:scale-95 transition-all cursor-pointer"
-              >
-                <span className="material-symbols-rounded text-lg">autorenew</span>
-                <span>Renew Course</span>
-              </button>
-            </div>
-          </div>
-        ) : !isEnrolled ? (
-          <div className="mt-8 mb-24 px-4 sticky bottom-4 z-40">
-            <div className="relative mx-auto max-w-md rounded-2xl sm:rounded-3xl p-4 sm:p-5 bg-gradient-to-r from-[#0C1222] via-[#162044] to-[#0C1222] border border-white/15 shadow-[0_16px_45px_rgba(12,18,34,0.65)] backdrop-blur-xl flex items-center justify-between gap-3 sm:gap-4 animate-fade-in-up">
-              {/* Left Side: Pricing & Discount Info */}
-              <div className="flex flex-col gap-0.5 min-w-0">
-                {course.mrp && course.mrp > (course.price || 0) ? (
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="inline-flex items-center gap-1 text-[10px] font-black text-emerald-400 bg-emerald-500/15 border border-emerald-500/25 px-2 py-0.5 rounded-full tracking-wider uppercase">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                      {Math.round(((course.mrp - course.price) / course.mrp) * 100)}% OFF
-                    </span>
-                    {(course.tsCount || 0) > 0 && (
-                      <span className="text-[9px] font-bold text-blue-200/80 truncate">
-                        +{course.tsCount} Tests
-                      </span>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    {(course.tsCount || 0) > 0 ? (
-                      <span className="text-emerald-400 text-[10px] font-black uppercase tracking-wider flex items-center gap-1">
-                        <span className="material-symbols-rounded text-xs">verified</span>
-                        Includes {course.tsCount} Tests
-                      </span>
-                    ) : (
-                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-                        Total Price
-                      </span>
-                    )}
-                  </div>
-                )}
-
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl sm:text-3xl font-[900] text-white tracking-tight">
-                    ₹{course.price}
-                  </span>
-                  {course.mrp && course.mrp > (course.price || 0) && (
-                    <span className="text-xs sm:text-sm text-gray-400 line-through font-semibold">
-                      ₹{course.mrp}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Right Side: Redesigned Action CTA Button */}
-              {isPaidCourse ? (
-                <button
-                  onClick={handleBuyNow}
-                  className="group inline-flex items-center justify-center gap-2 px-6 sm:px-7 py-3.5 rounded-xl sm:rounded-2xl font-black text-sm tracking-wide text-white bg-gradient-to-r from-blue-600 via-indigo-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-500 shadow-[0_4px_20px_rgba(79,70,229,0.5)] hover:shadow-[0_6px_25px_rgba(79,70,229,0.7)] active:scale-95 transition-all cursor-pointer border border-white/20 shrink-0"
-                >
-                  <span className="material-symbols-rounded text-lg group-hover:scale-110 transition-transform">
-                    bolt
-                  </span>
-                  <span>Buy Now</span>
-                  <span className="material-symbols-rounded text-base group-hover:translate-x-1 transition-transform">
-                    arrow_forward
-                  </span>
-                </button>
-              ) : (
-                <button
-                  onClick={handleEnroll}
-                  disabled={enrolling}
-                  className="group inline-flex items-center justify-center gap-2 px-6 sm:px-7 py-3.5 rounded-xl sm:rounded-2xl font-black text-sm tracking-wide text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-[0_4px_20px_rgba(16,185,129,0.4)] active:scale-95 transition-all cursor-pointer border border-white/20 shrink-0 disabled:opacity-50"
-                >
-                  <span className="material-symbols-rounded text-lg">
-                    school
-                  </span>
-                  <span>{enrolling ? 'Enrolling...' : 'Enroll Free'}</span>
-                </button>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="mt-8 mb-24 px-4 sticky bottom-4 z-40">
-            <button
-               onClick={handleStartLearning}
-               className="w-full max-w-md mx-auto flex items-center justify-center gap-3 bg-gradient-to-r from-[#1A237E] to-[#303F9F] hover:from-[#151C65] hover:to-[#283593] text-white p-4 sm:p-5 rounded-2xl sm:rounded-3xl shadow-[0_12px_40px_rgba(26,35,126,0.35)] border border-white/20 animate-fade-in-up active:scale-95 transition-all cursor-pointer"
-            >
-               <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center shrink-0">
-                  <span className="material-symbols-rounded text-white text-xl">play_arrow</span>
-               </div>
-               <div className="flex flex-col items-start">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-blue-200">Enrolled & Active</span>
-                  <span className="text-sm sm:text-base font-black tracking-wide">Start Learning</span>
-               </div>
-            </button>
-          </div>
-        )}
       </main>
+
+      {/* Ultra-Premium High-Conversion Bottom Checkout Bar */}
+      {!showVideoPlayer && (
+        <CourseCheckoutBar
+          course={course}
+          isPaidCourse={isPaidCourse}
+          isEnrolled={isEnrolled}
+          enrollmentStatus={enrollmentStatus}
+          enrolling={enrolling}
+          progressPercent={progressPercent}
+          completedVideosCount={completedVideosCount}
+          totalVideos={totalVideos}
+          onBuyNow={handleBuyNow}
+          onEnroll={handleEnroll}
+          onStartLearning={handleStartLearning}
+        />
+      )}
 
       {showVideoPlayer && selectedVideo && (
         <StudentVideoPlayer
