@@ -77,8 +77,11 @@ export const bruteForceGate = (identifierField = 'phone') => async (req, res, ne
 
     next();
   } catch (error) {
-    console.error('Brute force gate error:', error);
-    next(); // Fallback to allow login if DB fails (preventing self-DOS)
+    console.error('[SECURITY] Brute force gate error:', error.message);
+    if (!mongoose.connection.readyState || mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ error: 'Authentication service temporarily unavailable. Please retry.' });
+    }
+    next();
   }
 };
 
@@ -137,19 +140,31 @@ export const securityHeaders = (req, res, next) => {
   next();
 };
 
-// 🛡️ Safe Input Sanitization
-// Strips potentially dangerous script tags from string fields without breaking rich text/HTML
+// 🛡️ Safe Input Sanitization (Recursive for nested objects)
+// Strips potentially dangerous script tags and inline event handlers from all string values
+const cleanValue = (val) => {
+  if (typeof val === 'string') {
+    return val
+      .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "")
+      .replace(/on\w+="[^"]*"/gim, "")
+      .replace(/on\w+='[^']*'/gim, "")
+      .replace(/javascript:[^"']*/gim, "");
+  }
+  if (Array.isArray(val)) {
+    return val.map(cleanValue);
+  }
+  if (val && typeof val === 'object') {
+    for (const k of Object.keys(val)) {
+      val[k] = cleanValue(val[k]);
+    }
+    return val;
+  }
+  return val;
+};
+
 export const sanitizeInput = (req, res, next) => {
-  if (req.body) {
-    Object.keys(req.body).forEach(key => {
-      if (typeof req.body[key] === 'string') {
-        req.body[key] = req.body[key]
-          .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "")
-          .replace(/on\w+="[^"]*"/gim, "")
-          .replace(/on\w+='[^']*'/gim, "")
-          .replace(/javascript:[^"']*/gim, "");
-      }
-    });
+  if (req.body && typeof req.body === 'object') {
+    cleanValue(req.body);
   }
   next();
 };

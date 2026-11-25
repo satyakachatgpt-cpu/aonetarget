@@ -1,18 +1,34 @@
 import nodemailer from 'nodemailer';
 
+let transporter = null;
+
+function getTransporter() {
+  if (!transporter && process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    transporter = nodemailer.createTransport({
+      service: process.env.EMAIL_SERVICE || 'gmail',
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+  }
+  return transporter;
+}
+
 export async function sendEmail({ to, subject, html }) {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
     console.warn('[EMAIL_SERVICE] Missing credentials. Email not sent.');
     return null;
   }
 
-  const transporter = nodemailer.createTransport({
-    service: process.env.EMAIL_SERVICE || 'gmail',
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    }
-  });
+  const mailTransporter = getTransporter();
+  if (!mailTransporter) {
+    console.warn('[EMAIL_SERVICE] Failed to initialize mail transporter.');
+    return null;
+  }
 
   if (!to) {
     console.warn('[EMAIL_SERVICE] No recipient address provided.');
@@ -20,7 +36,7 @@ export async function sendEmail({ to, subject, html }) {
   }
 
   try {
-    const info = await transporter.sendMail({
+    const info = await mailTransporter.sendMail({
       from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
       to,
       subject,

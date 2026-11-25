@@ -505,9 +505,8 @@ export const checkEnrollment = async (req, res) => {
 
       if (pendingOrder) {
         try {
-          const settings = await db.collection('settings').findOne({});
-          const keyId = (process.env.RAZORPAY_KEY_ID || settings?.razorpayKeyId || '').toString().trim();
-          const keySecret = (process.env.RAZORPAY_KEY_SECRET || settings?.razorpayKeySecret || '').toString().trim();
+          const keyId = (process.env.RAZORPAY_KEY_ID || '').toString().trim();
+          const keySecret = (process.env.RAZORPAY_KEY_SECRET || '').toString().trim();
           if (keyId && keySecret) {
             const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
             const oRes = await fetch(`https://api.razorpay.com/v1/orders/${pendingOrder.orderId}`, {

@@ -58,21 +58,11 @@ export const createRazorpayOrder = async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    // Get credentials from env or DB settings
-    const settings = await db.collection('settings').findOne({});
-
-    let keyId = process.env.RAZORPAY_KEY_ID;
-    let keySecret = process.env.RAZORPAY_KEY_SECRET;
-
-    // Fallback if env vars aren't set
-    if (!keyId || keyId.trim() === '') keyId = settings?.razorpayKeyId;
-    if (!keySecret || keySecret.trim() === '') keySecret = settings?.razorpayKeySecret;
-
-    keyId = (keyId || '').toString().trim();
-    keySecret = (keySecret || '').toString().trim();
+    const keyId = (process.env.RAZORPAY_KEY_ID || '').toString().trim();
+    const keySecret = (process.env.RAZORPAY_KEY_SECRET || '').toString().trim();
 
     if (!keyId || !keySecret) {
-      return res.status(500).json({ error: 'Razorpay keys missing from .env and settings collection.' });
+      return res.status(500).json({ error: 'Razorpay keys not configured in server environment.' });
     }
 
     const student = await db.collection('students').findOne(getStudentFilter(studentId));
@@ -186,10 +176,9 @@ export async function fulfillSuccessfulPayment({
 }) {
   if (!db) db = getDb();
 
-  // 1. Resolve credentials if needed to fetch missing payment or order info
-  const settings = await db.collection('settings').findOne({});
-  const keyId = (process.env.RAZORPAY_KEY_ID || settings?.razorpayKeyId || '').toString().trim();
-  const keySecret = (process.env.RAZORPAY_KEY_SECRET || settings?.razorpayKeySecret || '').toString().trim();
+  // 1. Resolve credentials from environment
+  const keyId = (process.env.RAZORPAY_KEY_ID || '').toString().trim();
+  const keySecret = (process.env.RAZORPAY_KEY_SECRET || '').toString().trim();
   const auth = (keyId && keySecret) ? Buffer.from(`${keyId}:${keySecret}`).toString('base64') : null;
 
   // 2. Fetch payment details from Razorpay if not provided
@@ -480,13 +469,12 @@ export const verifyRazorpayPayment = async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
 
-    // Get credentials (same logic as create-order)
-    const settings = await db.collection('settings').findOne({});
-    let keyId = (process.env.RAZORPAY_KEY_ID || settings?.razorpayKeyId || '').toString().trim();
-    let keySecret = (process.env.RAZORPAY_KEY_SECRET || settings?.razorpayKeySecret || '').toString().trim();
+    // Get credentials from environment
+    const keyId = (process.env.RAZORPAY_KEY_ID || '').toString().trim();
+    const keySecret = (process.env.RAZORPAY_KEY_SECRET || '').toString().trim();
 
     if (!keyId || !keySecret) {
-      return res.status(500).json({ error: 'Razorpay credentials not configured' });
+      return res.status(500).json({ error: 'Razorpay credentials not configured in environment' });
     }
 
     const generated_signature = crypto.createHmac('sha256', keySecret)
@@ -621,8 +609,8 @@ export const checkAndFulfillOrder = async (req, res) => {
 
     // 2. Fetch Razorpay credentials
     const settings = await db.collection('settings').findOne({});
-    const keyId = (process.env.RAZORPAY_KEY_ID || settings?.razorpayKeyId || '').toString().trim();
-    const keySecret = (process.env.RAZORPAY_KEY_SECRET || settings?.razorpayKeySecret || '').toString().trim();
+    const keyId = (process.env.RAZORPAY_KEY_ID || '').toString().trim();
+    const keySecret = (process.env.RAZORPAY_KEY_SECRET || '').toString().trim();
 
     if (!keyId || !keySecret) {
       return res.status(500).json({ error: 'Razorpay credentials not configured' });
@@ -706,7 +694,7 @@ export const handleRazorpayWebhook = async (req, res) => {
   try {
     const db = getDb();
     const settings = await db.collection('settings').findOne({});
-    const webhookSecret = (process.env.RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_KEY_SECRET || settings?.razorpayKeySecret || '').toString().trim();
+    const webhookSecret = (process.env.RAZORPAY_WEBHOOK_SECRET || process.env.RAZORPAY_KEY_SECRET || '').toString().trim();
     const signature = req.headers['x-razorpay-signature'];
 
     // Require webhook credentials & signature

@@ -611,7 +611,14 @@ export const unbanStudent = async (req, res) => {
 
 export const deleteAllStudents = async (req, res) => {
   try {
+    const { confirm } = req.body || {};
+    if (confirm !== 'DELETE_ALL_STUDENTS_CONFIRM') {
+      return res.status(400).json({ 
+        error: 'Confirmation required. Pass { confirm: "DELETE_ALL_STUDENTS_CONFIRM" } in request body to execute.' 
+      });
+    }
     const result = await Student.deleteMany({});
+    console.warn(`[SECURITY AUDIT] All students deleted by admin: ${req.admin?._id || req.user?._id || 'unknown'}. Count: ${result.deletedCount}`);
     res.json({ success: true, message: `Deleted ${result.deletedCount} students` });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete all students' });

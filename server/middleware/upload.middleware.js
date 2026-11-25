@@ -14,8 +14,11 @@ const tempStorage = multer.diskStorage({
     cb(null, dir);
   },
   filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/gi, '');
+    const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf', '.docx', '.xlsx', '.csv', '.apk', '.mp4'];
+    const safeExt = allowed.includes(ext) ? ext : '.bin';
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    cb(null, file.fieldname + '-' + uniqueSuffix + safeExt);
   }
 });
 
@@ -86,8 +89,11 @@ const apkStorage = multer.diskStorage({
     cb(null, dir);
   },
   filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/gi, '');
+    const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf', '.docx', '.xlsx', '.csv', '.apk', '.mp4'];
+    const safeExt = allowed.includes(ext) ? ext : '.bin';
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    cb(null, file.fieldname + '-' + uniqueSuffix + safeExt);
   }
 });
 
