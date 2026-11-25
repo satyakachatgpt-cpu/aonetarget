@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom';
 import RichTextEditor from '../shared/RichTextEditor';
 import { coursesAPI, testSeriesAPI, pdfsAPI, testsAPI, uploadAPI } from '../../services/apiClient';
+import { API_BASE_URL } from '../../services/apiClient';
 
 interface AddPostDrawerProps {
     isOpen: boolean;
@@ -136,7 +137,7 @@ const AddPostDrawer: React.FC<AddPostDrawerProps> = ({ isOpen, onClose, courseId
         if (!title.trim()) return;
         setIsSubmitting(true);
         try {
-            const response = await fetch(`/api/courses/${courseId}/posts`, {
+            const response = await fetch(`${API_BASE_URL}/courses/${courseId}/posts`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

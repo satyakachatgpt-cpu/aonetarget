@@ -3,9 +3,38 @@ import { uploadImage, uploadPDF, uploadVideo } from '../middleware/upload.middle
 import { authMiddleware } from '../middleware/auth.js';
 import { uploadLimiter, videoUploadLimiter } from '../middleware/security.js';
 import { uploadToCloudinary, deleteFromCloudinary, uploadBase64ToCloudinary } from '../services/cloudinary.service.js';
+import { uploadFileToR2 } from '../services/r2.service.js';
 import fs from 'fs';
 
 const router = express.Router();
+
+// ─────────────────────────────────
+// GET /api/v2/upload/presigned-url (Direct Upload Support)
+// ─────────────────────────────────
+router.get('/v2/upload/presigned-url', authMiddleware, async (req, res) => {
+  try {
+    const { filename, fileType } = req.query;
+    
+    if (!filename || !fileType) {
+      return res.status(400).json({ success: false, error: "Filename and fileType are required" });
+    }
+
+    if (process.env.PDF_STORAGE_PROVIDER !== 'r2') {
+      return res.status(400).json({ success: false, error: "Direct upload is only supported for R2 storage" });
+    }
+
+    const { getPresignedUrl } = await import('../services/r2.service.js');
+    const result = await getPresignedUrl(filename, fileType);
+
+    return res.status(200).json({
+      success: true,
+      ...result
+    });
+  } catch (error) {
+    console.error('Failed to generate presigned URL:', error);
+    return res.status(500).json({ success: false, error: "Failed to generate presigned URL" });
+  }
+});
 
 // ─────────────────────────────────
 // POST /api/v2/upload/image
@@ -70,18 +99,27 @@ router.post('/v2/upload/pdf', authMiddleware, uploadLimiter, uploadPDF.single('f
   }
 
   try {
-    // Using auto resource_type for documents. req.file.path is available from diskStorage
-    const result = await uploadToCloudinary(req.file.path, {
-      folder: 'aot/documents',
-      resource_type: 'auto'
-    });
+    let result;
+    
+    // Check if R2 is configured as the storage provider for documents
+    if (process.env.PDF_STORAGE_PROVIDER === 'r2') {
+      result = await uploadFileToR2(req.file.path, req.file.originalname, req.file.mimetype);
+    } else {
+      // Using auto resource_type for documents. req.file.path is available from diskStorage
+      result = await uploadToCloudinary(req.file.path, {
+        folder: 'aot/documents',
+        resource_type: 'auto'
+      });
+    }
 
     return res.status(200).json({
       success: true,
       url: result.url,
       public_id: result.public_id,
       bytes: result.bytes,
-      format: result.format
+      format: result.format,
+      storage: result.storage || 'cloudinary',
+      provider: result.provider || 'cloudinary'
     });
   } catch (error) {
     console.error('Document upload failed:', error);

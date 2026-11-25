@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import StudentSidebar from '../components/StudentSidebar';
 import { getImageUrl, getVideoUrl, getYouTubeThumbnail, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
+import { API_BASE_URL } from '../services/apiClient';
 
 const FreeVideosList: React.FC = () => {
     const navigate = useNavigate();
@@ -24,7 +25,7 @@ const FreeVideosList: React.FC = () => {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const videosRes = await fetch(`/api/videos?isFree=true&t=${Date.now()}`).then(r => r.json());
+            const videosRes = await fetch(`${API_BASE_URL}/videos?isFree=true&t=${Date.now()}`).then(r => r.json());
 
             const videos = Array.isArray(videosRes) ? videosRes.filter((v: any) => v.isFree) : [];
             setFreeVideos(videos);
@@ -43,11 +44,12 @@ const FreeVideosList: React.FC = () => {
 
     const handleVideoClick = (video: any) => {
         const videoId = video._id || video.id;
-        navigate(`/watch/${videoId}`, { 
+        navigate(`/watch/${videoId}?returnTo=/free-videos`, { 
             state: { 
                 video: { ...video }, 
                 courseTitle: 'Free Content', 
-                courseId: video.courseId || videoId || '' 
+                courseId: video.courseId || videoId || '',
+                returnTo: '/free-videos'
             } 
         });
     };

@@ -46,6 +46,7 @@ export const LoginStep: React.FC<LoginStepProps> = ({
                 setPasswordFormData({ ...passwordFormData, loginId: val });
               }}
               placeholder="Enter User ID, Email or Mobile"
+              onKeyDown={(e) => { if (e.key === 'Enter') handlePasswordLogin(e); }}
               className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#303F9F] focus:bg-white transition-all text-sm font-medium"
             />
           </div>
@@ -65,6 +66,7 @@ export const LoginStep: React.FC<LoginStepProps> = ({
                 type={showPassword ? 'text' : 'password'}
                 value={passwordFormData.password}
                 onChange={(e) => setPasswordFormData({ ...passwordFormData, password: e.target.value })}
+                onKeyDown={(e) => { if (e.key === 'Enter') handlePasswordLogin(e); }}
                 placeholder="••••••••"
                 className="w-full px-4 py-3.5 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:border-[#303F9F] focus:bg-white transition-all text-sm font-medium pr-12"
               />

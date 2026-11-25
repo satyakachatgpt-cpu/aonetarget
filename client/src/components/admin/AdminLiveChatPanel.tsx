@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { API_BASE_URL } from '../../services/apiClient';
 
 interface Message {
   _id: string;
@@ -32,7 +33,7 @@ const AdminLiveChatPanel: React.FC<AdminLiveChatPanelProps> = ({ videoId, isVisi
   const fetchMessages = async () => {
     try {
       const token = localStorage.getItem('adminToken');
-      const response = await fetch(`/api/live-chat/${videoId}/messages`, {
+      const response = await fetch(`${API_BASE_URL}/live-chat/${videoId}/messages`, {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -57,7 +58,7 @@ const AdminLiveChatPanel: React.FC<AdminLiveChatPanelProps> = ({ videoId, isVisi
       const adminName = localStorage.getItem('adminName') || 
                         localStorage.getItem('adminUser') || 
                         'Teacher';
-      const response = await fetch(`/api/live-chat/${videoId}/messages`, {
+      const response = await fetch(`${API_BASE_URL}/live-chat/${videoId}/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

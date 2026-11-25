@@ -35,7 +35,7 @@ const QuestionEditorListWrapper: React.FC<QuestionEditorListWrapperProps> = ({
             </button>
             <button
               onClick={() =>
-                handleDeleteQuestion(q.id || (q as any)._id)
+                handleDeleteQuestion(q._id || q.id)
               }
               className="w-9 h-9 border border-gray-100 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 transition-all"
             >

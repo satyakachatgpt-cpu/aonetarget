@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { blogAPI, newsAPI } from '../services/apiClient';
-import { getImageUrl } from '../lib/utils';
+import { getImageUrl, openPlayStoreForNews } from '../lib/utils';
+import { Capacitor } from '@capacitor/core';
 
 const AllNews: React.FC = () => {
   const navigate = useNavigate();
@@ -50,12 +51,21 @@ const AllNews: React.FC = () => {
   }, []);
 
   return (
-    <div className="max-w-md mx-auto min-h-screen bg-surface-100 shadow-xl relative pb-20 font-outfit">
-      <header className="sticky top-0 z-40 shadow-sm bg-white border-b border-gray-100">
+    <div className="max-w-md mx-auto h-[100dvh] bg-surface-100 shadow-xl relative font-outfit flex flex-col w-full">
+      <div className="flex-1 overflow-y-auto pb-20 relative">
+        <header className="sticky top-0 z-40 shadow-sm bg-white border-b border-gray-100">
         <div className="px-4 py-3 flex items-center gap-3">
           <button
-            onClick={() => navigate(-1)}
-            className="w-10 h-10 rounded-xl bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-colors text-gray-700"
+            type="button"
+            onClick={() => {
+              if (window.history.state && typeof window.history.state.idx === 'number' && window.history.state.idx > 0) {
+                navigate(-1);
+              } else {
+                navigate('/', { replace: true });
+              }
+            }}
+            className="w-10 h-10 rounded-xl bg-gray-50 hover:bg-gray-100 flex items-center justify-center transition-colors text-gray-700 active:scale-95"
+            aria-label="Go back"
           >
             <span className="material-symbols-rounded">arrow_back</span>
           </button>
@@ -114,8 +124,11 @@ const AllNews: React.FC = () => {
            <div className="text-center py-10 text-gray-500 font-medium">No news available</div>
         )}
       </main>
+      </div>
     </div>
   );
 };
 
 export default AllNews;
+
+

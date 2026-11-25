@@ -29,7 +29,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
     }, [setSidebarHidden]);
 
     const [validityTab, setValidityTab] = useState<'set' | 'end' | 'lifetime'>('set');
-    const [isFeatured, setIsFeatured] = useState(!!courseData?.isFeatured);
+    const [isFeatured, setIsFeatured] = useState(!!(courseData?.settings?.isFeatured ?? courseData?.isFeatured));
     const [showCategories, setShowCategories] = useState(false);
     const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
     const [validityUnit, setValidityUnit] = useState('Months');
@@ -114,7 +114,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
             setPrice(courseData.price?.toString() || '');
             setOriginalPrice(courseData.originalPrice?.toString() || '');
             setCoverImage(courseData.thumbnail || courseData.imageUrl || null);
-            setIsFeatured(!!courseData.isFeatured);
+            setIsFeatured(!!(courseData.settings?.isFeatured ?? courseData.isFeatured));
 
             if (courseData.categories) {
                 setSelectedCategories(Array.isArray(courseData.categories) ? courseData.categories : [courseData.categories]);
@@ -605,7 +605,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
                                             <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">Recommended: 680x400 px (1.7:1 Ratio)</span>
                                         </div>
                                         <input type="file" ref={imageInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
-                                        <div onClick={() => !isUploadingImage && !coverImage && imageInputRef.current?.click()} className={`border border-dashed border-gray-300 rounded-sm p-6 flex flex-col items-center justify-center bg-white transition-all min-h-[140px] relative overflow-hidden shadow-sm ${coverImage ? '' : 'hover:bg-gray-50 cursor-pointer'}`}>
+                                        <div onClick={() => !isUploadingImage && !coverImage && imageInputRef.current?.click()} className={`border border-dashed border-gray-300 rounded-sm p-3 flex flex-col items-center justify-center bg-gray-50/50 transition-all min-h-[150px] relative overflow-hidden shadow-sm ${coverImage ? '' : 'hover:bg-gray-100 cursor-pointer'}`}>
                                             {isUploadingImage ? (
                                                 <div className="flex flex-col items-center gap-2">
                                                     <div className="w-8 h-8 border-4 border-black border-t-transparent rounded-full animate-spin"></div>
@@ -615,11 +615,11 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
                                                 <>
                                                     <img
                                                         src={getImageUrl(coverImage)}
-                                                        className="absolute inset-0 w-full h-full object-cover"
+                                                        className="w-full h-auto max-h-[200px] object-contain rounded-sm"
                                                         alt="Preview"
                                                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                                     />
-                                                    <div className="absolute inset-0 bg-black/30 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                                                    <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
                                                         <button
                                                             type="button"
                                                             onClick={(e) => { e.stopPropagation(); imageInputRef.current?.click(); }}
@@ -702,7 +702,12 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
 
                                      {/* Level 1 Chip */}
                                      {(() => {
-                                         const cat = categories.find(c => String(c.id || c._id) === String(selectedCategoryId));
+                                         const cat = categories.find(c => 
+    String(c.id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c._id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c.title || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    (Array.isArray(selectedCategories) && selectedCategories.some(sc => String(sc).toLowerCase().trim() === String(c.title || '').toLowerCase().trim()))
+);
                                          if (cat && cat.branchesL1 && cat.branchesL1.length > 0) {
                                              const branch = cat.branchesL1.find((b: any) => b.slug === level1Branch);
                                              return (
@@ -719,7 +724,12 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
 
                                      {/* Level 2 Chip */}
                                      {(() => {
-                                         const cat = categories.find(c => String(c.id || c._id) === String(selectedCategoryId));
+                                         const cat = categories.find(c => 
+    String(c.id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c._id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c.title || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    (Array.isArray(selectedCategories) && selectedCategories.some(sc => String(sc).toLowerCase().trim() === String(c.title || '').toLowerCase().trim()))
+);
                                          if (cat && cat.hierarchyMode === 'board-class' && cat.branchesL2 && cat.branchesL2.length > 0) {
                                              const branch = cat.branchesL2.find((b: any) => b.slug === level2Branch);
                                              return (
@@ -736,7 +746,12 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
 
                                      {/* Subcategory Chip */}
                                      {(() => {
-                                         const cat = categories.find(c => String(c.id || c._id) === String(selectedCategoryId));
+                                         const cat = categories.find(c => 
+    String(c.id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c._id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c.title || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    (Array.isArray(selectedCategories) && selectedCategories.some(sc => String(sc).toLowerCase().trim() === String(c.title || '').toLowerCase().trim()))
+);
                                          if (!cat) return null;
 
                                          const hasL1 = cat.branchesL1 && cat.branchesL1.length > 0;
@@ -769,7 +784,12 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
                                      {/* Subject Chip */}
                                      {(() => {
                                          const subObj = allSubCategories.find(s => String(s.id || s._id) === String(selectedSubCategoryId));
-                                         const cat = categories.find(c => String(c.id || c._id) === String(selectedCategoryId));
+                                         const cat = categories.find(c => 
+    String(c.id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c._id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c.title || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    (Array.isArray(selectedCategories) && selectedCategories.some(sc => String(sc).toLowerCase().trim() === String(c.title || '').toLowerCase().trim()))
+);
                                          if (!cat) return null;
 
                                          const hasL1 = cat?.branchesL1 && cat?.branchesL1.length > 0;
@@ -837,8 +857,8 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
                                                                          setSelectedSubCategoryId('');
                                                                          setSelectedSubjectId('');
                                                                          setShowCategories(false);
-                                                                     }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-slate-50 flex items-center justify-between ${String(selectedCategoryId) === String(catId) ? 'text-blue-600 bg-blue-50 font-bold' : 'text-slate-600'}`}>
-                                                                         {catName} {String(selectedCategoryId) === String(catId) && <span className="material-symbols-outlined text-[16px]">check_circle</span>}
+                                                                     }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-slate-50 flex items-center justify-between ${(String(selectedCategoryId) === String(catId) || String(selectedCategoryId) === String(catObj._id) || String(selectedCategoryId).toLowerCase() === String(catName).toLowerCase() || (Array.isArray(selectedCategories) && selectedCategories.includes(catName))) ? 'text-blue-600 bg-blue-50 font-bold' : 'text-slate-600'}`}>
+                                                                          {catName} {(String(selectedCategoryId) === String(catId) || String(selectedCategoryId) === String(catObj._id) || String(selectedCategoryId).toLowerCase() === String(catName).toLowerCase() || (Array.isArray(selectedCategories) && selectedCategories.includes(catName))) && <span className="material-symbols-outlined text-[16px]">check_circle</span>}
                                                                      </div>
                                                                  );
                                                              })}
@@ -851,7 +871,12 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
 
                                      {/* Dynamic Steps Block */}
                                      {selectedCategoryId && (() => {
-                                         const selectedCatObj = categories.find(c => String(c.id || c._id) === String(selectedCategoryId));
+                                         const selectedCatObj = categories.find(c => 
+    String(c.id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c._id || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    String(c.title || '').toLowerCase().trim() === String(selectedCategoryId || '').toLowerCase().trim() ||
+    (Array.isArray(selectedCategories) && selectedCategories.some(sc => String(sc).toLowerCase().trim() === String(c.title || '').toLowerCase().trim()))
+);
                                          if (!selectedCatObj) return null;
 
                                          const mode = selectedCatObj.hierarchyMode || 'simple';
@@ -1598,7 +1623,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
                         <div className="border border-gray-200 rounded-sm overflow-hidden bg-white shadow-[0_8px_30px_rgb(0,0,0,0.04)] ring-1 ring-gray-900/[0.02]">
                             <div className="aspect-[16/10] bg-gray-50 flex items-center justify-center relative overflow-hidden group">
                                 {coverImage ? (
-                                    <img src={getImageUrl(coverImage)} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" alt="Preview" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                    <img src={getImageUrl(coverImage)} className="w-full h-full object-contain p-1 transition-transform duration-700 group-hover:scale-105" alt="Preview" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                                 ) : (
                                     <div className="flex flex-col items-center">
                                         <div className="w-20 h-20 rounded-full border border-dashed border-gray-200 flex items-center justify-center mb-3 bg-white/50">

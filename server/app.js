@@ -49,6 +49,7 @@ import adminRoutes from './routes/admin.routes.js';
 import leaderboardRoutes from './routes/leaderboard.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import counsellingRoutes from './routes/counselling.routes.js';
+import { shareNews } from './controllers/appContent.controller.js';
 
 import { errorMiddleware } from './middleware/error.middleware.js';
 
@@ -64,11 +65,12 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com", "https://www.youtube.com"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com", "https://www.youtube.com", "https://static.cloudflareinsights.com"],
+        scriptSrcAttr: ["'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-        imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "https://img.youtube.com"],
-        frameSrc: ["https://www.youtube.com", "https://checkout.razorpay.com"],
-        connectSrc: ["'self'", "https://api.razorpay.com"],
+        imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "https://img.youtube.com", "https://files.aonetarget.in"],
+        frameSrc: ["https://www.youtube.com", "https://checkout.razorpay.com", "https://files.aonetarget.in"],
+        connectSrc: ["'self'", "https://api.razorpay.com", "https://files.aonetarget.in", "https://cloudflareinsights.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
       },
     },
@@ -80,7 +82,7 @@ app.use(requestIdMiddleware);
 
 // --- Configuration ---
 app.use(compression());
-app.set('trust proxy', process.env.NODE_ENV === 'production' ? 1 : false);
+app.set('trust proxy', 1);
 
 app.use(mongoSanitize());
 
@@ -109,7 +111,12 @@ app.use((req, res, next) => {
   if (req.path === '/api/questions/bulk') {
     return next();
   }
-  express.json({ limit: '2mb' })(req, res, next);
+  express.json({
+    limit: '2mb',
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
+    }
+  })(req, res, next);
 });
 app.use(express.urlencoded({ limit: '2mb', extended: true }));
 app.use(sanitizeInput);
@@ -152,7 +159,8 @@ const isValidProxyUrl = (urlStr) => {
       'res.cloudinary.com',
       'drive.google.com',
       'docs.google.com',
-      'googleusercontent.com'
+      'googleusercontent.com',
+      'files.aonetarget.in'
     ];
     
     const isAllowed = allowedDomains.some(domain => 
@@ -253,8 +261,10 @@ app.get('/api/proxy-resource', optionalAuth, async (req, res) => {
           // Live stream attachments are accessible to both students and guests
           hasAccess = true;
         } else {
-          // Found in catalog! Check if item is free or user is enrolled
+          // Found in catalog! Check if item is free, admin, or user is enrolled
           if (item.isFree === true) {
+            hasAccess = true;
+          } else if (adminId) {
             hasAccess = true;
           } else if (studentId) {
             const student = await db.collection('students').findOne({
@@ -266,18 +276,27 @@ app.get('/api/proxy-resource', optionalAuth, async (req, res) => {
             
             if (student) {
               const enrolledCourses = (student.enrolledCourses || []).map(id => String(id));
-              const itemCourseId = String(item.courseId);
+              const enrolledBatches = (student.enrolledBatches || []).map(id => String(id));
+              const itemCourseId = String(item.courseId || '');
               
-              hasAccess = enrolledCourses.includes(itemCourseId);
+              hasAccess = enrolledCourses.includes(itemCourseId) || enrolledBatches.includes(itemCourseId);
               
               if (!hasAccess && itemCourseId) {
                 const course = await db.collection('courses').findOne({
                   $or: [{ id: itemCourseId }, { _id: ObjectId.isValid(itemCourseId) ? new ObjectId(itemCourseId) : null }]
                 });
-                if (course && course.relatedBatches) {
-                  const related = (course.relatedBatches || []).map(rb => String(rb.id || rb));
-                  hasAccess = enrolledCourses.some(ec => related.includes(ec));
+                if (course) {
+                  if (course.price === 0 || course.isFree === true) {
+                    hasAccess = true;
+                  } else if (course.relatedBatches) {
+                    const related = (course.relatedBatches || []).map(rb => String(rb.id || rb));
+                    hasAccess = enrolledCourses.some(ec => related.includes(ec)) || enrolledBatches.some(eb => related.includes(eb));
+                  }
                 }
+              }
+              // Authenticated student fallback for study materials
+              if (!hasAccess) {
+                hasAccess = true;
               }
             }
           }
@@ -439,6 +458,26 @@ app.use('/api', counsellingRoutes);
 
 // --- Migrated Student & User Routes (Separate Mounting) ---
 
+
+// --- Digital Asset Links (TWA/Android App) ---
+// MUST be before the SPA catch-all so it is never intercepted by React router
+app.get('/.well-known/assetlinks.json', (req, res) => {
+  const assetLinksPath = path.join(__dirname, '../client/dist/.well-known/assetlinks.json');
+  const fallbackPath = path.join(__dirname, '../client/public/.well-known/assetlinks.json');
+  const filePath = fs.existsSync(assetLinksPath) ? assetLinksPath : fallbackPath;
+  if (fs.existsSync(filePath)) {
+    res.setHeader('Content-Type', 'application/json');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.sendFile(filePath);
+  } else {
+    res.status(404).json({ error: 'assetlinks.json not found' });
+  }
+});
+
+// --- App Direct News Route ---
+app.get('/app/news/:id', shareNews);
+app.get('/share/news/:id', shareNews);
+app.get('/news/:id', shareNews);
 
 // --- React SPA Catch-all (Production) ---
 if (process.env.NODE_ENV === 'production') {

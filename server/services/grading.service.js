@@ -11,11 +11,14 @@ export const evaluateTest = ({ questions, answers, test }) => {
   let obtainedMarks = 0;
   let negativeMarksTotal = 0;
 
-  const questionResults = questions.map((q) => {
+  const questionResults = questions.map((q, index) => {
     const qIdStr = q.id ? String(q.id) : (q._id ? q._id.toString() : null);
-    const studentAnswer = qIdStr ? (answers[qIdStr] || null) : null;
-    const normalizedCorrect = (q.correctAnswer || q.correct_answer || q.answer || q['Correct Answer'] || q.correctOption || 'A').toString().toUpperCase().trim();
-    const isCorrect = studentAnswer === normalizedCorrect;
+    const compositeId = `${qIdStr || 'q'}_idx_${index}`;
+    // Fallback: check if the answer exists under the composite ID first, else try the old qIdStr (for backward compatibility if needed)
+    const studentAnswer = answers[compositeId] !== undefined ? answers[compositeId] : (qIdStr ? (answers[qIdStr] || null) : null);
+    const rawCorrect = q.correctAnswer || q.correct_answer || q.answer || q['Correct Answer'] || q.correctOption || '';
+    const normalizedCorrect = rawCorrect.toString().toUpperCase().trim();
+    const isCorrect = studentAnswer && (studentAnswer.toString().toUpperCase().trim() === normalizedCorrect);
     
     // Resolve marks: Test-level wins, then Question-level fallback, then 0. 
     // We use explicit checks for undefined/null/empty string to allow 0.
@@ -67,8 +70,8 @@ export const evaluateTest = ({ questions, answers, test }) => {
     wrongAnswers: wrongCount,
     unanswered: questions.length - answeredCount,
     totalMarks,
-    obtainedMarks: Math.max(0, obtainedMarks),
-    negativeMarksTotal,
-    percentage: totalMarks > 0 ? Math.round((Math.max(0, obtainedMarks) / totalMarks) * 100) : 0,
+    obtainedMarks: Number(obtainedMarks.toFixed(2)),
+    negativeMarksTotal: Number(negativeMarksTotal.toFixed(2)),
+    percentage: totalMarks > 0 ? Number(((obtainedMarks / totalMarks) * 100).toFixed(2)) : 0,
   };
 };

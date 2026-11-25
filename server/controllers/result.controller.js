@@ -4,14 +4,16 @@ const { ObjectId } = mongoose.Types;
 import { findCourse } from '../services/course.service.js';
 import { evaluateTest } from '../services/grading.service.js';
 import { logReevaluation, logError, logSubmission } from '../utils/logger.js';
+import { getTestMatchFilter } from './leaderboard.controller.js';
 
 /**
  * Internal helper to fetch a sorted leaderboard (best attempt per student) for a test.
  * Returns an array of { score, time } objects.
  */
 const getLeaderboard = async (db, testId) => {
+  const { filter: matchFilter } = await getTestMatchFilter(db, testId);
   return await db.collection('testResults').aggregate([
-    { $match: { testId: String(testId) } },
+    { $match: matchFilter },
     {
       $group: {
         _id: "$studentId",
@@ -80,14 +82,14 @@ export const getResultById = async (req, res) => {
     const db = getDb();
     const resultId = String(req.params.id || '').trim();
     console.log('DEBUG: getResultById looking for:', resultId);
-    
+
     // Support custom id (string/number) and MongoDB _id (ObjectId or string)
     const orFilters = [
       { id: resultId },
       { id: !isNaN(Number(resultId)) ? Number(resultId) : null },
       { _id: resultId }
     ].filter(v => (v.id !== null && v.id !== undefined) || (v._id !== null && v._id !== undefined));
-    
+
     if (ObjectId.isValid(resultId)) {
       orFilters.push({ _id: new ObjectId(resultId) });
     }
@@ -97,16 +99,16 @@ export const getResultById = async (req, res) => {
 
     const result = await db.collection('testResults').findOne(filter);
     if (!result) {
-        console.log('DEBUG: Result NOT found in DB for ID:', resultId);
-        return res.status(404).json({ error: 'Result record not found' });
+      console.log('DEBUG: Result NOT found in DB for ID:', resultId);
+      return res.status(404).json({ error: 'Result record not found' });
     }
     console.log('DEBUG: Result found! studentId:', result.studentId);
-    
+
     // Check ownership
     const isAdmin = req.user?.isAdmin || req.user?.role === 'admin';
     const sessionStudentId = req.user?.studentId || req.user?.id;
     console.log('DEBUG: Ownership check - result.studentId:', result.studentId, 'sessionStudentId:', sessionStudentId, 'isAdmin:', isAdmin);
-    
+
     if (!isAdmin && String(result.studentId) !== String(sessionStudentId)) {
       console.log('DEBUG: Ownership check FAILED');
       return res.status(403).json({ error: 'Forbidden' });
@@ -116,18 +118,29 @@ export const getResultById = async (req, res) => {
 
     // --- Optimized Live Ranking Logic ---
     try {
-      const tid = enriched.testId;
-      const lb = await getLeaderboard(db, tid);
-      
+      const { filter: matchFilter } = await getTestMatchFilter(db, enriched.testId, enriched.testName);
+      // Fetch leaderboard results with flexible testId/name matching
+      const lb = await db.collection('testResults').aggregate([
+        { $match: matchFilter },
+        {
+          $group: {
+            _id: "$studentId",
+            score: { $max: "$obtainedMarks" },
+            time: { $min: "$timeTaken" } // Simple min time for now
+          }
+        },
+        { $sort: { score: -1, time: 1 } }
+      ]).toArray();
+
       const currentScore = Number(enriched.obtainedMarks) || 0;
       const currentTime = Number(enriched.timeTaken) || 999999;
-      
+
       // Calculate rank: count students better than current result
-      enriched.rank = lb.filter(s => 
-        (Number(s.score) > currentScore) || 
+      enriched.rank = lb.filter(s =>
+        (Number(s.score) > currentScore) ||
         (Number(s.score) === currentScore && Number(s.time) < currentTime)
       ).length + 1;
-      
+
       enriched.totalStudents = lb.length;
     } catch (rankErr) {
       console.error('Live ranking failed in single fetch:', rankErr);
@@ -145,7 +158,7 @@ export const getStudentTestResults = async (req, res) => {
   try {
     const identifier = req.params.id;
     const db = getDb();
-    
+
     // First, find the actual student to get all possible IDs (legacy custom ID, userId, and MongoDB _id)
     const student = await db.collection('students').findOne({
       $or: [
@@ -335,12 +348,12 @@ export const getStudentTestResults = async (req, res) => {
         if (lb) {
           const currentScore = Number(r.obtainedMarks) || 0;
           const currentTime = Number(r.timeTaken) || 999999;
-          
-          r.rank = lb.filter(s => 
-            (Number(s.score) > currentScore) || 
+
+          r.rank = lb.filter(s =>
+            (Number(s.score) > currentScore) ||
             (Number(s.score) === currentScore && Number(s.time) < currentTime)
           ).length + 1;
-          
+
           r.totalStudents = lb.length;
         }
       });
@@ -387,7 +400,17 @@ export const getAdminTestResults = async (req, res) => {
                 $expr: {
                   $and: [
                     { $not: ['$$hasName'] },
-                    { $eq: ['$id', '$$tid'] }
+                    {
+                      $or: [
+                        { $eq: ['$id', '$$tid'] },
+                        {
+                          $and: [
+                            { $regexMatch: { input: { $toString: '$$tid' }, regex: /^[0-9a-fA-F]{24}$/ } },
+                            { $eq: ['$_id', { $convert: { input: '$$tid', to: 'objectId', onError: null, onNull: null } }] }
+                          ]
+                        }
+                      ]
+                    }
                   ]
                 }
               }
@@ -401,9 +424,23 @@ export const getAdminTestResults = async (req, res) => {
       {
         $lookup: {
           from: 'students',
-          localField: 'studentId',
-          foreignField: 'id',
+          let: { sid: '$studentId' },
           pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $or: [
+                    { $eq: ['$id', '$$sid'] },
+                    {
+                      $and: [
+                        { $regexMatch: { input: { $toString: '$$sid' }, regex: /^[0-9a-fA-F]{24}$/ } },
+                        { $eq: ['$_id', { $convert: { input: '$$sid', to: 'objectId', onError: null, onNull: null } }] }
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
             { $limit: 1 },
             { $project: { _id: 0, name: 1, phone: 1, email: 1 } }
           ],
@@ -485,12 +522,12 @@ export const getAdminTestResults = async (req, res) => {
         if (lb) {
           const currentScore = Number(r.obtainedMarks) || 0;
           const currentTime = Number(r.timeTaken) || 999999;
-          
-          r.rank = lb.filter(s => 
-            (Number(s.score) > currentScore) || 
+
+          r.rank = lb.filter(s =>
+            (Number(s.score) > currentScore) ||
             (Number(s.score) === currentScore && Number(s.time) < currentTime)
           ).length + 1;
-          
+
           r.totalStudents = lb.length;
         }
       });
@@ -579,7 +616,7 @@ export const reevaluateTest = async (req, res) => {
     };
     if (!isNaN(testId)) questionFilter.$or.push({ testId: Number(testId) });
 
-    const questions = await db.collection('questions').find(questionFilter).toArray();
+    const questions = await db.collection('questions').find(questionFilter).sort({ orderIndex: 1, id: 1 }).toArray();
     if (questions.length === 0) {
       return res.status(400).json({ success: false, message: 'No questions found for this test. Cannot re-evaluate.' });
     }
@@ -678,7 +715,7 @@ export const submitTest = async (req, res) => {
     const db = getDb();
     const { studentId, answers, timeTaken } = req.body;
     const isAdmin = req.user?.isAdmin || req.user?.role === 'admin';
-    const tokenStudentId = req.user?.studentId;
+    const tokenStudentId = req.user?.studentId || req.user?.id || req.user?.userId;
 
     if (!isAdmin && String(studentId) !== String(tokenStudentId)) {
       return res.status(403).json({ error: 'Forbidden' });
@@ -691,7 +728,7 @@ export const submitTest = async (req, res) => {
       { id: !isNaN(tid) ? Number(tid) : null },
       { _id: tid }
     ].filter(v => v.id !== null && v.id !== undefined || v._id !== null && v._id !== undefined);
-    
+
     if (ObjectId.isValid(tid)) orConditions.push({ _id: new ObjectId(tid) });
 
     let test = await db.collection('tests').findOne({ $or: orConditions });
@@ -708,9 +745,9 @@ export const submitTest = async (req, res) => {
 
     const questionFilter = { $or: [{ testId: tid }, { testId: test.id || test._id.toString() }] };
     if (!isNaN(tid)) questionFilter.$or.push({ testId: Number(tid) });
-    const separateQuestions = await db.collection('questions').find(questionFilter).toArray();
+    const separateQuestions = await db.collection('questions').find(questionFilter).sort({ orderIndex: 1, id: 1 }).toArray();
     const questions = separateQuestions.length > 0 ? separateQuestions : (test.questions || []);
-    
+
     const evaluation = evaluateTest({ questions, answers, test });
 
     let studentName = '';
@@ -741,32 +778,40 @@ export const submitTest = async (req, res) => {
       submittedAt: new Date()
     };
 
-    // --- Optimized Ranking Calculation ---
+    // --- O(1) Extremely Fast Ranking Calculation ---
     let rank = 0;
     let totalStudents = 0;
     try {
-      const tid = req.params.testId;
-      const lb = await getLeaderboard(db, tid);
-      
+      const { filter: matchFilter } = await getTestMatchFilter(db, req.params.testId, test.name || test.title);
       const studentScore = Number(evaluation.obtainedMarks) || 0;
       const studentTime = Number(timeTaken) || 999999;
+
+      // Fast lookup: Count unique students who scored better or same score but faster
+      const betterStudentsIds = await db.collection('testResults').distinct('studentId', {
+        $and: [
+          matchFilter,
+          {
+            $or: [
+              { obtainedMarks: { $gt: studentScore } },
+              { obtainedMarks: studentScore, timeTaken: { $lt: studentTime } }
+            ]
+          }
+        ]
+      });
+
+      const uniqueBetterOthers = betterStudentsIds.filter(id => String(id) !== String(effectiveStudentId));
+      rank = uniqueBetterOthers.length + 1;
+
+      // Fast lookup: Count total unique students
+      const allStudentIds = await db.collection('testResults').distinct('studentId', matchFilter);
       
-      // Calculate rank among others' best attempts
-      // lb already contains best attempts per student (including current student's past attempts if any)
-      // To strictly rank among OTHERS, we could filter lb by studentId, but the leaderboard concept 
-      // usually includes the current best too. The existing code filtered out current student.
-      const otherStudentsBest = lb.filter(s => String(s._id) !== String(effectiveStudentId));
-      
-      totalStudents = otherStudentsBest.length + 1;
-      rank = otherStudentsBest.filter(s => 
-        (Number(s.score) > studentScore) || 
-        (Number(s.score) === studentScore && Number(s.time) < studentTime)
-      ).length + 1;
-      
+      const uniqueAllOthers = allStudentIds.filter(id => String(id) !== String(effectiveStudentId));
+      totalStudents = uniqueAllOthers.length + 1;
+
     } catch (rankErr) {
-      console.error('Ranking calculation failed:', rankErr);
+      console.error('Fast ranking calculation failed:', rankErr);
     }
-    // --- End Ranking Calculation ---
+    // --- End Fast Ranking Calculation ---
 
     resultData.rank = rank;
     resultData.totalStudents = totalStudents;
@@ -783,14 +828,58 @@ export const submitTest = async (req, res) => {
       timeTaken
     });
 
-    // Strip correctAnswer and isCorrect from response for students (keep in DB for later review)
-    const responseData = isAdmin ? resultData : {
-      ...resultData,
-      questionResults: resultData.questionResults?.map(qr => {
-        const { correctAnswer, isCorrect, ...safeQr } = qr;
-        return safeQr;
-      })
-    };
+    // Return full resultData so client can immediately display Answer Review
+    const responseData = resultData;
+
+    // Update student's course/test-series progress
+    try {
+      const courseIdsToUpdate = [];
+      
+      if (test.courseId) courseIdsToUpdate.push(String(test.courseId));
+      if (test.courseIds && Array.isArray(test.courseIds)) {
+        test.courseIds.forEach(c => courseIdsToUpdate.push(String(c)));
+      }
+      if (test.testSeriesId) courseIdsToUpdate.push(String(test.testSeriesId));
+      if (test.seriesId) courseIdsToUpdate.push(String(test.seriesId));
+      if (test.testSeries && Array.isArray(test.testSeries)) {
+        test.testSeries.forEach(s => courseIdsToUpdate.push(String(s)));
+      }
+      if (req.body.courseId) courseIdsToUpdate.push(String(req.body.courseId));
+
+      const uniqueCourseIds = [...new Set(courseIdsToUpdate.filter(Boolean))];
+
+      if (uniqueCourseIds.length > 0) {
+        const student = await db.collection('students').findOne({
+          $or: [
+            { id: effectiveStudentId },
+            { userId: effectiveStudentId },
+            { _id: mongoose.Types.ObjectId.isValid(effectiveStudentId) ? new mongoose.Types.ObjectId(effectiveStudentId) : null }
+          ].filter(v => v.id || v.userId || v._id)
+        });
+
+        if (student) {
+          const canonicalStudentId = student.id || String(student._id);
+          const studentIdVariants = [String(student._id), student.id, student.userId].filter(Boolean);
+          const itemId = String(req.params.testId);
+
+          for (const cId of uniqueCourseIds) {
+            const progressQuery = { studentId: { $in: studentIdVariants }, courseId: cId };
+            const progressUpdate = {
+              $setOnInsert: {
+                studentId: canonicalStudentId,
+                courseId: cId,
+                createdAt: new Date()
+              },
+              $addToSet: { completedTests: itemId },
+              $set: { updatedAt: new Date() }
+            };
+            await db.collection('courseProgress').updateOne(progressQuery, progressUpdate, { upsert: true });
+          }
+        }
+      }
+    } catch (progressErr) {
+      console.error('Failed to auto-update course progress upon submission:', progressErr);
+    }
 
     res.status(201).json(responseData);
   } catch (error) {

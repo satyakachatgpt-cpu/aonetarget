@@ -138,16 +138,10 @@ export const normalizeDateStr = (dateStr) => {
 export const isPurchaseExpired = (purchase, course) => {
   if (!purchase || !course) return false;
 
-  // Early return for lifetime access or missing mode
-  if (!course.expiryMode || course.expiryMode === 'Lifetime Access' || course.expiryMode === 'lifetime') {
-    return false;
-  }
-  
-  const mode = course.expiryMode;
   const val = course.validity;
-  
+  let currentExpiryMode = course.expiryMode || course.validityType;
   let validityValue = val;
-  let currentExpiryMode = mode;
+  let validityUnit = 'months';
 
   // Handle Course validity object structure
   if (typeof val === 'object' && val !== null) {
@@ -156,14 +150,16 @@ export const isPurchaseExpired = (purchase, course) => {
       validityValue = val.endDate;
     } else if (val.tab === 'set') {
       currentExpiryMode = 'Validity';
-      validityValue = val.value; 
+      validityValue = val.value;
+      validityUnit = val.unit || 'months';
     } else if (val.tab === 'lifetime') {
       currentExpiryMode = 'Lifetime Access';
+      validityValue = null;
     }
   }
 
-  // Secondary check after resolving validity object
-  if (currentExpiryMode === 'Lifetime Access' || currentExpiryMode === 'lifetime') {
+  // Check for lifetime access or missing mode
+  if (!currentExpiryMode || currentExpiryMode === 'Lifetime Access' || currentExpiryMode === 'lifetime') {
     return false;
   }
 
@@ -176,11 +172,22 @@ export const isPurchaseExpired = (purchase, course) => {
       return new Date() > expiryDate;
     }
   } else if (currentExpiryMode === 'Validity' && validityValue) {
-    const months = parseInt(validityValue);
-    if (!isNaN(months)) {
+    const value = parseInt(validityValue);
+    if (!isNaN(value)) {
       const createdAt = purchase.createdAt ? new Date(purchase.createdAt) : new Date();
       const expiryDate = new Date(createdAt);
-      expiryDate.setMonth(expiryDate.getMonth() + months);
+      const lowerUnit = String(validityUnit).toLowerCase();
+
+      if (lowerUnit === 'days' || lowerUnit === 'day') {
+        expiryDate.setDate(expiryDate.getDate() + value);
+      } else if (lowerUnit === 'weeks' || lowerUnit === 'week') {
+        expiryDate.setDate(expiryDate.getDate() + (value * 7));
+      } else if (lowerUnit === 'years' || lowerUnit === 'year') {
+        expiryDate.setFullYear(expiryDate.getFullYear() + value);
+      } else {
+        expiryDate.setMonth(expiryDate.getMonth() + value);
+      }
+
       // Set to end of day to include the full last day
       expiryDate.setHours(23, 59, 59, 999);
       return new Date() > expiryDate;
@@ -204,5 +211,69 @@ export const isTestExpired = (test) => {
   if (isNaN(expiryDate.getTime())) return false;
   
   return new Date() > expiryDate;
+};
+
+/**
+ * Extract YouTube 11-char ID from various URL formats
+ */
+export const extractYouTubeId = (url) => {
+  if (!url) return null;
+  const str = String(url).trim();
+  const patterns = [
+    /(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/|live\/|v\/)|youtu\.be\/)([\w-]{11})/,
+    /youtube\.com\/watch\?.*v=([\w-]{11})/,
+    /youtu\.be\/([\w-]{11})/
+  ];
+  for (const p of patterns) {
+    const m = str.match(p);
+    if (m && m[1]) return m[1];
+  }
+  return null;
+};
+
+/**
+ * Fetch video duration (format: MM:SS or H:MM:SS) from YouTube metadata
+ */
+export const fetchYouTubeDuration = async (url) => {
+  try {
+    const videoId = extractYouTubeId(url);
+    if (!videoId) return null;
+    const res = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+      signal: AbortSignal.timeout(5000)
+    });
+    const html = await res.text();
+    const m = html.match(/"lengthSeconds":"(\d+)"/);
+    if (m) {
+      const secs = parseInt(m[1], 10);
+      if (secs > 0) {
+        const hours = Math.floor(secs / 3600);
+        const mins = Math.floor((secs % 3600) / 60);
+        const remSecs = secs % 60;
+        const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
+        if (hours > 0) {
+          return `${pad(hours)}:${pad(mins)}:${pad(remSecs)}`;
+        }
+        return `${pad(mins)}:${pad(remSecs)}`;
+      }
+    }
+    const meta = html.match(/itemprop="duration" content="PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?"/);
+    if (meta) {
+      const h = parseInt(meta[1] || '0', 10);
+      const m = parseInt(meta[2] || '0', 10);
+      const s = parseInt(meta[3] || '0', 10);
+      const totalSecs = h * 3600 + m * 60 + s;
+      if (totalSecs > 0) {
+        const pad = (n) => (n < 10 ? `0${n}` : `${n}`);
+        if (h > 0) {
+          return `${pad(h)}:${pad(m)}:${pad(s)}`;
+        }
+        return `${pad(m)}:${pad(s)}`;
+      }
+    }
+  } catch (e) {
+    // Non-blocking fallback
+  }
+  return null;
 };
 

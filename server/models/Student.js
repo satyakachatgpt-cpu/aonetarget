@@ -85,6 +85,7 @@ const studentSchema = new mongoose.Schema({
     
     isBanned: { type: Boolean, default: false },
     banReason: { type: String, default: null },
+    isReviewer: { type: Boolean, default: false },
 
     // Referral & Coin System
     referredBy: { type: String, default: null },

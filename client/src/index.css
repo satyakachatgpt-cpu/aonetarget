@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap');
+
 
 * {
   margin: 0;
@@ -29,6 +29,61 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overscroll-behavior-y: none;
+  background-color: #f9fafb;
+  
+  /* Security Measures */
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Allow text selection in input fields */
+input, textarea, [contenteditable] {
+  user-select: text;
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+}
+
+/* Global iOS PWA Fixes - ONLY active in standalone mode */
+@media (display-mode: standalone) {
+  html, body, #root {
+    height: 100vh !important;
+    min-height: 100vh !important;
+    max-height: 100vh !important;
+    overflow: hidden !important; /* Prevent iOS bounce that causes viewport bugs */
+  }
+
+  /* Override tailwind 100dvh for PWA to avoid cold-start gap */
+  .h-\[100dvh\] { height: 100vh !important; }
+  .min-h-\[100dvh\] { min-height: 100vh !important; }
+  .h-screen { height: 100vh !important; }
+  .min-h-screen { min-height: 100vh !important; }
+
+  /* Apply safe-area only to iOS to prevent unwanted padding on Android */
+  @supports (-webkit-touch-callout: none) {
+    .pwa-status-bar {
+      display: none !important;
+      height: 0 !important;
+      min-height: 0 !important;
+    }
+    
+    .sidebar-header-ios {
+      padding-top: env(safe-area-inset-top) !important;
+    }
+
+    .bottom-nav-ios {
+      padding-bottom: env(safe-area-inset-bottom) !important;
+      background-color: white !important;
+    }
+  }
+}
+
+/* Hide PWA status bar by default (in browser) */
+.pwa-status-bar {
+  display: none;
 }
 
 /* Prevent iOS Auto-Zoom on inputs */
@@ -237,3 +292,14 @@ select {
 .news-content-html li {
     margin-bottom: 0.25rem;
 }
+
+/* Prevent Material Symbols raw text flash on slow networks */
+html:not(.material-symbols-ready) .material-symbols-rounded,
+html:not(.material-symbols-ready) .material-symbols-outlined {
+  visibility: hidden;
+}
+
+html.material-symbols-ready .material-symbols-rounded,
+html.material-symbols-ready .material-symbols-outlined {
+  visibility: visible;
+}

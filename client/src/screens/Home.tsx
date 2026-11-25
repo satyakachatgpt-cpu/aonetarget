@@ -2,10 +2,12 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import DOMPurify from 'dompurify';
 import { useDebounce } from '../hooks/useDebounce';
 import { useNavigate } from 'react-router-dom';
-import { coursesAPI, blogAPI, newsAPI, categoriesAPI, bannersAPI, testsAPI, testSeriesAPI, liveVideosAPI, quickLinksAPI } from '../services/apiClient';
+import { coursesAPI, blogAPI, newsAPI, categoriesAPI, bannersAPI, testsAPI, testSeriesAPI, liveVideosAPI, quickLinksAPI, API_BASE_URL } from '../services/apiClient';
 import StudentSidebar from '../components/StudentSidebar';
 import { useAuthStore } from '../store/authStore';
 import { Course, Student } from '../types';
+import { Capacitor } from '@capacitor/core';
+import { openPlayStoreForNews } from '../lib/utils';
 
 
 interface NewsItem {
@@ -143,6 +145,10 @@ const Home: React.FC = () => {
   const [allNews, setAllNews] = useState<any[]>([]);
   const [newsLoading, setNewsLoading] = useState(true);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
+  // Hide content initially if returning from a news article, to avoid top-flash
+  const [isRestoringScroll, setIsRestoringScroll] = useState(
+    () => !!sessionStorage.getItem('returnToNews')
+  );
   const bannerDragInfo = useRef({ startX: 0, startTime: 0 });
 
   const handleBannerClick = useCallback((banner: Banner) => {
@@ -195,18 +201,8 @@ const Home: React.FC = () => {
   };
 
   const featuredToDisplay = useMemo(() => {
-    // 1. Get explicitly featured courses
-    const featured = courses.filter((c: any) => c.settings?.isFeatured === true);
-    
-    // 2. If we have 4 or more featured, just show top 4
-    if (featured.length >= 4) return featured.slice(0, 4);
-    
-    // 3. Otherwise, fill up to 4 using other latest batches
-    const featuredIds = new Set(featured.map(c => c._id || c.id));
-    const others = courses.filter(c => !featuredIds.has(c._id || c.id));
-    
-    const combined = [...featured, ...others].slice(0, 4);
-    return combined;
+    // Get explicitly featured courses only
+    return courses.filter((c: any) => c.settings?.isFeatured === true);
   }, [courses]);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstalling, setIsInstalling] = useState(false);
@@ -222,6 +218,41 @@ const Home: React.FC = () => {
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []);
+
+  // Save and Restore Scroll Position
+  useEffect(() => {
+    const returnToNews = sessionStorage.getItem('returnToNews');
+    if (returnToNews && !newsLoading) {
+      let attempts = 0;
+      
+      const interval = setInterval(() => {
+        const el = document.getElementById('news-section');
+        if (el) {
+          el.scrollIntoView({ behavior: 'instant', block: 'center' });
+          attempts++;
+          
+          // After a few ticks, layout shifts should be done - reveal the page
+          if (attempts > 4) {
+            sessionStorage.removeItem('returnToNews');
+            setIsRestoringScroll(false);
+            clearInterval(interval);
+          }
+        } else {
+          attempts++;
+          // Safety: give up after 20 attempts (2s) even if element not found
+          if (attempts > 20) {
+            sessionStorage.removeItem('returnToNews');
+            setIsRestoringScroll(false);
+            clearInterval(interval);
+          }
+        }
+      }, 80);
+      
+      return () => clearInterval(interval);
+    }
+  }, [newsLoading]);
+
+
 
   useEffect(() => {
     if (banners.length <= 1) return;
@@ -411,7 +442,7 @@ const Home: React.FC = () => {
 
     const fetchExamDocs = async () => {
       try {
-        const response = await fetch('/api/exam-documents');
+        const response = await fetch(`${API_BASE_URL}/exam-documents`);
         if (response.ok) {
           const data = await response.json();
           const active = (Array.isArray(data) ? data : [])
@@ -457,6 +488,20 @@ const Home: React.FC = () => {
     };
 
     fetchAll();
+
+    const handleContentUpdate = () => {
+      fetchAll();
+    };
+
+    window.addEventListener('app:content-updated', handleContentUpdate);
+    window.addEventListener('app:live-status-changed', handleContentUpdate);
+    window.addEventListener('focus', fetchAll);
+
+    return () => {
+      window.removeEventListener('app:content-updated', handleContentUpdate);
+      window.removeEventListener('app:live-status-changed', handleContentUpdate);
+      window.removeEventListener('focus', fetchAll);
+    };
   }, [isAuthenticated, student]);
 
   const dismissNewsModal = () => {
@@ -482,37 +527,25 @@ const Home: React.FC = () => {
     return window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
   };
 
+  const isNativeApp = () => {
+    return Capacitor.isNativePlatform() || isStandalone();
+  };
+
+  const PLAYSTORE_URL = 'https://play.google.com/store/apps/details?id=com.aonetarget.education';
+
   const handleDownloadAPK = () => {
-    if (isStandalone()) {
-      alert('App is already installed!');
+    if (isNativeApp()) {
       return;
     }
     setShowDownloadModal(true);
     setInstallSuccess(false);
     setIsInstalling(false);
     setShowIOSSteps(false);
+    setShowAndroidSteps(false);
   };
 
-  const handleInstallAndroid = async () => {
-    // If PWA install prompt is available (HTTPS + Chrome + not yet installed)
-    if (deferredPrompt) {
-      setIsInstalling(true);
-      try {
-        await deferredPrompt.prompt();
-        const choiceResult = await deferredPrompt.userChoice;
-        if (choiceResult.outcome === 'accepted') {
-          setInstallSuccess(true);
-          setDeferredPrompt(null);
-        }
-      } catch (err) {
-        console.error('Install prompt failed:', err);
-      }
-      setIsInstalling(false);
-    } else {
-      // No native prompt available — show Android manual steps
-      setShowIOSSteps(false);
-      setShowAndroidSteps(true);
-    }
+  const handleInstallAndroid = () => {
+    window.open(PLAYSTORE_URL, '_blank');
   };
 
   const handleInstallIOS = () => {
@@ -614,19 +647,30 @@ const Home: React.FC = () => {
     
     if (isYT) {
       const videoId = lc.id || lc._id || 'live';
-      navigate(`/watch/${videoId}`, {
+      navigate(`/watch/${videoId}?returnTo=/`, {
         state: {
           video: {
             ...lc,
             title: lc.title || lc.name || 'Live Class',
             embedUrl: getEmbedUrl(url)
-          }
+          },
+          returnTo: '/'
         }
       });
     } else {
-      // Fallback for Zoom, Google Meet, etc.
       window.open(url, '_blank');
     }
+  };
+
+  const openPdf = (url: string, title: string) => {
+    const currentPath = window.location.hash.replace(/^#/, '') || window.location.pathname;
+    navigate(`/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent(title)}&returnTo=${encodeURIComponent(currentPath)}`, {
+      state: {
+        pdf: { fileUrl: getPdfUrl(url) },
+        title,
+        returnTo: currentPath
+      }
+    });
   };
 
   // Tick every 30s for client-side auto-promotion
@@ -637,10 +681,10 @@ const Home: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex flex-col bg-surface-100 min-h-screen pb-4 overflow-x-hidden">
+    <div className={`flex flex-col bg-surface-100 min-h-screen pb-4 overflow-x-hidden${isRestoringScroll ? ' opacity-0 pointer-events-none' : ''}`}>
       <div className="animate-fade-in">
         <header className="sticky top-0 z-40 shadow-lg" style={{ background: '#283593' }}>
-        <div className="px-4 py-2 flex items-center justify-between gap-3 min-h-[68px]">
+        <div className="px-4 py-2 flex items-center justify-between gap-3 min-h-[64px]">
           {isSearching ? (
             <div className="flex-1 flex items-center gap-3 animate-slide-in-left">
               <div className="flex-1 relative">
@@ -679,6 +723,8 @@ const Home: React.FC = () => {
                     src={getImageUrl("/attach-assist/alonelogo_1770810181717.jpg")}
                     alt="Aone Target"
                     className="h-full w-full object-contain"
+                    loading="eager"
+                    decoding="async"
                   />
                 </div>
               </div>
@@ -761,6 +807,7 @@ const Home: React.FC = () => {
                       alt={banner.title || `Banner ${index + 1}`}
                       className="w-full h-full object-cover select-none pointer-events-none"
                       loading={index === 0 ? 'eager' : 'lazy'}
+                      decoding="async"
                     />
                   ) : (
                     <div className="w-full h-full bg-gradient-to-r from-primary-800 to-primary-600 flex items-center justify-center p-4 select-none">
@@ -813,18 +860,13 @@ const Home: React.FC = () => {
                   key={cat._id || cat.id || i}
                   onClick={() => {
                     const lTitle = (cat.title || '').toLowerCase();
-                    if (cat.id === 'mock-test' || lTitle.includes('mock test')) {
-                      navigate('/mock-tests');
-                    } else if (cat.id === 'ebooks' || lTitle.includes('ebook') || lTitle.includes('notes')) {
-                      navigate('/ebook-notes');
-                    } else {
-                      navigate(`/explore/${cat.id}`);
-                    }
+                    const targetCatId = cat.id || cat._id || encodeURIComponent(lTitle.replace(/\s+/g, '-'));
+                    navigate(`/explore/${targetCatId}`);
                   }}
                   className={`relative p-3 rounded-3xl h-[140px] flex flex-col justify-between text-white bg-gradient-to-br ${cat.gradient || CATEGORY_GRADIENTS[i % CATEGORY_GRADIENTS.length]} overflow-hidden cursor-pointer active:scale-[0.97] transition-all duration-200 shadow-elevated hover:shadow-card-hover hover:-translate-y-0.5 group`}
                 >
                   {cat.imageUrl && (
-                    <img src={getImageUrl(cat.imageUrl)} alt={cat.title} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
+                    <img src={getImageUrl(cat.imageUrl)} alt={cat.title} loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
                   )}
                   {cat.imageUrl && <div className="absolute inset-0 bg-black/40"></div>}
                   <div className="relative z-10 flex justify-between items-start">
@@ -927,7 +969,7 @@ const Home: React.FC = () => {
                             <div className="px-3 pb-3 -mt-1 flex flex-wrap gap-2 relative z-10">
                               {lc.pdf1 && (
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.pdf1))}&title=${encodeURIComponent('PDF 1')}`, '_blank'); }}
+                                  onClick={(e) => { e.stopPropagation(); openPdf(lc.pdf1, 'PDF 1'); }}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 text-red-600 text-[10px] font-bold border border-red-100 hover:bg-white transition-all shadow-sm"
                                 >
                                   <span className="material-symbols-rounded text-sm">picture_as_pdf</span>
@@ -936,7 +978,7 @@ const Home: React.FC = () => {
                               )}
                               {lc.pdf2 && (
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.pdf2))}&title=${encodeURIComponent('PDF 2')}`, '_blank'); }}
+                                  onClick={(e) => { e.stopPropagation(); openPdf(lc.pdf2, 'PDF 2'); }}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 text-red-600 text-[10px] font-bold border border-red-100 hover:bg-white transition-all shadow-sm"
                                 >
                                   <span className="material-symbols-rounded text-sm">picture_as_pdf</span>
@@ -945,7 +987,7 @@ const Home: React.FC = () => {
                               )}
                               {lc.studyMaterial && (
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.studyMaterial))}&title=${encodeURIComponent('Study Material')}`, '_blank'); }}
+                                  onClick={(e) => { e.stopPropagation(); openPdf(lc.studyMaterial, 'Study Material'); }}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 text-blue-600 text-[10px] font-bold border border-blue-100 hover:bg-white transition-all shadow-sm"
                                 >
                                   <span className="material-symbols-rounded text-sm">auto_stories</span>
@@ -1072,7 +1114,7 @@ const Home: React.FC = () => {
           );
         })()}
 
-        {courses.length > 0 && (
+        {featuredToDisplay.length > 0 && (
           <section className="animate-fade-in-up" style={{ animationDelay: '0.22s' }}>
             <div className="flex justify-between items-center mb-3">
               <div className="flex items-center gap-2.5">
@@ -1110,6 +1152,7 @@ const Home: React.FC = () => {
                           alt={course.title}
                           className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                           loading="lazy"
+                          decoding="async"
                         />
                         <div className="absolute inset-0 bg-gradient-to-b from-black/45 via-black/15 to-black/65"></div>
                       </>
@@ -1264,7 +1307,7 @@ const Home: React.FC = () => {
         )} */}
 
         {allNews.length > 0 && !newsLoading && (
-          <section className="animate-fade-in-up" style={{ animationDelay: '0.32s' }}>
+          <section id="news-section" className="animate-fade-in-up" style={{ animationDelay: '0.32s' }}>
             <div className="flex justify-between items-center mb-3">
               <div className="flex items-center gap-2.5">
                 <div className="w-1.5 h-7 bg-gradient-to-b from-primary to-primary-600 rounded-full shadow-sm"></div>
@@ -1279,8 +1322,9 @@ const Home: React.FC = () => {
                 <div
                   key={news.id || news._id || i}
                   onClick={() => {
+                    sessionStorage.setItem('returnToNews', 'true');
                     const id = news.id || news._id || i;
-                    window.open(`/#/news/${id}`, '_blank');
+                    navigate(`/news/${id}`);
                   }}
                   className="bg-white rounded-[16px] p-3 border border-gray-100 flex items-center justify-between gap-4 cursor-pointer hover:shadow-md transition-all duration-300 group"
                 >
@@ -1305,6 +1349,8 @@ const Home: React.FC = () => {
                         src={news.thumbnail}
                         alt="News"
                         className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
+                        loading="lazy"
+                        decoding="async"
                         onError={(e) => {
                           (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?ixlib=rb-1.2.1&auto=format&fit=crop&w=400&q=80';
                         }}
@@ -1339,7 +1385,7 @@ const Home: React.FC = () => {
       </main>
 
       <div className="px-4 mb-8 space-y-4">
-        <div className="bg-white/80 backdrop-blur-xl rounded-[40px] p-6 border border-white/50 shadow-[0_20px_50px_rgba(0,0,0,0.05)] flex flex-col items-center gap-6 relative overflow-hidden">
+        <div className="bg-white/80 backdrop-blur-xl rounded-[40px] py-6 px-3 sm:p-6 border border-white/50 shadow-[0_20px_50px_rgba(0,0,0,0.05)] flex flex-col items-center gap-6 relative overflow-hidden">
           {/* Subtle Background Glow */}
           <div className="absolute -top-24 -right-24 w-48 h-48 bg-[#3DDC84]/5 rounded-full blur-[80px]"></div>
           <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-blue-500/5 rounded-full blur-[80px]"></div>
@@ -1352,7 +1398,7 @@ const Home: React.FC = () => {
             </div>
           </div>
 
-          <div className="flex flex-nowrap justify-center items-center gap-3 w-full relative z-10 overflow-x-auto no-scrollbar pb-1">
+          <div className="flex flex-nowrap justify-center items-center gap-2 sm:gap-3 w-full relative z-10 overflow-visible pb-1">
             {quickLinks.length > 0 ? (
               quickLinks
                 .filter(link => (link as any).type !== 'yt' && (link as any).status !== 'inactive')
@@ -1370,7 +1416,7 @@ const Home: React.FC = () => {
                   <button
                     key={link.id || i}
                     onClick={() => handleShare(link)}
-                    className="w-[52px] h-[52px] rounded-full flex items-center justify-center shadow-[0_8px_20px_-5px_rgba(0,0,0,0.1)] hover:shadow-[0_12px_25px_-5px_rgba(0,0,0,0.2)] active:scale-90 transition-all duration-500 hover:-translate-y-1 relative group bg-white border border-gray-50 overflow-hidden shrink-0"
+                    className="w-[46px] h-[46px] sm:w-[52px] sm:h-[52px] rounded-full flex items-center justify-center shadow-[0_8px_20px_-5px_rgba(0,0,0,0.1)] hover:shadow-[0_12px_25px_-5px_rgba(0,0,0,0.2)] active:scale-90 transition-all duration-500 hover:-translate-y-1 relative group bg-white border border-gray-50 overflow-hidden shrink-0"
                   >
                     {/* Soft Hover Overlay */}
                     <div
@@ -1381,8 +1427,11 @@ const Home: React.FC = () => {
                     {link.imageUrl ? (
                       <img
                         src={link.imageUrl}
-                        alt={link.title}
-                        className="w-7 h-7 object-contain relative z-10 group-hover:scale-110 transition-all duration-500"
+                        alt=""
+                        aria-hidden="true"
+                        className="w-6 h-6 sm:w-7 sm:h-7 block m-auto object-contain object-center shrink-0 relative z-10 group-hover:scale-110 transition-all duration-500"
+                        loading="lazy"
+                        decoding="async"
                         onError={(e) => (e.currentTarget.style.display = 'none')}
                       />
                     ) : (
@@ -1402,13 +1451,16 @@ const Home: React.FC = () => {
                 <button
                   key={i}
                   onClick={() => handleHardcodedShare(s.platform)}
-                  className="w-[52px] h-[52px] rounded-full flex items-center justify-center bg-white shadow-[0_8px_15px_rgba(0,0,0,0.05)] border border-gray-50 active:scale-90 transition-all duration-500 hover:-translate-y-1.5 hover:shadow-[0_12px_22px_rgba(0,0,0,0.1)] relative group shrink-0"
+                  className="w-[46px] h-[46px] sm:w-[52px] sm:h-[52px] rounded-full flex items-center justify-center bg-white shadow-[0_8px_15px_rgba(0,0,0,0.05)] border border-gray-50 active:scale-90 transition-all duration-500 hover:-translate-y-1.5 hover:shadow-[0_12px_22px_rgba(0,0,0,0.1)] relative group shrink-0"
                 >
                   <div className="absolute inset-0 rounded-full opacity-0 group-hover:opacity-10 transition-opacity duration-500" style={{ background: s.bg }}></div>
                   <img
                     src={s.img}
-                    className="w-[26px] h-[26px] object-contain relative z-10 group-hover:scale-110 transition-all duration-500"
-                    alt={s.platform}
+                    className="w-[22px] h-[22px] sm:w-[26px] sm:h-[26px] block m-auto object-contain object-center shrink-0 relative z-10 group-hover:scale-110 transition-all duration-500"
+                    alt=""
+                    aria-hidden="true"
+                    loading="lazy"
+                    decoding="async"
                   />
                 </button>
               ))
@@ -1417,42 +1469,106 @@ const Home: React.FC = () => {
         </div>
 
         <button
-          onClick={handleDownloadAPK}
-          className="w-full bg-[#F3F6F3] rounded-[32px] p-6 flex items-center justify-between active:scale-[0.98] transition-all duration-300 border border-white group overflow-hidden relative shadow-sm"
+          onClick={async () => {
+            const shareData = {
+              title: 'AoneTarget Institute',
+              text: 'Join Aone Target Institute – Best coaching for competitive exams! 🎯',
+              url: 'https://aonetarget.in'
+            };
+            // Check if Capacitor is available (since we use it globally)
+            const isNative = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform();
+            
+            if (isNative) {
+              try {
+                // Using dynamic import or global Share if available
+                const { Share } = await import('@capacitor/share');
+                await Share.share({
+                  title: shareData.title,
+                  text: `${shareData.text}\n\n🌐 Visit website:\nhttps://aonetarget.in\n\n📱 Download App:\nhttps://play.google.com/store/apps/details?id=com.aonetarget.education`,
+                  dialogTitle: 'Share App'
+                });
+              } catch (err) {
+                console.log('Native share failed:', err);
+              }
+            } else if (navigator.share) {
+              try {
+                await navigator.share(shareData);
+              } catch (err) {
+                // User cancelled – silent fail
+              }
+            } else {
+              // Fallback: copy to clipboard
+              try {
+                await navigator.clipboard.writeText('https://aonetarget.in');
+                alert('Link copied to clipboard!');
+              } catch {
+                alert('Share link: https://aonetarget.in');
+              }
+            }
+          }}
+          className="w-full bg-[#E8EAF6] rounded-[32px] p-6 flex items-center justify-between active:scale-[0.98] transition-all duration-300 border border-white group overflow-hidden relative shadow-sm mb-4"
         >
-          {/* Material You blur effects */}
-          <div className="absolute -right-4 -top-4 w-32 h-32 bg-[#3DDC84]/15 rounded-full blur-2xl group-hover:bg-[#3DDC84]/25 transition-all duration-500"></div>
-          <div className="absolute -left-4 -bottom-4 w-32 h-32 bg-[#1A237E]/5 rounded-full blur-2xl"></div>
+          <div className="absolute -right-4 -top-4 w-32 h-32 bg-[#283593]/10 rounded-full blur-2xl group-hover:bg-[#283593]/20 transition-all duration-500"></div>
+          <div className="absolute -left-4 -bottom-4 w-32 h-32 bg-[#283593]/5 rounded-full blur-2xl"></div>
 
           <div className="flex items-center gap-5 relative z-10">
-            {/* Premium Icon Container */}
             <div className="w-16 h-16 bg-white/80 backdrop-blur-md rounded-[24px] flex items-center justify-center shrink-0 shadow-sm border border-white/50 group-hover:scale-105 transition-transform duration-500">
-              <svg className="w-10 h-10" viewBox="0 0 24 24" fill="#3DDC84">
-                <path d="M17.523 15.3414C17.0232 15.3414 16.6179 14.9362 16.6179 14.4363C16.6179 13.9365 17.0232 13.5312 17.523 13.5312C18.0229 13.5312 18.4281 13.9365 18.4281 14.4363C18.4281 14.9362 18.0229 15.3414 17.523 15.3414ZM6.47702 15.3414C5.9772 15.3414 5.57195 14.9362 5.57195 14.4363C5.57195 13.9365 5.9772 13.5312 6.47702 13.5312C6.97684 13.5312 7.38209 13.9365 7.38209 14.4363C7.38209 14.9362 6.97684 15.3414 6.47702 15.3414ZM17.9616 10.0571L19.7289 7.00041C19.8217 6.83979 19.7663 6.6353 19.6057 6.54252C19.445 6.44975 19.2405 6.50518 19.1478 6.6658L17.3468 9.77884C15.8239 9.08889 14.0734 8.71875 12.2039 8.71875C10.3344 8.71875 8.58394 9.08889 7.06105 9.77884L5.26006 6.6658C5.16728 6.50518 4.96279 6.44975 4.80217 6.54252C4.64155 6.6353 4.58612 6.83979 4.6789 7.00041L6.44621 10.0571C3.12004 11.8385 0.887207 15.1438 0.887207 19.0062H23.5206C23.5206 15.1438 21.2878 11.8385 17.9616 10.0571Z" />
-              </svg>
+              <span className="material-symbols-rounded text-[#283593] text-[36px]">share</span>
             </div>
-
             <div className="text-left">
-              <h4 className="text-[19px] font-semibold text-gray-900 tracking-tight leading-none mb-1.5 flex items-center gap-2">
-                Get Android App
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3DDC84] opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#3DDC84]"></span>
-                </span>
+              <h4 className="text-[19px] font-semibold text-gray-900 tracking-tight leading-none mb-1.5">
+                Share App
               </h4>
-              <p className="text-[12px] text-gray-500 font-medium">Compatible with Android 8.0+</p>
+              <p className="text-[12px] text-gray-500 font-medium">Invite your friends & classmates</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-4 relative z-10">
-            <span className="bg-white/80 backdrop-blur-sm py-1.5 px-3 rounded-full text-[10px] font-bold text-[#2E7D32] border border-[#3DDC84]/20 shadow-sm uppercase tracking-wider hidden sm:block">
-              Free
-            </span>
-            <div className="w-14 h-14 bg-gray-900 text-white rounded-[20px] flex items-center justify-center shadow-lg group-hover:bg-[#3DDC84] group-hover:shadow-[#3DDC84]/30 transition-all duration-500 group-hover:translate-x-1">
-              <span className="material-symbols-rounded text-[28px]">download_for_offline</span>
+          <div className="relative z-10">
+            <div className="w-14 h-14 bg-[#283593] text-white rounded-[20px] flex items-center justify-center shadow-lg group-hover:bg-[#1A237E] group-hover:shadow-[#283593]/30 transition-all duration-500 group-hover:translate-x-1">
+              <span className="material-symbols-rounded text-[28px]">ios_share</span>
             </div>
           </div>
         </button>
+
+        {!isNativeApp() && (
+          <button
+            onClick={handleDownloadAPK}
+            className="w-full bg-[#F3F6F3] rounded-[32px] p-6 flex items-center justify-between active:scale-[0.98] transition-all duration-300 border border-white group overflow-hidden relative shadow-sm"
+          >
+            {/* Material You blur effects */}
+            <div className="absolute -right-4 -top-4 w-32 h-32 bg-[#3DDC84]/15 rounded-full blur-2xl group-hover:bg-[#3DDC84]/25 transition-all duration-500"></div>
+            <div className="absolute -left-4 -bottom-4 w-32 h-32 bg-[#1A237E]/5 rounded-full blur-2xl"></div>
+
+            <div className="flex items-center gap-5 relative z-10">
+              {/* Premium Icon Container */}
+              <div className="w-16 h-16 bg-white/80 backdrop-blur-md rounded-[24px] flex items-center justify-center shrink-0 shadow-sm border border-white/50 group-hover:scale-105 transition-transform duration-500">
+                <svg className="w-10 h-10" viewBox="0 0 24 24" fill="#3DDC84">
+                  <path d="M17.523 15.3414C17.0232 15.3414 16.6179 14.9362 16.6179 14.4363C16.6179 13.9365 17.0232 13.5312 17.523 13.5312C18.0229 13.5312 18.4281 13.9365 18.4281 14.4363C18.4281 14.9362 18.0229 15.3414 17.523 15.3414ZM6.47702 15.3414C5.9772 15.3414 5.57195 14.9362 5.57195 14.4363C5.57195 13.9365 5.9772 13.5312 6.47702 13.5312C6.97684 13.5312 7.38209 13.9365 7.38209 14.4363C7.38209 14.9362 6.97684 15.3414 6.47702 15.3414ZM17.9616 10.0571L19.7289 7.00041C19.8217 6.83979 19.7663 6.6353 19.6057 6.54252C19.445 6.44975 19.2405 6.50518 19.1478 6.6658L17.3468 9.77884C15.8239 9.08889 14.0734 8.71875 12.2039 8.71875C10.3344 8.71875 8.58394 9.08889 7.06105 9.77884L5.26006 6.6658C5.16728 6.50518 4.96279 6.44975 4.80217 6.54252C4.64155 6.6353 4.58612 6.83979 4.6789 7.00041L6.44621 10.0571C3.12004 11.8385 0.887207 15.1438 0.887207 19.0062H23.5206C23.5206 15.1438 21.2878 11.8385 17.9616 10.0571Z" />
+                </svg>
+              </div>
+
+              <div className="text-left">
+                <h4 className="text-[19px] font-semibold text-gray-900 tracking-tight leading-none mb-1.5 flex items-center gap-2">
+                  Get Android App
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3DDC84] opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#3DDC84]"></span>
+                  </span>
+                </h4>
+                <p className="text-[12px] text-gray-500 font-medium">Compatible with Android 8.0+</p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 relative z-10">
+              <span className="bg-white/80 backdrop-blur-sm py-1.5 px-3 rounded-full text-[10px] font-bold text-[#2E7D32] border border-[#3DDC84]/20 shadow-sm uppercase tracking-wider hidden sm:block">
+                Free
+              </span>
+              <div className="w-14 h-14 bg-gray-900 text-white rounded-[20px] flex items-center justify-center shadow-lg group-hover:bg-[#3DDC84] group-hover:shadow-[#3DDC84]/30 transition-all duration-500 group-hover:translate-x-1">
+                <span className="material-symbols-rounded text-[28px]">download_for_offline</span>
+              </div>
+            </div>
+          </button>
+        )}
       </div>
     </div>
 
@@ -1506,17 +1622,13 @@ const Home: React.FC = () => {
                     </div>
                     <div className="text-left flex-1 relative z-10">
                       <h4 className="text-[16px] font-semibold text-gray-900 flex items-center gap-2">
-                        {isInstalling ? 'Installing...' : 'Get Android App'}
+                        Get Android App
                         <span className="bg-[#E8F5E9] py-0.5 px-2 rounded-full text-[10px] font-bold text-[#2E7D32] uppercase">Free</span>
                       </h4>
-                      <p className="text-[12px] text-gray-500 mt-0.5">Compatible with Android 8.0+</p>
+                      <p className="text-[12px] text-gray-500 mt-0.5">Install from Google Play Store</p>
                     </div>
                     <div className="w-12 h-12 bg-gray-900 text-white rounded-2xl flex items-center justify-center shadow-md group-hover:bg-[#3DDC84] transition-all duration-300 relative z-10 shrink-0">
-                      {isInstalling ? (
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      ) : (
-                        <span className="material-symbols-rounded text-xl">download</span>
-                      )}
+                      <span className="material-symbols-rounded text-xl">open_in_new</span>
                     </div>
                   </button>
 
@@ -1636,6 +1748,8 @@ const Home: React.FC = () => {
                     src={newsModal.imageUrl}
                     alt={newsModal.title}
                     className="w-full h-36 object-cover"
+                    loading="lazy"
+                    decoding="async"
                   />
                   {newsModal.priority === 'high' && (
                     <div className="absolute top-3 left-3 bg-red-600 text-white text-[9px] font-black px-3 py-1 rounded-full flex items-center gap-1 shadow-lg border border-white/20 uppercase tracking-tighter">

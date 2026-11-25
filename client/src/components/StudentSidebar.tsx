@@ -29,15 +29,25 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ isOpen, onClose, studen
     if (isOpen) {
       document.body.style.overflow = 'hidden';
       document.body.style.touchAction = 'none';
+      document.body.setAttribute('data-sidebar-open', 'true');
     } else {
       document.body.style.overflow = 'unset';
       document.body.style.touchAction = 'auto';
+      document.body.removeAttribute('data-sidebar-open');
     }
+
+    const handleCloseOverlay = () => {
+      onClose();
+    };
+    window.addEventListener('app:close-overlays', handleCloseOverlay);
+
     return () => {
       document.body.style.overflow = 'unset';
       document.body.style.touchAction = 'auto';
+      document.body.removeAttribute('data-sidebar-open');
+      window.removeEventListener('app:close-overlays', handleCloseOverlay);
     };
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   const menuItems = [
     { icon: 'home', label: 'Home', path: '/' },
@@ -65,12 +75,14 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ isOpen, onClose, studen
         onClick={onClose}
       />
       <div className="absolute left-0 top-0 h-full w-[85%] max-w-[300px] bg-white z-[101] shadow-2xl animate-slide-in-left overflow-hidden flex flex-col smooth-scroll">
-        <div className="bg-gradient-to-r from-brandBlue to-[#1A237E] p-4 shrink-0">
+        <div className="bg-gradient-to-r from-brandBlue to-[#1A237E] p-4 shrink-0 sidebar-header-ios">
           <div className="flex items-center justify-between mb-4">
             <img
               src="/attach-assist/alonelogo_1770810181717.jpg"
               alt="Aone Target"
               className="h-10 rounded"
+              loading="eager"
+              decoding="async"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
                 target.style.display = 'none';

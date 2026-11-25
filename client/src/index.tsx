@@ -12,6 +12,24 @@ if (!rootElement) {
 }
 
 const root = ReactDOM.createRoot(rootElement);
+
+if ('fonts' in document) {
+  Promise.all([
+    document.fonts.load("24px 'Material Symbols Rounded'"),
+    document.fonts.load("24px 'Material Symbols Outlined'")
+  ]).then(() => {
+    document.documentElement.classList.add('material-symbols-ready');
+  }).catch(() => {
+    setTimeout(() => {
+      document.documentElement.classList.add('material-symbols-ready');
+    }, 3000);
+  });
+} else {
+  setTimeout(() => {
+    document.documentElement.classList.add('material-symbols-ready');
+  }, 3000);
+}
+
 root.render(
   <Provider store={store}>
     <App />

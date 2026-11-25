@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getAdminHeaders } from '../../services/apiClient';
+import { API_BASE_URL } from '../../services/apiClient';
 
 interface TestResult {
   id: string;
@@ -40,7 +41,7 @@ const AllReports: React.FC<Props> = ({ showToast }) => {
 
   const loadResults = async () => {
     try {
-      const res = await fetch('/api/admin/test-results', { headers: getAdminHeaders() });
+      const res = await fetch(`${API_BASE_URL}/admin/test-results`, { headers: getAdminHeaders() });
       const data = await res.json();
       setResults(Array.isArray(data) ? data : []);
     } catch (error) {

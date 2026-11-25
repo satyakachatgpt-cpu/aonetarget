@@ -3,7 +3,7 @@ const { ObjectId } = mongoose.Types;
 import { db } from '../config/db.js';
 import * as XLSX from 'xlsx';
 import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } from 'docx';
-import { findCourse, getRelatedCourseIds } from '../services/course.service.js';
+import { findCourse, getRelatedCourseIds, buildStudentPurchaseQuery } from '../services/course.service.js';
 import { isPurchaseExpired, isTestExpired } from '../utils/helpers.js';
 
 /**
@@ -30,6 +30,7 @@ export const reorderTests = async (req, res) => {
           update: { 
             $set: { 
               sortBy: total - index,
+              sortingOrder: total - index,
               updatedAt: new Date().toISOString()
             } 
           }
@@ -121,6 +122,7 @@ export const reorderSeriesTests = async (req, res) => {
           update: { 
             $set: { 
               sortBy: total - index,
+              sortingOrder: total - index,
               updatedAt: new Date().toISOString()
             } 
           }
@@ -160,8 +162,27 @@ export const getAllTests = async (req, res, next) => {
     const courseId = req.query.courseId ? String(req.query.courseId) : undefined;
     const seriesId = req.query.seriesId ? String(req.query.seriesId) : undefined;
     const testType = req.query.testType ? String(req.query.testType) : undefined;
+    const categoryId = req.query.categoryId ? String(req.query.categoryId) : undefined;
+    const branch = req.query.branch ? String(req.query.branch) : undefined;
 
     let matchConditions = [];
+    if (categoryId) {
+      matchConditions.push({
+        $or: [
+          { categoryId: categoryId },
+          { categoryName: categoryId },
+          { category: categoryId }
+        ]
+      });
+      if (branch) {
+        matchConditions.push({
+          $or: [
+            { branch: branch },
+            { level1Branch: branch }
+          ]
+        });
+      }
+    }
 
     // Robust ID/Series matching
     const searchId = seriesId || courseId;
@@ -214,6 +235,25 @@ export const getAllTests = async (req, res, next) => {
       } else {
         matchConditions.push({ type: testType });
       }
+    }
+
+    // Support free content filter
+    if (req.query.isFree === 'true') {
+      matchConditions.push({
+        $or: [
+          { isFree: true },
+          { isFree: 'true' },
+          { free: true },
+          { free: 'true' },
+          { price: 0 },
+          { price: '0' }
+        ]
+      });
+    }
+
+    // Support excluding series containers when querying for individual tests
+    if (req.query.excludeSeries === 'true' || req.query.isSeries === 'false') {
+      matchConditions.push({ isSeries: { $ne: true } });
     }
 
     const matchStage = matchConditions.length > 0 ? { $and: matchConditions } : {};
@@ -330,96 +370,162 @@ export const getTestById = async (req, res) => {
     if (test) {
       // Security Check: Enrollment & Expiry Validation for Students
       const isAdmin = req.admin || req.user?.isAdmin || req.user?.role === 'admin';
-      const studentId = req.user?.studentId;
+      const seriesId = test.courseId || test.testSeriesId || test.seriesId || test.batchId || (Array.isArray(test.courseIds) ? test.courseIds[0] : null);
+      
+      // 1. RESOLVE FREE STATUS IMMEDIATELY (robust string & boolean check)
+      const isFreeTest = 
+        test.isFree === true || 
+        test.isFree === 'true' || 
+        test.free === true || 
+        test.free === 'true' || 
+        (test.price !== undefined && test.price !== null && test.price !== '' && Number(test.price) === 0);
 
-      if (!isAdmin) {
-        // 1. Resolve student and series IDs
-        const seriesId = test.courseId || test.testSeriesId || test.seriesId || test.batchId || (Array.isArray(test.courseIds) ? test.courseIds[0] : null);
-        
-        if (seriesId && studentId) {
-          // 2. Fetch Student with all possible ID variants
-          const student = await db.collection('students').findOne({
+      let isSeriesFree = false;
+      let parentSeries = null;
+      let parentCourse = null;
+
+      if (seriesId) {
+        parentSeries = await findCourse(seriesId);
+        isSeriesFree = parentSeries && (
+          parentSeries.isFree === true ||
+          parentSeries.isFree === 'true' ||
+          parentSeries.free === true ||
+          parentSeries.free === 'true' ||
+          (parentSeries.price !== undefined && parentSeries.price !== null && parentSeries.price !== '' && Number(parentSeries.price) === 0)
+        );
+
+        // Also check if there is an overarching Course containing this test or series
+        try {
+          parentCourse = await db.collection('courses').findOne({
             $or: [
-              { id: studentId.toString() },
-              { userId: studentId.toString() },
-              { _id: ObjectId.isValid(studentId) ? new ObjectId(studentId) : null }
-            ].filter(v => v.id || v.userId || v._id)
+              { id: String(seriesId) },
+              { _id: ObjectId.isValid(seriesId) ? new ObjectId(seriesId) : null },
+              { "content.testSeries": String(seriesId) },
+              { "content.tests": String(seriesId) }
+            ].filter(v => v.id || v._id || v["content.testSeries"] || v["content.tests"])
           });
+        } catch (e) { /* ignore */ }
+      }
 
-          // 3. Check multiple sources of truth for enrollment
-          let isEnrolled = false;
-          
-          // Source A: Student document's enrolledCourses array
-          if (student?.enrolledCourses?.some(id => String(id) === String(seriesId))) {
+      const linkedCourseId = parentCourse?.id || parentCourse?._id?.toString() || parentSeries?.id || parentSeries?._id?.toString() || seriesId;
+      const linkedCourseTitle = parentCourse?.title || parentCourse?.name || parentSeries?.title || parentSeries?.name || test.seriesName || test.courseName || 'Target Course';
+      const linkedCoursePrice = parentCourse?.discountedPrice || parentCourse?.price || parentSeries?.discountedPrice || parentSeries?.price || 0;
+      const linkedCourseImage = parentCourse?.imageUrl || parentCourse?.thumbnail || parentSeries?.imageUrl || parentSeries?.thumbnail || '';
+
+      // 2. GRANT ACCESS IF ADMIN OR FREE
+      if (isAdmin || isFreeTest || isSeriesFree) {
+        console.log(`[getTestById] Access granted to test ${id} (Admin: ${isAdmin}, Free: ${isFreeTest || isSeriesFree})`);
+        // We will skip enrollment check for free/admin
+      } else {
+        // 3. PAID CONTENT: MUST BE AUTHENTICATED AND ENROLLED
+        const studentId = req.user?.studentId;
+        
+        if (!studentId || !seriesId) {
+          console.warn(`[getTestById] Access Denied - Missing studentId (${studentId}) or seriesId (${seriesId}) for paid content`);
+          return res.status(403).json({ 
+            error: 'Enrollment required to access this test', 
+            code: 'ENROLLMENT_REQUIRED',
+            courseId: linkedCourseId,
+            courseTitle: linkedCourseTitle,
+            coursePrice: linkedCoursePrice,
+            courseImage: linkedCourseImage
+          });
+        }
+
+        // Fetch Student with all possible ID variants
+        const student = await db.collection('students').findOne({
+          $or: [
+            { id: studentId.toString() },
+            { userId: studentId.toString() },
+            { _id: ObjectId.isValid(studentId) ? new ObjectId(studentId) : null }
+          ].filter(v => v.id || v.userId || v._id)
+        });
+
+        // Check multiple sources of truth for enrollment
+        let isEnrolled = false;
+        
+        // Source A: Student document's enrolledCourses array
+        const enrolledArr = (student?.enrolledCourses || []).map(String);
+        if (
+          enrolledArr.includes(String(seriesId)) || 
+          (linkedCourseId && enrolledArr.includes(String(linkedCourseId)))
+        ) {
+          isEnrolled = true;
+        }
+
+        // Source B: Enrollments collection
+        if (!isEnrolled) {
+          const enrollmentRecord = await db.collection('enrollments').findOne({
+            studentId: studentId.toString(),
+            $or: [
+              { courseId: seriesId.toString() },
+              { testSeriesId: seriesId.toString() },
+              ...(linkedCourseId ? [{ courseId: linkedCourseId.toString() }] : [])
+            ]
+          });
+          if (enrollmentRecord) isEnrolled = true;
+        }
+
+        // Source C: Purchases collection
+        if (!isEnrolled && student) {
+          const allTargetIds = [
+            seriesId ? String(seriesId) : null,
+            linkedCourseId ? String(linkedCourseId) : null,
+            ...(test.testSeriesId ? [String(test.testSeriesId)] : []),
+            ...(test.courseId ? [String(test.courseId)] : [])
+          ].filter(Boolean);
+
+          const purchase = await db.collection('purchases').findOne(
+            buildStudentPurchaseQuery(student, allTargetIds)
+          );
+          if (purchase) {
             isEnrolled = true;
+            db.collection('students').updateOne(
+              { _id: student._id },
+              { $addToSet: { enrolledCourses: { $each: allTargetIds } } }
+            ).catch(() => {});
           }
+        }
 
-          // Source B: Enrollments collection (legacy/liveclass pattern)
-          if (!isEnrolled) {
-            const enrollmentRecord = await db.collection('enrollments').findOne({
-              studentId: studentId.toString(),
-              $or: [
-                { courseId: seriesId.toString() },
-                { testSeriesId: seriesId.toString() },
-                { seriesId: seriesId.toString() },
-                { batchId: seriesId.toString() }
-              ]
-            });
-            if (enrollmentRecord) isEnrolled = true;
-          }
+        if (!isEnrolled) {
+          console.warn(`[getTestById] Access Denied - No enrollment found for student ${studentId} in paid series ${seriesId}`);
+          return res.status(403).json({ 
+            error: 'Enrollment required to access this test', 
+            code: 'ENROLLMENT_REQUIRED',
+            courseId: linkedCourseId,
+            courseTitle: linkedCourseTitle,
+            coursePrice: linkedCoursePrice,
+            courseImage: linkedCourseImage
+          });
+        }
 
-          // Source C: Purchases collection (fallback)
-          if (!isEnrolled) {
-            const purchase = await db.collection('purchases').findOne({
-              studentId: studentId.toString(),
-              courseId: seriesId.toString(),
-              status: 'completed'
-            });
-            if (purchase) isEnrolled = true;
-          }
+        // 4. Check for expiry if enrolled in paid content
+        const course = parentSeries || await findCourse(seriesId);
+        let purchase = await db.collection('purchases').findOne({
+          studentId: studentId.toString(),
+          courseId: seriesId.toString(),
+          status: 'completed'
+        }, { sort: { createdAt: -1 } });
 
-          if (!isEnrolled) {
-            // Optional: Check if test is free
-            if (!test.free && !test.isFree) {
-              console.warn(`[getTestById] Access Denied - No enrollment found for student ${studentId} in series ${seriesId}`);
-              return res.status(403).json({ error: 'Enrollment required to access this test', code: 'ENROLLMENT_REQUIRED' });
-            }
-          } else {
-            // 4. Check for expiry if enrolled
-            const course = await findCourse(seriesId);
-            let purchase = await db.collection('purchases').findOne({
-              studentId: studentId.toString(),
-              courseId: seriesId.toString(),
-              status: 'completed'
-            }, { sort: { createdAt: -1 } });
+        // Support Manual Enrollment Expiry
+        if (!purchase && student) {
+          purchase = { createdAt: student.admission?.admissionDate || student.createdAt || new Date() };
+        }
 
-            // Support Manual Enrollment: If no purchase record exists, use student admission date or creation date
-            if (!purchase && student) {
-              purchase = {
-                createdAt: student.admission?.admissionDate || student.createdAt || new Date()
-              };
-            }
-
-            if (course && purchase && isPurchaseExpired(purchase, course)) {
-              console.warn(`[getTestById] Access Denied - Enrollment expired for student ${studentId}`);
-              return res.status(403).json({ error: 'Your access to this test series has expired', code: 'EXPIRED' });
-            }
-
-            // 5. Check if individual test itself has expired
-            if (isTestExpired(test)) {
-              console.warn(`[getTestById] Access Denied - Individual test ${id} has expired`);
-              return res.status(403).json({ error: 'This test has expired and is no longer available.', code: 'TEST_EXPIRED' });
-            }
-          }
-        } else if (!test.free && !test.isFree) {
-           // Not an admin, no seriesId/studentId found, and not free
-           console.warn(`[getTestById] Access Denied - No studentId (${studentId}) or seriesId (${seriesId}) found`);
-           return res.status(403).json({ error: 'Access denied', code: 'ACCESS_DENIED' });
+        if (course && purchase && isPurchaseExpired(purchase, course)) {
+          console.warn(`[getTestById] Access Denied - Enrollment expired for student ${studentId}`);
+          return res.status(403).json({ error: 'Your access to this test series has expired', code: 'EXPIRED' });
         }
       }
-    }
 
-    if (!test) {
+        // 5. Final check for test-specific timing (Shared by free and paid)
+        if (!isAdmin && isTestExpired(test)) {
+          console.warn(`[getTestById] Access Denied - Individual test ${id} has expired`);
+          return res.status(403).json({ error: 'This test has expired and is no longer available.', code: 'TEST_EXPIRED' });
+        }
+      }
+
+      if (!test) {
       const questionCount = await db.collection('questions').countDocuments({
         $or: [{ testId: id }, { testId: !isNaN(id) ? Number(id) : id }]
       });
@@ -569,6 +675,13 @@ export const updateTest = async (req, res) => {
       { $set: { ...updateData, updatedAt: new Date().toISOString() } }, 
       { upsert: true }
     );
+
+    if (updateData.isSeries || updateData.seriesName) {
+      await db.collection('testSeries').updateOne(
+        query,
+        { $set: { ...updateData, updatedAt: new Date().toISOString() } }
+      ).catch(() => {});
+    }
     
     res.json({ success: true, message: result.upsertedCount > 0 ? 'Test created' : 'Test updated' });
   } catch (error) {
@@ -765,7 +878,7 @@ export const bulkExcelImport = async (req, res) => {
       }
 
       return {
-        id: row.id || `q_${Date.now()}_${i}`,
+        id: row.id ? `${row.id}_${Date.now()}_${i}` : `q_${Date.now()}_${i}`,
         question: row.question || row.Question || '',
         optionA: row.optionA || row['Option A'] || '',
         optionB: row.optionB || row['Option B'] || '',
@@ -949,8 +1062,66 @@ export const publishTest = async (req, res) => {
 export const getCourseTests = async (req, res) => {
   try {
     const { courseId } = req.params;
-    const query = { $or: [{ courseId }, { course: courseId }] };
-    const tests = await db.collection('tests').find(query).toArray();
+    const course = await findCourse(courseId);
+    const idVariants = await getRelatedCourseIds(course, courseId);
+
+    const linkedSeriesIds = Array.isArray(course?.content?.testSeries)
+      ? course.content.testSeries.map(String)
+      : [];
+    const linkedTestIds = Array.isArray(course?.content?.tests)
+      ? course.content.tests.map(String)
+      : [];
+
+    const orConditions = [
+      { courseId: { $in: idVariants } },
+      { course: { $in: idVariants } }
+    ];
+
+    if (linkedSeriesIds.length > 0) {
+      orConditions.push({ testSeriesId: { $in: linkedSeriesIds } });
+      orConditions.push({ seriesId: { $in: linkedSeriesIds } });
+      const seriesObjIds = linkedSeriesIds.filter(id => ObjectId.isValid(id)).map(id => new ObjectId(id));
+      if (seriesObjIds.length > 0) {
+        orConditions.push({ testSeriesId: { $in: seriesObjIds } });
+        orConditions.push({ seriesId: { $in: seriesObjIds } });
+      }
+    }
+
+    if (linkedTestIds.length > 0) {
+      orConditions.push({ id: { $in: linkedTestIds } });
+      const testObjIds = linkedTestIds.filter(id => ObjectId.isValid(id)).map(id => new ObjectId(id));
+      if (testObjIds.length > 0) {
+        orConditions.push({ _id: { $in: testObjIds } });
+      }
+    }
+
+    const query = {
+      $and: [
+        { $or: orConditions },
+        { isSeries: { $ne: true } }
+      ]
+    };
+
+    const tests = await db.collection('tests').find(query).sort({ sortBy: -1, createdAt: -1, _id: -1 }).toArray();
+
+    // Fetch series titles for display if any linked series exist
+    const seriesTitleMap = {};
+    if (linkedSeriesIds.length > 0) {
+      try {
+        const seriesObjIds = linkedSeriesIds.filter(id => ObjectId.isValid(id)).map(id => new ObjectId(id));
+        const seriesList = await db.collection('tests').find({
+          $or: [
+            { id: { $in: linkedSeriesIds } },
+            ...(seriesObjIds.length > 0 ? [{ _id: { $in: seriesObjIds } }] : [])
+          ]
+        }).toArray();
+        seriesList.forEach(s => {
+          const sTitle = s.title || s.name || '';
+          if (s.id) seriesTitleMap[String(s.id)] = sTitle;
+          if (s._id) seriesTitleMap[s._id.toString()] = sTitle;
+        });
+      } catch (err) { }
+    }
 
     // Fetch question counts (N+1 Fix)
     const testIdsForCount = [];
@@ -993,9 +1164,15 @@ export const getCourseTests = async (req, res) => {
           if (countMap[k]) qCount += countMap[k];
         });
 
+        const matchedSeriesName = test.seriesName || 
+                                  seriesTitleMap[String(test.testSeriesId || '')] || 
+                                  seriesTitleMap[String(test.seriesId || '')] || 
+                                  '';
+
         return {
           ...test,
           id: test.id || test._id?.toString(),
+          seriesName: matchedSeriesName,
           questions: qCount || (Array.isArray(test.questions) ? test.questions.length : (test.questions || 0))
         };
       });

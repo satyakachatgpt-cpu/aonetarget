@@ -40,7 +40,7 @@ class ErrorBoundary extends Component<Props, State> {
                             Refresh Application
                         </button>
                         <button
-                            onClick={() => { window.location.href = '/'; }}
+                            onClick={() => { window.location.reload(); }}
                             className="w-full mt-3 text-gray-400 text-xs font-bold uppercase tracking-widest py-2 hover:text-primary transition-colors"
                         >
                             Back to Home

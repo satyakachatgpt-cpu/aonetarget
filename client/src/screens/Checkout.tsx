@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getImageUrl } from '../lib/utils';
-import { getAuthHeaders } from '../services/apiClient';
+import { getAuthHeaders, API_BASE_URL } from '../services/apiClient';
+import { Capacitor } from '@capacitor/core';
+import { useAuthStore } from '../store/authStore';
 
 declare global {
   interface Window {
     Razorpay: any;
+    Checkout: any;
   }
 }
 
@@ -186,7 +189,7 @@ const Checkout: React.FC = () => {
   useEffect(() => {
     const loadCourse = async () => {
       try {
-        const res = await fetch(`/api/courses/${id}`);
+        const res = await fetch(`${API_BASE_URL}/courses/${id}`);
         if (res.ok) {
           const data = await res.json();
           setCourse(data);
@@ -207,7 +210,7 @@ const Checkout: React.FC = () => {
         return;
       }
       try {
-        const res = await fetch(`/api/referrals/${resolvedId}`, { headers: getAuthHeaders() });
+        const res = await fetch(`${API_BASE_URL}/referrals/${resolvedId}`, { headers: getAuthHeaders() });
         const data = await res.json();
         // Backend returns availableCoins as source of truth
         setAvailableCoins(data.availableCoins || data.coins || 0);
@@ -216,6 +219,47 @@ const Checkout: React.FC = () => {
       }
     };
     fetchCoins();
+
+    // Auto-check for any pending payment return / unconfirmed order
+    const checkPendingOrder = async () => {
+      try {
+        const rawPending = localStorage.getItem('pending_razorpay_order') || sessionStorage.getItem('pending_razorpay_order');
+        if (!rawPending) return;
+        const pending = JSON.parse(rawPending);
+        if (pending && pending.orderId && (Date.now() - (pending.timestamp || 0) < 2 * 3600 * 1000)) {
+          const student = getStudentData();
+          const sId = getResolvedStudentId(student);
+          const checkRes = await fetch(`${API_BASE_URL}/razorpay/check-order`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+            body: JSON.stringify({
+              orderId: pending.orderId,
+              studentId: sId || pending.studentId,
+              courseId: id || pending.courseId
+            })
+          });
+          if (checkRes.ok) {
+            const checkData = await checkRes.json();
+            if (checkData.success && checkData.enrolled) {
+              localStorage.removeItem('pending_razorpay_order');
+              sessionStorage.removeItem('pending_razorpay_order');
+              if (student) {
+                const currentEnrolled = Array.isArray(student.enrolledCourses) ? student.enrolledCourses : [];
+                const courseIdToEnroll = String(id || pending.courseId);
+                if (!currentEnrolled.map(String).includes(courseIdToEnroll)) {
+                  student.enrolledCourses = [...currentEnrolled, courseIdToEnroll];
+                  localStorage.setItem('studentData', JSON.stringify(student));
+                }
+              }
+              navigate('/purchase-success', { state: { course: course || { id }, purchase: checkData.purchase } });
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[CHECKOUT] Pending order check error:', e);
+      }
+    };
+    checkPendingOrder();
   }, [id]);
 
   // Set initial breakdown whenever course changes
@@ -238,7 +282,7 @@ const Checkout: React.FC = () => {
 
     const fetchUpsell = async () => {
       try {
-        const res = await fetch('/api/courses');
+        const res = await fetch(`${API_BASE_URL}/courses`);
         if (res.ok) {
           const allData = await res.json();
           const allCourses: Course[] = Array.isArray(allData) ? allData : (allData.courses || []);
@@ -264,7 +308,7 @@ const Checkout: React.FC = () => {
     setIsApplyingCoupon(true);
     setCouponError('');
     try {
-      const res = await fetch('/api/coupons/validate', {
+      const res = await fetch(`${API_BASE_URL}/coupons/validate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({ code: couponCode, courseId: course.id || course._id || id })
@@ -311,7 +355,7 @@ const Checkout: React.FC = () => {
     }
     setProcessing(true);
     try {
-      const orderRes = await fetch('/api/razorpay/create-order', {
+      let orderRes = await fetch(`${API_BASE_URL}/razorpay/create-order`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
@@ -321,65 +365,206 @@ const Checkout: React.FC = () => {
           coinsUsed: useCoins ? coinsToUse : 0
         })
       });
-      const orderData = await orderRes.json();
-      if (!orderRes.ok) throw new Error(orderData.error || 'Failed to create order');
 
-      const options = {
-        key: orderData.keyId,
-        amount: orderData.amount,
-        currency: orderData.currency,
-        name: 'Aone Target Institute',
-        description: course?.name || course?.title || 'Course Purchase',
-        order_id: orderData.orderId,
-        handler: async function (response: any) {
-          try {
-            const verifyRes = await fetch('/api/razorpay/verify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                courseId: course?.id || course?._id || id,
-                studentId: getResolvedStudentId(student),
-                referralCode: referralCode || undefined,
-                couponCode: breakdown?.couponCode || undefined,
-                coinsUsed: useCoins ? coinsToUse : 0
-              })
-            });
-            const verifyData = await verifyRes.json();
-            if (verifyData.success) {
-              navigate('/purchase-success', { state: { course, purchase: verifyData.purchase } });
-            } else {
-              alert('Payment verification failed. Please contact support.');
-              setProcessing(false);
-            }
-          } catch {
-            alert('Payment verification failed. Please contact support.');
-            setProcessing(false);
-          }
-        },
-        prefill: {
-          name: student.name || '',
-          email: student.email || '',
-          contact: student.phone || ''
-        },
-        theme: { color: '#1A237E' },
-        modal: { ondismiss: () => setProcessing(false) },
-        config: {
-          display: {
-            sequence: ['block.upi', 'card', 'netbanking', 'wallet'],
-            preferences: { show_default_blocks: true }
-          }
+      if (orderRes.status === 401) {
+        const refreshed = await useAuthStore.getState().refreshToken();
+        if (refreshed) {
+          orderRes = await fetch(`${API_BASE_URL}/razorpay/create-order`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+            body: JSON.stringify({
+              courseId: course?.id || course?._id || id,
+              studentId: getResolvedStudentId(student),
+              couponCode: breakdown?.couponCode || undefined,
+              coinsUsed: useCoins ? coinsToUse : 0
+            })
+          });
         }
+      }
+
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) {
+        if (orderRes.status === 401) {
+          sessionStorage.setItem('postLoginRedirect', location.pathname + location.search);
+          alert('Your session has expired. Please login again to complete the purchase.');
+          navigate('/student-login', { state: { from: location.pathname + location.search } });
+          setProcessing(false);
+          return;
+        }
+        throw new Error(orderData.error || 'Failed to create order');
+      }
+
+      // Persist pending order to survive page reloads or app switching
+      const targetCourseId = String(course?.id || course?._id || id);
+      const resolvedStudentId = getResolvedStudentId(student);
+      try {
+        const pendingPayload = {
+          orderId: orderData.orderId,
+          courseId: targetCourseId,
+          studentId: resolvedStudentId,
+          timestamp: Date.now()
+        };
+        localStorage.setItem('pending_razorpay_order', JSON.stringify(pendingPayload));
+        sessionStorage.setItem('pending_razorpay_order', JSON.stringify(pendingPayload));
+      } catch {}
+
+      const handlePaymentSuccess = async (response: any) => {
+        const orderIdToVerify = response.razorpay_order_id || orderData.orderId;
+        const paymentIdToVerify = response.razorpay_payment_id;
+        const signatureToVerify = response.razorpay_signature;
+
+        try {
+          let verifyRes = await fetch(`${API_BASE_URL}/razorpay/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+            body: JSON.stringify({
+              razorpay_order_id: orderIdToVerify,
+              razorpay_payment_id: paymentIdToVerify,
+              razorpay_signature: signatureToVerify,
+              courseId: targetCourseId,
+              studentId: resolvedStudentId,
+              referralCode: referralCode || undefined,
+              couponCode: breakdown?.couponCode || undefined,
+              coinsUsed: useCoins ? coinsToUse : 0
+            })
+          });
+
+          if (verifyRes.status === 401) {
+            const refreshed = await useAuthStore.getState().refreshToken();
+            if (refreshed) {
+              verifyRes = await fetch(`${API_BASE_URL}/razorpay/verify`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+                body: JSON.stringify({
+                  razorpay_order_id: orderIdToVerify,
+                  razorpay_payment_id: paymentIdToVerify,
+                  razorpay_signature: signatureToVerify,
+                  courseId: targetCourseId,
+                  studentId: resolvedStudentId,
+                  referralCode: referralCode || undefined,
+                  couponCode: breakdown?.couponCode || undefined,
+                  coinsUsed: useCoins ? coinsToUse : 0
+                })
+              });
+            }
+          }
+          const verifyData = await verifyRes.json();
+          if (verifyData.success) {
+            localStorage.removeItem('pending_razorpay_order');
+            sessionStorage.removeItem('pending_razorpay_order');
+            try {
+              const currentStudent = getStudentData();
+              if (currentStudent) {
+                const currentEnrolled = Array.isArray(currentStudent.enrolledCourses) ? currentStudent.enrolledCourses : [];
+                if (!currentEnrolled.map(String).includes(targetCourseId)) {
+                  currentStudent.enrolledCourses = [...currentEnrolled, targetCourseId];
+                  localStorage.setItem('studentData', JSON.stringify(currentStudent));
+                }
+              }
+              useAuthStore.getState().checkAuth().catch(() => {});
+            } catch (e) {
+              console.error('[Checkout] Local state sync error:', e);
+            }
+            navigate('/purchase-success', { state: { course, purchase: verifyData.purchase } });
+            return;
+          }
+        } catch (vErr) {
+          console.warn('[Checkout] verify error, attempting check-order fallback:', vErr);
+        }
+
+        // Fallback: Check order fulfillment directly with backend
+        try {
+          const checkRes = await fetch(`${API_BASE_URL}/razorpay/check-order`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+            body: JSON.stringify({
+              orderId: orderIdToVerify,
+              studentId: resolvedStudentId,
+              courseId: targetCourseId
+            })
+          });
+          const checkData = await checkRes.json();
+          if (checkData.success && checkData.enrolled) {
+            localStorage.removeItem('pending_razorpay_order');
+            sessionStorage.removeItem('pending_razorpay_order');
+            try {
+              const currentStudent = getStudentData();
+              if (currentStudent) {
+                const currentEnrolled = Array.isArray(currentStudent.enrolledCourses) ? currentStudent.enrolledCourses : [];
+                if (!currentEnrolled.map(String).includes(targetCourseId)) {
+                  currentStudent.enrolledCourses = [...currentEnrolled, targetCourseId];
+                  localStorage.setItem('studentData', JSON.stringify(currentStudent));
+                }
+              }
+              useAuthStore.getState().checkAuth().catch(() => {});
+            } catch (e) {}
+            navigate('/purchase-success', { state: { course, purchase: checkData.purchase } });
+            return;
+          }
+        } catch (checkErr) {
+          console.error('[Checkout] check-order fallback failed:', checkErr);
+        }
+
+        alert('Payment completed, but verification timed out. If your money was deducted, your course will be activated automatically.');
+        setProcessing(false);
       };
 
-      const razorpay = new window.Razorpay(options);
-      razorpay.on('payment.failed', (response: any) => {
-        alert(`Payment failed: ${response.error?.description || 'Please try again'}`);
-        setProcessing(false);
-      });
-      razorpay.open();
+      const prefillData: Record<string, string> = {
+        name: student.name || 'Student'
+      };
+      if (student.email && student.email.trim() && student.email.includes('@')) {
+        prefillData.email = student.email.trim();
+      }
+      if (student.phone && student.phone.trim()) {
+        prefillData.contact = student.phone.trim();
+      }
+
+      if (Capacitor.isNativePlatform()) {
+        const razorpay = (window as any).RazorpayCheckout;
+        const errorCallback = (error: any) => {
+          console.warn('[Razorpay Native Cancel/Error]', error);
+          alert(`Payment failed: ${error?.description || 'Please try again'}`);
+          setProcessing(false);
+        };
+        
+        if (razorpay) {
+          const nativeOptions = {
+            key: orderData.keyId,
+            amount: orderData.amount,
+            currency: orderData.currency || 'INR',
+            name: 'Aone Target Institute',
+            description: (course?.name || course?.title || 'Course Purchase').slice(0, 40),
+            order_id: orderData.orderId,
+            prefill: prefillData,
+            theme: { color: '#1A237E' }
+          };
+          razorpay.on('payment.success', handlePaymentSuccess);
+          razorpay.on('payment.cancel', errorCallback);
+          razorpay.open(nativeOptions);
+        } else {
+          alert('Payment plugin not initialized. Please restart the app.');
+          setProcessing(false);
+        }
+      } else {
+        const webOptions = {
+          key: orderData.keyId,
+          amount: orderData.amount,
+          currency: orderData.currency || 'INR',
+          name: 'Aone Target Institute',
+          description: (course?.name || course?.title || 'Course Purchase').slice(0, 40),
+          order_id: orderData.orderId,
+          handler: handlePaymentSuccess,
+          prefill: prefillData,
+          theme: { color: '#1A237E' },
+          modal: { ondismiss: () => setProcessing(false) }
+        };
+        const razorpay = new window.Razorpay(webOptions);
+        razorpay.on('payment.failed', (response: any) => {
+          alert(`Payment failed: ${response.error?.description || 'Please try again'}`);
+          setProcessing(false);
+        });
+        razorpay.open();
+      }
     } catch (error: any) {
       alert(error.message || 'Payment failed. Please try again.');
       setProcessing(false);
@@ -395,7 +580,7 @@ const Checkout: React.FC = () => {
     }
     setProcessing(true);
     try {
-      const res = await fetch('/api/purchases', {
+      const res = await fetch(`${API_BASE_URL}/purchases`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
         body: JSON.stringify({
@@ -532,17 +717,18 @@ const Checkout: React.FC = () => {
               </div>
             ) : (
               <>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2.5">
                   <input
-                    className={`flex-1 bg-gray-50 border ${couponError ? 'border-red-300' : 'border-gray-200'} rounded-xl text-sm px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#303F9F]/10 font-bold uppercase`}
+                    className={`flex-1 w-full bg-gray-50 border ${couponError ? 'border-red-300' : 'border-gray-200'} rounded-xl text-sm px-4 py-2.5 outline-none focus:ring-2 focus:ring-[#303F9F]/10 font-bold uppercase`}
                     placeholder="Enter coupon code"
                     value={couponCode}
                     onChange={(e) => { setCouponCode(e.target.value.toUpperCase()); if (couponError) setCouponError(''); }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleApplyCoupon(); } }}
                   />
                   <button
                     onClick={handleApplyCoupon}
                     disabled={isApplyingCoupon || !couponCode.trim()}
-                    className="bg-[#1A237E] text-white px-5 py-2.5 rounded-xl text-xs font-bold shadow-md active:scale-95 disabled:opacity-50 transition-all"
+                    className="w-full sm:w-auto bg-[#1A237E] text-white px-6 py-2.5 rounded-xl text-xs font-bold shadow-md active:scale-95 disabled:opacity-50 transition-all flex items-center justify-center shrink-0"
                   >
                     {isApplyingCoupon ? '...' : 'Apply'}
                   </button>
@@ -825,3 +1011,5 @@ const Checkout: React.FC = () => {
 };
 
 export default Checkout;
+
+

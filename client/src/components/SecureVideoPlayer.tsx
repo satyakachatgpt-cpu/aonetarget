@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuthStore } from '../store/authStore';
 import { extractYouTubeId, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
 import { getAuthHeaders } from '../services/apiClient';
+import { API_BASE_URL } from '../services/apiClient';
 
 interface SecureVideoPlayerProps {
   src: string;
@@ -78,7 +79,7 @@ const SecureVideoPlayer: React.FC<SecureVideoPlayerProps> = ({
     const studentId = student.id || (student as any)._id;
     if (!studentId) return;
 
-    fetch(`/api/students/${studentId}/watch-history`, {
+    fetch(`${API_BASE_URL}/students/${studentId}/watch-history`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
       body: JSON.stringify({

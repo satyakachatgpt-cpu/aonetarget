@@ -14,7 +14,7 @@ import Student from '../models/Student.js';
 import * as authService from '../services/auth.service.js';
 
 const OTP_EXPIRY_MS = 10 * 60 * 1000;
-const REFRESH_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+const REFRESH_EXPIRY_MS = 180 * 24 * 60 * 60 * 1000;
 
 function shouldExposeOtp() {
   // CRITICAL: Never expose OTP in API responses
@@ -91,7 +91,7 @@ function setAccessCookie(res, accessToken) {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/api',
-    maxAge: 15 * 60 * 1000
+    maxAge: 30 * 24 * 60 * 60 * 1000
   });
 }
 
@@ -177,7 +177,15 @@ export const adminLogin = async (req, res) => {
   const db = mongoose.connection.db;
 
   try {
-    const admin = await db.collection('admins').findOne({ adminId: adminId?.trim() });
+    const cleanAdminId = adminId?.trim();
+    const lowerAdminId = cleanAdminId?.toLowerCase();
+
+    const admin = await db.collection('admins').findOne({
+      $or: [
+        { adminId: cleanAdminId },
+        ...(lowerAdminId ? [{ adminId: lowerAdminId }, { email: lowerAdminId }] : [])
+      ].filter(Boolean)
+    });
     const isMatch = await verifyAndMigratePassword(db, admin, password, 'admins', `Admin ${adminId}`);
 
     if (!isMatch) {
@@ -320,7 +328,18 @@ export const loginWithPassword = async (req, res) => {
     // DEVICE BINDING LOGIC
     const activeDeviceId = student.activeDeviceId || student.deviceId;
 
-    if (!activeDeviceId) {
+    if (student.isReviewer) {
+      // BYPASS: Reviewer accounts don't get device locked
+      await db.collection('students').updateOne(
+        { _id: student._id },
+        { 
+          $set: { 
+            activeDeviceIP: incomingIP,
+            activeDeviceLastLoginAt: new Date()
+          } 
+        }
+      );
+    } else if (!activeDeviceId) {
       // CASE 1: First time login - Bind device
       await db.collection('students').updateOne(
         { _id: student._id },
@@ -661,7 +680,18 @@ export const verifyOtp = async (req, res) => {
     // DEVICE BINDING LOGIC
     const activeDeviceId = student.activeDeviceId || student.deviceId; // Check both new and legacy fields
 
-    if (!activeDeviceId) {
+    if (student.isReviewer) {
+      // BYPASS: Reviewer accounts don't get device locked
+      await db.collection('students').updateOne(
+        { _id: student._id },
+        { 
+          $set: { 
+            activeDeviceIP: incomingIP,
+            activeDeviceLastLoginAt: new Date()
+          } 
+        }
+      );
+    } else if (!activeDeviceId) {
       // CASE 1: First time login - Bind device
       await db.collection('students').updateOne(
         { _id: student._id },
@@ -939,6 +969,12 @@ export const refreshAccessToken = async (req, res) => {
     
     if (!student) return res.status(401).json({ error: 'User not found' });
     
+    // If device was unlinked / reset by admin, deny token refresh
+    if (!student.isReviewer && student.deviceLocked && !student.activeDeviceId && !student.deviceId) {
+      await db.collection('refresh_tokens').deleteMany({ studentId: { $in: [student.id, String(student._id)] } });
+      return res.status(401).json({ error: 'Device has been unlinked. Please log in again.', code: 'DEVICE_UNLINKED' });
+    }
+
     await db.collection('refresh_tokens').deleteOne({ _id: tokenRecord._id });
     const session = await issueStudentSession(req, res, db, student.toObject(), student.deviceId || null);
     res.json({ accessToken: session.accessToken, refreshToken: session.refreshToken });

@@ -12,6 +12,7 @@ export const questionsAPI = {
       body: JSON.stringify(data),
     });
     invalidateCache('questions');
+    invalidateCache('tests');
     return res;
   },
   update: async (id: string, data: any) => {
@@ -21,6 +22,7 @@ export const questionsAPI = {
       body: JSON.stringify(data),
     });
     invalidateCache('questions');
+    invalidateCache('tests');
     return res;
   },
   delete: async (id: string, testId?: string) => {
@@ -31,6 +33,7 @@ export const questionsAPI = {
       headers: { ...getAdminHeaders() }
     });
     invalidateCache('questions');
+    invalidateCache('tests');
     return res;
   },
   bulkDelete: async (ids: string[], testId?: string) => {
@@ -48,6 +51,8 @@ export const questionsAPI = {
       const details = errorData.details ? `: ${errorData.details}` : '';
       throw new Error(`${msg}${details}`);
     }
+    invalidateCache('questions');
+    invalidateCache('tests');
     return response.json();
   },
   updateAll: async (updates: any[]) => {
@@ -63,6 +68,7 @@ export const questionsAPI = {
        const errorData = await response.json().catch(() => ({}));
        throw new Error(errorData.error || 'Failed to update questions order');
     }
+    invalidateCache('questions');
     invalidateCache('tests');
     return response.json();
   }
@@ -70,8 +76,13 @@ export const questionsAPI = {
 
 // Tests API
 export const testsAPI = {
-  getAll: async () => {
-    return cachedFetch(`${API_BASE_URL}/tests`);
+  getAll: async (params?: any) => {
+    let url = `${API_BASE_URL}/tests`;
+    if (params) {
+      const query = new URLSearchParams(params).toString();
+      url += `?${query}`;
+    }
+    return cachedFetch(url);
   },
   create: async (data: any) => {
     const response = await fetch(`${API_BASE_URL}/tests`, {
@@ -84,6 +95,7 @@ export const testsAPI = {
     });
     if (!response.ok) throw new Error('Failed to create test');
     invalidateCache('tests');
+    invalidateCache('test-series');
     return response.json();
   },
   update: async (id: string, data: any) => {
@@ -97,6 +109,7 @@ export const testsAPI = {
     });
     if (!response.ok) throw new Error('Failed to update test');
     invalidateCache('tests');
+    invalidateCache('test-series');
     return response.json();
   },
   delete: async (id: string) => {
@@ -106,6 +119,7 @@ export const testsAPI = {
     });
     if (!response.ok) throw new Error('Failed to delete test');
     invalidateCache('tests');
+    invalidateCache('test-series');
     return response.json();
   },
   getById: async (id: string) => {
@@ -218,6 +232,7 @@ export const testSeriesAPI = {
         throw new Error(error.error || error.details || `Failed to create test series (${response.status})`);
       }
       invalidateCache('test-series');
+      invalidateCache('tests');
       const result = await response.json();
       console.log('Test series created successfully:', result);
       return result;

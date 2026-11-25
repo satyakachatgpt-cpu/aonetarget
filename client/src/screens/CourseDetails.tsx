@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import DOMPurify from 'dompurify';
+import { Share } from '@capacitor/share';
+import { Capacitor } from '@capacitor/core';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getImageUrl, getVideoUrl, getPdfUrl, getYouTubeThumbnail, getGradientPlaceholder, toYouTubeEmbed, isYouTubeUrl, isLiveUrl } from '../lib/utils';
 import StudentVideoPlayer from '../components/student/StudentVideoPlayer';
@@ -13,6 +15,8 @@ import { Course, Video, Progress } from '../types';
 import { useAuthStore } from '../store/authStore';
 import { useUIStore } from '../store/uiStore';
 import { CATEGORY_GRADIENTS } from '../constants';
+import { API_BASE_URL as _API_BASE_URL, getAuthHeaders as getStudentAuthHeaders } from '../services/apiClient';
+const API_BASE_URL = _API_BASE_URL;
 
 // Local Video interface removed; using Course/Video/Progress from ../types
 
@@ -64,12 +68,26 @@ const CourseDetails: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { student } = useAuthStore();
-  const [course, setCourse] = useState<Course | null>(null);
+  const [course, setCourse] = useState<Course | null>(() => {
+    try {
+      const cached = sessionStorage.getItem(`course_cache_${id}`);
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
   const [videos, setVideos] = useState<Video[]>([]);
   const [notes, setNotes] = useState<Note[]>([]);
   const [tests, setTests] = useState<Test[]>([]);
   const [progress, setProgress] = useState<Progress>({ completedVideos: [], completedTests: [], completedNotes: [] });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(() => {
+    try {
+      const cached = sessionStorage.getItem(`course_cache_${id}`);
+      return !cached;
+    } catch {
+      return true;
+    }
+  });
   const [activeTab, setActiveTab] = useState<'videos' | 'notes' | 'tests' | 'live'>('videos');
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [isCourseExpired, setIsCourseExpired] = useState(false);
@@ -95,7 +113,15 @@ const CourseDetails: React.FC = () => {
 
   const fetchLiveMessages = async (vId: string) => {
     try {
-      const res = await fetch(`/api/live-chat/${vId}/messages`);
+      const studentToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      const adminToken = localStorage.getItem('adminToken');
+      const authHeader = studentToken ? { 'Authorization': `Bearer ${studentToken}` } : (adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {});
+      const res = await fetch(`${API_BASE_URL}/live-chat/${vId}/messages`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeader
+        }
+      });
       if (res.ok) {
         const data = await res.json();
         // Normalize fields for StudentVideoPlayer
@@ -133,7 +159,7 @@ const CourseDetails: React.FC = () => {
     if (!finalMsg || !selectedVideo || !student) return;
     try {
       const vid = selectedVideo.id || selectedVideo._id;
-      const res = await fetch(`/api/live-chat/${vid}/messages`, {
+      const res = await fetch(`${API_BASE_URL}/live-chat/${vid}/messages`, {
         method: 'POST',
         headers: getAuthHeaders(),
         body: JSON.stringify({
@@ -173,18 +199,11 @@ const CourseDetails: React.FC = () => {
   };
 
   const getAuthHeaders = () => {
-    const adminId = localStorage.getItem('adminId');
-    const adminToken = localStorage.getItem('adminToken');
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
+    const studentHeaders = getStudentAuthHeaders();
+    return {
+      'Content-Type': 'application/json',
+      ...studentHeaders
     };
-    if (adminId) headers['x-admin-id'] = adminId;
-    if (adminToken) headers['Authorization'] = `Bearer ${adminToken}`;
-    if (!headers['Authorization']) {
-      const studentToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
-      if (studentToken) headers['Authorization'] = `Bearer ${studentToken}`;
-    }
-    return headers;
   };
 
 
@@ -203,6 +222,27 @@ const CourseDetails: React.FC = () => {
     return () => setBottomNavHidden(false);
   }, [showVideoPlayer, setBottomNavHidden]);
 
+  // Handle mobile web / browser back button when video is open (fallback for non-Capacitor environments)
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) return;
+    if (!showVideoPlayer) return;
+
+    window.history.pushState({ videoModal: true }, '');
+
+    const handlePopState = () => {
+      setShowVideoPlayer(false);
+      setSelectedVideo(null);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      if (window.history.state?.videoModal) {
+        window.history.back();
+      }
+    };
+  }, [showVideoPlayer]);
+
 
   const handleImageError = useCallback((id: string) => {
     setFailedImages(prev => new Set(prev).add(id));
@@ -212,16 +252,32 @@ const CourseDetails: React.FC = () => {
 
   const handleVideoClick = (video: Video) => {
     // STRICT PLAYABILITY RULE: Upcoming live streams must not open player
-    if (video.contentType === 'live_stream' && computeEffectiveStatus(video) !== 'live') {
+    const status = computeEffectiveStatus(video);
+    if (video.contentType === 'live_stream' && status === 'upcoming') {
       return;
+    }
+
+    if (status === 'live') {
+      video.streamStatus = 'live';
+      video.isLive = true;
     }
 
     const isFirstVideoInRoot = navigationHistory.length === 0 && filteredVideos[0] === video;
 
     const canPlay = (isEnrolled && !isCourseExpired) || video.isFree || video.isDemo || isFirstVideoInRoot;
 
-    // Resolve raw URL first
-    const rawUrl = video.youtubeUrl || video.videoUrl || video.url || video.meetingLink || (video as any).streamId || '';
+    // Resolve raw URL first (include recorded links for ended live streams)
+    const rawUrl = video.recordedLink || 
+                   video.recordingUrl || 
+                   video.replayUrl || 
+                   video.youtubeUrl || 
+                   video.videoUrl || 
+                   video.url || 
+                   video.meetingLink || 
+                   video.liveUrl || 
+                   video.streamUrl || 
+                   (video as any).streamId || 
+                   '';
 
     const url = toYouTubeEmbed(rawUrl);
     if (canPlay && url) {
@@ -246,25 +302,35 @@ const CourseDetails: React.FC = () => {
   };
 
   const handleShare = async () => {
-    const courseUrl = `${window.location.origin}/#/course/${id}`;
+    const courseUrl = `https://aonetarget.in/#/course/${id}`;
     const courseTitle = course?.name || course?.title || 'Check out this course';
     const shareData = {
       title: courseTitle,
-      text: `${courseTitle} - Learn with Aone Target!`,
+      text: `${courseTitle} - Learn with Aone Target Institute!`,
       url: courseUrl,
     };
 
     try {
-      if (navigator.share) {
+      if (Capacitor.isNativePlatform()) {
+        try {
+          await Share.share({
+            title: shareData.title,
+            text: `${shareData.text}\n\n📱 Download App:\nhttps://play.google.com/store/apps/details?id=com.aonetarget.education`,
+            dialogTitle: 'Share Course'
+          });
+        } catch (err) {
+          console.log('Capacitor share failed:', err);
+        }
+      } else if (navigator.share) {
         await navigator.share(shareData);
       } else {
-        await navigator.clipboard.writeText(`${courseTitle}\n${courseUrl}`);
+        await navigator.clipboard.writeText(`${shareData.text}\n📱 Download App:\nhttps://play.google.com/store/apps/details?id=com.aonetarget.education`);
         setShareSuccess(true);
         setTimeout(() => setShareSuccess(false), 2000);
       }
     } catch (err) {
       try {
-        await navigator.clipboard.writeText(`${courseTitle}\n${courseUrl}`);
+        await navigator.clipboard.writeText(`${shareData.text}\n📱 Download App:\nhttps://play.google.com/store/apps/details?id=com.aonetarget.education`);
         setShareSuccess(true);
         setTimeout(() => setShareSuccess(false), 2000);
       } catch {
@@ -299,7 +365,7 @@ const CourseDetails: React.FC = () => {
   const fetchCourseProgress = useCallback(async () => {
     if (!studentId || !id) return;
     try {
-      const progressRes = await fetch(`/api/students/${studentId}/courses/${id}/progress`, { headers: getAuthHeaders() });
+      const progressRes = await fetch(`${API_BASE_URL}/students/${studentId}/courses/${id}/progress`, { headers: getAuthHeaders() });
       if (progressRes.ok) {
         const progressData = await progressRes.json();
         
@@ -327,16 +393,79 @@ const CourseDetails: React.FC = () => {
   const fetchCourseData = async () => {
     try {
       const h = getAuthHeaders();
-      const [courseData, videosData, notesData, testsData, foldersData] = await Promise.all([
-        fetch(`/api/courses/${id}`, { headers: h }).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch(`/api/courses/${id}/videos?studentId=${studentId}`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`/api/courses/${id}/notes`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`/api/courses/${id}/tests`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`/api/courses/${id}/folders`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
+      const withTimeout = <T,>(promise: Promise<T>, timeoutMs = 8000, fallback: T): Promise<T> => {
+        return Promise.race([
+          promise,
+          new Promise<T>(resolve => setTimeout(() => resolve(fallback), timeoutMs))
+        ]);
+      };
+
+      const t = Date.now();
+      const coursePromise = withTimeout(
+        fetch(`${API_BASE_URL}/courses/${id}?t=${t}`, { headers: h, cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+        8000,
+        null
+      );
+      const videosPromise = withTimeout(
+        fetch(`${API_BASE_URL}/courses/${id}/videos?studentId=${studentId}&t=${t}`, { headers: h, cache: 'no-store' }).then(r => r.ok ? r.json() : []).catch(() => []),
+        8000,
+        []
+      );
+      const notesPromise = withTimeout(
+        fetch(`${API_BASE_URL}/courses/${id}/notes?t=${t}`, { headers: h, cache: 'no-store' }).then(r => r.ok ? r.json() : []).catch(() => []),
+        8000,
+        []
+      );
+      const testsPromise = withTimeout(
+        fetch(`${API_BASE_URL}/courses/${id}/tests?t=${t}`, { headers: h, cache: 'no-store' }).then(r => r.ok ? r.json() : []).catch(() => []),
+        8000,
+        []
+      );
+      const foldersPromise = withTimeout(
+        fetch(`${API_BASE_URL}/courses/${id}/folders?t=${t}`, { headers: h, cache: 'no-store' }).then(r => r.ok ? r.json() : []).catch(() => []),
+        6000,
+        []
+      );
+      const enrolledPromise = studentId ? withTimeout(
+        (async () => {
+          let res = await fetch(`${API_BASE_URL}/students/${studentId}/enrolled/${id}?t=${t}`, { headers: h, cache: 'no-store' });
+          if (res.status === 401) {
+            const refreshed = await useAuthStore.getState().refreshToken().catch(() => false);
+            if (refreshed) {
+              res = await fetch(`${API_BASE_URL}/students/${studentId}/enrolled/${id}?t=${Date.now()}`, { headers: getAuthHeaders(), cache: 'no-store' });
+            }
+          }
+          return res.ok ? res.json() : null;
+        })().catch(() => null),
+        8000,
+        null
+      ) : Promise.resolve(null);
+
+      // Fast unblock: As soon as main course info arrives, show the page!
+      coursePromise.then(courseData => {
+        if (courseData && !courseData.error) {
+          setCourse(courseData);
+          setLoading(false);
+          try {
+            sessionStorage.setItem(`course_cache_${id}`, JSON.stringify(courseData));
+          } catch {}
+        }
+      });
+
+      const [courseData, videosData, notesData, testsData, foldersData, enrolledData] = await Promise.all([
+        coursePromise,
+        videosPromise,
+        notesPromise,
+        testsPromise,
+        foldersPromise,
+        enrolledPromise
       ]);
 
       if (courseData && !courseData.error) {
         setCourse(courseData);
+        try {
+          sessionStorage.setItem(`course_cache_${id}`, JSON.stringify(courseData));
+        } catch {}
       }
 
       setVideos(Array.isArray(videosData) ? videosData : []);
@@ -344,20 +473,19 @@ const CourseDetails: React.FC = () => {
       setTests(Array.isArray(testsData) ? testsData.filter((t: Test) => !t.status || t.status === 'active') : []);
       setFolders(Array.isArray(foldersData) ? foldersData : []);
 
-      if (studentId) {
-        try {
-          const enrolledRes = await fetch(`/api/students/${studentId}/enrolled/${id}`, { headers: getAuthHeaders() });
-          if (enrolledRes.ok) {
-            const enrolledData = await enrolledRes.json();
-            setIsEnrolled(enrolledData.enrolled || false);
-            setIsCourseExpired(enrolledData.isExpired || false);
-            setEnrollmentStatus(enrolledData.status || (enrolledData.isExpired ? 'expired' : (enrolledData.enrolled ? 'active' : 'not_enrolled')));
+      if (enrolledData) {
+        const enrolledFlag = Boolean(enrolledData.enrolled);
+        setIsEnrolled(enrolledFlag);
+        setIsCourseExpired(Boolean(enrolledData.isExpired));
+        setEnrollmentStatus(enrolledData.status || (enrolledData.isExpired ? 'expired' : (enrolledFlag ? 'active' : 'not_enrolled')));
 
-            if (enrolledData.enrolled) {
-              await fetchCourseProgress();
-            }
-          }
-        } catch { }
+        if (enrolledFlag) {
+          fetchCourseProgress();
+        }
+      } else {
+        setIsEnrolled(false);
+        setIsCourseExpired(false);
+        setEnrollmentStatus('not_enrolled');
       }
     } catch (error) {
       // Fetch failed
@@ -367,6 +495,11 @@ const CourseDetails: React.FC = () => {
   };
 
   const handleEnroll = async () => {
+    if (isPaidCourse) {
+      handleBuyNow();
+      return;
+    }
+
     if (!studentId) {
       alert('Please login first to enroll in this course');
       sessionStorage.setItem('postLoginRedirect', location.pathname);
@@ -376,21 +509,43 @@ const CourseDetails: React.FC = () => {
 
     setEnrolling(true);
     try {
-      const response = await fetch(`/api/students/${studentId}/enroll`, {
+      let response = await fetch(`${API_BASE_URL}/students/${studentId}/enroll`, {
         method: 'POST',
-        headers: getAuthHeaders(),
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
         body: JSON.stringify({ courseId: id })
       });
+
+      if (response.status === 401) {
+        const refreshed = await useAuthStore.getState().refreshToken();
+        if (refreshed) {
+          response = await fetch(`${API_BASE_URL}/students/${studentId}/enroll`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...getAuthHeaders()
+            },
+            body: JSON.stringify({ courseId: id })
+          });
+        }
+      }
 
       if (response.ok) {
         setIsEnrolled(true);
         alert('Enrollment successful! You now have access to all course content.');
-        const progressRes = await fetch(`/api/students/${studentId}/courses/${id}/progress`, { headers: getAuthHeaders() });
+        const progressRes = await fetch(`${API_BASE_URL}/students/${studentId}/courses/${id}/progress`, { headers: getAuthHeaders() });
         const progressData = await progressRes.json();
         setProgress(progressData);
       } else {
-        const error = await response.json();
-        alert(error.error || 'Failed to enroll. Please try again.');
+        const error = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+          alert('Your session has expired. Please login again to enroll.');
+          navigate('/student-login', { state: { from: location.pathname } });
+        } else {
+          alert(error.error || 'Failed to enroll. Please try again.');
+        }
       }
     } catch (error) {
       alert('Failed to enroll. Please try again.');
@@ -423,7 +578,7 @@ const CourseDetails: React.FC = () => {
         completedVideos: [...new Set([...prev.completedVideos.map(v => String(v)), videoId])]
       }));
 
-      const res = await fetch(`/api/students/${studentId}/courses/${id}/progress`, {
+      const res = await fetch(`${API_BASE_URL}/students/${studentId}/courses/${id}/progress`, {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({ videoId: String(videoId), action: 'complete' })
@@ -454,7 +609,7 @@ const CourseDetails: React.FC = () => {
     if (course?.content?.upsell?.enabled && course.content.upsell.courses.length > 0) {
       const fetchUpsell = async () => {
         try {
-          const res = await fetch('/api/courses');
+          const res = await fetch(`${API_BASE_URL}/courses`);
           if (res.ok) {
             const all = await res.json();
             const recommended = all.filter((c: any) =>
@@ -472,11 +627,49 @@ const CourseDetails: React.FC = () => {
   const location = useLocation();
 
   useEffect(() => {
+    setIsEnrolled(false);
+    setIsCourseExpired(false);
+    setEnrollmentStatus('not_enrolled');
+  }, [id]);
+
+  useEffect(() => {
     fetchCourseData();
     fetchCourseProgress(); // Force initial sync
+
+    const handleContentUpdate = () => {
+      fetchCourseData();
+      fetchCourseProgress();
+    };
+
     window.addEventListener('focus', fetchCourseProgress);
-    return () => window.removeEventListener('focus', fetchCourseProgress);
-  }, [id, location.pathname, student?.id]);
+    window.addEventListener('app:content-updated', handleContentUpdate);
+    window.addEventListener('app:live-status-changed', handleContentUpdate);
+
+    // Auto-poll stream status if on live tab or player is active
+    const pollInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible' && (activeTab === 'live' || showVideoPlayer)) {
+        fetchCourseData();
+      }
+    }, 6000);
+
+    return () => {
+      window.removeEventListener('focus', fetchCourseProgress);
+      window.removeEventListener('app:content-updated', handleContentUpdate);
+      window.removeEventListener('app:live-status-changed', handleContentUpdate);
+      clearInterval(pollInterval);
+    };
+  }, [id, location.pathname, student?.id, activeTab, showVideoPlayer]);
+
+  // Keep selected video in sync with latest videos list for real-time live status updates
+  useEffect(() => {
+    if (selectedVideo && videos.length > 0) {
+      const vId = selectedVideo.id || selectedVideo._id;
+      const updated = videos.find(v => (v.id && v.id === vId) || (v._id && v._id === vId));
+      if (updated && (updated.streamStatus !== selectedVideo.streamStatus || updated.isLive !== selectedVideo.isLive)) {
+        setSelectedVideo(updated);
+      }
+    }
+  }, [videos]);
 
   useEffect(() => {
     if (course) {
@@ -495,6 +688,26 @@ const CourseDetails: React.FC = () => {
       } catch (e) { console.error(e); }
     }
   }, [course]);
+
+  useEffect(() => {
+    // If course is not found after loading, clean it up from local storage so it stops appearing in "Continue Watching"
+    if (!loading && !course && id) {
+      try {
+        const progressData = JSON.parse(localStorage.getItem('player_progress') || '{}');
+        const newData = { ...progressData };
+        let changed = false;
+        Object.keys(newData).forEach(key => {
+          if (newData[key].courseId === id) {
+            delete newData[key];
+            changed = true;
+          }
+        });
+        if (changed) {
+          localStorage.setItem('player_progress', JSON.stringify(newData));
+        }
+      } catch (e) { console.error('Cleanup fail:', e); }
+    }
+  }, [loading, course, id]);
 
   const navigateIntoFolder = (folder: any) => {
     setNavigationHistory(prev => [...prev, folder]);
@@ -591,7 +804,7 @@ const CourseDetails: React.FC = () => {
 
   const completedVideosCount = Math.min(validCompletedCount, totalVideos);
   const progressPercent = totalVideos > 0 ? Math.min(100, Math.round((completedVideosCount / totalVideos) * 100)) : 0;
-  const isPaidCourse = course?.price && course.price > 0;
+  const isPaidCourse = Number(course?.price || 0) > 0 && !course?.isFree;
 
   if (loading) {
     return (
@@ -636,7 +849,7 @@ const CourseDetails: React.FC = () => {
             <span className="material-symbols-rounded text-5xl text-gray-300">error</span>
           </div>
           <p className="text-gray-500 font-medium">Course not found</p>
-          <button onClick={() => navigate('/courses')} className="mt-4 btn-primary px-6 py-2.5 text-sm">
+          <button onClick={() => navigate('/courses', { replace: true })} className="mt-4 btn-primary px-6 py-2.5 text-sm">
             Back to Courses
           </button>
         </div>
@@ -646,15 +859,14 @@ const CourseDetails: React.FC = () => {
 
   const courseImage = getImageUrl(course.imageUrl || course.thumbnail);
   const shareOnPlatform = (platform: string) => {
-    const courseUrl = `${window.location.origin}/#/course/${id}`;
     const courseTitle = course.name || course.title || 'Check out this course';
-    const text = `${courseTitle} - Learn with Aone Target Institute!`;
+    const text = `${courseTitle} - Learn with Aone Target Institute!\n\n📱 Download App:\nhttps://play.google.com/store/apps/details?id=com.aonetarget.education`;
     let url = '';
     switch (platform) {
-      case 'whatsapp': url = `https://wa.me/?text=${encodeURIComponent(text + '\n' + courseUrl)}`; break;
-      case 'telegram': url = `https://t.me/share/url?url=${encodeURIComponent(courseUrl)}&text=${encodeURIComponent(text)}`; break;
-      case 'facebook': url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(courseUrl)}`; break;
-      case 'twitter': url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(courseUrl)}`; break;
+      case 'whatsapp': url = `https://wa.me/?text=${encodeURIComponent(text)}`; break;
+      case 'telegram': url = `https://t.me/share/url?url=&text=${encodeURIComponent(text)}`; break;
+      case 'facebook': url = `https://www.facebook.com/sharer/sharer.php?u=https://play.google.com/store/apps/details?id=com.aonetarget.education`; break;
+      case 'twitter': url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`; break;
     }
     if (url) window.open(url, '_blank');
   };
@@ -786,7 +998,15 @@ const CourseDetails: React.FC = () => {
             coursePrice={course.price}
             enrolling={enrolling}
             completedTests={progress.completedTests || []}
-            onStartTest={(testId) => { if (isCourseExpired) { alert('Your access to this course has expired. Please renew to continue.'); return; } navigate(`/test/${testId}`); }}
+            onStartTest={(testId) => { 
+              if (isCourseExpired) { 
+                alert('Your access to this course has expired. Please renew to continue.'); 
+                return; 
+              } 
+              navigate(`/test/${testId}`, { 
+                state: { from: location.pathname + location.search } 
+              }); 
+            }}
             onEnroll={handleEnroll}
             onBuyNow={handleBuyNow}
           />
@@ -916,13 +1136,32 @@ const CourseDetails: React.FC = () => {
       {showVideoPlayer && selectedVideo && (
         <StudentVideoPlayer
           videoId={selectedVideo.id || selectedVideo._id || ''}
-          src={selectedVideo.youtubeUrl ? selectedVideo.youtubeUrl : (selectedVideo.videoUrl ? getVideoUrl(selectedVideo.videoUrl) : (selectedVideo.url ? (selectedVideo.url.includes('youtube.com') || selectedVideo.url.includes('youtu.be') ? selectedVideo.url : getVideoUrl(selectedVideo.url)) : selectedVideo.meetingLink || ''))}
+          src={toYouTubeEmbed(
+            selectedVideo.recordedLink || 
+            selectedVideo.recordingUrl || 
+            selectedVideo.replayUrl || 
+            selectedVideo.youtubeUrl || 
+            selectedVideo.videoUrl || 
+            selectedVideo.url || 
+            selectedVideo.meetingLink || 
+            selectedVideo.liveUrl || 
+            selectedVideo.streamUrl || 
+            ''
+          )}
           title={selectedVideo.title}
           courseTitle={course?.name || course?.title}
           courseId={id}
-          thumbnail={selectedVideo.thumbnail}
-          duration={selectedVideo.duration}
-          isLive={selectedVideo.contentType === 'live_stream'}
+          duration={
+            selectedVideo.duration && selectedVideo.duration !== '00:00'
+              ? selectedVideo.duration
+              : (selectedVideo.startedAt || selectedVideo.startTime) && (selectedVideo.endedAt || selectedVideo.endTime)
+                ? String(Math.floor((new Date(selectedVideo.endedAt || selectedVideo.endTime).getTime() - new Date(selectedVideo.startedAt || selectedVideo.startTime).getTime()) / 1000))
+                : undefined
+          }
+          isLive={
+            (selectedVideo.contentType === 'live_stream' || selectedVideo.type === 'live' || selectedVideo.platform === 'youtube_live') &&
+            computeEffectiveStatus(selectedVideo) === 'live'
+          }
           onClose={closeVideoPlayer}
           onMarkComplete={() => {
             const vId = selectedVideo.id || selectedVideo._id;

@@ -48,6 +48,7 @@ type ProfileFormData = z.infer<typeof profileSchema>;
 interface StudentLoginProps {
   setAuth: (student: any, accessToken?: string, deviceId?: string, refreshToken?: string) => void;
   onSuccess?: () => void;
+  onClose?: () => void;
 }
 
 const getDeviceType = () => {
@@ -74,7 +75,7 @@ const getDeviceId = () => {
 };
 
 
-const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
+const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess, onClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -290,6 +291,11 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
     if (e.key === 'Backspace' && !otp[index] && index > 0) {
       otpRefs.current[index - 1]?.focus();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (step === 'otp') verifyOtpAndLogin();
+      else if (step === 'reset-otp') verifyResetOtp();
+      else if (step === 'signup-otp') verifySignupOtp();
     }
   };
 
@@ -355,7 +361,8 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
       setAuth(data.student, data.accessToken, data.deviceId, data.refreshToken);
       toast.success('Login successful!');
-      const redirect = getPostLoginRedirect() || '/student-dashboard';
+      const postLoginRedirect = getPostLoginRedirect();
+      const redirect = (postLoginRedirect && postLoginRedirect !== '/student-dashboard') ? postLoginRedirect : '/';
       navigate(redirect, { replace: true });
     } catch (err: any) {
       toast.error(err.message);
@@ -435,7 +442,8 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
         toast.success('Login successful!');
         setAuth(data.student, data.accessToken, data.deviceId, data.refreshToken);
         if (onSuccess) onSuccess();
-        const redirect = getPostLoginRedirect() || '/student-dashboard';
+        const postLoginRedirect = getPostLoginRedirect();
+        const redirect = (postLoginRedirect && postLoginRedirect !== '/student-dashboard') ? postLoginRedirect : '/';
         navigate(redirect, { replace: true });
       } else {
         if (data.code === 'DEVICE_APPROVAL_REQUIRED') {
@@ -526,8 +534,10 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       });
       if (response.ok) {
         toast.success('Password updated! Please login.');
+        setResetPhone('');
+        setNewPasswordData({ password: '', confirm: '' });
+        setPasswordFormData({ loginId: '', password: '' });
         setStep('login');
-        setPasswordFormData({ loginId: resetPhone, password: '' });
       } else {
         const data = await response.json();
         toast.error(data.error || 'Failed to reset password');
@@ -571,7 +581,11 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       setShowPassword={setShowPassword}
       handlePasswordLogin={handlePasswordLogin}
       onSignupClick={() => setStep('signup')}
-      onForgotPasswordClick={() => setStep('forgot-password')}
+      onForgotPasswordClick={() => {
+        setResetPhone('');
+        setPasswordFormData(prev => ({ ...prev, password: '' }));
+        setStep('forgot-password');
+      }}
     />
   );
 
@@ -581,14 +595,22 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       resetPhone={resetPhone}
       setResetPhone={setResetPhone}
       handleForgotStep1={handleForgotStep1}
-      onBackToLogin={() => setStep('login')}
+      onBackToLogin={() => {
+        setResetPhone('');
+        setPasswordFormData(prev => ({ ...prev, password: '' }));
+        setNewPasswordData({ password: '', confirm: '' });
+        setStep('login');
+      }}
     />
   );
 
   const renderResetOtpStep = () => (
     <div className="p-8">
       <AuthBackButton 
-        onClick={() => setStep('forgot-password')} 
+        onClick={() => {
+          setResetPhone('');
+          setStep('forgot-password');
+        }} 
         label="Go Back" 
         variant="gray" 
         className="mb-8" 
@@ -786,7 +808,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
           setLoading(true);
           try {
             // Directly send registration OTP (backend already checks if user exists)
-            const otpRes = await fetch('/api/students/signup/send-otp', {
+            const otpRes = await fetch(`${API_BASE_URL}/students/signup/send-otp`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ phone: data.phone })
@@ -876,7 +898,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       <form onSubmit={handleProfileSubmit(async (data) => {
         setLoading(true);
         try {
-          const response = await fetch('/api/students/register', {
+          const response = await fetch(`${API_BASE_URL}/students/register`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
@@ -1128,7 +1150,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
   return (
     <>
-      <AuthLayout>
+      <AuthLayout onBack={onClose}>
         {step === 'login' && renderLoginStep()}
         {step === 'otp' && renderOtpStep()}
         {step === 'signup' && renderSignupStep()}

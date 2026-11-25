@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   DndContext,
   closestCenter,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   DragEndEvent,
+  DragStartEvent,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -54,7 +56,8 @@ const SortableTestItem = ({
   expandedDropdownItem,
   setExpandedDropdownItem,
   isSortingDisabled,
-  totalTests
+  totalTests,
+  wasDraggingRef
 }: any) => {
   const {
     attributes,
@@ -91,6 +94,12 @@ const SortableTestItem = ({
             className="cursor-grab active:cursor-grabbing p-1 text-gray-400 hover:text-gray-600 flex-shrink-0"
             title="Drag to reorder"
             style={{ touchAction: 'none', pointerEvents: 'auto' }}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              if (listeners && listeners.onPointerDown) {
+                (listeners as any).onPointerDown(e);
+              }
+            }}
           >
             <span className="material-symbols-outlined text-[20px]">drag_indicator</span>
           </div>
@@ -103,7 +112,12 @@ const SortableTestItem = ({
         <div className="flex-1 min-w-0">
           <h3
             className="text-[14px] font-bold text-gray-800 hover:text-blue-600 transition-colors cursor-pointer leading-snug"
-            onClick={() => {
+            onClick={(e) => {
+              if (wasDraggingRef && wasDraggingRef.current) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+              }
               onViewQuestionEditor(test);
             }}
           >
@@ -367,19 +381,38 @@ const TestSeriesDetailList: React.FC<TestSeriesDetailListProps> = ({
   setExpandedDropdownItem,
   isSortingDisabled
 }) => {
+  const wasDraggingRef = useRef(false);
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 3,
+        distance: 10,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        distance: 10,
       },
     })
   );
+
+  const handleDragStart = (event: DragStartEvent) => {
+    wasDraggingRef.current = true;
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    onReorder(event);
+    setTimeout(() => {
+      wasDraggingRef.current = false;
+    }, 200);
+  };
 
   return (
     <DndContext
       sensors={sensors}
       collisionDetection={closestCenter}
-      onDragEnd={onReorder}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
     >
       <div className="grid grid-cols-1 gap-4">
         {tests.length === 0 ? (
@@ -414,6 +447,7 @@ const TestSeriesDetailList: React.FC<TestSeriesDetailListProps> = ({
                 setExpandedDropdownItem={setExpandedDropdownItem}
                 isSortingDisabled={isSortingDisabled}
                 totalTests={tests.length}
+                wasDraggingRef={wasDraggingRef}
               />
             ))}
           </SortableContext>

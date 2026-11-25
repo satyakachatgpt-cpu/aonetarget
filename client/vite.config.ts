@@ -6,7 +6,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
 
-  const backendUrl = 'http://127.0.0.1:5001';
+  const backendUrl = 'http://127.0.0.1:5004';
 
   return {
     plugins: [
@@ -17,10 +17,27 @@ export default defineConfig(({ mode }) => {
         registerType: 'autoUpdate',
         injectRegister: 'script',
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,otf}'],
           navigateFallback: '/index.html',
           navigateFallbackDenylist: [/^\/api\//],
+          navigateFallbackAllowlist: [/^\//],
           runtimeCaching: [
+            {
+              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'google-fonts-stylesheets',
+                expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 30 }
+              }
+            },
+            {
+              urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'google-fonts-webfonts',
+                expiration: { maxEntries: 30, maxAgeSeconds: 60 * 60 * 24 * 365 }
+              }
+            },
             {
               urlPattern: /^https:\/\/aonetarget\.in\/api\/.*/i,
               handler: 'NetworkFirst',
@@ -117,6 +134,7 @@ export default defineConfig(({ mode }) => {
     define: {
       "process.env.API_KEY": JSON.stringify(env.GEMINI_API_KEY),
       "process.env.GEMINI_API_KEY": JSON.stringify(env.GEMINI_API_KEY),
+      "__APP_VERSION__": JSON.stringify(Date.now().toString()),
     },
 
     build: {

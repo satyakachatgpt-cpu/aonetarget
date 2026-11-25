@@ -279,6 +279,13 @@ export const counsellingAPI = {
       body: JSON.stringify(data),
     });
   },
+  submitNewsLead: async (data: { name: string; phone: string; email?: string; newsId?: string; newsTitle?: string; source?: string }) => {
+    return apiRequest(`${API_BASE_URL}/news-leads`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+  },
   getLeads: async () => {
     return apiRequest(`${API_BASE_URL}/admin/counselling-leads`, {
       headers: getAdminHeaders()

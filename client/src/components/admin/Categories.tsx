@@ -414,7 +414,16 @@ const Categories: React.FC<Props> = ({ showToast }) => {
     setCurrentPage(1);
   }, [activeTab, searchQuery, selectedCategory]);
 
-  const handleSaveCategory = async (data: Partial<Category>) => {
+  const handleSaveCategory = async (rawCatData: Partial<Category>) => {
+    const generatedId = (rawCatData.title || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+    const data: Partial<Category> = {
+      ...rawCatData,
+      id: (rawCatData.id && rawCatData.id.trim()) ? rawCatData.id.trim() : (generatedId || `cat_${Date.now()}`),
+    };
     try {
       if (editingCat) {
         await categoriesAPI.update(editingCat._id || editingCat.id, data);

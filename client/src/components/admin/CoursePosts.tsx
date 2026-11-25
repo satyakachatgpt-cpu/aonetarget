@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import AddPostDrawer from './AddPostDrawer';
+import { API_BASE_URL } from '../../services/apiClient';
 
 interface Post {
     _id?: string;
@@ -30,7 +31,7 @@ const CoursePosts: React.FC<CoursePostsProps> = ({ courseId }) => {
     const fetchPosts = async () => {
         setLoading(true);
         try {
-            const response = await fetch(`/api/courses/${courseId}/posts`);
+            const response = await fetch(`${API_BASE_URL}/courses/${courseId}/posts`);
             if (response.ok) {
                 const data = await response.json();
                 setPosts(data);
@@ -135,7 +136,7 @@ const CoursePosts: React.FC<CoursePostsProps> = ({ courseId }) => {
                                             <button
                                                 onClick={async () => {
                                                     if (confirm('Delete this post permanently?')) {
-                                                        const res = await fetch(`/api/courses/${courseId}/posts/${post._id || post.id}`, { method: 'DELETE' });
+                                                        const res = await fetch(`${API_BASE_URL}/courses/${courseId}/posts/${post._id || post.id}`, { method: 'DELETE' });
                                                         if (res.ok) fetchPosts();
                                                     }
                                                 }}

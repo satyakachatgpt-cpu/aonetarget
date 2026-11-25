@@ -1,5 +1,6 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { API_BASE_URL } from '../../../../services/apiClient';
 
 interface YoutubeZoomDrawerProps {
   showYoutubeZoomModal: boolean;
@@ -217,7 +218,7 @@ const YoutubeZoomDrawer: React.FC<YoutubeZoomDrawerProps> = ({
                             showToast('Uploading PDF...', 'success');
                             const formData = new FormData();
                             formData.append('file', file);
-                            const res = await fetch('/api/v2/upload/pdf', {
+                            const res = await fetch(`${API_BASE_URL}/v2/upload/pdf`, {
                               method: 'POST',
                               headers: getAuthHeaders(),
                               body: formData
@@ -273,7 +274,7 @@ const YoutubeZoomDrawer: React.FC<YoutubeZoomDrawerProps> = ({
                         showToast('Uploading material...', 'success');
                         const formData = new FormData();
                         formData.append('file', file);
-                        const res = await fetch('/api/v2/upload/pdf', {
+                        const res = await fetch(`${API_BASE_URL}/v2/upload/pdf`, {
                           method: 'POST',
                           headers: getAuthHeaders(),
                           body: formData

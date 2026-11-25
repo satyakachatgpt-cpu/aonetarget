@@ -128,6 +128,371 @@ export const deleteNews = async (req, res) => {
   }
 };
 
+export const shareNews = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const { ObjectId } = mongoose.Types;
+    
+    const conditions = [{ id: id }, { _id: id }];
+    if (ObjectId.isValid(id)) {
+      conditions.push({ _id: new ObjectId(id) });
+    }
+    const query = { $or: conditions };
+    
+    // Check both blog and news collections
+    let news = await db.collection('blog').findOne(query);
+    if (!news) {
+      news = await db.collection('news').findOne(query);
+    }
+    
+    if (!news) {
+      return res.redirect('https://play.google.com/store/apps/details?id=com.aonetarget.education');
+    }
+
+    const title = news.title || 'Aone Target Institute News';
+    const rawDesc = news.excerpt || news.message || news.content || '';
+    const desc = rawDesc.replace(/<[^>]+>/g, '').substring(0, 150) || 'Check out this news on Aone Target Institute';
+    
+    // Clean up image url if it's relative
+    let image = news.thumbnail || news.imageUrl || news.image || 'https://aonetarget.in/pwa-512x512.png';
+    if (!image.startsWith('http')) {
+      if (!image.startsWith('/')) {
+        image = '/' + image;
+      }
+      image = 'https://aonetarget.in' + image;
+    }
+
+    const playStoreUrl = `https://play.google.com/store/apps/details?id=com.aonetarget.education&referrer=utm_source%3Dwhatsapp%26news_id%3D${encodeURIComponent(id)}`;
+    const intentUrl = `intent://news/${encodeURIComponent(id)}#Intent;scheme=aonetarget;package=com.aonetarget.education;S.browser_fallback_url=${encodeURIComponent(playStoreUrl)};end`;
+
+  const rawTitle = news.title || 'Aone Target Institute News';
+  const safeTitle = rawTitle.replace(/"/g, '&quot;');
+  const safeDesc = desc.replace(/"/g, '&quot;');
+  const jsonTitle = JSON.stringify(rawTitle);
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>${title}</title>
+  <meta property="og:site_name" content="Aone Target Institute">
+  <meta property="og:title" content="${title}">
+  <meta property="og:description" content="${desc}">
+  <meta property="og:image" content="${image}">
+  <meta property="og:image:secure_url" content="${image}">
+  <meta property="og:image:type" content="image/jpeg">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:url" content="https://aonetarget.in/api/share/news/${id}">
+  <meta property="og:type" content="article">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="${title}">
+  <meta name="twitter:description" content="${desc}">
+  <meta name="twitter:image" content="${image}">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .card {
+      background: #ffffff;
+      max-width: 440px;
+      width: 100%;
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+      border: 1px solid #e2e8f0;
+    }
+    .thumb {
+      width: 100%;
+      max-height: 220px;
+      object-fit: cover;
+      display: block;
+    }
+    .content {
+      padding: 20px;
+    }
+    .title {
+      font-size: 17px;
+      font-weight: 700;
+      color: #204a8e;
+      line-height: 1.4;
+      margin-bottom: 8px;
+    }
+    .desc {
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.5;
+      margin-bottom: 18px;
+    }
+    .form-group {
+      margin-bottom: 12px;
+      text-align: left;
+    }
+    .form-group label {
+      display: block;
+      font-size: 11px;
+      font-weight: 700;
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      font-size: 14px;
+      background: #f8fafc;
+      color: #0f172a;
+      outline: none;
+      transition: all 0.2s;
+    }
+    .form-group input:focus {
+      border-color: #204a8e;
+      background: #ffffff;
+      box-shadow: 0 0 0 3px rgba(32, 74, 142, 0.12);
+    }
+    .phone-wrapper {
+      display: flex;
+    }
+    .phone-prefix {
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      background: #e2e8f0;
+      border: 1px solid #cbd5e1;
+      border-right: none;
+      border-radius: 12px 0 0 12px;
+      font-size: 13px;
+      font-weight: 700;
+      color: #475569;
+    }
+    .phone-input {
+      border-radius: 0 12px 12px 0 !important;
+    }
+    .error-msg {
+      display: none;
+      padding: 10px;
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      border-radius: 10px;
+      color: #dc2626;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      text-align: center;
+    }
+    .btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 14px 20px;
+      background: linear-gradient(135deg, #204a8e, #142e5c);
+      color: #ffffff;
+      font-weight: 700;
+      font-size: 15px;
+      border-radius: 14px;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(32, 74, 142, 0.35);
+      transition: transform 0.15s;
+    }
+    .btn:active {
+      transform: scale(0.98);
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <img src="${image}" class="thumb" alt="News" />
+    <div class="content">
+      <div class="title">${safeTitle}</div>
+      <div class="desc">${safeDesc}</div>
+
+      <div id="errorMsg" class="error-msg"></div>
+
+      <div id="loadingBox" style="display:none; text-align:center; padding: 24px 0;">
+        <div style="width: 48px; height: 48px; border: 4px solid #e2e8f0; border-top-color: #204a8e; border-radius: 50%; margin: 0 auto 16px; animation: spin 0.8s linear infinite;"></div>
+        <div style="font-size: 16px; font-weight: 700; color: #204a8e; margin-bottom: 4px;">Opening News Article...</div>
+        <div style="font-size: 13px; color: #64748b;">Please wait a moment</div>
+      </div>
+
+      <form id="readerForm">
+        <div id="formBody">
+          <div class="form-group">
+            <label>Full Name *</label>
+            <input type="text" id="name" required placeholder="Enter your full name" autocomplete="name" />
+          </div>
+
+          <div class="form-group">
+            <label>Mobile Number *</label>
+            <div class="phone-wrapper">
+              <span class="phone-prefix">🇮🇳 +91</span>
+              <input type="tel" id="phone" maxlength="10" required pattern="[6-9][0-9]{9}" placeholder="10-digit mobile number" class="phone-input" />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Email ID (Optional)</label>
+            <input type="email" id="email" placeholder="name@example.com" autocomplete="email" />
+          </div>
+
+          <button type="submit" id="submitBtn" class="btn">
+            <span id="btnText">Read More</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      var newsId = "${id}";
+      var targetUrl = window.location.origin + '/#/news/' + encodeURIComponent(newsId);
+      var articleTitle = ${jsonTitle};
+
+      // Auto-fill previous details if already submitted
+      try {
+        var savedName = localStorage.getItem('aone_lead_name');
+        var savedPhone = localStorage.getItem('aone_lead_phone');
+        if (savedName && document.getElementById('name')) {
+          document.getElementById('name').value = savedName;
+        }
+        if (savedPhone && document.getElementById('phone')) {
+          document.getElementById('phone').value = savedPhone;
+        }
+      } catch(e) {}
+
+      var isSubmitting = false;
+
+      function handleLeadSubmit() {
+        if (isSubmitting) return;
+
+        var err = document.getElementById('errorMsg');
+        if (err) err.style.display = 'none';
+
+        var nameInput = document.getElementById('name');
+        var phoneInput = document.getElementById('phone');
+        var emailInput = document.getElementById('email');
+
+        var name = (nameInput ? nameInput.value : '').trim();
+        var rawPhone = (phoneInput ? phoneInput.value : '').replace(/[^0-9]/g, '');
+        var email = (emailInput ? emailInput.value : '').trim();
+
+        var phone = rawPhone;
+        if (phone.length === 12 && phone.startsWith('91')) {
+          phone = phone.substring(2);
+        } else if (phone.length === 11 && phone.startsWith('0')) {
+          phone = phone.substring(1);
+        }
+
+        if (!name || name.length < 2) {
+          if (err) {
+            err.innerText = 'Please enter your full name (minimum 2 characters)';
+            err.style.display = 'block';
+          }
+          if (nameInput) nameInput.focus();
+          return;
+        }
+
+        if (!/^[6-9][0-9]{9}$/.test(phone)) {
+          if (err) {
+            err.innerText = 'Please enter a valid 10-digit mobile number';
+            err.style.display = 'block';
+          }
+          if (phoneInput) phoneInput.focus();
+          return;
+        }
+
+        isSubmitting = true;
+
+        // Immediately hide form and show loading animation
+        var formBody = document.getElementById('formBody');
+        var loadingBox = document.getElementById('loadingBox');
+        if (formBody) formBody.style.display = 'none';
+        if (loadingBox) loadingBox.style.display = 'block';
+
+        var redirected = false;
+        function doRedirect() {
+          if (redirected) return;
+          redirected = true;
+          try {
+            localStorage.setItem('aone_news_lead_submitted', 'true');
+            localStorage.setItem('aone_lead_name', name);
+            localStorage.setItem('aone_lead_phone', phone);
+          } catch(e) {}
+          window.location.href = targetUrl;
+        }
+
+        // Safety timeout: guaranteed redirect within 1.5s even if network is slow
+        var timer = setTimeout(doRedirect, 1500);
+
+        // Submit lead to backend
+        fetch('/api/news-leads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: name,
+            phone: phone,
+            email: email || undefined,
+            newsId: newsId,
+            newsTitle: articleTitle,
+            source: 'news_share_link'
+          })
+        })
+        .then(function(res) {
+          return res.json();
+        })
+        .catch(function(e) {
+          console.warn('Lead submit error:', e);
+        })
+        .finally(function() {
+          clearTimeout(timer);
+          doRedirect();
+        });
+      }
+
+      // Attach DOM listeners safely without any inline onclick / onsubmit attributes
+      var form = document.getElementById('readerForm');
+      if (form) {
+        form.addEventListener('submit', function(e) {
+          if (e && e.preventDefault) e.preventDefault();
+          handleLeadSubmit();
+        });
+      }
+      var btn = document.getElementById('submitBtn');
+      if (btn) {
+        btn.addEventListener('click', function(e) {
+          if (e && e.preventDefault) e.preventDefault();
+          handleLeadSubmit();
+        });
+      }
+    })();
+  </script>
+</body>
+</html>
+    `;
+    res.send(html);
+  } catch (error) {
+    res.redirect('https://play.google.com/store/apps/details?id=com.aonetarget.education');
+  }
+};
+
+
 // Quick Links Controllers
 export const getQuickLinks = async (req, res) => {
   try {
@@ -494,10 +859,32 @@ export const deleteStandaloneNote = async (req, res) => {
 
 export const getGenericPdfs = async (req, res) => {
   try {
-    const { courseId, isFree } = req.query;
+    const { courseId, isFree, categoryId, branch } = req.query;
     const query = {};
     if (courseId) query.courseId = courseId;
     if (isFree === 'true') query.isFree = true;
+    
+    if (categoryId) {
+      query.$or = [
+        { categoryId: categoryId },
+        { category: categoryId },
+        { categoryName: categoryId }
+      ];
+    }
+    if (branch) {
+      const branchCond = {
+        $or: [
+          { branch: branch },
+          { level1Branch: branch }
+        ]
+      };
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, branchCond];
+        delete query.$or;
+      } else {
+        query.$or = branchCond.$or;
+      }
+    }
     
     const pdfs = await db.collection('pdfs').find(query).sort({ sortBy: 1 }).toArray();
     res.json(pdfs);
@@ -532,7 +919,10 @@ export const deleteGenericPdf = async (req, res) => {
         { _id: ObjectId.isValid(id) ? new ObjectId(id) : null }
       ].filter(v => v.id || v._id)
     };
-    const result = await db.collection('pdfs').deleteOne(query);
+    let result = await db.collection('pdfs').deleteOne(query);
+    if (result.deletedCount === 0) {
+      result = await db.collection('notes').deleteOne(query);
+    }
     if (result.deletedCount === 0) return res.status(404).json({ error: 'PDF not found' });
     res.json({ success: true, message: 'PDF deleted' });
   } catch (error) {

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { API_BASE_URL } from '../services/apiClient';
 import { Upload, FileText, Video, ImageIcon, CheckCircle2, Loader2, AlertCircle, Youtube } from 'lucide-react';
 import { extractYouTubeId, toYouTubeEmbed } from '../lib/utils';
 import { toast } from 'sonner';
@@ -33,7 +34,7 @@ const AdminUploadPage: React.FC = () => {
         const formData = new FormData();
         formData.append('file', file);
         const adminId = localStorage.getItem('adminId');
-        const res = await axios.post(`/api/v2/upload/${type}`, formData, {
+        const res = await axios.post(`${API_BASE_URL}/v2/upload/${type}`, formData, {
             headers: { 
                 'Content-Type': 'multipart/form-data',
                 'x-admin-id': adminId || ''
@@ -75,7 +76,7 @@ const AdminUploadPage: React.FC = () => {
 
             // Step 4: Create Course in DB
             const adminId = localStorage.getItem('adminId');
-            await axios.post('/api/courses', {
+            await axios.post(`${API_BASE_URL}/courses`, {
                 title,
                 description,
                 thumbnail: thumbnailBtn,

@@ -1,4 +1,5 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
+import fs from 'fs';
 
 export const parsePDFWithGemini = async (req, res) => {
   try {
@@ -7,10 +8,36 @@ export const parsePDFWithGemini = async (req, res) => {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const modelName = "gemini-flash-latest";
-    const model = genAI.getGenerativeModel({ model: modelName });
+    // Google's cheapest Lite model (matches Gemini 3.5 Flash Lite in AI Studio)
+    const modelName = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+    
+    const safetySettings = [
+      {
+        category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+        threshold: HarmBlockThreshold.BLOCK_NONE,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+        threshold: HarmBlockThreshold.BLOCK_NONE,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+        threshold: HarmBlockThreshold.BLOCK_NONE,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+        threshold: HarmBlockThreshold.BLOCK_NONE,
+      },
+    ];
 
-    console.log(`[Gemini] Starting AI analysis for: ${req.file.originalname}`);
+    const generationConfig = {
+      responseMimeType: "application/json",
+      temperature: 0.1,
+    };
+
+    const model = genAI.getGenerativeModel({ model: modelName, safetySettings, generationConfig });
+
+    console.log(`[Gemini] Starting AI analysis using ${modelName} for: ${req.file.originalname}`);
 
     const systemPrompt = `
 Act as an expert exam paper digitizer. Extract ALL questions from the provided PDF exam paper without missing any.
@@ -32,9 +59,7 @@ STRICT RULES:
   "questionHi": "full question text in Hindi if it exists separately in the PDF, otherwise empty string",
   "options": ["Option A text", "Option B text", "Option C text", "Option D text"],
   "correctAnswer": "A" | "B" | "C" | "D",
-  "solution": "explanation or solution if provided in the PDF, otherwise empty string",
-  "questionImageBase64": "if the question has a diagram or figure, output it as a base64 encoded PNG/JPEG data URL like data:image/png;base64,... — otherwise empty string",
-  "optionImagesBase64": ["base64 data URL for option A image if option A is an image, else empty string", "same for B", "same for C", "same for D"]
+  "solution": "explanation or solution if provided in the PDF, otherwise empty string"
 }
 
 6. Option Labels: Do not include the primary option labels (A., B., (1), (2)) in the options text. However preserve internal statement labels like (a), (i), (I) if they appear inside the option text.
@@ -78,11 +103,8 @@ EXAMPLE for match-the-following — questionEn must look like:
 "Match the following. / सही मिलान कीजिए।<table style=\"border-collapse:collapse;width:100%;margin-top:8px;\"><thead><tr style=\"background:#f3f4f6;\"><th style=\"border:1px solid #d1d5db;padding:8px 12px;text-align:left;font-weight:600;\">Column I / कॉलम I</th><th style=\"border:1px solid #d1d5db;padding:8px 12px;text-align:left;font-weight:600;\">Item / विषय</th><th style=\"border:1px solid #d1d5db;padding:8px 12px;text-align:left;font-weight:600;\">Column II / कॉलम II</th><th style=\"border:1px solid #d1d5db;padding:8px 12px;text-align:left;font-weight:600;\">Description / विवरण</th></tr></thead><tbody><tr><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">A</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">Item text</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">I</td><td style=\"border:1px solid #d1d5db;padding:8px 12px;\">Description text</td></tr></tbody></table>"
 Adjust rows and columns to match the actual table. Options A/B/C/D stay as plain text outside the table.
 
-9. IMAGE RULE — MANDATORY:
-- If a question has a diagram, figure, graph, or image embedded in the PDF next to or below the question text, extract it and put its base64 data URL in the "questionImageBase64" field.
-- If any option (A, B, C, or D) is itself an image/diagram instead of text, extract it and put its base64 data URL in the corresponding index of "optionImagesBase64" array. In this case set the text for that option in "options" array to "[Image Option]".
-- If there is no image for question or options, set "questionImageBase64" to empty string "" and "optionImagesBase64" to ["","","",""].
-- Always output base64 as a complete data URL starting with "data:image/png;base64," or "data:image/jpeg;base64,".
+9. IMAGE RULE:
+- DO NOT extract any images. Focus only on high-accuracy text, equations, tables, and options.
 
 Combine multi-page questions logically. Ignore headers, footers, watermarks, and page numbers.
     `;
@@ -94,9 +116,30 @@ Combine multi-page questions logically. Ignore headers, footers, watermarks, and
       }
     };
 
-    const result = await model.generateContent([systemPrompt, pdfPart]);
+    let result;
+    let retries = 3;
+    while (retries > 0) {
+      try {
+        result = await model.generateContent([systemPrompt, pdfPart]);
+        break; // Success, break out of retry loop
+      } catch (err) {
+        if (err.status === 503 && retries > 1) {
+          console.warn(`[Gemini] 503 Service Unavailable (High Demand). Retrying in 3 seconds... (${retries - 1} attempts left)`);
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          retries--;
+        } else {
+          throw err; // Not a 503 error or out of retries, throw it
+        }
+      }
+    }
+    
     const response = await result.response;
     const text = response.text();
+
+    // DEBUG: Save the raw text from Gemini to see what it actually returned
+    try {
+      fs.writeFileSync('gemini_debug.txt', text);
+    } catch(e) {}
 
     let questions = [];
     try {
@@ -113,7 +156,16 @@ Combine multi-page questions logically. Ignore headers, footers, watermarks, and
 
     const stripOptionMarkers = (text) => {
       if (!text) return "";
-      return text.trim().replace(/^[\(\[]?([a-zA-Z0-9])[\)\].:]\s*/, "").trim();
+      let cleaned = text.trim();
+      // Match (a), (A), (1) etc with or without space after it
+      if (/^[\(\[][a-zA-Z0-9][\)\]]/.test(cleaned)) {
+        cleaned = cleaned.replace(/^[\(\[][a-zA-Z0-9][\)\]]\s*/, "");
+      } 
+      // Match A., a., 1., a) etc MUST have a space after to avoid breaking decimal numbers like "0.5"
+      else if (/^[a-zA-Z0-9][\.\)\:]\s+/.test(cleaned)) {
+        cleaned = cleaned.replace(/^[a-zA-Z0-9][\.\)\:]\s+/, "");
+      }
+      return cleaned.trim();
     };
 
     // Helper — validate base64 data URL

@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
 import StudentSidebar from '../components/StudentSidebar';
-import { testsAPI, testSeriesAPI, coursesAPI, getAuthHeaders } from '../services/apiClient';
+import { testsAPI, testSeriesAPI, coursesAPI, getAuthHeaders, invalidateCache } from '../services/apiClient';
+import { API_BASE_URL } from '../services/apiClient';
 
 interface CourseGroup {
   courseId: string;
@@ -10,7 +11,13 @@ interface CourseGroup {
   tests: any[];
 }
 
-const MockTests: React.FC = () => {
+interface MockTestsProps {
+  categoryFilter?: string;    // e.g. 'Mock-Test'
+  categoryTitle?: string;     // e.g. 'MOCK TEST'
+  onBack?: () => void;        // override back button
+}
+
+const MockTests: React.FC<MockTestsProps> = ({ categoryFilter, categoryTitle, onBack: propOnBack }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -37,6 +44,27 @@ const MockTests: React.FC = () => {
       sessionStorage.setItem('postLoginRedirect', location.pathname + location.search);
       navigate('/student-login', { state: { from: location.pathname + location.search } });
     }
+
+    // Auto-refresh when user switches back to this tab (admin may have made changes)
+    const handleFocus = () => {
+      invalidateCache('tests');
+      invalidateCache('test-series');
+      fetchData();
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        invalidateCache('tests');
+        invalidateCache('test-series');
+        fetchData();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
   }, []);
 
   const fetchData = async () => {
@@ -103,7 +131,18 @@ const MockTests: React.FC = () => {
       };
 
       setTests(extractFinalTests(testsData).sort(sortFn));
-      setTestSeries((Array.isArray(seriesData) ? seriesData : []).sort(sortFn));
+      const searchParams = new URLSearchParams(location.search);
+      const categoryParam = (categoryFilter || searchParams.get('category') || searchParams.get('categoryId') || '').toLowerCase().trim();
+      let finalSeries = Array.isArray(seriesData) ? seriesData : [];
+      if (categoryParam) {
+        finalSeries = finalSeries.filter((s: any) => {
+          const sCatId = String(s.categoryId || '').toLowerCase().trim();
+          const sCatName = String(s.categoryName || '').toLowerCase().trim();
+          const sCategory = String(s.category || '').toLowerCase().trim();
+          return sCatId === categoryParam || sCatName === categoryParam || sCategory === categoryParam;
+        });
+      }
+      setTestSeries(finalSeries.sort(sortFn));
       setCourses(Array.isArray(coursesData) ? coursesData : []);
 
       // Pre-check which series student is already enrolled in (using server-provided status)
@@ -121,33 +160,42 @@ const MockTests: React.FC = () => {
   };
 
   useEffect(() => {
+    // Embedded mode (categoryFilter prop diya hai) me URL se auto-open mat karo
+    // Warna navigate se naya remount hoga aur first click pe detail nahi khulega
+    if (categoryFilter) return;
     if (!loading && testSeries.length > 0) {
+      const searchParams = new URLSearchParams(location.search);
+      const querySeriesId = searchParams.get('seriesId');
       const stateSeries = location.state?.series;
       const stateSeriesId = location.state?.seriesId;
+      const targetId = querySeriesId || stateSeriesId || stateSeries?._id || stateSeries?.id;
       
-      if (stateSeries || stateSeriesId) {
-        const targetId = stateSeriesId || stateSeries?._id || stateSeries?.id;
-        const found = testSeries.find(ts => (ts._id || ts.id) === targetId);
+      if (targetId) {
+        const found = testSeries.find(ts => String(ts._id || ts.id) === String(targetId));
         if (found) {
-          handleSeriesClick(found);
-          // Clear state so it doesn't trigger again on refresh/back
-          window.history.replaceState({}, document.title);
+          handleSeriesClick(found, false);
         }
       }
     }
-  }, [loading, testSeries, location.state]);
+  }, [loading, testSeries, location.search, location.state]);
 
   const checkEnrollment = async (series: any) => {
     if (!student) return;
-    // Free series - always enrolled (but can be expired)
-    if (!series.price || Number(series.price) === 0) {
+    // --- Robust Free Series Detection ---
+    const isFree = !series.price || 
+                   Number(series.price) === 0 || 
+                   series.isFree === true || 
+                   series.free === true || 
+                   String(series.price).toLowerCase() === 'free';
+
+    if (isFree) {
       setIsEnrolled(true);
       setEnrollmentStatus(series.isExpired ? 'expired' : 'active');
       return;
     }
     try {
       const seriesId = series.id || series._id;
-      const res = await fetch(`/api/students/${student.id || student._id}/enrolled/${seriesId}`, {
+      const res = await fetch(`${API_BASE_URL}/students/${student.id || student._id}/enrolled/${seriesId}?t=${Date.now()}`, {
         headers: getAuthHeaders()
       });
       if (res.ok) {
@@ -165,7 +213,7 @@ const MockTests: React.FC = () => {
     }
   };
 
-  const handleSeriesClick = async (series: any) => {
+  const handleSeriesClick = async (series: any, updateUrl: boolean = true) => {
     const isActuallyExpired = getSeriesExpiryStatus(series);
     if (isActuallyExpired) {
       toast.error('This test series has expired.');
@@ -173,10 +221,21 @@ const MockTests: React.FC = () => {
     }
     setActiveSeries(series);
     const seriesId = String(series.id || series._id);
+    // Agar embedded mode hai (categoryFilter prop diya hai), navigate mat karo
+    // Sirf state update karo — component wahi rahega, detail view in-place khulega
+    if (updateUrl && !categoryFilter) {
+      navigate(`/mock-tests?seriesId=${seriesId}`, { replace: true });
+    }
     const preEnrolled = enrolledSeriesIds.has(seriesId);
     
-    // Free series - always give access (unless expired)
-    if (!series.price || Number(series.price) === 0) {
+    // --- Robust Free Series Detection ---
+    const isFree = !series.price || 
+                   Number(series.price) === 0 || 
+                   series.isFree === true || 
+                   series.free === true || 
+                   String(series.price).toLowerCase() === 'free';
+
+    if (isFree) {
       setIsEnrolled(true);
       setEnrollmentStatus(series.isExpired ? 'expired' : 'active');
     } else {
@@ -194,7 +253,7 @@ const MockTests: React.FC = () => {
     setEnrolling(true);
     try {
       const seriesId = activeSeries.id || activeSeries._id;
-      const res = await fetch(`/api/students/${student.id || student._id}/enroll`, {
+      const res = await fetch(`${API_BASE_URL}/students/${student.id || student._id}/enroll`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -260,20 +319,49 @@ const MockTests: React.FC = () => {
       setCurrentView('series');
       setActiveSeries(null);
     } else {
-      navigate(-1);
+      if (propOnBack) {
+        propOnBack();
+      } else if (window.history.length > 1) {
+        navigate(-1);
+      } else {
+        navigate('/', { replace: true });
+      }
     }
   };
+
+  useEffect(() => {
+    const handleMockBackEvent = (e: CustomEvent) => {
+      if (currentView === 'tests') {
+        e.preventDefault();
+        handleBack();
+      }
+    };
+    window.addEventListener('app:mocktests-back' as any, handleMockBackEvent);
+    return () => window.removeEventListener('app:mocktests-back' as any, handleMockBackEvent);
+  }, [currentView]);
 
   const getSeriesTests = (series: any) => {
     if (!series) return [];
     const seriesId = String(series.id || series._id);
-    return tests.filter(t =>
-      String(t.testSeriesId) === seriesId ||
-      String(t.courseId) === seriesId ||
-      (Array.isArray(t.courseIds) && t.courseIds.map(String).includes(seriesId)) ||
-      (Array.isArray(series.testIds) && series.testIds.includes(t.id || t._id)) ||
-      (Array.isArray(series.tests) && series.tests.some((st: any) => (st.id || st._id) === (t.id || t._id)))
-    );
+    const matched = tests.filter(t => {
+      const tId = String(t.id || t._id);
+      if (tId === seriesId && t.isSeries) return false;
+      return (
+        String(t.testSeriesId || '') === seriesId ||
+        String(t.seriesId || '') === seriesId ||
+        String(t.courseId || '') === seriesId ||
+        (Array.isArray(t.courseIds) && t.courseIds.map(String).includes(seriesId)) ||
+        (Array.isArray(t.testSeries) && t.testSeries.map(String).includes(seriesId)) ||
+        (Array.isArray(series.testIds) && series.testIds.map(String).includes(tId)) ||
+        (Array.isArray(series.tests) && series.tests.some((st: any) => String(st.id || st._id) === tId))
+      );
+    });
+
+    if (matched.length > 0) return matched;
+    if (Array.isArray(series.tests) && series.tests.length > 0 && typeof series.tests[0] === 'object') {
+      return series.tests;
+    }
+    return [];
   };
 
   return (
@@ -289,7 +377,7 @@ const MockTests: React.FC = () => {
           </button>
           <div className="flex-1">
             <h1 className="text-xl font-bold tracking-tight">
-              {currentView === 'series' ? 'Test Series' : (activeSeries?.title || activeSeries?.name || 'Tests')}
+              {currentView === 'series' ? (categoryTitle || 'Test Series') : (activeSeries?.title || activeSeries?.name || 'Tests')}
             </h1>
             <p className="text-xs text-white/60 mt-1 font-medium">
               {currentView === 'series' ? `${testSeries.length} series available` : `${getSeriesTests(activeSeries).length} tests in this series`}
@@ -323,11 +411,11 @@ const MockTests: React.FC = () => {
                 <div className="flex items-center gap-1.5 mt-2">
                   <span className="text-[11px] text-gray-400 flex items-center gap-1">
                     <span className="material-symbols-rounded text-[12px]">description</span>
-                    {getSeriesTests(series).length} Tests
+                    {getSeriesTests(series).length || Number(series.totalTests) || (Array.isArray(series.tests) ? series.tests.length : 0)} Tests
                   </span>
                 </div>
                 <div className="mt-3 pt-3 border-t border-gray-50 flex items-center justify-between">
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{series.category || 'General'}</span>
+                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{series.categoryName || series.category || 'General'}</span>
                   {getSeriesExpiryStatus(series) ? (
                     <span className="text-[11px] font-black text-rose-600 bg-rose-50 px-2 py-0.5 rounded-lg flex items-center gap-1">
                       <span className="material-symbols-rounded text-[12px]">lock_clock</span>
@@ -398,32 +486,41 @@ const MockTests: React.FC = () => {
               </div>
             ) : null}
 
-            {enrollmentStatus !== 'expired' && (!Number(activeSeries?.price) || isEnrolled) ? (
-              <div className="space-y-4">
-                {getSeriesTests(activeSeries).length > 0 ? (
-                  getSeriesTests(activeSeries).map((test: any, tIdx: number) => {
-                    const status = getTestStatus(test);
-                    const badge = getStatusBadge(status);
-                    return (
-                      <div key={test.id || test._id || tIdx} className="card-premium p-4 animate-fade-in-up" style={{ animationDelay: `${tIdx * 0.05}s` }}>
-                        <div className="flex items-center justify-between mb-2.5">
-                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 ${badge.bg} ${badge.text}`}>
+            {/* Tests inside this series listed one by one */}
+            <div className="space-y-4">
+              {getSeriesTests(activeSeries).length > 0 ? (
+                getSeriesTests(activeSeries).map((test: any, tIdx: number) => {
+                  const status = getTestStatus(test);
+                  const badge = getStatusBadge(status);
+                  const canAttempt = enrollmentStatus !== 'expired' && (!Number(activeSeries?.price) || isEnrolled);
+                  return (
+                    <div key={test.id || test._id || tIdx} className="card-premium p-4 animate-fade-in-up" style={{ animationDelay: `${tIdx * 0.05}s` }}>
+                      <div className="flex items-center justify-between mb-2.5">
+                        <div className="flex flex-col gap-1">
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold flex items-center gap-1 w-fit ${badge.bg} ${badge.text}`}>
                             <span className="material-symbols-rounded text-[12px]">{badge.icon}</span>
                             {badge.label}
                           </span>
-                          <span className="text-[10px] text-gray-400 font-bold uppercase">{test.subject || 'Test'}</span>
+                          {status === 'upcoming' && test.openDate && (
+                            <span className="text-[10px] text-indigo-500 font-bold ml-1">
+                              Starts: {new Date(test.openDate).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}, {new Date(test.openDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}
+                            </span>
+                          )}
                         </div>
-                        <h4 className="font-bold text-[15px] text-gray-900 leading-snug">{test.title || test.name}</h4>
-                        <div className="flex items-center gap-4 mt-3 text-[11px] text-gray-400 font-bold uppercase tracking-wider">
-                          <span className="flex items-center gap-1">
-                            <span className="material-symbols-rounded text-base text-gray-300">help</span>
-                            {(Array.isArray(test.questions) ? test.questions.length : (Number(test.questions) || test.totalQuestions || test.numberOfQuestions || test.totalQuestionsCount || 0))} Qs
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <span className="material-symbols-rounded text-base text-gray-300">timer</span>
-                            {test.duration || 0} Min
-                          </span>
-                        </div>
+                        <span className="text-[10px] text-gray-400 font-bold uppercase">{test.subject || 'Test'}</span>
+                      </div>
+                      <h4 className="font-bold text-[15px] text-gray-900 leading-snug">{test.title || test.name}</h4>
+                      <div className="flex items-center gap-4 mt-3 text-[11px] text-gray-400 font-bold uppercase tracking-wider">
+                        <span className="flex items-center gap-1">
+                          <span className="material-symbols-rounded text-base text-gray-300">help</span>
+                          {(Array.isArray(test.questions) ? test.questions.length : (Number(test.questions) || test.totalQuestions || test.numberOfQuestions || test.totalQuestionsCount || 0))} Qs
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <span className="material-symbols-rounded text-base text-gray-300">timer</span>
+                          {test.duration || 0} Min
+                        </span>
+                      </div>
+                      {canAttempt ? (
                         <button
                           onClick={() => {
                             if (status === 'expired') {
@@ -431,26 +528,40 @@ const MockTests: React.FC = () => {
                               return;
                             }
                             if (status !== 'upcoming') {
-                              navigate(`/test/${test.id || test._id}`, { state: { seriesId: activeSeries?.id || activeSeries?._id } });
+                              const sId = activeSeries?.id || activeSeries?._id;
+                              navigate(`/test/${test.id || test._id}`, { 
+                                state: { 
+                                  seriesId: sId,
+                                  from: sId ? `/mock-tests?seriesId=${sId}` : '/mock-tests'
+                                } 
+                              });
                             }
                           }}
                           disabled={status === 'upcoming'}
                           className={`w-full mt-4 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest shadow-lg transition-all active:scale-95 ${status === 'upcoming' || status === 'expired' ? 'bg-gray-100 text-gray-300 shadow-none' : 'bg-primary text-white shadow-primary/20'
                             }`}
                         >
-                          {status === 'expired' ? 'Expired' : status === 'upcoming' ? 'Locked' : 'Start Test'}
+                          {status === 'expired' ? 'Expired' : status === 'upcoming' ? `Starts at ${new Date(test.openDate).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true })}` : 'Start Test'}
                         </button>
-                      </div>
-                    );
-                  })
-                ) : (
-                  <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-200">
-                    <span className="material-symbols-rounded text-5xl text-gray-100 mb-4">folder_open</span>
-                    <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">No tests in this series</p>
-                  </div>
-                )}
-              </div>
-            ) : null}
+                      ) : (
+                        <button
+                          onClick={handleBuyNow}
+                          className="w-full mt-4 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 flex items-center justify-center gap-1.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-100 shadow-sm"
+                        >
+                          <span className="material-symbols-rounded text-sm">lock</span>
+                          Unlock to Attempt
+                        </button>
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-gray-200">
+                  <span className="material-symbols-rounded text-5xl text-gray-100 mb-4">folder_open</span>
+                  <p className="text-sm font-bold text-gray-400 uppercase tracking-widest">No tests in this series</p>
+                </div>
+              )}
+            </div>
           </>
         )}
       </div>

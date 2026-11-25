@@ -107,6 +107,38 @@ export const uploadAPI = {
   },
 
   uploadDocument: async (file: File, options: any = {}) => {
+    try {
+      // Step 1: Attempt to get a Presigned URL for Direct Upload
+      const presignedRes = await axios.get(`${API_BASE_URL}/v2/upload/presigned-url`, {
+        params: { filename: file.name, fileType: file.type },
+        headers: { ...getAdminHeaders() }
+      }).catch(() => null);
+
+      if (presignedRes && presignedRes.data && presignedRes.data.uploadUrl) {
+        // Step 2: Direct Upload to Cloudflare R2
+        const { uploadUrl, publicUrl, key, format, resource_type, storage, provider } = presignedRes.data;
+        
+        await axios.put(uploadUrl, file, {
+          headers: { 'Content-Type': file.type },
+          onUploadProgress: options.onUploadProgress
+        });
+
+        // Step 3: Return the expected format
+        return {
+          success: true,
+          url: publicUrl,
+          public_id: key,
+          bytes: file.size,
+          format,
+          storage,
+          provider
+        };
+      }
+    } catch (directUploadErr) {
+      console.warn('Direct upload failed, falling back to server upload', directUploadErr);
+    }
+
+    // Fallback: Original Server-Side Upload (Double-hop)
     const formData = new FormData();
     formData.append('file', file);
 
@@ -281,8 +313,18 @@ export const liveVideosAPI = {
 
 // PDFs API
 export const pdfsAPI = {
-  getAll: async () => {
-    const response = await fetch(`${API_BASE_URL}/pdfs`);
+  getAll: async (params?: { courseId?: string; isFree?: boolean; categoryId?: string; branch?: string }) => {
+    let url = `${API_BASE_URL}/pdfs`;
+    if (params) {
+      const q = new URLSearchParams();
+      if (params.courseId) q.append('courseId', params.courseId);
+      if (params.isFree !== undefined) q.append('isFree', String(params.isFree));
+      if (params.categoryId) q.append('categoryId', params.categoryId);
+      if (params.branch) q.append('branch', params.branch);
+      const qs = q.toString();
+      if (qs) url += `?${qs}`;
+    }
+    const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to fetch PDFs');
     return response.json();
   },

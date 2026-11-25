@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { RightSideDrawer, DrawerHeader, DrawerBody, DrawerFooter } from '../DrawerSystem';
 import { getAdminHeaders } from '../../../services/apiClient';
+import { API_BASE_URL } from '../../../services/apiClient';
 
 interface UserRecord {
   id: string; // This is the MongoDB _id string from the backend
@@ -81,7 +82,7 @@ const NoPurchaseReport: React.FC<Props> = ({ showToast }) => {
       query.append('page', currentPage.toString());
       query.append('limit', pageSize.toString());
 
-      const res = await fetch(`/api/admin/reports/no-purchase?${query.toString()}`, {
+      const res = await fetch(`${API_BASE_URL}/admin/reports/no-purchase?${query.toString()}`, {
           headers: getAdminHeaders()
       });
       const data = await res.json();
@@ -115,7 +116,7 @@ const NoPurchaseReport: React.FC<Props> = ({ showToast }) => {
       if (debouncedSearch) query.append('search', debouncedSearch);
       query.append('export', 'true');
 
-      const res = await fetch(`/api/admin/reports/no-purchase?${query.toString()}`, {
+      const res = await fetch(`${API_BASE_URL}/admin/reports/no-purchase?${query.toString()}`, {
           headers: getAdminHeaders()
       });
       const data = await res.json();
@@ -213,7 +214,7 @@ const NoPurchaseReport: React.FC<Props> = ({ showToast }) => {
     if (!window.confirm(`Are you sure you want to permanently remove lead "${user.name}"?`)) return;
     
     try {
-        const res = await fetch(`/api/admin/reports/no-purchase/${user.id}`, {
+        const res = await fetch(`${API_BASE_URL}/admin/reports/no-purchase/${user.id}`, {
             method: 'DELETE',
             headers: getAdminHeaders()
         });
@@ -240,7 +241,7 @@ const NoPurchaseReport: React.FC<Props> = ({ showToast }) => {
   const handleUpdate = async () => {
     if (!selectedUser) return;
     try {
-       const res = await fetch(`/api/admin/reports/no-purchase/${selectedUser.id}`, {
+       const res = await fetch(`${API_BASE_URL}/admin/reports/no-purchase/${selectedUser.id}`, {
            method: 'PUT',
            headers: { 
                'Content-Type': 'application/json',

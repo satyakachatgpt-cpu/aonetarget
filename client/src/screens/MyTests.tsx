@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import { useAuthStore } from '../store/authStore';
 import { getAuthHeaders } from '../services/apiClient';
+import { API_BASE_URL } from '../services/apiClient';
 
 const MyTests: React.FC = () => {
   const navigate = useNavigate();
@@ -17,14 +18,14 @@ const MyTests: React.FC = () => {
       return;
     }
     if (student) {
-      fetchTestResults(student.id);
+      fetchTestResults(student.id || student._id);
     }
   }, [isAuthenticated, student, navigate]);
 
   const fetchTestResults = async (studentId: string) => {
     try {
       console.log('Fetching test results for studentId:', studentId);
-      const response = await fetch(`/api/students/${studentId}/test-results`, { headers: getAuthHeaders() });
+      const response = await fetch(`${API_BASE_URL}/students/${studentId}/test-results`, { headers: getAuthHeaders() });
       const data = await response.json();
       console.log('Fetched test results:', data);
       
@@ -51,7 +52,7 @@ const MyTests: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-surface-100 pb-20">
+    <div className="min-h-screen bg-surface-100 pb-20 overflow-x-hidden">
       <StudentSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} student={student} />
 
       <header className="relative bg-gradient-to-br from-primary-800 via-primary-700 to-primary-600 text-white pt-10 pb-10 px-4 overflow-hidden shadow-lg">
@@ -83,9 +84,12 @@ const MyTests: React.FC = () => {
         ) : testResults.length > 0 ? (
           <div className="space-y-3">
             {testResults.map((result, idx) => {
-              const score = Number(result.score) || Number(result.obtainedMarks) || 0;
-              const total = Number(result.totalMarks) || 0;
-              const accuracy = total > 0 ? Math.round((score / total) * 100) : 0;
+              const scoreRaw = Number(result.score) || Number(result.obtainedMarks) || 0;
+              const totalRaw = Number(result.totalMarks) || 0;
+              // Round to avoid floating point display like 1.6499999999
+              const score = Number.isInteger(scoreRaw) ? scoreRaw : Math.round(scoreRaw * 10) / 10;
+              const total = Number.isInteger(totalRaw) ? totalRaw : Math.round(totalRaw * 10) / 10;
+              const accuracy = total > 0 ? Math.round((scoreRaw / totalRaw) * 100) : 0;
               
               const baseName = result.testName && result.testName !== 'Test' && result.testName !== 'Mock Test'
                 ? result.testName 

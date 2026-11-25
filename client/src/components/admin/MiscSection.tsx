@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../../services/apiClient';
 import { 
   coursesAPI, subjectsAPI, topicsAPI, subcoursesAPI, 
   instructionsAPI, newsAPI, notificationsAPI, getAdminHeaders
@@ -51,7 +52,7 @@ const MiscSection: React.FC<Props> = ({ showToast }) => {
   const loadStudentsAndCourses = async () => {
     try {
       const [studentsRes, coursesRes] = await Promise.all([
-        fetch('/api/students', { headers: getAdminHeaders() }).then(r => r.json()),
+        fetch(`${API_BASE_URL}/students`, { headers: getAdminHeaders() }).then(r => r.json()),
         coursesAPI.getAll()
       ]);
       setStudents(Array.isArray(studentsRes) ? studentsRes : []);

@@ -1,5 +1,6 @@
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
+import { API_BASE_URL } from "../services/apiClient";
 import * as pdfjsLib from "pdfjs-dist";
 
 // Configure PDF.js worker
@@ -57,7 +58,7 @@ export async function parseFile(file: File): Promise<{ questions: any[], extract
       const formData = new FormData();
       formData.append('pdf', file);
 
-      const response = await fetch('/api/v2/parse/gemini-pdf', {
+      const response = await fetch(`${API_BASE_URL}/v2/parse/gemini-pdf`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('adminToken')}`,

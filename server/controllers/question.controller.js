@@ -78,17 +78,25 @@ export const updateQuestion = async (req, res) => {
 
     logToFile(`Final query conditions: ${JSON.stringify(orConditions)}`);
 
+    const testId = req.body.testId || req.query.testId;
+    let mainQuery = { $or: orConditions };
+    if (testId) {
+      mainQuery = {
+        $and: [
+          { testId: { $in: [testId, String(testId), Number(testId)] } },
+          { $or: orConditions }
+        ]
+      };
+      logToFile(`Scoping standalone query with testId: ${testId}`);
+    }
+
     // Plan A
     const mainResult = await db.collection('questions').updateOne(
-      { $or: orConditions },
+      mainQuery,
       { $set: { ...updateData, updatedAt: new Date().toISOString() } }
     );
 
     logToFile(`Plan A (Standalone) Matched: ${mainResult.matchedCount}, Modified: ${mainResult.modifiedCount}`);
-
-    if (mainResult.matchedCount > 0) {
-      return res.json({ success: true, message: 'Question updated in global collection' });
-    }
 
     // Plan B
     logToFile(`Searching embedded questions...`);
@@ -96,7 +104,20 @@ export const updateQuestion = async (req, res) => {
     for (const condition of orConditions) {
       const searchKey = Object.keys(condition)[0];
       const searchValue = condition[searchKey];
-      const testQuery = { [`questions.${searchKey}`]: searchValue };
+      
+      let testQuery = { [`questions.${searchKey}`]: searchValue };
+      if (testId) {
+        const testIdMatches = [{ id: testId }, { id: String(testId) }, { id: Number(testId) }, { _id: testId }, { _id: String(testId) }];
+        if (mongoose.Types.ObjectId.isValid(testId)) {
+          testIdMatches.push({ _id: new mongoose.Types.ObjectId(testId) });
+        }
+        testQuery = {
+          $and: [
+            { $or: testIdMatches },
+            { [`questions.${searchKey}`]: searchValue }
+          ]
+        };
+      }
 
       const testUpdate = await db.collection('tests').updateMany(
         testQuery,
@@ -106,12 +127,14 @@ export const updateQuestion = async (req, res) => {
       if (testUpdate.matchedCount > 0) {
         logToFile(`Plan B (Embedded) SUCCESS using ${JSON.stringify(condition)}`);
         embeddedMatch = true;
-        break;
       }
     }
 
-    if (embeddedMatch) {
-      return res.json({ success: true, message: 'Question updated in tests' });
+    if (mainResult.matchedCount > 0 || embeddedMatch) {
+      return res.json({
+        success: true,
+        message: `Question updated. Standalone: ${mainResult.matchedCount > 0}, Embedded: ${embeddedMatch}`
+      });
     }
 
     logToFile(`FAILED: No match found for ${id}`);
@@ -304,7 +327,7 @@ export const bulkExcelUpload = async (req, res) => {
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' });
     const questions = jsonData.map((row, i) => ({
-      id: row.id || `q_${Date.now()}_${i}`,
+      id: row.id ? `${row.id}_${Date.now()}_${i}` : `q_${Date.now()}_${i}`,
       question: row.question || row.Question || '',
       optionA: row.optionA || row['Option A'] || '',
       optionB: row.optionB || row['Option B'] || '',

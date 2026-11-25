@@ -60,13 +60,6 @@ export const validateSubmitPayload = (req, res, next) => {
   }
 
   const keys = Object.keys(answers);
-  if (keys.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: 'Validation failed: answers object is empty. At least one answer (even null) must be provided.'
-    });
-  }
-
   const invalidKey = keys.find(k => !k || typeof k !== 'string' || k.trim() === '');
   if (invalidKey !== undefined) {
     return res.status(400).json({

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { coursesAPI, getAuthHeaders } from '../services/apiClient';
 import { getImageUrl } from '../lib/utils';
+import { API_BASE_URL } from '../services/apiClient';
 
 interface Course {
   _id?: string;
@@ -95,7 +96,7 @@ const SubCategoryDetail: React.FC = () => {
 
       if (studentId) {
         try {
-          const enrolledRes = await fetch(`/api/students/${studentId}/courses`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []);
+          const enrolledRes = await fetch(`${API_BASE_URL}/students/${studentId}/courses`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []);
           const ids = Array.isArray(enrolledRes) ? enrolledRes.map((c: any) => c.id) : [];
           setEnrolledCourseIds(ids);
         } catch { }
@@ -118,8 +119,8 @@ const SubCategoryDetail: React.FC = () => {
         if (!cId) return;
         try {
           const [vRes, tRes] = await Promise.all([
-            fetch(`/api/courses/${cId}/videos`).then(r => r.json()).catch(() => []),
-            fetch(`/api/courses/${cId}/tests`).then(r => r.json()).catch(() => [])
+            fetch(`${API_BASE_URL}/courses/${cId}/videos`).then(r => r.json()).catch(() => []),
+            fetch(`${API_BASE_URL}/courses/${cId}/tests`).then(r => r.json()).catch(() => [])
           ]);
           contentMap[cId] = {
             videos: Array.isArray(vRes) ? vRes : [],
@@ -385,7 +386,7 @@ const SubCategoryDetail: React.FC = () => {
                                     return;
                                   }
                                   if (isFree) {
-                                    fetch(`/api/students/${studentId}/enroll`, {
+                                    fetch(`${API_BASE_URL}/students/${studentId}/enroll`, {
                                       method: 'POST',
                                       headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
                                       body: JSON.stringify({ courseId: cId })

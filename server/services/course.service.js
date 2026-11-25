@@ -117,6 +117,47 @@ export async function getCourseIdVariants(courseId) {
 }
 
 /**
+ * Build a MongoDB query matching purchases for a specific student AND course.
+ */
+export function buildStudentPurchaseQuery(student, courseIdVariants, statuses = ['completed', 'success', 'captured', 'paid']) {
+  if (!student) return { _id: null };
+
+  const studentIdStrings = [...new Set([String(student._id || ''), student.id, student.userId].filter(Boolean).map(String))];
+  const studentObjectIds = student._id ? [student._id] : [];
+  const courseIds = [...new Set((Array.isArray(courseIdVariants) ? courseIdVariants : [courseIdVariants]).filter(Boolean).map(String))];
+  const courseObjectIds = courseIds.filter(id => ObjectId.isValid(id)).map(id => new ObjectId(id));
+
+  if (courseIds.length === 0) return { _id: null };
+
+  const studentOr = [
+    ...(studentIdStrings.length ? [{ studentId: { $in: [...studentIdStrings, ...studentObjectIds] } }] : []),
+    ...(student._id ? [{ studentMongoId: { $in: [String(student._id), student._id] } }] : []),
+    ...(student.phone ? [{ studentPhone: student.phone }, { studentPhone: `+91${student.phone}` }] : [])
+  ];
+
+  if (studentOr.length === 0) return { _id: null };
+
+  const allCourseTargets = [...courseIds, ...courseObjectIds];
+  const query = {
+    $and: [
+      { $or: studentOr },
+      {
+        $or: [
+          { courseId: { $in: allCourseTargets } },
+          { courseMongoId: { $in: allCourseTargets } }
+        ]
+      }
+    ]
+  };
+
+  if (Array.isArray(statuses) && statuses.length > 0) {
+    query.status = { $in: statuses };
+  }
+
+  return query;
+}
+
+/**
  * Helper to sync Demo Video with Free Content
  */
 export async function syncDemoVideoWithFreeContent(record, id) {

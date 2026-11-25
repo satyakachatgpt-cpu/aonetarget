@@ -4,7 +4,8 @@ import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import { useAuthStore } from '../store/authStore';
 import { toast } from 'sonner';
-import { getAuthHeaders } from '../services/apiClient';
+import { getAuthHeaders, API_BASE_URL } from '../services/apiClient';
+import { APP_VERSION_CONFIG } from '../config/appVersion';
 
 interface SettingsProps {
   setAuth?: (auth: boolean) => void;
@@ -83,7 +84,7 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
 
     try {
       setPasswordLoading(true);
-      const response = await fetch('/api/students/change-password', {
+      const response = await fetch(`${API_BASE_URL}/students/change-password`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -142,7 +143,7 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
         { key: 'changePassword', label: 'Change Password', icon: 'lock' },
         { key: 'terms', label: 'Terms of Service', icon: 'description' },
         { key: 'refund', label: 'Refund & Return Policy', icon: 'assignment_return' },
-        { key: 'about', label: 'About App', icon: 'info', value: 'v1.0.0' }
+        { key: 'about', label: 'About App', icon: 'info', value: `v${APP_VERSION_CONFIG.version}` }
       ]
     }
   ];
@@ -220,7 +221,7 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
         </button>
 
         <p className="text-center text-[10px] text-gray-300 mt-4">
-          Aone Target Institute Pvt. Ltd. | Version 1.0.0
+          Aone Target Institute Pvt. Ltd. | Version {APP_VERSION_CONFIG.version}
         </p>
       </div>
 
@@ -325,3 +326,5 @@ const Settings: React.FC<SettingsProps> = ({ setAuth }) => {
 };
 
 export default Settings;
+
+

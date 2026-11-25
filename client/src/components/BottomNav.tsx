@@ -25,14 +25,20 @@ const BottomNav: React.FC<BottomNavProps> = ({ isLoggedIn = false }) => {
 
   return (
     <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50">
-      <div className="glass rounded-t-[20px] shadow-nav border-t border-white/40 overflow-hidden">
+      <div 
+        className="glass rounded-t-[20px] shadow-nav border-t border-white/40 overflow-hidden"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
         <div className="flex justify-around items-center py-1 px-1">
           {tabs.map((tab) => {
             const isActive = currentPath === tab.path;
             return (
               <button
                 key={tab.name}
-                onClick={() => navigate(tab.path)}
+                onClick={() => {
+                  if (isActive) return;
+                  navigate(tab.path);
+                }}
                 className="relative flex flex-col items-center gap-0.5 py-1 px-1 min-w-[64px] transition-all duration-200 group"
               >
                 <div className={`relative p-1.5 rounded-xl transition-all duration-200 ${isActive

@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
 import { testsAPI, notificationsAPI, reportedQuestionsAPI, getAuthHeaders } from '../services/apiClient';
-import { getImageUrl } from '../lib/utils';
+import { getImageUrl, getYouTubeThumbnail, isYouTubeUrl, toYouTubeEmbed } from '../lib/utils';
 import { useAuthStore } from '../store/authStore';
 import { Course, Student, VideoProgress } from '../types';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
+import { API_BASE_URL } from '../services/apiClient';
 
 interface TestResult {
   id: string;
@@ -58,16 +59,15 @@ const StudentDashboard: React.FC = () => {
   const fetchDashboardData = async (studentId: string) => {
     try {
       const [coursesRes, testsData, resultsRes, progressRes] = await Promise.all([
-        fetch(`/api/students/${studentId}/courses`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []),
+        fetch(`${API_BASE_URL}/students/${studentId}/courses`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []),
         testsAPI.getAll().catch(() => []),
-        fetch(`/api/students/${studentId}/test-results`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []),
-        fetch(`/api/progress/${studentId}`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => [])
+        fetch(`${API_BASE_URL}/students/${studentId}/test-results`, { headers: getAuthHeaders() }).then(r => r.json()).catch(() => []),
+        fetch(`${API_BASE_URL}/progress/${studentId}`, { headers: getAuthHeaders() }).then(r => r.ok ? r.json() : null).catch(() => null)
       ]);
 
       // Process Progress (Continue Watching)
-      const backendProgress = Array.isArray(progressRes) ? progressRes : [];
-      if (backendProgress.length > 0) {
-        setContinueWatching(backendProgress as VideoProgress[]);
+      if (progressRes && Array.isArray(progressRes)) {
+        setContinueWatching(progressRes as VideoProgress[]);
       } else {
         // Fallback to localStorage
         try {
@@ -243,17 +243,46 @@ const StudentDashboard: React.FC = () => {
                 <span className="w-1.5 h-1.5 bg-brandBlue rounded-full animate-pulse"></span>
                 Continue Watching
               </h3>
+              <button 
+                onClick={() => navigate('/watch-history')}
+                className="text-[10px] font-bold text-brandBlue uppercase tracking-wider bg-blue-50 px-2 py-1 rounded-lg hover:bg-blue-100 transition-colors"
+              >
+                View All
+              </button>
             </div>
             <div className="flex gap-4 overflow-x-auto hide-scrollbar pb-2 -mx-4 px-4 snap-x">
               {continueWatching.map((v, i) => (
                 <div 
                   key={i} 
                   className="bg-white rounded-2xl p-2 w-[240px] shrink-0 border border-gray-100 shadow-sm snap-start group cursor-pointer active:scale-95 transition-all"
-                  onClick={() => navigate(`/course/${v.courseId}`, { state: { resumeVideoId: v.videoId } })}
+                  onClick={() => {
+                    const videoUrl = (v as any).videoUrl || (v as any).youtubeUrl || '';
+                    const vId = v.videoId || (v as any).id || (v as any)._id;
+                    const videoObj = {
+                      _id: vId,
+                      id: vId,
+                      title: v.title || 'Video',
+                      thumbnail: getImageUrl(v.thumbnail) || '',
+                      thumbnailUrl: getImageUrl(v.thumbnail) || '',
+                      duration: v.duration || '',
+                      youtubeUrl: isYouTubeUrl(videoUrl) ? videoUrl : ((v as any).youtubeUrl || null),
+                      videoUrl: toYouTubeEmbed(videoUrl),
+                      courseId: v.courseId || '',
+                      courseTitle: (v as any).courseTitle || '',
+                    };
+                    navigate(`/watch/${v.courseId || 'history'}/${vId}?returnTo=/student-dashboard`, {
+                      state: {
+                        video: (videoObj.videoUrl || videoObj.youtubeUrl) ? videoObj : null,
+                        courseTitle: (v as any).courseTitle || 'Watch History',
+                        courseId: v.courseId || '',
+                        returnTo: '/student-dashboard'
+                      },
+                    });
+                  }}
                 >
                   <div className="relative aspect-video rounded-xl overflow-hidden bg-gray-100 mb-3">
                     <img 
-                      src={getImageUrl(v.thumbnail)} 
+                      src={(v.thumbnail && v.thumbnail.trim() !== '') ? getImageUrl(v.thumbnail) : getYouTubeThumbnail((v as any).youtubeUrl || (v as any).videoUrl || '') || 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=400'} 
                       alt="" 
                       className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
                       onError={(e) => { e.currentTarget.src = 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=400'; }}

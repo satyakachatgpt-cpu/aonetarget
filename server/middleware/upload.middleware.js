@@ -21,7 +21,7 @@ const tempStorage = multer.diskStorage({
 
 // Read limits from .env
 const IMAGE_LIMIT = (parseInt(process.env.IMAGE_MAX_SIZE_MB) || 5) * 1024 * 1024;
-const PDF_LIMIT   = (parseInt(process.env.PDF_MAX_SIZE_MB)   || 50) * 1024 * 1024;
+const PDF_LIMIT   = (parseInt(process.env.PDF_MAX_SIZE_MB)   || 100) * 1024 * 1024; // Updated default to 100MB for R2
 const VIDEO_LIMIT = (parseInt(process.env.VIDEO_MAX_SIZE_MB) || 95) * 1024 * 1024;
 
 // 1. uploadImage (Keep memory for small images)
@@ -50,12 +50,13 @@ export const uploadPDF = multer({
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'text/csv',
       'application/vnd.ms-powerpoint',
-      'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'text/plain'
     ];
     if (allowed.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(new Error("INVALID_TYPE: Only PDF, Word, Excel, CSV, and PPT allowed"), false);
+      cb(new Error("INVALID_TYPE: Only PDF, Word, Excel, CSV, PPT, and Text files allowed"), false);
     }
   },
   limits: { fileSize: PDF_LIMIT }

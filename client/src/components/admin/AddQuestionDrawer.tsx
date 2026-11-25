@@ -15,6 +15,8 @@ import { uploadAPI } from '../../services/apiClient';
 
 interface QuestionForm {
   id?: string | number;
+  _id?: string;
+  testId?: string;
   questionType: string;
   sectionId: string;
   questionHeading: string;
@@ -337,6 +339,8 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
 
           setForm({
             id: editingQuestion.id || editingQuestion._id,
+            _id: editingQuestion._id,
+            testId: editingQuestion.testId || testId,
             questionType: editingQuestion.questionType || 'Multiple Choice Question',
             sectionId: editingQuestion.sectionId || sections[0]?.id || '',
             questionHeading: editingQuestion.questionHeading || '',
@@ -351,6 +355,7 @@ const AddQuestionDrawer: React.FC<AddQuestionModalProps> = ({
         } else {
           // Reset form for fresh creation
           setForm({
+            testId: testId,
             questionType: 'Multiple Choice Question',
             sectionId: sections[0]?.id || '',
             questionHeading: '',

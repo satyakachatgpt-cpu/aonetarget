@@ -355,12 +355,31 @@ export const deleteCourse = async (req, res) => {
     let filter = { id: id };
     if (ObjectId.isValid(id)) filter = { _id: new ObjectId(id) };
 
-    let result = await db.collection('courses').deleteOne(filter);
-    if (result.deletedCount === 0) {
-      result = await db.collection('packages').deleteOne(filter);
+    let existing = await db.collection('courses').findOne(filter);
+    let collectionName = 'courses';
+    if (!existing) {
+      existing = await db.collection('packages').findOne(filter);
+      collectionName = 'packages';
     }
-    
-    if (result.deletedCount === 0) return res.status(404).json({ error: 'Course not found' });
+
+    if (!existing) return res.status(404).json({ error: 'Course not found' });
+
+    await db.collection(collectionName).deleteOne({ _id: existing._id });
+
+    // Collect all possible ID variants of this course/package
+    const idVariants = [
+      id,
+      String(existing._id),
+      ...(existing.id ? [String(existing.id)] : []),
+      ...(existing.slug ? [String(existing.slug)] : [])
+    ].filter(Boolean);
+
+    // Automatically remove this course from all students' enrolledCourses
+    await db.collection('students').updateMany(
+      { enrolledCourses: { $in: idVariants } },
+      { $pull: { enrolledCourses: { $in: idVariants } } }
+    );
+
     res.json({ success: true, message: 'Course/Package deleted' });
   } catch (error) {
     console.error('[COURSE CONTROLLER] Delete Error:', error);

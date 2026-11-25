@@ -4,6 +4,7 @@ import StudentVideoPlayer from '../components/student/StudentVideoPlayer';
 import Playlist from '../components/Playlist';
 import { getVideoUrl, toYouTubeEmbed, getEmbedUrl, normalizeId } from '../lib/utils';
 import { getAuthHeaders, getAdminHeaders } from '../services/apiClient';
+import { API_BASE_URL } from '../services/apiClient';
 
 function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' {
   const raw = (lc.streamStatus || lc.status || lc.liveStatus || lc.eventStatus || 'upcoming').toLowerCase();
@@ -33,6 +34,18 @@ const WatchPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
+  const [isLandscape, setIsLandscape] = useState(window.innerWidth > window.innerHeight);
+  const [playlist, setPlaylist] = useState<any[]>([]);
+  const [currentVideo, setCurrentVideo] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'lectures' | 'about' | 'notes'>('lectures');
+  const [autoPlayEnabled, setAutoPlayEnabled] = useState(true);
+  const [liveMessages, setLiveMessages] = useState<any[]>([]);
+  const [newLiveMessage, setNewLiveMessage] = useState('');
+  const pollRef = useRef<any>(null);
+  const [student, setStudent] = useState<any>(null);
+  const [isChatVisible, setIsChatVisible] = useState(false);
+
   const searchParams = new URLSearchParams(window.location.hash.split('?')[1] || '');
   const isAdminPreview = searchParams.get('adminPreview') === '1';
   const source = searchParams.get('source');
@@ -54,31 +67,36 @@ const WatchPage: React.FC = () => {
   }
 
   const handleBack = useCallback(() => {
-    if (returnTo) {
-      navigate(returnTo);
-    } else {
-      const state = window.history.state;
-      if (state && state.idx > 0) {
-        navigate(-1);
-      } else if (isAdminPreview) {
-        navigate((source === 'free-content' || source === 'free') ? '/admin/free-content' : '/admin/course-content');
-      } else {
-        navigate('/live-classes', { replace: true });
-      }
+    // 1. If opened within existing browser history, cleanly pop back to previous page
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
     }
-  }, [navigate, returnTo, isAdminPreview, source]);
 
-  const [isLandscape, setIsLandscape] = useState(window.innerWidth > window.innerHeight);
-  const [playlist, setPlaylist] = useState<any[]>([]);
-  const [currentVideo, setCurrentVideo] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'lectures' | 'about' | 'notes'>('lectures');
-  const [autoPlayEnabled, setAutoPlayEnabled] = useState(true);
-  const [liveMessages, setLiveMessages] = useState<any[]>([]);
-  const [newLiveMessage, setNewLiveMessage] = useState('');
-  const pollRef = useRef<any>(null);
-  const [student, setStudent] = useState<any>(null);
-  const [isChatVisible, setIsChatVisible] = useState(false);
+    // 2. Explicit returnTo target takes priority if opened directly
+    if (returnTo) {
+      navigate(returnTo, { replace: true });
+      return;
+    }
+
+    // 3. Admin preview return target
+    if (isAdminPreview) {
+      navigate((source === 'free-content' || source === 'free') ? '/admin/free-content' : '/admin/course-content', { replace: true });
+      return;
+    }
+
+    // 4. Fallback if opened without history
+    const targetBatchId = batchId && batchId !== 'live' && batchId !== 'undefined' && batchId !== 'history' ? batchId : null;
+    const courseId = targetBatchId || (location.state as any)?.courseId || currentVideo?.courseId;
+
+    if (courseId && courseId !== 'live' && courseId !== 'history') {
+      navigate(`/course/${courseId}`, { replace: true });
+    } else if (currentVideo?.isLive || currentVideo?.contentType === 'live_stream' || currentVideo?.type === 'live') {
+      navigate('/live-classes', { replace: true });
+    } else {
+      navigate('/free-content', { replace: true });
+    }
+  }, [navigate, returnTo, isAdminPreview, source, batchId, location.state, currentVideo]);
 
   useEffect(() => {
     const data = localStorage.getItem('studentData');
@@ -87,7 +105,15 @@ const WatchPage: React.FC = () => {
 
   const fetchLiveMessages = async (vId: string) => {
     try {
-      const res = await fetch(`/api/live-chat/${vId}/messages`);
+      const studentToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      const adminToken = localStorage.getItem('adminToken');
+      const authHeader = studentToken ? { 'Authorization': `Bearer ${studentToken}` } : (adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {});
+      const res = await fetch(`${API_BASE_URL}/live-chat/${vId}/messages`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeader
+        }
+      });
       if (res.ok) {
         const data = await res.json();
         const normalized = (data || []).map((msg: any) => ({
@@ -143,7 +169,7 @@ const WatchPage: React.FC = () => {
       const senderId = useAdminRole ? 'admin' : (student?.id || student?._id || 'student');
       const role = useAdminRole ? 'admin' : 'student';
 
-      const res = await fetch(`/api/live-chat/${vid}/messages`, {
+      const res = await fetch(`${API_BASE_URL}/live-chat/${vid}/messages`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -169,48 +195,75 @@ const WatchPage: React.FC = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Load Content
-  useEffect(() => {
-    const loadContent = async () => {
-      // Priority 1: Check if video is passed via state (e.g. from Live Classes)
-      if (location.state?.video && (location.state.video.videoUrl || location.state.video.youtubeUrl || location.state.video.url || location.state.video.recordedLink || location.state.video.link)) {
-        setCurrentVideo(location.state.video);
-        setLoading(false);
-        return;
-      }
+  // Load Content & Auto-Sync
+  const loadContent = useCallback(async (isBackground = false) => {
+    // If video passed via location state, use it as initial view immediately
+    if (location.state?.video && !currentVideo && !isBackground) {
+      setCurrentVideo(location.state.video);
+      setLoading(false);
+    }
 
-      if (!batchId) {
-        setLoading(false);
-        return;
-      }
-      try {
-        setLoading(true);
-        const headers = (isAdminPreview || isUserAdmin) ? { ...getAdminHeaders() } : { ...getAuthHeaders() };
-        const response = await fetch(`/api/courses/${batchId}/videos`, {
-          headers
+    const targetBatchId = batchId && batchId !== 'live' && batchId !== 'undefined' ? batchId : (currentVideo?.courseId || (location.state as any)?.courseId);
+
+    if (!targetBatchId) {
+      if (!isBackground && !currentVideo) setLoading(false);
+      return;
+    }
+
+    try {
+      if (!isBackground && !currentVideo) setLoading(true);
+      const headers = (isAdminPreview || isUserAdmin) ? { ...getAdminHeaders() } : { ...getAuthHeaders() };
+      const response = await fetch(`${API_BASE_URL}/courses/${targetBatchId}/videos`, { headers });
+      const videos = await response.json();
+
+      if (Array.isArray(videos) && videos.length > 0) {
+        setPlaylist(videos);
+        const targetId = normalizeId(videoId || currentVideo?._id || currentVideo?.id);
+
+        let current = videos.find((v: any) => {
+          const ids = [v._id, v.id, v.videoId].filter(Boolean).map(normalizeId);
+          return ids.includes(targetId);
         });
-        const videos = await response.json();
 
-        if (Array.isArray(videos) && videos.length > 0) {
-          setPlaylist(videos);
-          const targetId = normalizeId(videoId);
-
-          let current = videos.find((v: any) => {
-            const ids = [v._id, v.id, v.videoId].filter(Boolean).map(normalizeId);
-            return ids.includes(targetId);
-          });
-
-          if (!current && videos.length > 0) current = videos[0];
-          setCurrentVideo(current || null);
+        if (!current && videos.length > 0 && !videoId) current = videos[0];
+        if (current) {
+          setCurrentVideo(current);
         }
-      } catch (err) {
-        console.error('Failed to load playlist:', err);
-      } finally {
-        setLoading(false);
       }
-    };
-    loadContent();
+    } catch (err) {
+      console.error('Failed to load playlist:', err);
+    } finally {
+      if (!isBackground) setLoading(false);
+    }
+  }, [batchId, videoId, currentVideo, location.state, isAdminPreview, isUserAdmin]);
+
+  useEffect(() => {
+    loadContent(false);
   }, [batchId, videoId]);
+
+  // Real-time listener & 6s live polling so admin actions auto-update without refresh
+  useEffect(() => {
+    const handleSync = () => {
+      loadContent(true);
+    };
+
+    window.addEventListener('app:content-updated', handleSync);
+    window.addEventListener('app:live-status-changed', handleSync);
+
+    let intervalId: any = null;
+    const isLiveTarget = currentVideo?.contentType === 'live_stream' || currentVideo?.type === 'live' || currentVideo?.isLive;
+    if (isLiveTarget) {
+      intervalId = setInterval(() => {
+        loadContent(true);
+      }, 6000);
+    }
+
+    return () => {
+      window.removeEventListener('app:content-updated', handleSync);
+      window.removeEventListener('app:live-status-changed', handleSync);
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [loadContent, currentVideo?.contentType, currentVideo?.type, currentVideo?.isLive]);
 
   const handleVideoSelect = (vId: string) => {
     navigate(`/watch/${batchId}/${vId}`, { replace: true });
@@ -225,7 +278,7 @@ const WatchPage: React.FC = () => {
         console.log(`[WatchPage] Auto-completing video ${vId} for course ${batchId}`);
       }
       
-      await fetch(`/api/students/${sId}/courses/${batchId}/progress`, {
+      await fetch(`${API_BASE_URL}/students/${sId}/courses/${batchId}/progress`, {
         method: 'PUT',
         headers: getAuthHeaders(),
         body: JSON.stringify({ videoId: String(vId), action: 'complete' })
@@ -259,7 +312,7 @@ const WatchPage: React.FC = () => {
   if (!currentVideo) {
     return (
       <div className="h-[100dvh] bg-[#000000] flex flex-col items-center justify-center overflow-hidden font-outfit relative">
-        <div onClick={handleBack} className="fixed top-0 left-0 w-24 h-24 z-[9999999] cursor-pointer group flex items-start justify-start p-6 active:scale-90 transition-all">
+        <div onClick={handleBack} className="fixed top-0 left-0 w-24 h-24 z-[9999999] cursor-pointer group flex items-start justify-start p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] active:scale-90 transition-all">
           <div className="w-10 h-10 bg-white/10 hover:bg-red-600/80 backdrop-blur-3xl border border-white/20 rounded-full text-white flex items-center justify-center shadow-2xl transition-all duration-200">
             <span className="material-symbols-rounded text-2xl font-bold">arrow_back</span>
           </div>
@@ -273,11 +326,9 @@ const WatchPage: React.FC = () => {
     );
   }
 
-  const streamStatus = (currentVideo?.effectiveStatus === 'live' || currentVideo?.streamStatus === 'live' || currentVideo?.status === 'live') 
-    ? 'live' 
-    : computeEffectiveStatus(currentVideo);
-  const isUpcomingStream = currentVideo.contentType === 'live_stream' && streamStatus === 'upcoming';
-  const isEndedStream = currentVideo.contentType === 'live_stream' && streamStatus === 'ended';
+  const streamStatus = computeEffectiveStatus(currentVideo);
+  const isUpcomingStream = (currentVideo.contentType === 'live_stream' || currentVideo.type === 'live') && streamStatus === 'upcoming';
+  const isEndedStream = (currentVideo.contentType === 'live_stream' || currentVideo.type === 'live') && streamStatus === 'ended';
 
   const replaySource = currentVideo.recordedLink || 
                       currentVideo.recordingUrl || 
@@ -337,7 +388,8 @@ const WatchPage: React.FC = () => {
     );
   }
 
-  const isLive = currentVideo.contentType === 'live_stream' && streamStatus === 'live';
+  const isLive = (currentVideo.contentType === 'live_stream' || currentVideo.type === 'live' || currentVideo.platform === 'youtube_live') && 
+                 streamStatus === 'live';
   
   // STABLE VIDEO ID FOR PROGRESS SYNC
   const stableVideoId = String(currentVideo.id || currentVideo._id || currentVideo.sourceVideoId || `v-${currentVideo.title}`);
@@ -347,6 +399,7 @@ const WatchPage: React.FC = () => {
       videoId={stableVideoId}
       src={toYouTubeEmbed(replaySource || '')}
       title={currentVideo.title}
+      duration={currentVideo.duration && currentVideo.duration !== '00:00' ? currentVideo.duration : undefined}
       isLive={isLive}
       chatMessages={liveMessages}
       onSendMessage={handleSendLiveMessage}
@@ -356,6 +409,9 @@ const WatchPage: React.FC = () => {
       courseId={batchId || (location.state as any)?.courseId}
       courseTitle={currentVideo.courseTitle || (location.state as any)?.courseTitle}
       isAdmin={isUserAdmin}
+      provider={currentVideo.provider}
+      streamUrl={currentVideo.streamUrl || (replaySource && replaySource.includes('.m3u8') ? replaySource : undefined)}
+      youtubeUrl={currentVideo.youtubeUrl}
       pdf1={currentVideo.pdf1 || currentVideo.pdf1Url || currentVideo.pdfUrl}
       pdf2={currentVideo.pdf2 || currentVideo.pdf2Url}
       studyMaterial={currentVideo.studyMaterial || currentVideo.studyMaterialUrl || currentVideo.documentUrl || currentVideo.material}
@@ -364,3 +420,5 @@ const WatchPage: React.FC = () => {
 };
 
 export default WatchPage;
+
+

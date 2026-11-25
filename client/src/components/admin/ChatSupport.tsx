@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getAdminHeaders } from '../../services/apiClient';
+import { API_BASE_URL } from '../../services/apiClient';
 
 interface Chat {
   id: string;
@@ -78,7 +79,7 @@ const ChatSupport: React.FC<Props> = ({ showToast }) => {
 
   const fetchChats = async () => {
     try {
-      const r = await fetch('/api/chats', { headers: getAdminHeaders() });
+      const r = await fetch(`${API_BASE_URL}/chats`, { headers: getAdminHeaders() });
       const d = await r.json();
       setChats(Array.isArray(d) ? d : []);
     } catch (e) { console.error(e); } finally { setLoading(false); }
@@ -86,7 +87,7 @@ const ChatSupport: React.FC<Props> = ({ showToast }) => {
 
   const fetchMessages = async (id: string) => {
     try {
-      const r = await fetch(`/api/chats/${id}/messages`, { headers: getAdminHeaders() });
+      const r = await fetch(`${API_BASE_URL}/chats/${id}/messages`, { headers: getAdminHeaders() });
       const d = await r.json();
       const newMessages = Array.isArray(d) ? d : [];
       if (JSON.stringify(newMessages) !== JSON.stringify(messagesRef.current)) {
@@ -98,7 +99,7 @@ const ChatSupport: React.FC<Props> = ({ showToast }) => {
 
   const markRead = async (id: string) => {
     try {
-      await fetch(`/api/chats/${id}/read`, {
+      await fetch(`${API_BASE_URL}/chats/${id}/read`, {
         method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
         body: JSON.stringify({ readerType: 'admin' })
       });
@@ -111,13 +112,13 @@ const ChatSupport: React.FC<Props> = ({ showToast }) => {
     setSending(true);
     try {
       if (editingMsg) {
-        const r = await fetch(`/api/chats/${selectedChat.id}/messages/${editingMsg.id}`, {
+        const r = await fetch(`${API_BASE_URL}/chats/${selectedChat.id}/messages/${editingMsg.id}`, {
           method: 'PUT', headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
           body: JSON.stringify({ message: newMessage.trim() })
         });
         if (r.ok) { setEditingMsg(null); setNewMessage(''); await fetchMessages(selectedChat.id); fetchChats(); }
       } else {
-        const r = await fetch(`/api/chats/${selectedChat.id}/messages`, {
+        const r = await fetch(`${API_BASE_URL}/chats/${selectedChat.id}/messages`, {
           method: 'POST', headers: { 'Content-Type': 'application/json', ...getAdminHeaders() },
           body: JSON.stringify({ senderId: 'admin', senderName: 'Admin', senderType: 'admin', message: newMessage.trim() })
         });

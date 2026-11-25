@@ -7,6 +7,7 @@ import AddTestPDFBulkDrawer from "../AddTestPDFBulkDrawer";
 import AddQuestionDrawer from "../AddQuestionDrawer";
 import BulkEditQuestionsDrawer from "../BulkEditQuestionsDrawer";
 import { testsAPI, questionsAPI, getAdminHeaders } from "../../../services/apiClient";
+import { API_BASE_URL } from '../../../services/apiClient';
 
 interface Props {
   showModal: boolean;
@@ -106,7 +107,7 @@ const TestsDrawers: React.FC<Props> = ({
         }));
 
       if (updates.length > 0) {
-        fetch('/api/questions/update-all', {
+        fetch(`${API_BASE_URL}/questions/update-all`, {
           method: 'PUT',
           headers: {
             ...getAdminHeaders(),
@@ -161,6 +162,11 @@ const TestsDrawers: React.FC<Props> = ({
                 Array.isArray(testData.testSeries) && testData.testSeries.length > 0
                   ? testData.testSeries
                   : [effectiveCourseId],
+              categoryId: testData.categoryId || '',
+              categoryName: testData.categoryName || '',
+              category: testData.categoryName || testData.categoryId || '',
+              branch: testData.branch || '',
+              level1Branch: testData.branch || '',
               isSeries: false,
               status: "active",
               questions: 0,
@@ -192,7 +198,7 @@ const TestsDrawers: React.FC<Props> = ({
             setShowAddSingleTestDrawer(false);
             setEditingTest(null);
 
-            if (routeId) {
+            if (routeId && !viewingTestSeries) {
               navigate("/admin/tests", { replace: true });
             }
           } catch (err: any) {
@@ -405,10 +411,10 @@ const TestsDrawers: React.FC<Props> = ({
           onSave={async (updatedQuestions) => {
             try {
               const individualUpdates = updatedQuestions.map(async (q: any) => {
-                const qId = q.id || q._id;
+                const qId = q._id || q.id;
                 if (qId && typeof qId === "string" && qId.length > 5) {
                   try {
-                    return await fetch(`/api/questions/${qId}`, {
+                    return await fetch(`${API_BASE_URL}/questions/${qId}`, {
                       method: "PUT",
                       headers: {
                         ...getAdminHeaders(),

@@ -326,7 +326,7 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
           <table className="w-full text-left">
             <thead className="bg-[#F8F9FB] border-b border-gray-200">
               <tr>
-                <th className="px-6 py-4 w-12 text-center">
+                <th className="px-3 py-4 w-12 text-center">
                   <input
                     type="checkbox"
                     className="w-4 h-4 rounded border-gray-300 accent-indigo-600 cursor-pointer"
@@ -334,7 +334,7 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
                     checked={filteredResults.length > 0 && selectedResultIds.length === filteredResults.length}
                   />
                 </th>
-                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                <th className="px-3 py-4 text-[11px] font-black text-gray-400 uppercase tracking-wider whitespace-nowrap">
                   <div className="flex items-center gap-1">
                     S. NO.{" "}
                     <span className="material-symbols-outlined text-[14px]">
@@ -342,7 +342,7 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
                     </span>
                   </div>
                 </th>
-                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                <th className="px-3 py-4 text-[11px] font-black text-gray-400 uppercase tracking-wider whitespace-nowrap">
                   <div className="flex items-center gap-1">
                     STUDENT DETAILS{" "}
                     <span className="material-symbols-outlined text-[14px]">
@@ -350,7 +350,7 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
                     </span>
                   </div>
                 </th>
-                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                <th className="px-3 py-4 text-[11px] font-black text-gray-400 uppercase tracking-wider whitespace-nowrap">
                   <div className="flex items-center gap-1">
                     TEST INFO{" "}
                     <span className="material-symbols-outlined text-[14px]">
@@ -358,7 +358,7 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
                     </span>
                   </div>
                 </th>
-                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                <th className="px-3 py-4 text-[11px] font-black text-gray-400 uppercase tracking-wider whitespace-nowrap">
                   <div className="flex items-center gap-1">
                     TIME TAKEN{" "}
                     <span className="material-symbols-outlined text-[14px]">
@@ -366,7 +366,7 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
                     </span>
                   </div>
                 </th>
-                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                <th className="px-3 py-4 text-[11px] font-black text-gray-400 uppercase tracking-wider whitespace-nowrap">
                   <div className="flex items-center gap-1">
                     SCORE / %{" "}
                     <span className="material-symbols-outlined text-[14px]">
@@ -374,7 +374,7 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
                     </span>
                   </div>
                 </th>
-                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                <th className="px-3 py-4 text-[11px] font-black text-gray-400 uppercase tracking-wider whitespace-nowrap">
                   <div className="flex items-center gap-1">
                     STATS (C/W/U){" "}
                     <span className="material-symbols-outlined text-[14px]">
@@ -382,7 +382,7 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
                     </span>
                   </div>
                 </th>
-                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+                <th className="px-3 py-4 text-[11px] font-black text-gray-400 uppercase tracking-wider whitespace-nowrap">
                   <div className="flex items-center gap-1">
                     DATE & TIME{" "}
                     <span className="material-symbols-outlined text-[14px]">
@@ -390,7 +390,7 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
                     </span>
                   </div>
                 </th>
-                <th className="px-6 py-4 text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap text-center">
+                <th className="px-3 py-4 text-[11px] font-black text-gray-400 uppercase tracking-wider whitespace-nowrap text-center">
                   ACTIONS{" "}
                 </th>
               </tr>
@@ -410,7 +410,7 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
                     key={r.id}
                     className="hover:bg-gray-50/50 transition-colors"
                   >
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-3 py-4 text-center">
                       <input
                         type="checkbox"
                         className="w-4 h-4 rounded border-gray-300 accent-indigo-600 cursor-pointer"
@@ -418,10 +418,10 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
                         onChange={() => handleSelectRow(String(r.id || r._id))}
                       />
                     </td>
-                    <td className="px-6 py-4 text-[14px] font-bold text-gray-600">
+                    <td className="px-3 py-4 text-[14px] font-bold text-gray-600">
                       {resultsStartIndex + idx + 1}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-4">
                       <div>
                         <p className="text-[14px] font-bold text-gray-800">
                           {r.studentName || "Student Name"}
@@ -438,7 +438,7 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-4">
                       <div className="max-w-[180px]">
                         <p className="text-[13px] font-bold text-gray-700 truncate" title={r.testName || r.testTitle}>
                           {r.testName || r.testTitle || "Test Title"}
@@ -453,10 +453,10 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
                         )}
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-[13px] font-medium text-gray-600">
+                    <td className="px-3 py-4 text-[13px] font-medium text-gray-600">
                       {formatTime(r.timeTaken)}
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-4">
                       <div className="space-y-1">
                         <span className="px-3 py-1 bg-[#E9F7EF] text-[#155724] rounded-lg text-[12px] font-black border border-[#D4EDDA] shadow-sm flex items-center w-fit gap-1">
                           {r.obtainedMarks || 0} / {r.totalMarks || 0}
@@ -466,7 +466,7 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
                         </p>
                       </div>
                     </td>
-                    <td className="px-6 py-4">
+                    <td className="px-3 py-4">
                       <div className="flex items-center gap-1.5">
                         <div className="flex flex-col items-center">
                           <span className="text-[11px] font-black text-green-600">{r.correctAnswers || 0}</span>
@@ -484,7 +484,7 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-6">
+                    <td className="px-3 py-4">
                       <p className="text-[13px] font-bold text-gray-600">
                         {r.submittedAt
                           ? new Date(r.submittedAt).toLocaleDateString("en-IN", {
@@ -504,7 +504,7 @@ const TestsResultsTab: React.FC<TestsResultsTabProps> = ({
                           : ""}
                       </p>
                     </td>
-                    <td className="px-6 py-6 text-center">
+                    <td className="px-3 py-4 text-center">
                       <button
                         onClick={() => {
                           setViewingStudentAnalysis(r);

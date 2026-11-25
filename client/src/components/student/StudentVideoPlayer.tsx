@@ -2,9 +2,32 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Hls from 'hls.js';
 import { useDispatch } from 'react-redux';
 import { updateProgress, setPlaybackSpeed as setReduxSpeed } from '../../store/slices/playerSlice';
-import { getImageUrl, extractYouTubeId, isYouTubeUrl, toYouTubeEmbed, getPdfUrl } from '../../lib/utils';
+import { getImageUrl, extractYouTubeId, isYouTubeUrl, toYouTubeEmbed, getPdfUrl, parseDurationToSeconds } from '../../lib/utils';
 import { useAuthStore } from '../../store/authStore';
-import { getAuthHeaders } from '../../services/apiClient';
+import { getAuthHeaders, API_BASE_URL } from '../../services/apiClient';
+import { StatusBar } from '@capacitor/status-bar';
+import { Capacitor } from '@capacitor/core';
+
+// Helper to reliably hide/show native status bar on mobile app (Capacitor)
+const hideMobileStatusBar = async () => {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await StatusBar.hide();
+    } catch (e) {
+      console.warn('[Player] StatusBar.hide failed:', e);
+    }
+  }
+};
+
+const showMobileStatusBar = async () => {
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await StatusBar.show();
+    } catch (e) {
+      console.warn('[Player] StatusBar.show failed:', e);
+    }
+  }
+};
 
 declare global {
   interface Window {
@@ -65,7 +88,21 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const initialDurationSecs = typeof propDuration === 'string' ? parseDurationToSeconds(propDuration) : (typeof propDuration === 'number' ? propDuration : 0);
+  const [duration, setDuration] = useState(initialDurationSecs || 0);
+
+  useEffect(() => {
+    if (propDuration) {
+      const parsed = typeof propDuration === 'string' ? parseDurationToSeconds(propDuration) : propDuration;
+      if (parsed > 0) {
+        setDuration(prev => (prev > 0 ? prev : parsed));
+      }
+    }
+  }, [propDuration]);
+
+  const seekGraceUntilRef = useRef<number>(0);
+  const targetSeekTimeRef = useRef<number>(0);
+  const initialLiveSeekDoneRef = useRef(false);
   const [showControls, setShowControls] = useState(true);
   const [isReady, setIsReady] = useState(false);
   const [orientation, setOrientation] = useState<'portrait' | 'landscape'>('portrait');
@@ -78,6 +115,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const [showChat, setShowChat] = useState(false);
   const [autoNextEnabled, setAutoNextEnabled] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
+  const isDraggingRef = useRef(false);
   const [liveChatInput, setLiveChatInput] = useState('');
   const [viewport, setViewport] = useState({ 
     width: typeof window !== 'undefined' ? window.innerWidth : 0, 
@@ -91,6 +129,222 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const controlsTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const completedSentRef = useRef<Record<string, boolean>>({}); // Prevent duplicate calls for same video in same session
 
+  const progressBarRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [dragPercentage, setDragPercentage] = useState<number | null>(null);
+
+  const getEffectiveDuration = useCallback(() => {
+    if (duration > 0) return duration;
+    if (playerRef.current?.getDuration) {
+      const ytDur = playerRef.current.getDuration();
+      if (ytDur > 0) {
+        setDuration(ytDur);
+        return ytDur;
+      }
+    }
+    if (videoRef.current?.duration && videoRef.current.duration > 0) {
+      setDuration(videoRef.current.duration);
+      return videoRef.current.duration;
+    }
+    if (propDuration) {
+      const p = typeof propDuration === 'string' ? parseDurationToSeconds(propDuration) : propDuration;
+      if (p > 0) {
+        setDuration(p);
+        return p;
+      }
+    }
+    if (isLive && currentTime > 0) {
+      return currentTime;
+    }
+    return 0;
+  }, [duration, propDuration, isLive, currentTime]);
+
+  const getLiveWindow = useCallback(() => {
+    const effDuration = getEffectiveDuration();
+    const liveEnd = Math.max(effDuration, currentTime, 1);
+    // YouTube live DVR window is maximum 4 hours (14400s). For shorter streams, window is from 0 to liveEnd.
+    const dvrWindow = Math.min(liveEnd, 14400);
+    const dvrStart = Math.max(0, liveEnd - dvrWindow);
+    return { liveEnd, dvrStart, dvrWindow };
+  }, [getEffectiveDuration, currentTime]);
+
+  const calculateScrubPercentage = (clientX: number, clientY: number): number => {
+    if (!progressBarRef.current) return 0;
+    const rect = progressBarRef.current.getBoundingClientRect();
+    
+    // Check if CSS fallback rotation is currently active
+    const _isPhysicalLandscape = viewport.width > viewport.height;
+    const _isMobile = viewport.width < 1024;
+    const _isLandscape = orientation === 'landscape';
+    const _needsRotation = !isAdmin && _isMobile && _isLandscape && !_isPhysicalLandscape;
+
+    let percentage = 0;
+    if (_needsRotation) {
+      let y = clientY - rect.top;
+      if (y < 0) y = 0;
+      if (y > rect.height) y = rect.height;
+      percentage = rect.height > 0 ? y / rect.height : 0;
+    } else {
+      let x = clientX - rect.left;
+      if (x < 0) x = 0;
+      if (x > rect.width) x = rect.width;
+      percentage = rect.width > 0 ? x / rect.width : 0;
+    }
+    return Math.max(0, Math.min(1, percentage));
+  };
+
+  const isPointerInteractingRef = useRef(false);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const effDuration = getEffectiveDuration();
+    if (!progressBarRef.current || effDuration <= 0) return;
+    isPointerInteractingRef.current = true;
+    setIsDragging(true);
+    isDraggingRef.current = true;
+    
+    if (progressBarRef.current.setPointerCapture) {
+      try { progressBarRef.current.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+    
+    const pct = calculateScrubPercentage(e.clientX, e.clientY);
+    setDragPercentage(pct);
+    if (isLive) {
+      const { liveEnd, dvrStart } = getLiveWindow();
+      setCurrentTime(dvrStart + pct * (liveEnd - dvrStart));
+    } else {
+      setCurrentTime(pct * effDuration);
+    }
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const effDuration = getEffectiveDuration();
+    if (!isDraggingRef.current || effDuration <= 0) return;
+    const pct = calculateScrubPercentage(e.clientX, e.clientY);
+    setDragPercentage(pct);
+    if (isLive) {
+      const { liveEnd, dvrStart } = getLiveWindow();
+      setCurrentTime(dvrStart + pct * (liveEnd - dvrStart));
+    } else {
+      setCurrentTime(pct * effDuration);
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    isPointerInteractingRef.current = false;
+    if (!isDraggingRef.current) return;
+    
+    if (progressBarRef.current?.releasePointerCapture) {
+      try { progressBarRef.current.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
+    
+    setIsDragging(false);
+    isDraggingRef.current = false;
+    
+    const pct = calculateScrubPercentage(e.clientX, e.clientY);
+    setDragPercentage(null);
+    applySeek(pct);
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    isPointerInteractingRef.current = false;
+    if (!isDraggingRef.current) return;
+    if (progressBarRef.current?.releasePointerCapture) {
+      try { progressBarRef.current.releasePointerCapture(e.pointerId); } catch (err) {}
+    }
+    setIsDragging(false);
+    isDraggingRef.current = false;
+    setDragPercentage(null);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (isPointerInteractingRef.current) return;
+    const effDuration = getEffectiveDuration();
+    if (!progressBarRef.current || effDuration <= 0 || e.touches.length === 0) return;
+    setIsDragging(true);
+    isDraggingRef.current = true;
+    const touch = e.touches[0];
+    const pct = calculateScrubPercentage(touch.clientX, touch.clientY);
+    setDragPercentage(pct);
+    if (isLive) {
+      const { liveEnd, dvrStart } = getLiveWindow();
+      setCurrentTime(dvrStart + pct * (liveEnd - dvrStart));
+    } else {
+      setCurrentTime(pct * effDuration);
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (isPointerInteractingRef.current) return;
+    const effDuration = getEffectiveDuration();
+    if (!isDraggingRef.current || effDuration <= 0 || e.touches.length === 0) return;
+    const touch = e.touches[0];
+    const pct = calculateScrubPercentage(touch.clientX, touch.clientY);
+    setDragPercentage(pct);
+    if (isLive) {
+      const { liveEnd, dvrStart } = getLiveWindow();
+      setCurrentTime(dvrStart + pct * (liveEnd - dvrStart));
+    } else {
+      setCurrentTime(pct * effDuration);
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (isPointerInteractingRef.current) return;
+    if (!isDraggingRef.current) return;
+    setIsDragging(false);
+    isDraggingRef.current = false;
+    const touch = e.changedTouches[0];
+    if (touch) {
+      const pct = calculateScrubPercentage(touch.clientX, touch.clientY);
+      setDragPercentage(null);
+      applySeek(pct);
+    } else {
+      setDragPercentage(null);
+    }
+  };
+
+  const applySeek = (percentage: number) => {
+    const effDuration = getEffectiveDuration();
+    if (!effDuration || effDuration <= 0) return;
+
+    if (isLive) {
+      const { liveEnd, dvrStart } = getLiveWindow();
+      const targetTime = dvrStart + percentage * (liveEnd - dvrStart);
+
+      // If user released within 15 seconds of duration or at >= 97% of the bar -> Jump to live head
+      if (percentage >= 0.97 || (liveEnd - targetTime) <= 15) {
+        handleJumpToLive();
+        return;
+      }
+
+      const clampedTime = Math.max(dvrStart, Math.min(liveEnd, targetTime));
+
+      seekGraceUntilRef.current = Date.now() + 4000;
+      targetSeekTimeRef.current = clampedTime;
+      setCurrentTime(clampedTime);
+
+      if (isYoutube && playerRef.current?.seekTo) {
+        playerRef.current.seekTo(clampedTime, true);
+        if (typeof playerRef.current.playVideo === 'function') playerRef.current.playVideo();
+      } else if (videoRef.current) {
+        videoRef.current.currentTime = clampedTime;
+      }
+    } else {
+      const targetTime = percentage * effDuration;
+      // Recorded video seek
+      const clampedTime = Math.max(0, Math.min(effDuration, targetTime));
+      seekGraceUntilRef.current = Date.now() + 4000;
+      targetSeekTimeRef.current = clampedTime;
+      setCurrentTime(clampedTime);
+
+      if (isYoutube && playerRef.current?.seekTo) {
+        playerRef.current.seekTo(clampedTime, true);
+        if (typeof playerRef.current.playVideo === 'function') playerRef.current.playVideo();
+      } else if (videoRef.current) {
+        videoRef.current.currentTime = clampedTime;
+      }
+    }
+  };
   // HANDLE ORIENTATION & VIEWPORT (Debounced for stability)
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout>;
@@ -99,11 +353,36 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
       const w = window.innerWidth;
       const h = window.innerHeight;
       const isLandscapeView = w > h;
+      const isMobileView = w < 1024;
       
       setViewport({ width: w, height: h });
       
       if (!isAdmin) {
         setOrientation(isLandscapeView ? 'landscape' : 'portrait');
+      }
+
+      // Physical landscape on mobile: auto enter fullscreen + lock orientation (immersive mode)
+      if (isMobileView && isLandscapeView && !isAdmin) {
+        hideMobileStatusBar();
+        const el = document.documentElement;
+        if (!document.fullscreenElement && el.requestFullscreen) {
+          el.requestFullscreen().then(() => {
+            if ((screen.orientation as any)?.lock) {
+              (screen.orientation as any).lock('landscape').catch(() => {});
+            }
+            setIsFullscreen(true);
+          }).catch(() => {});
+        }
+      } else if (isMobileView && !isLandscapeView) {
+        // Portrait on mobile: exit fullscreen
+        showMobileStatusBar();
+        if (document.fullscreenElement && document.exitFullscreen) {
+          document.exitFullscreen().catch(() => {});
+        }
+        if ((screen.orientation as any)?.unlock) {
+          (screen.orientation as any).unlock();
+        }
+        setIsFullscreen(false);
       }
     };
 
@@ -112,13 +391,54 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
       timeoutId = setTimeout(updateViewport, 150);
     };
 
+    // Sync fullscreen state with browser fullscreen change (e.g. user presses back)
+    const handleFullscreenChange = () => {
+      const isFs = !!(
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      );
+
+      if (!isFs) {
+        setIsFullscreen(false);
+        showMobileStatusBar();
+        if ((screen.orientation as any)?.unlock) {
+          (screen.orientation as any).unlock();
+        }
+      } else {
+        setIsFullscreen(true);
+        hideMobileStatusBar();
+      }
+    };
+
     // Initial sync
     updateViewport();
     
     window.addEventListener('resize', handleResize);
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
     return () => {
+      showMobileStatusBar();
       window.removeEventListener('resize', handleResize);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
       clearTimeout(timeoutId);
+      const doc: any = document;
+      const isFs = !!(doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement);
+      const exitFs = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
+      if (isFs && exitFs) {
+        try { exitFs.call(doc); } catch (e) {}
+      }
+      if ((screen.orientation as any)?.unlock) {
+        try {
+          (screen.orientation as any).unlock();
+        } catch (e) {}
+      }
     };
   }, [isAdmin]);
 
@@ -158,7 +478,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
       if (!studentId) return;
 
       try {
-        await fetch('/api/progress/save', {
+        await fetch(`${API_BASE_URL}/progress/save`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
           body: JSON.stringify({
@@ -194,7 +514,77 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const isPhysicalLandscape = viewport.width > viewport.height;
   const isMobile = viewport.width < 1024;
   const isLandscape = orientation === 'landscape';
-  const needsRotation = !isAdmin && isLandscape && !isPhysicalLandscape;
+  const needsRotation = !isAdmin && isMobile && isLandscape && !isPhysicalLandscape;
+
+  // Professional fullscreen toggle (like YouTube)
+  const toggleFullscreen = () => {
+    const doc: any = document;
+    const isCurrentlyFullscreen = !!(
+      doc.fullscreenElement ||
+      doc.webkitFullscreenElement ||
+      doc.mozFullScreenElement ||
+      doc.msFullscreenElement ||
+      isFullscreen
+    );
+
+    if (!isCurrentlyFullscreen) {
+      hideMobileStatusBar();
+      // 1. If on iOS and standard video element can enter native fullscreen (hides status bar on iPhone)
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+      if (isIOS && videoRef.current && (videoRef.current as any).webkitEnterFullscreen) {
+        try {
+          (videoRef.current as any).webkitEnterFullscreen();
+          setIsFullscreen(true);
+          return;
+        } catch (e) {
+          console.warn('[Player] iOS webkitEnterFullscreen failed, falling back:', e);
+        }
+      }
+
+      // 2. Enter fullscreen + lock landscape if mobile
+      const el: any = document.documentElement;
+      const requestFs = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
+
+      if (requestFs) {
+        requestFs.call(el).then(() => {
+          if (isMobile && (screen.orientation as any)?.lock) {
+            (screen.orientation as any).lock('landscape').catch(() => {});
+          }
+          setIsFullscreen(true);
+          if (isMobile) setOrientation('landscape');
+        }).catch(() => {
+          setIsFullscreen(true);
+          if (isMobile) setOrientation('landscape');
+        });
+      } else {
+        setIsFullscreen(true);
+        if (isMobile) setOrientation('landscape');
+      }
+    } else {
+      showMobileStatusBar();
+      // Exit fullscreen + unlock orientation
+      const exitFs = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
+
+      if (exitFs && (doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement)) {
+        exitFs.call(doc).then(() => {
+          if (isMobile && (screen.orientation as any)?.unlock) {
+            (screen.orientation as any).unlock();
+          }
+          setIsFullscreen(false);
+          if (isMobile) setOrientation('portrait');
+        }).catch(() => {
+          setIsFullscreen(false);
+          if (isMobile) setOrientation('portrait');
+        });
+      } else {
+        if (isMobile && (screen.orientation as any)?.unlock) {
+          try { (screen.orientation as any).unlock(); } catch (e) {}
+        }
+        setIsFullscreen(false);
+        if (isMobile) setOrientation('portrait');
+      }
+    }
+  };
 
   // BRANCHING LOGIC: Determine engine
   const getYouTubeIdRobust = (url: string): string | null => {
@@ -211,6 +601,10 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   const isHls = activeProvider === 'hls';
   const isDirect = activeProvider === 'direct';
   const [isYoutubeUnplayable, setIsYoutubeUnplayable] = useState(false);
+
+  useEffect(() => {
+    initialLiveSeekDoneRef.current = false;
+  }, [propVideoId, activeSrc, youtubeId]);
 
   // INITIALIZE YT SDK
   useEffect(() => {
@@ -249,10 +643,25 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
               setDuration(total);
               setAvailableQualities(e.target.getAvailableQualityLevels() || []);
               
-              // RESUME PLAYBACK
-              const resumeTime = getSavedProgress();
-              if (resumeTime > 0) {
-                e.target.seekTo(resumeTime, true);
+              // RESUME PLAYBACK (Only for non-live videos)
+              if (!isLive) {
+                const resumeTime = getSavedProgress();
+                if (resumeTime > 0) {
+                  e.target.seekTo(resumeTime, true);
+                }
+              } else {
+                // Ensure live stream starts at the live edge safely
+                try {
+                  const liveDur = e.target.getDuration();
+                  if (liveDur > 0) {
+                    initialLiveSeekDoneRef.current = true;
+                    setDuration(liveDur);
+                    setCurrentTime(liveDur);
+                    seekGraceUntilRef.current = Date.now() + 4000;
+                    targetSeekTimeRef.current = liveDur;
+                    e.target.seekTo(liveDur, true);
+                  }
+                } catch (err) {}
               }
               
               // Apply saved speed
@@ -266,7 +675,19 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
               if (s === 1) { 
                  setIsPlaying(true); 
                  setAvailableQualities(e.target.getAvailableQualityLevels() || []);
-                 setDuration(e.target.getDuration());
+                 const total = e.target.getDuration();
+                 if (total > 0) setDuration(total);
+
+                 // Auto-jump to live edge on initial play of live stream
+                 if (isLive && !initialLiveSeekDoneRef.current && total > 0) {
+                   initialLiveSeekDoneRef.current = true;
+                   seekGraceUntilRef.current = Date.now() + 4000;
+                   targetSeekTimeRef.current = total;
+                   setCurrentTime(total);
+                   if (typeof e.target.seekTo === 'function') {
+                     e.target.seekTo(total, true);
+                   }
+                 }
               }
               else if (s === 2) {
                 setIsPlaying(false);
@@ -384,12 +805,58 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
         if (isYoutube && playerRef.current?.getCurrentTime) {
           time = playerRef.current.getCurrentTime();
           total = playerRef.current.getDuration() || duration;
+          if (total > 0 && Math.abs(total - duration) > 1) {
+            setDuration(total);
+          }
+          if (isLive && !initialLiveSeekDoneRef.current && total > 0) {
+            if (total - time > 10) {
+              initialLiveSeekDoneRef.current = true;
+              seekGraceUntilRef.current = Date.now() + 4000;
+              targetSeekTimeRef.current = total;
+              setCurrentTime(total);
+              if (typeof playerRef.current.seekTo === 'function') {
+                playerRef.current.seekTo(total, true);
+              }
+              time = total;
+            } else {
+              initialLiveSeekDoneRef.current = true;
+            }
+          }
         } else if ((isHls || isDirect) && videoRef.current) {
           time = videoRef.current.currentTime;
           total = videoRef.current.duration || duration;
+          if (total > 0 && Math.abs(total - duration) > 1) {
+            setDuration(total);
+          }
+          if (isLive && !initialLiveSeekDoneRef.current && total > 0) {
+            let targetTime = total;
+            if (hlsRef.current && (hlsRef.current as any).liveSyncPosition) {
+              targetTime = (hlsRef.current as any).liveSyncPosition;
+            } else if (videoRef.current.seekable && videoRef.current.seekable.length > 0) {
+              targetTime = videoRef.current.seekable.end(videoRef.current.seekable.length - 1);
+            }
+            if (targetTime - time > 10) {
+              initialLiveSeekDoneRef.current = true;
+              seekGraceUntilRef.current = Date.now() + 4000;
+              targetSeekTimeRef.current = targetTime;
+              videoRef.current.currentTime = targetTime;
+              setCurrentTime(targetTime);
+              time = targetTime;
+            } else {
+              initialLiveSeekDoneRef.current = true;
+            }
+          }
         }
-        if (!isDragging) {
-          setCurrentTime(time);
+        if (!isDraggingRef.current) {
+          const now = Date.now();
+          if (now < seekGraceUntilRef.current) {
+            if (Math.abs(time - targetSeekTimeRef.current) <= 2) {
+              seekGraceUntilRef.current = 0;
+              setCurrentTime(time);
+            }
+          } else {
+            setCurrentTime(time);
+          }
         }
         
         // Auto-save every 30 seconds (throttled to once per second)
@@ -456,18 +923,72 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
   };
 
   const skip = (s: number) => {
-    if (isYoutube) {
-      if (!playerRef.current) return;
-      const currentTime = playerRef.current.getCurrentTime() || 0;
-      const totalDuration = playerRef.current.getDuration() || duration;
-      const t = Math.max(0, Math.min(totalDuration, currentTime + s));
-      playerRef.current.seekTo(t, true);
-      setCurrentTime(t); // Instant progress bar update
-    } else {
-      if (!videoRef.current) return;
-      const t = Math.max(0, Math.min(duration, videoRef.current.currentTime + s));
-      videoRef.current.currentTime = t;
+    const totalDuration = (isYoutube && playerRef.current?.getDuration ? playerRef.current.getDuration() : 0) || duration;
+    const cur = (isYoutube && playerRef.current?.getCurrentTime ? playerRef.current.getCurrentTime() : 0) || currentTime;
+
+    if (isLive) {
+      const { liveEnd, dvrStart } = getLiveWindow();
+      if (s > 0 && cur + s >= liveEnd - 10) {
+        handleJumpToLive();
+        return;
+      }
+      const t = Math.max(dvrStart, Math.min(liveEnd, cur + s));
+      seekGraceUntilRef.current = Date.now() + 3500;
+      targetSeekTimeRef.current = t;
+      if (isYoutube && playerRef.current?.seekTo) {
+        playerRef.current.seekTo(t, true);
+        if (typeof playerRef.current.playVideo === 'function') playerRef.current.playVideo();
+      } else if (videoRef.current) {
+        videoRef.current.currentTime = t;
+      }
       setCurrentTime(t);
+    } else {
+      const t = Math.max(0, Math.min(totalDuration, cur + s));
+      if (isYoutube && playerRef.current?.seekTo) {
+        playerRef.current.seekTo(t, true);
+      } else if (videoRef.current) {
+        videoRef.current.currentTime = t;
+      }
+      setCurrentTime(t);
+    }
+  };
+
+  const handleJumpToLive = () => {
+    if (isYoutube && playerRef.current) {
+      try {
+        const liveDuration = (typeof playerRef.current.getDuration === 'function' ? playerRef.current.getDuration() : 0) || duration || currentTime || 0;
+        
+        seekGraceUntilRef.current = Date.now() + 4000;
+        targetSeekTimeRef.current = liveDuration;
+
+        if (liveDuration > 0 && typeof playerRef.current.seekTo === 'function') {
+          playerRef.current.seekTo(liveDuration, true);
+        }
+        if (typeof playerRef.current.playVideo === 'function') {
+          playerRef.current.playVideo();
+        }
+        if (liveDuration > 0) {
+          setCurrentTime(liveDuration);
+          setDuration(liveDuration);
+        }
+      } catch (err) {
+        console.warn('Jump to live error:', err);
+      }
+    } else if (videoRef.current) {
+      let targetTime = duration;
+      if (hlsRef.current && (hlsRef.current as any).liveSyncPosition) {
+        targetTime = (hlsRef.current as any).liveSyncPosition;
+      } else if (videoRef.current.seekable && videoRef.current.seekable.length > 0) {
+        targetTime = videoRef.current.seekable.end(videoRef.current.seekable.length - 1);
+      } else if (videoRef.current.duration && isFinite(videoRef.current.duration)) {
+        targetTime = videoRef.current.duration;
+      }
+      if (targetTime > 0) {
+        seekGraceUntilRef.current = Date.now() + 4000;
+        targetSeekTimeRef.current = targetTime;
+        videoRef.current.currentTime = targetTime;
+        setCurrentTime(targetTime);
+      }
     }
   };
 
@@ -549,10 +1070,54 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isPlaying, isMuted, togglePlay]);
 
-  const formatTime = (s: number) => {
-    const min = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
+  // HARDWARE / PHONE BACK BUTTON HANDLER
+  useEffect(() => {
+    const handleVideoBack = (e: Event) => {
+      e.preventDefault();
+
+      // 1. If settings menu open, close it
+      if (showSettingsMenu || showQualityMenu) {
+        setShowSettingsMenu(false);
+        setShowQualityMenu(false);
+        return;
+      }
+
+      // 2. If live chat open, close it
+      if (showChat) {
+        setShowChat(false);
+        if (onChatVisibilityChange) onChatVisibilityChange(false);
+        return;
+      }
+
+      // 3. If fullscreen active, exit fullscreen
+      if (isFullscreen || document.fullscreenElement) {
+        toggleFullscreen();
+        return;
+      }
+
+      // 4. Otherwise, exit video player
+      onClose();
+    };
+
+    window.addEventListener('app:video-back', handleVideoBack);
+    return () => window.removeEventListener('app:video-back', handleVideoBack);
+  }, [showSettingsMenu, showQualityMenu, showChat, isFullscreen, onClose, toggleFullscreen, onChatVisibilityChange]);
+
+  const formatTime = (s: number, forceHours = false) => {
+    if (!s || isNaN(s) || s < 0) return forceHours ? '00:00:00' : '0:00';
+    const totalSecs = Math.floor(s);
+    const hrs = Math.floor(totalSecs / 3600);
+    const min = Math.floor((totalSecs % 3600) / 60);
+    const sec = totalSecs % 60;
+    if (hrs > 0 || forceHours) {
+      return `${hrs.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
+    }
     return `${min}:${sec < 10 ? '0' : ''}${sec}`;
+  };
+
+  const openPdf = (url: string, pdfTitle: string) => {
+    const returnPath = window.location.hash.replace(/^#/, '') || window.location.pathname;
+    window.location.hash = `#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent(pdfTitle)}&returnTo=${encodeURIComponent(returnPath)}`;
   };
 
   const mapQuality = (q: string) => {
@@ -562,31 +1127,24 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
 
   return (
     <div 
+      data-student-video-player="true"
       className="fixed inset-0 z-[1000000] bg-black font-outfit select-none overflow-hidden p-0"
       onMouseMove={handleUserActivity}
       onTouchStart={handleUserActivity}
       onContextMenu={(e) => e.preventDefault()}
     >
       <div 
-        className={`absolute bg-black transition-all duration-700 ease-in-out shadow-2xl ${
-          isAdmin 
-            ? 'inset-0 w-full h-full border-0'
-            : needsRotation 
-              ? 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90 scale-100 z-50' 
-              : `border-0 overflow-hidden ${
-                  isPhysicalLandscape 
-                    ? 'inset-0 w-full h-full rounded-none' 
-                    : isMobile
-                      ? 'inset-0 w-full h-full rounded-none'
-                      : 'top-0 bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[450px] rounded-none sm:rounded-3xl'
-                }`
+        className={`absolute bg-black transition-all duration-500 ease-in-out shadow-2xl ${
+          needsRotation 
+            ? 'top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90 scale-100 z-50' 
+            : 'inset-0 w-full h-full border-0 overflow-hidden'
         }`}
-        style={{
+        style={{ 
           transformOrigin: 'center center',
-          width: isAdmin ? '100%' : (needsRotation ? `${viewport.height}px` : '100%'),
-          height: isAdmin ? '100%' : (needsRotation ? `${viewport.width}px` : '100%'),
-          maxHeight: isAdmin ? '100%' : (needsRotation ? `${viewport.width}px` : '100%'),
-          maxWidth: isAdmin ? '100%' : (needsRotation ? `${viewport.height}px` : (isPhysicalLandscape ? '100%' : (isMobile ? '100%' : (isLandscape ? '100%' : '450px')))),
+          width: needsRotation ? `${viewport.height}px` : '100%',
+          height: needsRotation ? `${viewport.width}px` : '100%',
+          maxWidth: needsRotation ? `${viewport.height}px` : '100%',
+          maxHeight: needsRotation ? `${viewport.width}px` : '100%'
         }}
       >
         <div className="absolute inset-0 z-10 bg-black w-full h-full">
@@ -614,10 +1172,17 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                     </a>
                   </div>
                 ) : (
-                  <div 
-                    id={`student-player-${youtubeId}`} 
-                    className="w-full h-full" 
-                  />
+                  <>
+                    <div 
+                      id={`student-player-${youtubeId}`} 
+                      className="w-full h-full pointer-events-none" 
+                    />
+                    {/* INVISIBLE OVERLAY TO BLOCK YOUTUBE NATIVE UI INTERACTION */}
+                    <div 
+                      className="absolute inset-0 z-[50] cursor-pointer" 
+                      onClick={togglePlay}
+                    />
+                  </>
                 )}
               </div>
             ) : (
@@ -636,7 +1201,12 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
 
         {/* Watermark Overlay - DRM Protection */}
         <div
-          className="absolute bottom-20 right-3 z-30 pointer-events-none select-none"
+          className="absolute right-3 z-30 pointer-events-none select-none"
+          style={{
+            bottom: (isLandscape || isPhysicalLandscape || needsRotation)
+              ? 'max(5rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem))'
+              : 'max(7rem, calc(env(safe-area-inset-bottom, 0px) + 5.5rem))'
+          }}
           aria-hidden="true"
         >
           <span
@@ -649,10 +1219,15 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
           </span>
         </div>
 
-        {/* Top Control Bar - Strengthened Contrast */}
-        <div className={`absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/95 via-black/40 to-transparent z-40 p-6 flex items-start justify-between transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
+        {/* Top Control Bar */}
+        <div className={`absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-black/95 via-black/40 to-transparent z-40 p-6 flex items-start justify-between transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+          style={{ paddingTop: `max(1.5rem, env(safe-area-inset-top))` }}>
             <button 
-              onClick={onClose} 
+              onClick={() => {
+                showMobileStatusBar();
+                onClose();
+              }} 
+              data-video-back-btn="true"
               className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 flex items-center justify-center text-white active:scale-90 transition-all pointer-events-auto shadow-xl"
             >
                <span className="material-symbols-rounded text-2xl">arrow_back</span>
@@ -677,75 +1252,76 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                      <span className="material-symbols-rounded text-sm text-red-500 animate-pulse">visibility</span>
                      <span className="text-[10px] font-black text-white/40 uppercase tracking-[0.2em]">Admin Preview</span>
                   </div>
-                ) : (
-                  <button 
-                    onClick={() => setOrientation(isLandscape ? 'portrait' : 'landscape')}
-                    className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 flex items-center justify-center text-white/60 hover:text-white transition-all pointer-events-auto"
-                  >
-                    <span className="material-symbols-rounded text-xl">{isLandscape ? 'stay_primary_portrait' : 'stay_primary_landscape'}</span>
-                  </button>
-                )}
-                
-                {(pdf1 || pdf2 || studyMaterial) && (
-                  <button 
-                    onClick={() => {
-                      // Toggle a resources view or just show first one
-                      const url = pdf1 || pdf2 || studyMaterial;
-                      if (url) window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent('Lesson Material')}`, '_blank');
-                    }}
-                    className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md border border-white/10 flex items-center justify-center text-white active:scale-90 transition-all pointer-events-auto"
-                    title="View Materials"
-                  >
-                    <span className="material-symbols-rounded text-xl">description</span>
-                  </button>
-                )}
+                ) : null}
+                {/* PDF buttons removed from inside player top bar per user request - available outside on course screen */}
             </div>
         </div>
 
-        {/* Bottom Controls - Increased Contrast and Area */}
-        <div className={`absolute bottom-0 left-0 right-0 p-6 pt-24 pb-8 bg-gradient-to-t from-black/95 via-black/70 to-transparent z-50 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}>
-            {/* Progress Bar */}
-            <div className="relative w-full h-1 bg-white/20 rounded-full mb-6 cursor-pointer group pointer-events-auto">
-               <div className="absolute h-full bg-white transition-all duration-150" style={{ width: `${(currentTime/(duration||1))*100}%` }} />
-               <input 
-                 type="range" min="0" max={duration||0} step="0.5" value={currentTime} 
-                 onMouseDown={() => setIsDragging(true)}
-                 onMouseUp={() => {
-                    setIsDragging(false);
-                    if(isYoutube){ playerRef.current?.seekTo(currentTime, true); } 
-                    else { if(videoRef.current) videoRef.current.currentTime = currentTime; }
-                 }}
-                 onTouchStart={() => setIsDragging(true)}
-                 onTouchEnd={() => {
-                    setIsDragging(false);
-                    if(isYoutube){ playerRef.current?.seekTo(currentTime, true); } 
-                    else { if(videoRef.current) videoRef.current.currentTime = currentTime; }
-                 }}
-                 onChange={(e) => { 
-                   const t = parseFloat(e.target.value); 
-                   setCurrentTime(t); 
-                 }} 
-                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-[60]" 
-               />
+        {/* Bottom Controls - Increased Contrast and Area with Safe Area / Navigation Bar Protection */}
+        <div 
+          className={`absolute bottom-0 left-0 right-0 p-3 sm:p-6 pt-16 sm:pt-24 bg-gradient-to-t from-black/95 via-black/70 to-transparent z-50 transition-opacity duration-300 ${showControls ? 'opacity-100' : 'opacity-0'}`}
+          style={{
+            paddingBottom: (isLandscape || isPhysicalLandscape || needsRotation)
+              ? 'max(1.5rem, calc(env(safe-area-inset-bottom, 0px) + 0.75rem))'
+              : 'max(3.75rem, calc(env(safe-area-inset-bottom, 0px) + 2rem))'
+          }}
+        >
+            {/* Progress Bar (Custom Pointer-based Scrubber) */}
+            <div 
+              ref={progressBarRef}
+              className="relative w-full h-10 sm:h-8 flex items-center mb-4 sm:mb-6 cursor-pointer select-none group pointer-events-auto touch-none py-3"
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerCancel}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onTouchCancel={handleTouchEnd}
+            >
+            {(() => {
+              const { liveEnd, dvrStart } = getLiveWindow();
+              const isAtLiveEdge = isLive && (!duration || (liveEnd - currentTime) <= 10);
+              const liveProgress = isAtLiveEdge ? 100 : (liveEnd > dvrStart ? Math.max(0, Math.min(100, ((currentTime - dvrStart) / (liveEnd - dvrStart)) * 100)) : 100);
+              const currentProgressPercent = isLive ? liveProgress : (duration > 0 ? (currentTime / duration) * 100 : 0);
+              const scrubberPercent = Math.min(100, Math.max(0, dragPercentage !== null ? dragPercentage * 100 : currentProgressPercent));
+
+              return (
+                <>
+                   {/* Background Track */}
+                   <div className="absolute left-0 right-0 h-1 sm:h-1 bg-white/25 rounded-full transition-all group-hover:h-1.5" />
+                   {/* Filled Track */}
+                   <div 
+                     className={`absolute left-0 h-1 sm:h-1 rounded-full ${isDragging ? '' : 'transition-all duration-75'} ${isLive ? 'bg-red-600' : 'bg-white'}`} 
+                     style={{ width: `${scrubberPercent}%` }} 
+                   />
+                   {/* Thumb */}
+                   <div 
+                     className={`absolute h-4.5 w-4.5 sm:h-3.5 sm:w-3.5 rounded-full transform -translate-x-1/2 ${isDragging ? 'scale-125' : 'transition-all duration-75'} ${isLive ? 'bg-red-600 shadow-[0_0_12px_rgba(239,68,68,1)]' : 'bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)]'}`} 
+                     style={{ left: `${scrubberPercent}%` }} 
+                   />
+                </>
+              );
+            })()}
             </div>
 
-            <div className="flex items-center justify-between pointer-events-auto">
+            <div className="flex items-center justify-between pointer-events-auto gap-2">
                {/* Left Controls */}
-               <div className="flex items-center gap-4 sm:gap-6">
-                  <button onClick={togglePlay} className="text-white hover:scale-110 active:scale-90 transition-all flex items-center justify-center">
-                     <span className="material-symbols-rounded text-[32px] fill-current">{isPlaying ? 'pause' : 'play_arrow'}</span>
+               <div className="flex items-center gap-2 sm:gap-6 min-w-0 flex-1 overflow-hidden">
+                  <button onClick={togglePlay} className="text-white hover:scale-110 active:scale-90 transition-all flex items-center justify-center shrink-0">
+                     <span className="material-symbols-rounded text-[28px] sm:text-[32px] fill-current">{isPlaying ? 'pause' : 'play_arrow'}</span>
                   </button>
                   
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
                      <button onClick={() => skip(-10)} className="text-white/70 hover:text-white transition-all active:scale-90 flex items-center">
-                        <span className="material-symbols-rounded text-[26px]">replay_10</span>
+                        <span className="material-symbols-rounded text-[22px] sm:text-[26px]">replay_10</span>
                      </button>
                      <button onClick={() => skip(10)} className="text-white/70 hover:text-white transition-all active:scale-90 flex items-center">
-                        <span className="material-symbols-rounded text-[26px]">forward_10</span>
+                        <span className="material-symbols-rounded text-[22px] sm:text-[26px]">forward_10</span>
                      </button>
                   </div>
 
-                  <div className="flex items-center gap-3 sm:ml-2">
+                  <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                      <button 
                        onClick={() => { 
                          if(isYoutube && playerRef.current){ 
@@ -756,24 +1332,54 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                            setIsMuted(videoRef.current.muted); 
                          } 
                        }} 
-                       className="text-white/70 hover:text-white transition-all"
+                       className="text-white/70 hover:text-white transition-all hidden xs:flex items-center"
                      >
-                        <span className="material-symbols-rounded text-2xl">{isMuted ? 'volume_off' : 'volume_up'}</span>
+                        <span className="material-symbols-rounded text-xl sm:text-2xl">{isMuted ? 'volume_off' : 'volume_up'}</span>
                      </button>
-                     <div className="text-white/90 text-xs font-medium font-mono whitespace-nowrap hidden sm:block opacity-60">
-                        {formatTime(currentTime)} <span className="opacity-40 mx-0.5">/</span> {formatTime(duration)}
-                     </div>
+                     {isLive ? (() => {
+                        const { liveEnd } = getLiveWindow();
+                        const isAtLiveEdge = !duration || (liveEnd - currentTime) <= 10;
+                        const forceHrs = liveEnd >= 3600 || currentTime >= 3600;
+                        return (
+                          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                             <button
+                               onClick={handleJumpToLive}
+                               className={`flex items-center gap-1.5 px-3 py-1 sm:px-2.5 sm:py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all shadow-md cursor-pointer active:scale-95 touch-manipulation ${
+                                 isAtLiveEdge 
+                                   ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-600/30' 
+                                   : 'bg-zinc-800 hover:bg-red-600 text-gray-200 hover:text-white border border-white/20 hover:border-red-500'
+                               }`}
+                               title={isAtLiveEdge ? "Currently watching LIVE" : "Behind live - Click to return to LIVE point"}
+                             >
+                                <span className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full ${isAtLiveEdge ? 'bg-white animate-pulse' : 'bg-gray-400'}`} />
+                                {isAtLiveEdge ? 'LIVE' : 'GO LIVE'}
+                             </button>
+                             <span className="text-white text-[10px] sm:text-xs font-bold font-mono whitespace-nowrap flex items-center gap-1">
+                                <span>{formatTime(currentTime, forceHrs)}</span>
+                                {!isAtLiveEdge && liveEnd > currentTime && (
+                                  <span className="text-red-400 text-[9px] sm:text-[10px] font-medium font-mono">
+                                    (-{formatTime(Math.max(0, liveEnd - currentTime), (liveEnd - currentTime) >= 3600)})
+                                  </span>
+                                )}
+                             </span>
+                          </div>
+                        );
+                     })() : (
+                        <div className="text-white/90 text-[10px] sm:text-xs font-medium font-mono whitespace-nowrap opacity-60">
+                           {formatTime(currentTime, duration >= 3600)} <span className="opacity-40 mx-0.5">/</span> {formatTime(duration, duration >= 3600)}
+                        </div>
+                     )}
                   </div>
                </div>
 
                {/* Right Controls */}
-               <div className="flex items-center gap-4">
+               <div className="flex items-center gap-1.5 sm:gap-4 shrink-0 ml-2">
                   <div className="relative">
                      <button 
                        onClick={() => { setShowSettingsMenu(!showSettingsMenu); setSettingsView('main'); }} 
-                       className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${showSettingsMenu ? 'bg-white text-black' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
+                       className={`w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center transition-all ${showSettingsMenu ? 'bg-white text-black' : 'text-white/70 hover:text-white hover:bg-white/10'}`}
                      >
-                        <span className="material-symbols-rounded text-[22px]">settings</span>
+                        <span className="material-symbols-rounded text-[20px] sm:text-[22px]">settings</span>
                      </button>
                      
                      {showSettingsMenu && (
@@ -853,18 +1459,11 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                   </div>
 
                   <button 
-                    onClick={() => {
-                        const el = document.querySelector('.fixed.inset-0');
-                        if (!document.fullscreenElement) {
-                           el?.requestFullscreen();
-                        } else {
-                           document.exitFullscreen();
-                        }
-                    }}
+                    onClick={toggleFullscreen}
                     title="Toggle Fullscreen"
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all flex"
+                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-white/70 hover:text-white hover:bg-white/10 transition-all shrink-0"
                   >
-                     <span className="material-symbols-rounded text-[24px]">fullscreen</span>
+                     <span className="material-symbols-rounded text-[22px] sm:text-[24px]">{isFullscreen ? 'fullscreen_exit' : 'fullscreen'}</span>
                   </button>
                </div>
             </div>
@@ -873,7 +1472,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
         {/* Live Chat Overlay */}
         {isLive && showChat && (
            <div className={`absolute top-0 bottom-0 right-0 w-full sm:w-[350px] bg-zinc-950/95 backdrop-blur-2xl border-l border-white/10 z-[60] transition-all duration-500 ease-in-out shadow-2xl flex flex-col pointer-events-auto`}>
-              <div className="p-6 border-b border-white/5 flex items-center justify-between">
+              <div className="p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] border-b border-white/5 flex items-center justify-between">
                  <div className="flex items-center gap-3">
                     <div className="w-2 h-2 bg-red-600 rounded-full animate-pulse shadow-[0_0_8px_red]" />
                     <span className="text-xs font-black text-white tracking-[0.2em] uppercase">Live Chat</span>
@@ -903,7 +1502,12 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
                 )}
               </div>
 
-              <div className="p-4 bg-black/40 border-t border-white/10 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+              <div 
+                className="p-4 bg-black/40 border-t border-white/10"
+                style={{
+                  paddingBottom: 'max(2rem, calc(env(safe-area-inset-bottom, 0px) + 1.25rem))'
+                }}
+              >
                   <div className="relative flex items-center">
                     <input
                       type="text"
