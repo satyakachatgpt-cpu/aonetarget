@@ -11,7 +11,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ isLoggedIn = false }) => {
   const currentPath = location.pathname;
   const isGlobalHidden = useUIStore(s => s.isBottomNavHidden);
 
-  const hideOnPaths = ['/news/', '/test/', '/checkout/', '/video-player', '/test-series/', '/live-session/'];
+  const hideOnPaths = ['/course/', '/news/', '/test/', '/checkout/', '/video-player', '/test-series/', '/live-session/'];
   const shouldHide = isGlobalHidden || hideOnPaths.some(path => currentPath.startsWith(path));
 
   if (shouldHide) return null;

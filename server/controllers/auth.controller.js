@@ -415,8 +415,8 @@ export const registerStudent = async (req, res) => {
     const db = getDb();
     const { name, email, phone, username, class: studentClass, target, address, state, district, gender, dob, password, higherEducation } = req.body;
 
-    if (!name || !phone || !email) {
-      return res.status(400).json({ error: 'Name, email, and phone are required' });
+    if (!name || !phone) {
+      return res.status(400).json({ error: 'Name and phone are required' });
     }
 
     const cleanPhone = phone.replace(/\D/g, '');
@@ -426,7 +426,7 @@ export const registerStudent = async (req, res) => {
       return res.status(400).json({ error: 'Please verify your phone number with OTP first' });
     }
 
-    const normalizedEmail = email ? email.toLowerCase().trim() : '';
+    const normalizedEmail = email && typeof email === 'string' && email.trim() ? email.toLowerCase().trim() : undefined;
 
     const existingStudent = await Student.findOne({
       $or: [
@@ -457,11 +457,13 @@ export const registerStudent = async (req, res) => {
       userId: studentId,
       username: username || studentId,
       name,
-      email: normalizedEmail,
+      ...(normalizedEmail ? { email: normalizedEmail } : {}),
       phone: cleanPhone,
       password: hashedPassword,
-      class: studentClass || '11th',
+      class: studentClass || '',
+      target: target || '',
       highQualification: higherEducation || '',
+      higherEducation: higherEducation || '',
       admission: {
         fullAddress: address || '',
         admissionDate: new Date()

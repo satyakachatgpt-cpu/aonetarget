@@ -219,9 +219,9 @@ const CourseDetails: React.FC = () => {
   const setBottomNavHidden = useUIStore(s => s.setBottomNavHidden);
 
   useEffect(() => {
-    setBottomNavHidden(showVideoPlayer);
+    setBottomNavHidden(true);
     return () => setBottomNavHidden(false);
-  }, [showVideoPlayer, setBottomNavHidden]);
+  }, [setBottomNavHidden]);
 
   // Handle mobile web / browser back button when video is open (fallback for non-Capacitor environments)
   useEffect(() => {
@@ -873,7 +873,7 @@ const CourseDetails: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-surface-100 pb-48 sm:pb-52">
+    <div className="min-h-screen bg-surface-100 pb-28 sm:pb-32">
       <CourseHero 
         courseImage={courseImage}
         courseName={course.name || course.title}

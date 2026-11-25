@@ -399,7 +399,8 @@ export const updateStudent = async (req, res) => {
       'name', 'phone', 'email', 'dob', 'city', 'state', 'district', 'gender',
       'whatsAppNumber', 'alternateNumber', 'alternateWhatsAppNumber', 'class', 'target',
       'fatherName', 'motherName', 'fullAddress', 'address', 'password',
-      'previousClass', 'schoolName', 'marksPercentage', 'passingYear', 'profilePhoto'
+      'previousClass', 'schoolName', 'marksPercentage', 'passingYear', 'profilePhoto',
+      'higherEducation', 'highQualification'
     ];
 
     // Block non-admins from updating sensitive fields
@@ -413,10 +414,10 @@ export const updateStudent = async (req, res) => {
 
     const updateData = {};
     const stringFields = [
-      'name', 'phone', 'userId', 'highQualification', 'dob', 'city', 'state', 
+      'name', 'phone', 'userId', 'highQualification', 'higherEducation', 'dob', 'city', 'state', 
       'course', 'status', 'registrationType', 'registrationDate', 'district', 
       'gender', 'whatsAppNumber', 'alternateNumber', 'alternateWhatsAppNumber', 
-      'class', 'notes', 'paymentStatus', 'banReason', 'target', 'tag'
+      'class', 'notes', 'paymentStatus', 'banReason', 'target', 'tag', 'address'
     ];
 
     stringFields.forEach(field => {
@@ -428,6 +429,13 @@ export const updateStudent = async (req, res) => {
         }
       }
     });
+
+    if (body.higherEducation && !body.highQualification) {
+      updateData.highQualification = body.higherEducation.trim();
+    }
+    if (body.highQualification && !body.higherEducation) {
+      updateData.higherEducation = body.highQualification.trim();
+    }
 
     if (body.email !== undefined) {
       updateData.email = (body.email && body.email.trim()) ? body.email.toLowerCase().trim() : null;
