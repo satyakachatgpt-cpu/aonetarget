@@ -38,7 +38,9 @@ export const connectDB = async (isInitialConnect = true) => {
     await mongoose.connect(MONGODB_URI, {
       dbName: 'aonetarget',
       serverSelectionTimeoutMS: 30000, // Allow slow Atlas handshakes
-      family: 4 // Force IPv4 to avoid resolution issues
+      family: 4, // Force IPv4 to avoid resolution issues
+      minPoolSize: 10, // Maintain warm connection pool for instant queries
+      maxPoolSize: 100
     });
 
     _db = mongoose.connection.db;
@@ -92,6 +94,8 @@ export const connectDB = async (isInitialConnect = true) => {
       await _db.collection('categories').createIndex({ isActive: 1 });
       await _db.collection('banners').createIndex({ isActive: 1 });
       await _db.collection('posts').createIndex({ status: 1 });
+      await _db.collection('news').createIndex({ status: 1, createdAt: -1 });
+      await _db.collection('news').createIndex({ id: 1 });
 
       // 🚀 P1: Production Performance Indexes
       // 1. Purchases: Speed up standalone access checks and enrollment verification

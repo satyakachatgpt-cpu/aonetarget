@@ -122,18 +122,33 @@ app.use(express.urlencoded({ limit: '2mb', extended: true }));
 app.use(sanitizeInput);
 app.use(cookieParser());
 
-// --- Static Files ---
-app.use('/attach-assist', express.static(path.join(__dirname, '../client/public/attach-assist')));
+// --- Static Files with Optimized Cache-Control Headers ---
+const staticOptions = {
+  maxAge: '7d',
+  etag: true,
+  lastModified: true
+};
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), staticOptions));
+app.use('/attach-assist', express.static(path.join(__dirname, '../client/public/attach-assist'), staticOptions));
 app.use('/attached_assets', (req, res, next) => {
   const oldPath = path.join(__dirname, '../attached_assets', req.path);
   if (fs.existsSync(oldPath) && !fs.lstatSync(oldPath).isDirectory()) {
-    return express.static(path.join(__dirname, '../attached_assets'))(req, res, next);
+    return express.static(path.join(__dirname, '../attached_assets'), staticOptions)(req, res, next);
   }
   res.redirect(301, `/attach-assist${req.path}`);
 });
 
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, "../client/dist")));
+  app.use(express.static(path.join(__dirname, "../client/dist"), {
+    maxAge: '1d',
+    setHeaders: (res, filePath) => {
+      // Hashed Vite assets in dist/assets get 1-year immutable caching
+      if (filePath.includes(path.join('dist', 'assets')) || filePath.includes('/assets/')) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      }
+    }
+  }));
 }
 
 // --- Multer Configuration ---

@@ -6,6 +6,7 @@ import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } fro
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getCache, setCache, clearCachePattern } from '../utils/memoryCache.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -191,6 +192,9 @@ export const getContentVersion = (req, res) => {
 
 export const getSplashScreen = async (req, res) => {
   try {
+    const cached = getCache('system_splash_screen');
+    if (cached) return res.json(cached);
+
     const splash = await db.collection('settings').findOne({ type: 'splash_screen' });
     const defaultSplash = {
       type: 'splash_screen',
@@ -198,7 +202,9 @@ export const getSplashScreen = async (req, res) => {
       isActive: true,
       duration: 3000
     };
-    res.json(splash || defaultSplash);
+    const result = splash || defaultSplash;
+    setCache('system_splash_screen', result, 120);
+    res.json(result);
   } catch (error) {
     res.json({
       type: 'splash_screen',
@@ -210,6 +216,7 @@ export const getSplashScreen = async (req, res) => {
 };
 export const updateSplashScreen = async (req, res) => {
   try {
+    clearCachePattern('system_splash_screen');
     const { _id, ...updateData } = req.body;
     updateData.type = 'splash_screen';
     await db.collection('settings').updateOne(

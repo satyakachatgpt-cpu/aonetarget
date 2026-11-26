@@ -2,6 +2,7 @@ import { db, getDb } from '../config/db.js';
 import mongoose from 'mongoose';
 import Folder from '../models/Folder.js';
 import { findCourse, getRelatedCourseIds, syncDemoVideoWithFreeContent } from '../services/course.service.js';
+import { getCache, setCache, clearCachePattern } from '../utils/memoryCache.js';
 
 const { ObjectId } = mongoose.Types;
 
@@ -9,7 +10,10 @@ const { ObjectId } = mongoose.Types;
 
 export const getCategories = async (req, res) => {
   try {
+    const cached = getCache('categories:all');
+    if (cached) return res.json(cached);
     const categories = await db.collection('categories').find({}).sort({ order: 1 }).toArray();
+    setCache('categories:all', categories, 60);
     res.json(categories);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch categories' });
@@ -18,6 +22,7 @@ export const getCategories = async (req, res) => {
 
 export const createCategory = async (req, res) => {
   try {
+    clearCachePattern('categories');
     const { _id, ...categoryData } = req.body;
     if (!categoryData.id && categoryData.title) {
       categoryData.id = categoryData.title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `cat_${Date.now()}`;
@@ -32,6 +37,7 @@ export const createCategory = async (req, res) => {
 
 export const updateCategory = async (req, res) => {
   try {
+    clearCachePattern('categories');
     const id = req.params.id;
     const query = {
       $or: [
@@ -59,6 +65,7 @@ export const updateCategory = async (req, res) => {
 
 export const deleteCategory = async (req, res) => {
   try {
+    clearCachePattern('categories');
     let filter;
     try { 
       filter = { _id: new ObjectId(req.params.id) }; 

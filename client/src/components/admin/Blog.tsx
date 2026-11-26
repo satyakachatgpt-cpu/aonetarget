@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { blogAPI, uploadAPI } from '../../services/apiClient';
 import { RightSideDrawer, DrawerHeader, DrawerBody, DrawerFooter } from './DrawerSystem';
 import RichTextEditor from '../shared/RichTextEditor';
@@ -19,6 +19,11 @@ interface BlogPost {
   createdAt: string;
   thumbnail?: string;
   pdfUrl?: string;
+  pdfName?: string;
+  pdfSize?: string;
+  directLink?: string;
+  youtubeUrl?: string;
+  whatsappUrl?: string;
 }
 
 interface Props {
@@ -38,13 +43,17 @@ const Blog: React.FC<Props> = ({ showToast }) => {
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+  const [pdfProgress, setPdfProgress] = useState(0);
+  const uploadSessionRef = useRef(0);
   const [isSaving, setIsSaving] = useState(false);
 
   const [thumbnailFile, setThumbnailFile] = useState<File | null>(null);
   const [formData, setFormData] = useState({
     title: '', content: '', excerpt: '', author: '', category: '', tags: '',
     status: 'draft' as 'draft' | 'published', featured: false,
-    publishDate: new Date().toISOString().split('T')[0], thumbnail: ''
+    publishDate: new Date().toISOString().split('T')[0], thumbnail: '',
+    directLink: '', pdfUrl: '', pdfName: '', pdfSize: '', youtubeUrl: '', whatsappUrl: ''
   });
 
   useEffect(() => { 
@@ -92,6 +101,10 @@ const Blog: React.FC<Props> = ({ showToast }) => {
   const paginatedPosts = filteredPosts.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   const handleSubmit = async () => {
+    if (isUploadingPdf) {
+      showToast('Please wait for the PDF to finish uploading before saving', 'error');
+      return;
+    }
     if (!formData.title?.trim() || !formData.content?.trim()) {
       showToast('Title and content are required', 'error');
       return;
@@ -111,6 +124,12 @@ const Blog: React.FC<Props> = ({ showToast }) => {
         featured: formData.featured,
         publishDate: formData.publishDate,
         thumbnail: formData.thumbnail,
+        directLink: formData.directLink || '',
+        pdfUrl: formData.pdfUrl || '',
+        pdfName: formData.pdfName || '',
+        pdfSize: formData.pdfSize || '',
+        youtubeUrl: formData.youtubeUrl || '',
+        whatsappUrl: formData.whatsappUrl || '',
         createdAt: editingPost?.createdAt || new Date().toISOString()
       };
 
@@ -128,7 +147,8 @@ const Blog: React.FC<Props> = ({ showToast }) => {
       setFormData({
         title: '', content: '', excerpt: '', author: '', category: '', tags: '',
         status: 'draft', featured: false,
-        publishDate: new Date().toISOString().split('T')[0], thumbnail: ''
+        publishDate: new Date().toISOString().split('T')[0], thumbnail: '',
+        directLink: '', pdfUrl: '', pdfName: '', pdfSize: '', youtubeUrl: '', whatsappUrl: ''
       });
       loadPosts();
     } catch (error) {
@@ -170,6 +190,56 @@ const Blog: React.FC<Props> = ({ showToast }) => {
     }
   };
 
+  const handlePdfUpload = async (file: File) => {
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      showToast('Please select a valid PDF file (.pdf)', 'error');
+      return;
+    }
+    if (file.size > 150 * 1024 * 1024) {
+      showToast('File size exceeds the 150MB limit', 'error');
+      return;
+    }
+    setIsUploadingPdf(true);
+    setPdfProgress(0);
+    const currentSessionId = ++uploadSessionRef.current;
+    try {
+      const data = await uploadAPI.uploadNewsPDF(file, {
+        onUploadProgress: (progressEvent: any) => {
+          if (progressEvent.total) {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setPdfProgress(percent);
+          }
+        }
+      });
+      if (uploadSessionRef.current !== currentSessionId) return;
+      if (data && data.url) {
+        setFormData(prev => ({
+          ...prev,
+          pdfUrl: data.url,
+          pdfName: data.fileName || file.name,
+          pdfSize: data.size || `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+        }));
+        showToast('Notification PDF uploaded successfully to server!');
+      }
+    } catch (err: any) {
+      if (uploadSessionRef.current !== currentSessionId) return;
+      console.error('PDF upload failed:', err);
+      showToast(err.message || 'PDF upload failed', 'error');
+    } finally {
+      if (uploadSessionRef.current === currentSessionId) {
+        setIsUploadingPdf(false);
+      }
+    }
+  };
+
+  const handleRemovePdf = () => {
+    setFormData(prev => ({
+      ...prev,
+      pdfUrl: '',
+      pdfName: '',
+      pdfSize: ''
+    }));
+  };
 
   const openEditModal = (post: BlogPost) => {
     setEditingPost(post);
@@ -184,7 +254,13 @@ const Blog: React.FC<Props> = ({ showToast }) => {
       status: post.status,
       featured: post.featured || false,
       publishDate: post.publishDate || new Date().toISOString().split('T')[0],
-      thumbnail: post.thumbnail || ''
+      thumbnail: post.thumbnail || '',
+      directLink: post.directLink || '',
+      pdfUrl: post.pdfUrl || '',
+      pdfName: post.pdfName || '',
+      pdfSize: post.pdfSize || '',
+      youtubeUrl: post.youtubeUrl || '',
+      whatsappUrl: post.whatsappUrl || ''
     });
     setShowModal(true);
   };
@@ -216,7 +292,11 @@ const Blog: React.FC<Props> = ({ showToast }) => {
             onClick={() => {
               setEditingPost(null);
               setThumbnailFile(null);
-              setFormData({ title: '', content: '', excerpt: '', author: '', category: '', tags: '', status: 'draft', featured: false, publishDate: new Date().toISOString().split('T')[0], thumbnail: '' });
+              setFormData({
+                title: '', content: '', excerpt: '', author: '', category: '', tags: '',
+                status: 'draft', featured: false, publishDate: new Date().toISOString().split('T')[0],
+                thumbnail: '', directLink: '', pdfUrl: '', pdfName: '', pdfSize: '', youtubeUrl: '', whatsappUrl: ''
+              });
               setShowModal(true);
             }}
             className="w-9 h-9 bg-[#1a1c1e] text-white rounded-full flex items-center justify-center shadow-lg hover:bg-black transition-all"
@@ -471,10 +551,10 @@ const Blog: React.FC<Props> = ({ showToast }) => {
               />
             </div>
 
-            <div className="space-y-3">
-              <label className="text-[14px] font-bold text-gray-700 ml-1 uppercase tracking-wider">Content <span className="text-red-500">*</span></label>
-              <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm">
+            <div className="space-y-2">
+              <div className="border border-gray-200 rounded-2xl overflow-hidden bg-white shadow-sm p-4">
                 <RichTextEditor
+                  label="Content"
                   content={formData.content}
                   onChange={(html) => setFormData(prev => ({ ...prev, content: html }))}
                   height="450px"
@@ -528,6 +608,127 @@ const Blog: React.FC<Props> = ({ showToast }) => {
                 </div>
               </div>
 
+            </div>
+
+            {/* Direct Website / Vacancy Link */}
+            <div className="space-y-2">
+              <label className="text-[13px] font-bold text-gray-700 ml-1 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[18px] text-blue-600">language</span>
+                Direct / Official Website Link <span className="text-[11px] font-normal text-gray-400">(Job portal, vacancy official site)</span>
+              </label>
+              <input
+                type="url"
+                placeholder="https://example.gov.in/vacancy-portal"
+                value={formData.directLink}
+                onChange={(e) => setFormData(prev => ({ ...prev, directLink: e.target.value }))}
+                className="w-full h-[54px] px-5 border border-gray-200 rounded-2xl text-[14px] font-medium outline-none focus:border-navy transition-all placeholder:text-gray-300 bg-white shadow-sm"
+              />
+            </div>
+
+            {/* Official Notification PDF (Saved to Server Disk) */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-[13px] font-bold text-gray-700 ml-1 flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[18px] text-red-600">picture_as_pdf</span>
+                  Official Notification PDF <span className="text-[11px] font-normal text-gray-400">(Optional)</span>
+                </label>
+                <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-100">Saved to Server Disk • Max 150MB</span>
+              </div>
+
+              {formData.pdfUrl ? (
+                <div className="p-4 bg-emerald-50/60 border border-emerald-200 rounded-2xl flex items-center justify-between gap-3 shadow-sm">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-xl bg-red-500 text-white flex items-center justify-center shrink-0 shadow-sm">
+                      <span className="material-symbols-outlined text-[22px]">picture_as_pdf</span>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-bold text-gray-900 truncate">{formData.pdfName || 'Notification.pdf'}</p>
+                      <p className="text-[11px] font-medium text-emerald-700">{formData.pdfSize || 'Uploaded'} • Ready on Server</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <a
+                      href={formData.pdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1.5 bg-white border border-emerald-300 text-emerald-800 rounded-lg text-xs font-bold hover:bg-emerald-100 transition-all flex items-center gap-1"
+                    >
+                      <span className="material-symbols-outlined text-sm">visibility</span>
+                      View
+                    </a>
+                    <button
+                      type="button"
+                      onClick={handleRemovePdf}
+                      className="px-3 py-1.5 bg-red-50 border border-red-200 text-red-600 rounded-lg text-xs font-bold hover:bg-red-100 transition-all flex items-center gap-1"
+                    >
+                      <span className="material-symbols-outlined text-sm">delete</span>
+                      Remove
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (e.dataTransfer.files[0]) handlePdfUpload(e.dataTransfer.files[0]);
+                  }}
+                  onDragOver={(e) => e.preventDefault()}
+                  className="w-full border border-dashed border-gray-200 rounded-xl p-5 text-center cursor-pointer hover:border-navy hover:bg-gray-50 transition-all bg-white flex flex-col justify-center min-h-[110px] shadow-sm"
+                >
+                  <input
+                    type="file"
+                    accept="application/pdf,.pdf"
+                    onChange={(e) => e.target.files && handlePdfUpload(e.target.files[0])}
+                    className="hidden"
+                    id="pdf-input"
+                  />
+                  <label htmlFor="pdf-input" className="cursor-pointer flex flex-col items-center justify-center w-full h-full">
+                    {isUploadingPdf ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="w-8 h-8 border-4 border-red-600 border-t-transparent rounded-full animate-spin"></div>
+                        <p className="text-[12px] font-bold text-gray-600">Uploading PDF to Server... {pdfProgress}%</p>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-1.5">
+                        <span className="material-symbols-outlined text-red-500 text-3xl font-light">upload_file</span>
+                        <p className="text-[13px] font-bold text-gray-700">Click or Drag & Drop PDF here</p>
+                        <p className="text-[11px] text-gray-400">Supports large documents (50MB - 100MB+, 200-300 pages)</p>
+                      </div>
+                    )}
+                  </label>
+                </div>
+              )}
+            </div>
+
+            {/* Social Media Links */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <label className="text-[13px] font-bold text-gray-700 ml-1 flex items-center gap-1.5">
+                  <span className="w-4 h-4 rounded-full bg-red-600 flex items-center justify-center text-white text-[10px] font-black">▶</span>
+                  YouTube Link <span className="text-[11px] font-normal text-gray-400">(Optional)</span>
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://youtube.com/..."
+                  value={formData.youtubeUrl}
+                  onChange={(e) => setFormData(prev => ({ ...prev, youtubeUrl: e.target.value }))}
+                  className="w-full h-[54px] px-5 border border-gray-200 rounded-2xl text-[14px] font-medium outline-none focus:border-navy transition-all placeholder:text-gray-300 bg-white shadow-sm"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-[13px] font-bold text-gray-700 ml-1 flex items-center gap-1.5">
+                  <span className="w-4 h-4 rounded-full bg-emerald-500 flex items-center justify-center text-white text-[10px] font-black">💬</span>
+                  WhatsApp Link <span className="text-[11px] font-normal text-gray-400">(Optional)</span>
+                </label>
+                <input
+                  type="url"
+                  placeholder="https://whatsapp.com/channel/..."
+                  value={formData.whatsappUrl}
+                  onChange={(e) => setFormData(prev => ({ ...prev, whatsappUrl: e.target.value }))}
+                  className="w-full h-[54px] px-5 border border-gray-200 rounded-2xl text-[14px] font-medium outline-none focus:border-navy transition-all placeholder:text-gray-300 bg-white shadow-sm"
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-6">
@@ -589,18 +790,21 @@ const Blog: React.FC<Props> = ({ showToast }) => {
 
             <div className="flex gap-4 pt-8 mt-10 border-t border-gray-100">
               <button
-                onClick={() => setShowModal(false)}
+                onClick={() => {
+                  uploadSessionRef.current++;
+                  setShowModal(false);
+                }}
                 className="flex-1 bg-white border border-gray-200 text-gray-500 h-[56px] rounded-xl font-black uppercase hover:bg-gray-50 transition-all active:scale-95"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSubmit}
-                disabled={isSaving}
-                className={`flex-1 ${isSaving ? 'bg-gray-400' : 'bg-[#1A237E] hover:bg-[#151b60]'} text-white h-[56px] rounded-xl font-black uppercase transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2`}
+                disabled={isSaving || isUploadingPdf}
+                className={`flex-1 ${isSaving || isUploadingPdf ? 'bg-gray-400 cursor-not-allowed' : 'bg-[#1A237E] hover:bg-[#151b60] active:scale-95'} text-white h-[56px] rounded-xl font-black uppercase transition-all shadow-lg flex items-center justify-center gap-2`}
               >
-                {isSaving && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
-                {isSaving ? 'Saving...' : (editingPost ? 'Update News' : 'Create News')}
+                {(isSaving || isUploadingPdf) && <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>}
+                {isUploadingPdf ? `Uploading PDF (${pdfProgress}%)` : isSaving ? 'Saving...' : (editingPost ? 'Update News' : 'Create News')}
               </button>
             </div>
 

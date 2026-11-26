@@ -1,5 +1,6 @@
 import express from 'express';
-import { uploadImage, uploadPDF, uploadVideo } from '../middleware/upload.middleware.js';
+import path from 'path';
+import { uploadImage, uploadPDF, uploadVideo, uploadNewsPDF } from '../middleware/upload.middleware.js';
 import { authMiddleware } from '../middleware/auth.js';
 import { uploadLimiter, videoUploadLimiter } from '../middleware/security.js';
 import { uploadToCloudinary, deleteFromCloudinary, uploadBase64ToCloudinary } from '../services/cloudinary.service.js';
@@ -33,6 +34,73 @@ router.get('/v2/upload/presigned-url', authMiddleware, async (req, res) => {
   } catch (error) {
     console.error('Failed to generate presigned URL:', error);
     return res.status(500).json({ success: false, error: "Failed to generate presigned URL" });
+  }
+});
+
+// ─────────────────────────────────
+// POST /api/upload (CKEditor 4 Direct Image Upload with Cloudinary & disk fallback)
+// ─────────────────────────────────
+router.post('/upload', (req, res, next) => {
+  uploadImage.any()(req, res, (err) => {
+    if (err) {
+      console.error('CKEditor Multer Error:', err);
+      return res.status(200).json({ uploaded: 0, error: { message: err.message || "Multer error" } });
+    }
+    req.file = (req.files && req.files[0]) || req.file;
+    next();
+  });
+}, async (req, res) => {
+  if (!req.file) {
+    return res.status(200).json({ uploaded: 0, error: { message: "No image file provided" } });
+  }
+
+  try {
+    let imageUrl = '';
+    try {
+      const result = await uploadToCloudinary(req.file.buffer, {
+        folder: 'aot/images',
+        resource_type: 'image'
+      });
+      imageUrl = result.url;
+    } catch (cloudErr) {
+      console.warn('Cloudinary upload fallback to server disk for editor image:', cloudErr.message);
+      // Fallback: save to server/uploads/news_images/
+      const imgDir = path.resolve(__dirname, '../uploads/news_images');
+      if (!fs.existsSync(imgDir)) {
+        fs.mkdirSync(imgDir, { recursive: true });
+      }
+      const ext = path.extname(req.file.originalname) || '.png';
+      const fileName = `editor-${Date.now()}-${Math.round(Math.random() * 1E9)}${ext}`;
+      const filePath = path.join(imgDir, fileName);
+      fs.writeFileSync(filePath, req.file.buffer);
+      imageUrl = `/uploads/news_images/${fileName}`;
+    }
+
+    // Support CKEditor 4 iframe callback
+    if (req.query.CKEditorFuncNum) {
+      return res.send(`
+        <script type="text/javascript">
+          window.parent.CKEDITOR.tools.callFunction(${req.query.CKEditorFuncNum}, "${imageUrl}", "");
+        </script>
+      `);
+    }
+
+    // Support CKEditor 4 JSON response (XHR / Drag-Drop / Paste)
+    return res.status(200).json({
+      uploaded: 1,
+      fileName: req.file.originalname,
+      url: imageUrl
+    });
+  } catch (err) {
+    console.error('CKEditor upload error:', err);
+    if (req.query.CKEditorFuncNum) {
+      return res.send(`
+        <script type="text/javascript">
+          window.parent.CKEDITOR.tools.callFunction(${req.query.CKEditorFuncNum}, "", "${err.message || 'Upload failed'}");
+        </script>
+      `);
+    }
+    return res.status(200).json({ uploaded: 0, error: { message: err.message || "Upload failed" } });
   }
 });
 
@@ -91,6 +159,42 @@ router.post('/v2/upload/image/base64', authMiddleware, uploadLimiter, async (req
     return res.status(500).json({ success: false, error: "Failed to upload base64 image" });
   }
 });
+
+// ─────────────────────────────────
+// POST /api/v2/upload/news-pdf (Direct Server Disk Storage for News / Job Vacancy PDFs)
+// ─────────────────────────────────
+const handleNewsPdfUpload = async (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ success: false, error: "No PDF file provided" });
+  }
+
+  try {
+    // Relative path accessible via static /uploads route
+    const fileName = path.basename(req.file.path);
+    const relativeUrl = `/uploads/news_pdfs/${fileName}`;
+
+    // Format file size nicely
+    const bytes = req.file.size;
+    let formattedSize = `${(bytes / 1024).toFixed(1)} KB`;
+    if (bytes >= 1024 * 1024) {
+      formattedSize = `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    return res.status(200).json({
+      success: true,
+      url: relativeUrl,
+      fileName: req.file.originalname,
+      size: formattedSize,
+      bytes: bytes
+    });
+  } catch (error) {
+    console.error('News PDF upload failed:', error);
+    return res.status(500).json({ success: false, error: "Failed to upload news PDF to server" });
+  }
+};
+
+router.post('/v2/upload/news-pdf', authMiddleware, uploadNewsPDF.single('file'), handleNewsPdfUpload);
+router.post('/upload/news-pdf', authMiddleware, uploadNewsPDF.single('file'), handleNewsPdfUpload);
 
 // POST /api/v2/upload/pdf (Handles all documents: PDF, Word, Excel, etc.)
 router.post('/v2/upload/pdf', authMiddleware, uploadLimiter, uploadPDF.single('file'), async (req, res) => {

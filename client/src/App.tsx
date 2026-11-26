@@ -11,43 +11,64 @@ import FreeContent from './screens/FreeContent';
 import FreeVideosList from './screens/FreeVideosList';
 import StudyDashboard from './screens/StudyDashboard';
 
-const Home = lazy(() => import('./screens/Home'));
-const CourseDetails = lazy(() => import('./screens/CourseDetails'));
-const Checkout = lazy(() => import('./screens/Checkout'));
-const Success = lazy(() => import('./screens/Success'));
-const VideoPlayer = lazy(() => import('./screens/VideoPlayer'));
-const AdminDashboard = lazy(() => import('./screens/AdminDashboard'));
-const AdminLogin = lazy(() => import('./screens/AdminLogin'));
-const StudentLogin = lazy(() => import('./screens/StudentLogin'));
-const StudentProfile = lazy(() => import('./screens/StudentProfile'));
-const StudentDashboard = lazy(() => import('./screens/StudentDashboard'));
-const CoursesScreen = lazy(() => import('./screens/CoursesScreen'));
-const ExploreCourses = lazy(() => import('./screens/ExploreCourses'));
-const CategoryPage = lazy(() => import('./screens/CategoryPage'));
-const SubCategoryDetail = lazy(() => import('./screens/SubCategoryDetail'));
-const ChatsScreen = lazy(() => import('./screens/ChatsScreen'));
-const MyCourses = lazy(() => import('./screens/MyCourses'));
-const LiveClasses = lazy(() => import('./screens/LiveClasses'));
-const MockTests = lazy(() => import('./screens/MockTests'));
-const TestTaking = lazy(() => import('./screens/TestTaking'));
-const EbookNotes = lazy(() => import('./screens/EbookNotes'));
+// Resilient Lazy Loader: Automatically retries on dynamic import failures (e.g. after Vite restarts/HMR invalidations)
+const lazyRetry = (importFn: () => Promise<any>) =>
+  lazy(async () => {
+    try {
+      return await importFn();
+    } catch (error) {
+      console.warn('[Vite] Dynamic import failed, attempting recovery...', error);
+      try {
+        return await importFn();
+      } catch (retryError) {
+        const reloadKey = 'vite_chunk_reload_lock';
+        const lastReload = Number(sessionStorage.getItem(reloadKey) || 0);
+        if (Date.now() - lastReload > 8000) {
+          sessionStorage.setItem(reloadKey, String(Date.now()));
+          window.location.reload();
+        }
+        throw retryError;
+      }
+    }
+  });
 
-const Notifications = lazy(() => import('./screens/Notifications'));
-const WatchHistory = lazy(() => import('./screens/WatchHistory'));
-const HelpSupport = lazy(() => import('./screens/HelpSupport'));
-const Settings = lazy(() => import('./screens/Settings'));
-const ReferEarn = lazy(() => import('./screens/ReferEarn'));
-const PurchaseSuccess = lazy(() => import('./screens/PurchaseSuccess'));
-const ContentTypeDetail = lazy(() => import('./screens/ContentTypeDetail'));
-const NewsArticle = lazy(() => import('./screens/NewsArticle'));
-const AllNews = lazy(() => import('./screens/AllNews'));
-const Batches = lazy(() => import('./screens/Batches'));
-const TermsOfService = lazy(() => import('./screens/TermsOfService'));
-const PrivacyPolicy = lazy(() => import('./screens/PrivacyPolicy'));
-const RefundPolicy = lazy(() => import('./screens/RefundPolicy'));
-const PDFViewerScreen = lazy(() => import('./screens/PDFViewerScreen'));
-const WatchPage = lazy(() => import('./screens/WatchPage'));
-const MyTests = lazy(() => import('./screens/MyTests'));
+const Home = lazyRetry(() => import('./screens/Home'));
+const CourseDetails = lazyRetry(() => import('./screens/CourseDetails'));
+const Checkout = lazyRetry(() => import('./screens/Checkout'));
+const Success = lazyRetry(() => import('./screens/Success'));
+const VideoPlayer = lazyRetry(() => import('./screens/VideoPlayer'));
+const AdminDashboard = lazyRetry(() => import('./screens/AdminDashboard'));
+const AdminLogin = lazyRetry(() => import('./screens/AdminLogin'));
+const StudentLogin = lazyRetry(() => import('./screens/StudentLogin'));
+const StudentProfile = lazyRetry(() => import('./screens/StudentProfile'));
+const StudentDashboard = lazyRetry(() => import('./screens/StudentDashboard'));
+const CoursesScreen = lazyRetry(() => import('./screens/CoursesScreen'));
+const ExploreCourses = lazyRetry(() => import('./screens/ExploreCourses'));
+const CategoryPage = lazyRetry(() => import('./screens/CategoryPage'));
+const SubCategoryDetail = lazyRetry(() => import('./screens/SubCategoryDetail'));
+const ChatsScreen = lazyRetry(() => import('./screens/ChatsScreen'));
+const MyCourses = lazyRetry(() => import('./screens/MyCourses'));
+const LiveClasses = lazyRetry(() => import('./screens/LiveClasses'));
+const MockTests = lazyRetry(() => import('./screens/MockTests'));
+const TestTaking = lazyRetry(() => import('./screens/TestTaking'));
+const EbookNotes = lazyRetry(() => import('./screens/EbookNotes'));
+
+const Notifications = lazyRetry(() => import('./screens/Notifications'));
+const WatchHistory = lazyRetry(() => import('./screens/WatchHistory'));
+const HelpSupport = lazyRetry(() => import('./screens/HelpSupport'));
+const Settings = lazyRetry(() => import('./screens/Settings'));
+const ReferEarn = lazyRetry(() => import('./screens/ReferEarn'));
+const PurchaseSuccess = lazyRetry(() => import('./screens/PurchaseSuccess'));
+const ContentTypeDetail = lazyRetry(() => import('./screens/ContentTypeDetail'));
+const NewsArticle = lazyRetry(() => import('./screens/NewsArticle'));
+const AllNews = lazyRetry(() => import('./screens/AllNews'));
+const Batches = lazyRetry(() => import('./screens/Batches'));
+const TermsOfService = lazyRetry(() => import('./screens/TermsOfService'));
+const PrivacyPolicy = lazyRetry(() => import('./screens/PrivacyPolicy'));
+const RefundPolicy = lazyRetry(() => import('./screens/RefundPolicy'));
+const PDFViewerScreen = lazyRetry(() => import('./screens/PDFViewerScreen'));
+const WatchPage = lazyRetry(() => import('./screens/WatchPage'));
+const MyTests = lazyRetry(() => import('./screens/MyTests'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-[100dvh] w-full bg-[#283593] animate-in fade-in duration-300 overflow-hidden">
@@ -71,7 +92,7 @@ const MainLayout: React.FC<{ isLoggedIn: boolean; children: React.ReactNode }> =
   const location = useLocation();
   const scrollRef = React.useRef<HTMLDivElement>(null);
   const currentPath = location.pathname;
-  const hideOnPaths = ['/news/', '/test/', '/checkout/', '/video-player', '/test-series/', '/live-session/'];
+  const hideOnPaths = ['/course/', '/news/', '/test/', '/checkout/', '/video-player', '/test-series/', '/live-session/'];
   const shouldHide = hideOnPaths.some(path => currentPath.startsWith(path));
 
   useEffect(() => {
@@ -109,7 +130,7 @@ const ProtectedRedirect = () => {
 declare const __APP_VERSION__: string;
 const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : 'dev-version';
 
-export const isAdminRoute = () => {
+const isAdminRoute = () => {
   if (typeof window === 'undefined') return false;
   const hash = window.location.hash || '';
   const pathname = window.location.pathname || '';
@@ -244,6 +265,13 @@ const App: React.FC = () => {
     if (!isAdminRoute()) {
       checkAuth();
     }
+    // Safety Watchdog: Never let loading screen freeze more than 3.5s
+    const safetyTimer = setTimeout(() => {
+      if (useAuthStore.getState().isLoading) {
+        useAuthStore.setState({ isLoading: false });
+      }
+    }, 3500);
+    return () => clearTimeout(safetyTimer);
   }, [checkAuth]);
 
   const [showSplash, setShowSplash] = useState(() => {
@@ -253,6 +281,10 @@ const App: React.FC = () => {
     }
     // Do not show splash screen on desktop/laptop
     if (window.innerWidth >= 768) {
+      return false;
+    }
+    // Only show splash once per session so navigating or reloading is instantaneous
+    if (sessionStorage.getItem('splash_shown') === 'true') {
       return false;
     }
     return true;
@@ -365,6 +397,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleSplashComplete = useCallback(() => {
+    try { sessionStorage.setItem('splash_shown', 'true'); } catch {}
     setShowSplash(false);
   }, []);
 

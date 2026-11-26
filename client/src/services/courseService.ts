@@ -159,6 +159,28 @@ export const uploadAPI = {
   // Alias for backward compatibility
   uploadPDF: async (file: File, options: any = {}) => {
     return uploadAPI.uploadDocument(file, options);
+  },
+
+  // Dedicated server-disk storage for News / Job Vacancy PDFs
+  uploadNewsPDF: async (file: File, options: any = {}) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const config = {
+      headers: { ...getAdminHeaders() },
+      onUploadProgress: options.onUploadProgress
+    };
+
+    try {
+      const res = await axios.post(`${API_BASE_URL}/v2/upload/news-pdf`, formData, config);
+      return res.data;
+    } catch (err: any) {
+      if (err.response) {
+        await handleUnauthorized(err.response, `${API_BASE_URL}/v2/upload/news-pdf`);
+      }
+      const errMsg = err.response?.data?.error || err.message || 'News PDF upload failed';
+      throw new Error(errMsg);
+    }
   }
 };
 

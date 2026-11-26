@@ -10,9 +10,12 @@ const BottomNav: React.FC<BottomNavProps> = ({ isLoggedIn = false }) => {
   const navigate = useNavigate();
   const currentPath = location.pathname;
   const isGlobalHidden = useUIStore(s => s.isBottomNavHidden);
+  const showBottomNavOnCourse = useUIStore(s => s.showBottomNavOnCourse);
 
-  const hideOnPaths = ['/course/', '/news/', '/test/', '/checkout/', '/video-player', '/test-series/', '/live-session/'];
-  const shouldHide = isGlobalHidden || hideOnPaths.some(path => currentPath.startsWith(path));
+  const hideOnPaths = ['/news/', '/test/', '/checkout/', '/video-player', '/test-series/', '/live-session/'];
+  const shouldHide = isGlobalHidden || 
+    hideOnPaths.some(path => currentPath.startsWith(path)) || 
+    (currentPath.startsWith('/course/') && !showBottomNavOnCourse);
 
   if (shouldHide) return null;
 

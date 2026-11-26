@@ -11,7 +11,7 @@ interface AuthState {
     deviceId: string | null;
     setAuth: (student: any, accessToken?: string, deviceId?: string, refreshToken?: string) => void;
     clearAuth: () => void;
-    checkAuth: () => Promise<void>;
+    checkAuth: (isRetry?: boolean) => Promise<void>;
     setUnreadCount: (count: number) => void;
     refreshToken: () => Promise<boolean>;
     startHeartbeat: () => void;
@@ -98,13 +98,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ student: null, isAuthenticated: false, accessToken: null, deviceId: null });
     },
 
-    checkAuth: async () => {
+    checkAuth: async (isRetry = false) => {
         try {
             const token = localStorage.getItem('accessToken');
             const headers: Record<string, string> = {};
             if (token) headers['Authorization'] = `Bearer ${token}`;
 
-            const response = await fetch(`${API_BASE_URL}/me`, { headers });
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s max timeout for auth check
+
+            const response = await fetch(`${API_BASE_URL}/me`, { headers, signal: controller.signal });
+            clearTimeout(timeoutId);
 
             if (response.ok) {
                 const data = await response.json();
@@ -117,10 +121,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 get().startHeartbeat();
             } else if (response.status === 401 || response.status === 403) {
                 const data = await response.json().catch(() => ({}));
-                if (data.code === 'TOKEN_EXPIRED') {
+                if (data.code === 'TOKEN_EXPIRED' && !isRetry) {
                     const refreshed = await get().refreshToken();
                     if (refreshed) {
-                        return get().checkAuth();
+                        return get().checkAuth(true); // retry only ONCE
                     }
                 }
                 clearStudentSession();

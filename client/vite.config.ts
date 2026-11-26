@@ -17,7 +17,8 @@ export default defineConfig(({ mode }) => {
         registerType: 'autoUpdate',
         injectRegister: 'script',
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,ttf,otf}'],
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,webp}'],
+          globIgnores: ['**/KaTeX_*', '**/AdminDashboard*', '**/Tests-*', '**/PDFViewerScreen*', '**/StudentVideoPlayer*'],
           navigateFallback: '/index.html',
           navigateFallbackDenylist: [/^\/api\//],
           navigateFallbackAllowlist: [/^\//],
@@ -43,7 +44,7 @@ export default defineConfig(({ mode }) => {
               handler: 'NetworkFirst',
               options: {
                 cacheName: 'api-cache',
-                networkTimeoutSeconds: 10
+                networkTimeoutSeconds: 3
               }
             }
           ]
@@ -83,7 +84,7 @@ export default defineConfig(({ mode }) => {
             }
           ]
         },
-        devOptions: { enabled: true }
+        devOptions: { enabled: false }
       })
     ],
 

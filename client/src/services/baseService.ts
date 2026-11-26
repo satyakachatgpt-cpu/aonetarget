@@ -10,7 +10,7 @@ console.log('[API_BASE_URL]', API_BASE_URL, window.location.href);
 
 export const apiCache: Record<string, { data: any; timestamp: number }> = {};
 export const pendingRequests: Record<string, Promise<any>> = {};
-export const CACHE_TTL = 5000; // 5 seconds - ensures fresh data when switching tabs
+export const CACHE_TTL = 60000; // 60 seconds - fast instant tab switching without flooding backend
 
 // Global Fetch Interceptor for automatic 401 & 403 handling (DEVICE_UNLINKED / USER_BLOCKED)
 if (typeof window !== 'undefined' && !(window as any).__fetch_intercepted__) {
@@ -116,7 +116,8 @@ export const clearStudentSession = () => {
   }
 };
 
-export const handleUnauthorized = async (response: Response | { status: number; data?: any }, url: string) => {
+export const handleUnauthorized = async (response?: Response | { status: number; data?: any } | null, url: string = '') => {
+  if (!response) return;
   const status = 'status' in response ? response.status : (response as any).response?.status;
   
   if (status === 401 || status === 403) {
@@ -210,7 +211,11 @@ export async function cachedFetch(url: string, ttl = CACHE_TTL): Promise<any> {
   }
 
   const headers = { ...getAuthHeaders(), ...getAdminHeaders() };
-  const promise = fetch(url, { headers }).then(async (response) => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s maximum timeout
+
+  const promise = fetch(url, { headers, signal: controller.signal }).then(async (response) => {
+    clearTimeout(timeoutId);
     await handleUnauthorized(response, url);
 
     if (response.status === 429) {
@@ -230,7 +235,12 @@ export async function cachedFetch(url: string, ttl = CACHE_TTL): Promise<any> {
     delete pendingRequests[url];
     return data;
   }).catch((err) => {
+    clearTimeout(timeoutId);
     delete pendingRequests[url];
+    // Return stale cache if available instead of crashing UI
+    if (cached && cached.data) {
+      return cached.data;
+    }
     throw err;
   });
 

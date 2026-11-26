@@ -378,4 +378,72 @@ export const openPlayStoreForNews = (newsId?: string | number) => {
   }
 };
 
-
+/**
+ * Dynamic Course Validity Formatter (Mirrors Admin Panel Settings)
+ */
+export const formatCourseValidity = (validity: any, expiryMode?: string): { title: string; subtitle: string } => {
+  if (expiryMode === 'Lifetime Access' || validity?.tab === 'lifetime') {
+    return {
+      title: 'Lifetime Access',
+      subtitle: 'You will get unlimited access to this course'
+    };
+  }
+
+  if (expiryMode === 'End Date' || validity?.tab === 'end' || validity?.endDate) {
+    const endStr = validity?.endDate || '';
+    return {
+      title: endStr ? `Valid till ${endStr}` : 'Fixed Date Validity',
+      subtitle: endStr ? `Course access valid till ${endStr}` : 'Access ends on specified date'
+    };
+  }
+
+  if (validity && typeof validity === 'object' && validity.value) {
+    const val = parseInt(validity.value, 10);
+    const unit = String(validity.unit || 'Months');
+    
+    if (val === 12 && unit.toLowerCase() === 'months') {
+      return {
+        title: '1 Year Validity',
+        subtitle: 'You will get this course for 1 full Year(s)'
+      };
+    }
+
+    let unitLabel = unit;
+    if (val === 1 && unit.endsWith('s')) {
+      unitLabel = unit.slice(0, -1);
+    }
+
+    return {
+      title: `${val} ${unitLabel} Validity`,
+      subtitle: `You will get this course for ${val} ${unitLabel}`
+    };
+  }
+
+  if (validity) {
+    const str = String(validity).trim();
+    if (/^\d+$/.test(str)) {
+      const num = parseInt(str, 10);
+      if (num === 12) {
+        return {
+          title: '1 Year Validity',
+          subtitle: 'You will get this course for 1 full Year(s)'
+        };
+      }
+      return {
+        title: `${num} Months Validity`,
+        subtitle: `You will get this course for ${num} Months`
+      };
+    }
+    return {
+      title: `${str} Validity`,
+      subtitle: `You will get this course for ${str}`
+    };
+  }
+
+  return {
+    title: '1 Year Validity',
+    subtitle: 'You will get this course for 1 full Year(s)'
+  };
+};
+
+

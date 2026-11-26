@@ -40,9 +40,8 @@ const HelpSupport: React.FC = () => {
   ];
 
   const contactOptions = [
-    { icon: 'call', label: 'Call Us', value: '+91 98765 43210', action: 'tel:+919876543210' },
-    { icon: 'mail', label: 'Email', value: 'support@aonetarget.com', action: 'mailto:support@aonetarget.com' },
-    { icon: 'chat', label: 'WhatsApp', value: 'Chat with us', action: 'https://wa.me/919876543210' }
+    { icon: 'call', label: 'Call Us', value: '+91 90090 08148', action: 'tel:+919009008148' },
+    { icon: 'chat', label: 'WhatsApp', value: 'Chat with us', action: 'https://api.whatsapp.com/send/?phone=919009008148&text=' + encodeURIComponent('Hello A-One Target Team, I need help regarding courses.') }
   ];
 
   return (
@@ -64,7 +63,7 @@ const HelpSupport: React.FC = () => {
             <span className="material-symbols-rounded text-cyan-600">contact_support</span>
             Contact Us
           </h3>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             {contactOptions.map((option, idx) => (
               <a
                 key={idx}

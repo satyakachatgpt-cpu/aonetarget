@@ -7,6 +7,8 @@ interface CourseCheckoutBarProps {
   isEnrolled: boolean;
   enrollmentStatus: string;
   enrolling: boolean;
+  processing?: boolean;
+  payableAmount?: number;
   progressPercent: number;
   completedVideosCount: number;
   totalVideos: number;
@@ -21,6 +23,8 @@ const CourseCheckoutBar: React.FC<CourseCheckoutBarProps> = ({
   isEnrolled,
   enrollmentStatus,
   enrolling,
+  processing,
+  payableAmount,
   progressPercent,
   completedVideosCount,
   totalVideos,
@@ -28,7 +32,7 @@ const CourseCheckoutBar: React.FC<CourseCheckoutBarProps> = ({
   onEnroll,
   onStartLearning,
 }) => {
-  const price = Number(course?.price || 0);
+  const price = payableAmount !== undefined ? payableAmount : Number(course?.price || 0);
   const mrp = Number(course?.mrp || 0);
   const hasDiscount = mrp > price && price > 0;
 
@@ -161,14 +165,24 @@ const CourseCheckoutBar: React.FC<CourseCheckoutBarProps> = ({
                 <span>{(course?.settings as any)?.customBadge || (course as any)?.customBadge || 'Best Deal'}</span>
               </div>
               <button
+                disabled={processing || enrolling}
                 onClick={onBuyNow}
-                className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-full font-black text-white bg-gradient-to-r from-[#6366F1] via-[#8B5CF6] via-[#A855F7] to-[#EC4899] shadow-[0_8px_25px_rgba(168,85,247,0.45)] hover:shadow-[0_10px_30px_rgba(168,85,247,0.6)] active:scale-95 transition-all flex items-center gap-2 cursor-pointer border border-white/25 overflow-hidden shrink-0"
+                className="px-5 sm:px-6 py-2.5 sm:py-3 rounded-full font-black text-white bg-gradient-to-r from-[#6366F1] via-[#8B5CF6] via-[#A855F7] to-[#EC4899] shadow-[0_8px_25px_rgba(168,85,247,0.45)] hover:shadow-[0_10px_30px_rgba(168,85,247,0.6)] active:scale-95 transition-all flex items-center gap-2 cursor-pointer border border-white/25 overflow-hidden shrink-0 disabled:opacity-60"
               >
-                <span className="material-symbols-rounded text-lg text-white">shopping_cart</span>
-                <span className="text-sm sm:text-base font-black tracking-tight text-white whitespace-nowrap">Buy Now</span>
-                <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/25 flex items-center justify-center shrink-0 ml-0.5">
-                  <span className="material-symbols-rounded text-white text-sm sm:text-base">arrow_forward</span>
-                </div>
+                {processing ? (
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span className="text-sm font-black text-white">Processing...</span>
+                  </span>
+                ) : (
+                  <>
+                    <span className="material-symbols-rounded text-lg text-white">shopping_cart</span>
+                    <span className="text-sm sm:text-base font-black tracking-tight text-white whitespace-nowrap">Buy Now</span>
+                    <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-white/25 flex items-center justify-center shrink-0 ml-0.5">
+                      <span className="material-symbols-rounded text-white text-sm sm:text-base">arrow_forward</span>
+                    </div>
+                  </>
+                )}
               </button>
             </div>
           </>

@@ -127,10 +127,30 @@ const Home: React.FC = () => {
     const timer = setInterval(() => setTick(t => t + 1), 30000);
     return () => clearInterval(timer);
   }, []);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [filteredCategories, setFilteredCategories] = useState<any[]>([]);
-  const [banners, setBanners] = useState<Banner[]>([]);
+  const [courses, setCourses] = useState<Course[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('home_courses_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
+  const [categories, setCategories] = useState<any[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('home_categories_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
+  const [filteredCategories, setFilteredCategories] = useState<any[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('home_categories_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
+  const [banners, setBanners] = useState<Banner[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('home_banners_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
   const [newsModal, setNewsModal] = useState<NewsItem | null>(null);
   const [showNewsModal, setShowNewsModal] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -141,9 +161,21 @@ const Home: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [isSearching, setIsSearching] = useState(false);
-  const [quickLinks, setQuickLinks] = useState<any[]>([]);
-  const [allNews, setAllNews] = useState<any[]>([]);
-  const [newsLoading, setNewsLoading] = useState(true);
+  const [quickLinks, setQuickLinks] = useState<any[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('home_quicklinks_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
+  const [allNews, setAllNews] = useState<any[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('home_news_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
+  const [newsLoading, setNewsLoading] = useState(() => {
+    return !sessionStorage.getItem('home_news_cache');
+  });
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   // Hide content initially if returning from a news article, to avoid top-flash
   const [isRestoringScroll, setIsRestoringScroll] = useState(
@@ -290,6 +322,7 @@ const Home: React.FC = () => {
         });
 
         setCourses(sorted);
+        try { sessionStorage.setItem('home_courses_cache', JSON.stringify(sorted)); } catch {}
       } catch (error) {
         console.error('Failed to fetch from MongoDB:', error);
       }
@@ -311,6 +344,7 @@ const Home: React.FC = () => {
             return String(a._id || a.id).localeCompare(String(b._id || b.id));
           });
         setCategories(active);
+        try { sessionStorage.setItem('home_categories_cache', JSON.stringify(active)); } catch {}
       } catch (error) {
         console.error('Failed to fetch categories:', error);
       }
@@ -329,6 +363,7 @@ const Home: React.FC = () => {
             return getOrderValue(a.order) - getOrderValue(b.order);
           });
           setBanners(activeBanners);
+          try { sessionStorage.setItem('home_banners_cache', JSON.stringify(activeBanners)); } catch {}
         } else {
           setBanners([{ imageUrl: '/attached_assets/download_1770552281686.png', title: 'Aone Target Institute' }]);
         }
@@ -372,7 +407,9 @@ const Home: React.FC = () => {
           return getTimestamp(b) - getTimestamp(a);
         });
 
-        setAllNews(activeNews.slice(0, 8));
+        const latestSlice = activeNews.slice(0, 8);
+        setAllNews(latestSlice);
+        try { sessionStorage.setItem('home_news_cache', JSON.stringify(latestSlice)); } catch {}
 
         const modalNews = activeNews.find((n: any) => n.showAsModal || n.featured);
         if (modalNews) {
@@ -463,7 +500,9 @@ const Home: React.FC = () => {
     const fetchQuickLinks = async () => {
       try {
         const data = await quickLinksAPI.getAll();
-        setQuickLinks(Array.isArray(data) ? data : []);
+        const links = Array.isArray(data) ? data : [];
+        setQuickLinks(links);
+        try { sessionStorage.setItem('home_quicklinks_cache', JSON.stringify(links)); } catch {}
       } catch (error) {
         console.error('Failed to fetch quick links:', error);
       }

@@ -2,6 +2,8 @@ import { db, getDb } from '../config/db.js';
 import Student from '../models/Student.js';
 import mongoose from 'mongoose';
 
+const { ObjectId } = mongoose.Types;
+
 /**
  * GET /api/admin/verify
  * Verifies admin session
@@ -227,6 +229,7 @@ export const approveDevice = async (req, res) => {
     const student = await Student.findOne({
       $or: [
         { id: studentId },
+        { userId: studentId },
         ...(ObjectId.isValid(studentId) ? [{ _id: new ObjectId(studentId) }] : [])
       ]
     });
@@ -263,7 +266,8 @@ export const approveDevice = async (req, res) => {
     
     res.json({ success: true, message: 'Device approved successfully' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to approve device' });
+    console.error('[approveDevice error]:', error);
+    res.status(500).json({ error: error?.message || 'Failed to approve device' });
   }
 };
 
@@ -279,6 +283,7 @@ export const rejectDevice = async (req, res) => {
     const student = await Student.findOne({
       $or: [
         { id: studentId },
+        { userId: studentId },
         ...(ObjectId.isValid(studentId) ? [{ _id: new ObjectId(studentId) }] : [])
       ]
     });
@@ -296,7 +301,8 @@ export const rejectDevice = async (req, res) => {
     
     res.json({ success: true, message: 'Device request rejected' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to reject device' });
+    console.error('[rejectDevice error]:', error);
+    res.status(500).json({ error: error?.message || 'Failed to reject device' });
   }
 };
 

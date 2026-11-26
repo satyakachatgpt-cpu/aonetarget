@@ -1,12 +1,16 @@
 import mongoose from 'mongoose';
 import { db } from '../config/db.js';
+import { getCache, setCache, clearCachePattern } from '../utils/memoryCache.js';
 
 const { ObjectId } = mongoose.Types;
 
 // Banner Controllers
 export const getBanners = async (req, res) => {
   try {
+    const cached = getCache('banners:all');
+    if (cached) return res.json(cached);
     const banners = await db.collection('banners').find({}).sort({ order: 1 }).toArray();
+    setCache('banners:all', banners, 60);
     res.json(banners);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch banners' });
@@ -15,6 +19,7 @@ export const getBanners = async (req, res) => {
 
 export const createBanner = async (req, res) => {
   try {
+    clearCachePattern('banners');
     const result = await db.collection('banners').insertOne(req.body);
     res.status(201).json({ _id: result.insertedId, ...req.body });
   } catch (error) {
@@ -24,6 +29,7 @@ export const createBanner = async (req, res) => {
 
 export const updateBanner = async (req, res) => {
   try {
+    clearCachePattern('banners');
     const { _id, ...updateData } = req.body;
     const result = await db.collection('banners').updateOne(
       { id: req.params.id },
@@ -38,6 +44,7 @@ export const updateBanner = async (req, res) => {
 
 export const deleteBanner = async (req, res) => {
   try {
+    clearCachePattern('banners');
     const result = await db.collection('banners').deleteOne({ id: req.params.id });
     if (result.deletedCount === 0) return res.status(404).json({ error: 'Banner not found' });
     res.json({ success: true, message: 'Banner deleted' });
@@ -48,6 +55,7 @@ export const deleteBanner = async (req, res) => {
 
 export const reorderBanners = async (req, res) => {
   try {
+    clearCachePattern('banners');
     const { orderedIds } = req.body;
     if (!Array.isArray(orderedIds) || orderedIds.length === 0) {
       return res.status(400).json({ error: 'orderedIds must be a non-empty array' });
@@ -91,7 +99,10 @@ export const reorderBanners = async (req, res) => {
 // News Controllers
 export const getNews = async (req, res) => {
   try {
+    const cached = getCache('news:all');
+    if (cached) return res.json(cached);
     const news = await db.collection('news').find({}).sort({ createdAt: -1 }).toArray();
+    setCache('news:all', news, 60);
     res.json(news);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch news' });
@@ -100,6 +111,7 @@ export const getNews = async (req, res) => {
 
 export const createNews = async (req, res) => {
   try {
+    clearCachePattern('news');
     const result = await db.collection('news').insertOne({ ...req.body, createdAt: new Date() });
     res.status(201).json({ _id: result.insertedId, ...req.body });
   } catch (error) {
@@ -109,6 +121,7 @@ export const createNews = async (req, res) => {
 
 export const updateNews = async (req, res) => {
   try {
+    clearCachePattern('news');
     const { _id, ...updateData } = req.body;
     const result = await db.collection('news').updateOne({ id: req.params.id }, { $set: updateData });
     if (result.matchedCount === 0) return res.status(404).json({ error: 'News not found' });
@@ -120,6 +133,7 @@ export const updateNews = async (req, res) => {
 
 export const deleteNews = async (req, res) => {
   try {
+    clearCachePattern('news');
     const result = await db.collection('news').deleteOne({ id: req.params.id });
     if (result.deletedCount === 0) return res.status(404).json({ error: 'News not found' });
     res.json({ success: true, message: 'News deleted' });

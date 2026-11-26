@@ -20,16 +20,16 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
       setTimeout(onComplete, 300);
     };
 
-    // Auto-close after 2.5 seconds
-    const timer = setTimeout(finish, 2500);
+    // Auto-close after 1.5 seconds maximum
+    const timer = setTimeout(finish, 1500);
 
     // Fetch splash image from API
     splashScreenAPI.get().then(data => {
       if (completed) return;
       if (data?.imageUrl && data?.isActive !== false) {
         setImageUrl(data.imageUrl);
-        // Close after image displays for duration
-        setTimeout(finish, Math.min(data.duration || 2000, 2500));
+        // Close after image displays for duration (max 1.5s)
+        setTimeout(finish, Math.min(data.duration || 1200, 1500));
       } else {
         finish();
       }

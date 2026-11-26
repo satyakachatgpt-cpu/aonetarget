@@ -324,6 +324,13 @@ const PDFViewerScreen: React.FC = () => {
     (title || '').toLowerCase().endsWith('.docx') ||
     (title || '').toLowerCase().endsWith('.doc');
 
+  const isNewsPdf =
+    location.state?.source === 'news' ||
+    location.state?.canDownload === true ||
+    queryParams.get('source') === 'news' ||
+    queryParams.get('canDownload') === 'true' ||
+    (pdfUrl || '').includes('/news_pdfs/');
+
   const returnTo = location.state?.returnTo || queryParams.get('returnTo');
 
   const handleExit = useCallback(() => {
@@ -400,7 +407,7 @@ const PDFViewerScreen: React.FC = () => {
       // Load PDF into Mozilla PDF.js
       const loadingTask = pdfjsLib.getDocument({
         data: new Uint8Array(arrayBuffer),
-        cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.7.284/cmaps/',
+        cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.5.207/cmaps/',
         cMapPacked: true,
         useWorkerFetch: false,
       });
@@ -577,18 +584,33 @@ const PDFViewerScreen: React.FC = () => {
           <div className="flex items-center justify-center gap-2 mt-0.5">
             <span className={`w-1.5 h-1.5 rounded-full ${isDocx ? 'bg-blue-400' : 'bg-green-400'}`} />
             <p className="text-[9px] sm:text-[10px] text-white/50 font-bold uppercase tracking-widest leading-none">
-              {isDocx ? 'Word Document' : 'Verified Secure PDF'} • {subject}
+              {isDocx ? 'Word Document' : 'Verified Secure PDF'} • {isNewsPdf ? 'Official Notification' : subject}
             </p>
           </div>
         </div>
 
-        <button
-          onClick={handleExit}
-          className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/30 active:scale-95 transition-all z-[120]"
-          title="Close"
-        >
-          <span className="material-symbols-rounded text-[20px]">close</span>
-        </button>
+        <div className="flex items-center gap-2 z-[120]">
+          {isNewsPdf && fullPdfUrl && (
+            <a
+              href={fullPdfUrl}
+              download={title.toLowerCase().endsWith('.pdf') ? title : `${title}.pdf`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all shadow-md cursor-pointer"
+              title="Download PDF Document"
+            >
+              <span className="material-symbols-rounded text-[17px]">download</span>
+              <span>Download</span>
+            </a>
+          )}
+          <button
+            onClick={handleExit}
+            className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/30 active:scale-95 transition-all cursor-pointer"
+            title="Close"
+          >
+            <span className="material-symbols-rounded text-[20px]">close</span>
+          </button>
+        </div>
       </div>
 
       {/* ── Document Canvas Scroll Viewport ── */}

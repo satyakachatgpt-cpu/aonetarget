@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { blogAPI } from '../services/apiClient';
 import { counsellingAPI } from '../services/communicationService';
 import { useAuthStore } from '../store/authStore';
-import { getImageUrl, openPlayStoreForNews } from '../lib/utils';
+import { getImageUrl, getPdfUrl, openPlayStoreForNews } from '../lib/utils';
 import DOMPurify from 'dompurify';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
@@ -184,6 +184,170 @@ const NewsArticle: React.FC = () => {
     }
   };
 
+  const openPdfInViewer = (pdfUrl: string, pdfName?: string) => {
+    const normalizedUrl = getPdfUrl(pdfUrl);
+    const docTitle = pdfName || news?.title || 'Official Notification';
+    const returnTo = window.location.hash.replace(/^#/, '') || window.location.pathname;
+
+    navigate(`/pdf-viewer?url=${encodeURIComponent(normalizedUrl)}&title=${encodeURIComponent(docTitle)}&returnTo=${encodeURIComponent(returnTo)}&source=news&canDownload=true`, {
+      state: {
+        pdf: { fileUrl: normalizedUrl },
+        title: docTitle,
+        returnTo,
+        source: 'news',
+        canDownload: true
+      }
+    });
+  };
+
+  // Render Important Links & Official Notification Table (Clean Job Portal Table Design)
+  const renderImportantLinks = () => {
+    if (!news?.directLink && !news?.pdfUrl && !news?.youtubeUrl && !news?.whatsappUrl) {
+      return null;
+    }
+
+    return (
+      <div className="my-8 rounded-2xl border border-gray-200 overflow-hidden shadow-sm bg-white">
+        {/* Table Header */}
+        <div className="bg-[#1A237E] text-white px-5 py-3.5 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="material-symbols-rounded text-xl text-amber-300">link</span>
+            <h3 className="text-[14px] font-bold tracking-wide uppercase">Important Links & Official Notification</h3>
+          </div>
+          <span className="text-[10px] font-bold bg-white/20 px-2.5 py-0.5 rounded-full text-white uppercase tracking-wider">
+            Official
+          </span>
+        </div>
+
+        {/* Table Rows */}
+        <div className="divide-y divide-gray-100 text-sm">
+          {/* Direct Link Row */}
+          {news.directLink && (
+            <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50/80 transition-colors">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-blue-50 text-[#1A237E] flex items-center justify-center shrink-0 border border-blue-100">
+                  <span className="material-symbols-rounded text-lg">language</span>
+                </div>
+                <div className="min-w-0">
+                  <span className="font-bold text-gray-900 block text-[13.5px]">Official Website / Apply Online</span>
+                  <a 
+                    href={news.directLink} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-[12px] text-blue-600 hover:underline font-medium truncate block max-w-md"
+                  >
+                    {news.directLink}
+                  </a>
+                </div>
+              </div>
+              <a
+                href={news.directLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[#1A237E] hover:bg-[#151c66] text-white rounded-xl font-bold text-xs shadow-sm transition-all active:scale-95 shrink-0"
+              >
+                <span>Click Here</span>
+                <span className="material-symbols-rounded text-[15px]">open_in_new</span>
+              </a>
+            </div>
+          )}
+
+          {/* PDF View in Viewer Row */}
+          {news.pdfUrl && (
+            <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-red-50/40 transition-colors bg-red-50/20">
+              <div 
+                onClick={() => openPdfInViewer(news.pdfUrl!, news.pdfName)}
+                className="flex items-center gap-3 min-w-0 cursor-pointer group"
+                title="Click to Open and Read PDF"
+              >
+                <div className="w-9 h-9 rounded-xl bg-red-100 text-red-600 flex items-center justify-center shrink-0 border border-red-200 group-hover:bg-red-200 transition-colors">
+                  <span className="material-symbols-rounded text-lg">picture_as_pdf</span>
+                </div>
+                <div className="min-w-0">
+                  <span className="font-bold text-gray-900 block text-[13.5px] truncate group-hover:text-red-700 transition-colors">
+                    {news.pdfName || 'Download Official Notification (PDF)'}
+                  </span>
+                  <span className="text-[11.5px] text-red-700 font-medium">
+                    {news.pdfSize || 'Official PDF'} • Click to Open in PDF Viewer
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => openPdfInViewer(news.pdfUrl!, news.pdfName)}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-xs shadow-sm transition-all active:scale-95 shrink-0 cursor-pointer"
+              >
+                <span className="material-symbols-rounded text-[16px]">visibility</span>
+                <span>Open in Viewer</span>
+              </button>
+            </div>
+          )}
+
+          {/* YouTube Video Row */}
+          {news.youtubeUrl && (
+            <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50/80 transition-colors">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-red-50 text-[#FF0000] flex items-center justify-center shrink-0 border border-red-100">
+                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <span className="font-bold text-gray-900 block text-[13.5px]">Watch Video Discussion / Analysis</span>
+                  <a 
+                    href={news.youtubeUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-[12px] text-gray-500 hover:text-red-600 truncate block max-w-md"
+                  >
+                    {news.youtubeUrl}
+                  </a>
+                </div>
+              </div>
+              <a
+                href={news.youtubeUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[#FF0000] hover:bg-[#D90000] text-white rounded-xl font-bold text-xs shadow-sm transition-all active:scale-95 shrink-0"
+              >
+                <span>Watch Video</span>
+                <span className="material-symbols-rounded text-[15px]">smart_display</span>
+              </a>
+            </div>
+          )}
+
+          {/* WhatsApp Channel Row */}
+          {news.whatsappUrl && (
+            <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-gray-50/80 transition-colors">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-emerald-50 text-[#25D366] flex items-center justify-center shrink-0 border border-emerald-100">
+                  <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                    <path d="M12.031 0C5.394 0 .012 5.383.012 12.02c0 2.119.554 4.186 1.608 6.012L.003 24l6.147-1.613a11.97 11.97 0 0 0 5.881 1.533h.005c6.636 0 12.019-5.384 12.019-12.021A12.007 12.007 0 0 0 12.031 0zm0 21.996h-.004a9.98 9.98 0 0 1-5.093-1.39l-.365-.217-3.784.992 1.01-3.69-.238-.378a9.998 9.998 0 0 1-1.535-5.293c0-5.525 4.496-10.021 10.024-10.021a9.97 9.97 0 0 1 7.086 2.936 9.96 9.96 0 0 1 2.933 7.085c0 5.525-4.495 10.02-10.024 10.02zm5.494-7.498c-.301-.151-1.782-.879-2.058-.98-.276-.1-.476-.151-.677.151-.2.302-.777.98-.953 1.18-.175.201-.351.226-.652.075-.301-.151-1.272-.469-2.423-1.496-.895-.798-1.5-1.784-1.675-2.086-.176-.301-.019-.464.132-.614.136-.135.301-.352.452-.527.15-.176.2-.302.301-.503.1-.2.05-.376-.025-.527-.075-.151-.677-1.632-.928-2.235-.244-.587-.492-.507-.677-.517-.175-.008-.376-.01-.577-.01-.2 0-.527.075-.803.376-.276.301-1.053 1.029-1.053 2.509 0 1.48 1.079 2.91 1.229 3.111.151.201 2.124 3.243 5.145 4.548.718.311 1.279.497 1.716.636.722.23 1.378.197 1.897.12.578-.087 1.782-.728 2.033-1.431.25-.703.25-1.306.175-1.431-.075-.125-.276-.201-.577-.352z"/>
+                  </svg>
+                </div>
+                <div className="min-w-0">
+                  <span className="font-bold text-gray-900 block text-[13.5px]">Join Official WhatsApp Channel</span>
+                  <span className="text-[11.5px] text-gray-500 block truncate max-w-md">
+                    Direct Updates & Fast Support
+                  </span>
+                </div>
+              </div>
+              <a
+                href={news.whatsappUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-[#25D366] hover:bg-[#1EBE5D] text-white rounded-xl font-bold text-xs shadow-sm transition-all active:scale-95 shrink-0"
+              >
+                <span>Join Channel</span>
+                <span className="material-symbols-rounded text-[15px]">chat</span>
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-white">
@@ -264,6 +428,9 @@ const NewsArticle: React.FC = () => {
                 dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(news.content || '') }}
               />
 
+              {/* Important Links & Official Notification Table - Placed at the END of Content */}
+              {renderImportantLinks()}
+
               {/* App Promotion Banner */}
               {!Capacitor.isNativePlatform() && (
                 <div className="mt-8 p-6 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/80 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm">
@@ -297,6 +464,9 @@ const NewsArticle: React.FC = () => {
                 {/* Fade out gradient overlay */}
                 <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-white via-white/90 to-transparent pointer-events-none" />
               </div>
+
+              {/* Important Links & Official Notification Table */}
+              {renderImportantLinks()}
 
               {/* App Redirect Card */}
               <div className="bg-gradient-to-b from-blue-50/90 via-white to-indigo-50/70 border border-blue-200 rounded-3xl p-6 sm:p-8 text-center shadow-xl shadow-blue-900/5 relative overflow-hidden">

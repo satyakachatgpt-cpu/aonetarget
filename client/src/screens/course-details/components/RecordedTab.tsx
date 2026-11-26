@@ -76,6 +76,16 @@ const RecordedTab: React.FC<RecordedTabProps> = ({
 
   return (
     <div className="space-y-3">
+      {isExpired && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-center gap-3 text-red-700">
+          <span className="material-symbols-rounded text-2xl text-red-500">lock_clock</span>
+          <div className="flex-1">
+            <h4 className="font-bold text-xs uppercase tracking-wider text-red-900">Course Access Expired</h4>
+            <p className="text-xs text-red-600 mt-0.5">Your subscription validity for this course has ended. Please renew to resume your learning.</p>
+          </div>
+        </div>
+      )}
+
       {navigationHistory.length > 0 && (
         <button
           onClick={onNavigateUp}
@@ -127,7 +137,13 @@ const RecordedTab: React.FC<RecordedTabProps> = ({
           return (
             <div
               key={videoId}
-              onClick={() => !isLocked && onVideoClick(video)}
+              onClick={() => {
+                if (isExpired) {
+                  alert('Your access to this course has expired. Please renew to continue.');
+                  return;
+                }
+                if (!isLocked) onVideoClick(video);
+              }}
               className={`card-premium overflow-hidden cursor-pointer active:scale-[0.97] transition-all duration-200 animate-fade-in-up ${isLocked ? 'opacity-70' : ''}`}
               style={{ animationDelay: `${index * 60}ms` }}
             >

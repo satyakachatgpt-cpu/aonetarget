@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { CKEditor } from 'ckeditor4-react';
 
 interface RichTextEditorProps {
@@ -9,19 +9,79 @@ interface RichTextEditorProps {
 }
 
 const RichTextEditor: React.FC<RichTextEditorProps> = ({ label, content, onChange, height = '400px' }) => {
+    const editorRef = useRef<any>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+    const handleDirectImageInsert = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploadingImage(true);
+        try {
+            const formData = new FormData();
+            formData.append('upload', file);
+
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('accessToken');
+            const headers: Record<string, string> = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const res = await fetch('/api/upload', {
+                method: 'POST',
+                headers,
+                body: formData
+            });
+
+            const data = await res.json();
+            if (data.uploaded && data.url) {
+                if (editorRef.current) {
+                    editorRef.current.insertHtml(`<p><img src="${data.url}" alt="${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}" style="max-width:100%; height:auto; border-radius:8px; margin:14px 0; display:block;" /></p><p><br></p>`);
+                }
+            } else {
+                alert(data.error?.message || 'Failed to upload image');
+            }
+        } catch (err: any) {
+            alert(err.message || 'Image upload failed');
+        } finally {
+            setIsUploadingImage(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
     return (
         <div className="w-full">
-            {label && (
-                <div className="mb-2">
+            <div className="flex items-center justify-between mb-2">
+                {label ? (
                     <label className="text-[14px] font-semibold text-gray-800">{label}</label>
-                    <div className="h-[1px] w-full bg-gray-100 mt-2 mb-4"></div>
+                ) : <div />}
+                
+                <div className="flex items-center gap-2">
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleDirectImageInsert}
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        className="hidden"
+                    />
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploadingImage}
+                        title="Upload & Insert Image directly into Content"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-lg border border-blue-200 transition-all active:scale-95 shadow-sm cursor-pointer"
+                    >
+                        <span className="material-symbols-outlined text-[17px]">add_photo_alternate</span>
+                        {isUploadingImage ? 'Uploading Image...' : 'Insert Image in Content'}
+                    </button>
                 </div>
-            )}
+            </div>
+            {label && <div className="h-[1px] w-full bg-gray-100 mb-3"></div>}
             <div className="border border-gray-200 rounded-sm overflow-hidden">
                 <CKEditor
                     editorUrl="https://cdn.ckeditor.com/4.22.1/full-all/ckeditor.js"
                     onInstanceReady={(evt: any) => {
                         const editor = evt.editor;
+                        editorRef.current = editor;
                         const doc = editor.document.$;
                         const head = doc.getElementsByTagName('head')[0];
                         if (!head) {
@@ -90,19 +150,56 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ label, content, onChang
                         addMathCommand('mathLimit', 'Limit', '\\lim_{x \\to \\infty}');
                         addMathCommand('mathVector', 'Vector', '\\vec{a}');
 
-                        // Fix for Image Upload (Base64 Conversion)
+                        // Real Server Image Upload Handler (for Drag & Drop, File Upload, Toolbar Image)
                         editor.on('fileUploadRequest', function (evt: any) {
                             const fileLoader = evt.data.fileLoader;
-                            const file = fileLoader.file;
-                            const reader = new FileReader();
+                            const xhr = fileLoader.xhr;
+                            const formData = new FormData();
+                            formData.append('upload', fileLoader.file);
+                            xhr.open('POST', '/api/upload', true);
+                            const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('accessToken');
+                            if (token) {
+                                xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+                            }
+                            xhr.send(formData);
+                            evt.stop();
+                        });
 
-                            reader.onload = function () {
+                        editor.on('fileUploadResponse', function (evt: any) {
+                            evt.stop();
+                            const data = evt.data;
+                            const xhr = data.fileLoader.xhr;
+                            try {
+                                const response = JSON.parse(xhr.responseText);
+                                if (response.uploaded && response.url) {
+                                    data.url = response.url;
+                                } else {
+                                    data.message = response.error?.message || 'Image upload failed';
+                                    evt.cancel();
+                                }
+                            } catch (e) {
+                                data.message = 'Invalid server response';
                                 evt.cancel();
-                                fileLoader.url = reader.result;
-                                fileLoader.changeStatus('uploaded');
-                            };
+                            }
+                        });
 
-                            reader.readAsDataURL(file);
+                        // Direct Clipboard Image Paste Handler (Ctrl+V)
+                        editor.on('paste', function (evt: any) {
+                            const dataTransfer = evt.data?.dataTransfer;
+                            if (dataTransfer && typeof dataTransfer.getFilesCount === 'function' && dataTransfer.getFilesCount() > 0) {
+                                const file = dataTransfer.getFile(0);
+                                if (file && file.type && file.type.startsWith('image/')) {
+                                    const reader = new FileReader();
+                                    reader.onload = function (e) {
+                                        const base64 = e.target?.result as string;
+                                        if (base64) {
+                                            editor.insertHtml(`<p><img src="${base64}" alt="Pasted Image" style="max-width:100%; height:auto; margin:12px 0; border-radius:6px; display:block;" /></p><p><br></p>`);
+                                        }
+                                    };
+                                    reader.readAsDataURL(file);
+                                    evt.cancel();
+                                }
+                            }
                         });
 
                         // Fix for PDF Export (Direct Download using html2pdf.js)
@@ -201,6 +298,9 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ label, content, onChang
                         embed_provider: '//ckeditor.iframe.ly/api/oembed?url={url}&callback={callback}',
                         uploadUrl: '/api/upload',
                         filebrowserUploadUrl: '/api/upload',
+                        filebrowserImageUploadUrl: '/api/upload',
+                        filebrowserUploadMethod: 'xhr',
+                        image_previewText: ' ',
                         exportPdf_tokenUrl: '', // Providing empty string to try suppressing the warning, though it might still need a valid token for non-watermarked
                         exportPdf_stylesheets: [
                             'https://cdn.ckeditor.com/4.22.1/full-all/contents.css',
