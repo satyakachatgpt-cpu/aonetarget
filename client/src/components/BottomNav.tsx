@@ -12,10 +12,33 @@ const BottomNav: React.FC<BottomNavProps> = ({ isLoggedIn = false }) => {
   const isGlobalHidden = useUIStore(s => s.isBottomNavHidden);
   const showBottomNavOnCourse = useUIStore(s => s.showBottomNavOnCourse);
 
+  const checkIsEnrolledCourse = (path: string) => {
+    if (!path.startsWith('/course/')) return false;
+    const courseId = path.split('/course/')[1]?.split('/')[0]?.split('?')[0];
+    if (!courseId) return false;
+    try {
+      if (sessionStorage.getItem(`course_enrolled_${courseId}`) === 'true') {
+        return true;
+      }
+      const studentData = localStorage.getItem('student') || localStorage.getItem('studentData');
+      if (studentData) {
+        const parsed = JSON.parse(studentData);
+        const enrolledList = (parsed.enrolledCourses || []).map((c: any) => String(c.id || c._id || c));
+        const enrolledBatch = parsed.enrolledBatch ? String(parsed.enrolledBatch) : '';
+        if (enrolledList.includes(String(courseId)) || enrolledBatch === String(courseId)) {
+          return true;
+        }
+      }
+    } catch { }
+    return false;
+  };
+
+  const isEnrolledCourse = showBottomNavOnCourse || checkIsEnrolledCourse(currentPath);
+
   const hideOnPaths = ['/news/', '/test/', '/checkout/', '/video-player', '/test-series/', '/live-session/'];
-  const shouldHide = isGlobalHidden || 
-    hideOnPaths.some(path => currentPath.startsWith(path)) || 
-    (currentPath.startsWith('/course/') && !showBottomNavOnCourse);
+  const shouldHide = (!isEnrolledCourse && isGlobalHidden) ||
+    hideOnPaths.some(path => currentPath.startsWith(path)) ||
+    (currentPath.startsWith('/course/') && !isEnrolledCourse);
 
   if (shouldHide) return null;
 
@@ -28,7 +51,7 @@ const BottomNav: React.FC<BottomNavProps> = ({ isLoggedIn = false }) => {
 
   return (
     <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-50">
-      <div 
+      <div
         className="glass rounded-t-[20px] shadow-nav border-t border-white/40 overflow-hidden"
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >

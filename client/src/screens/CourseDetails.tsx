@@ -42,10 +42,10 @@ interface Note {
 
 function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' | 'recorded' {
   const raw = (lc.streamStatus || lc.status || lc.liveStatus || lc.eventStatus || 'upcoming').toLowerCase();
-  
+
   const isExplicitlyEnded = ['ended', 'completed', 'inactive', 'recorded', 'disable', 'finished'].includes(raw);
-  const isImplicitlyEnded = (lc.isLive === false && (lc.endedAt || lc.endTime)) || 
-                           (lc.type === 'recorded' || lc.contentType === 'recorded' || lc.contentType === 'video');
+  const isImplicitlyEnded = (lc.isLive === false && (lc.endedAt || lc.endTime)) ||
+    (lc.type === 'recorded' || lc.contentType === 'recorded' || lc.contentType === 'video');
   const hasEndedLabel = lc.statusLabel === 'EVENT ENDED' || lc.label === 'EVENT ENDED';
 
   if (isExplicitlyEnded || isImplicitlyEnded || hasEndedLabel) return 'ended';
@@ -58,7 +58,7 @@ function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' | 'recor
     if (scheduledTime > Date.now()) {
       return 'upcoming';
     } else if (!isExplicitlyEnded) {
-       return 'live'; // Promote to live if time passed and not explicitly ended
+      return 'live'; // Promote to live if time passed and not explicitly ended
     }
   }
 
@@ -111,7 +111,7 @@ const CourseDetails: React.FC = () => {
         const currentId = id ? String(id) : '';
         return enrolledList.some((c: any) => String(c.id || c._id || c) === currentId) || String(enrolledBatch) === currentId;
       }
-    } catch {}
+    } catch { }
     return false;
   });
   const [mainTab, setMainTab] = useState<'overview' | 'content'>(() => {
@@ -126,7 +126,7 @@ const CourseDetails: React.FC = () => {
         const isPreEnrolled = enrolledList.some((c: any) => String(c.id || c._id || c) === currentId) || String(enrolledBatch) === currentId;
         if (isPreEnrolled) return 'content';
       }
-    } catch {}
+    } catch { }
     return 'overview';
   });
   const [activeTab, setActiveTab] = useState<'videos' | 'notes' | 'tests' | 'live'>('videos');
@@ -143,7 +143,7 @@ const CourseDetails: React.FC = () => {
         const parsed = JSON.parse(studentData);
         if (parsed.state) return parsed.state;
       }
-    } catch {}
+    } catch { }
     return (student as any)?.state || 'Haryana';
   });
   const [isStateSheetOpen, setIsStateSheetOpen] = useState<boolean>(false);
@@ -159,7 +159,7 @@ const CourseDetails: React.FC = () => {
         parsed.state = newState;
         localStorage.setItem('studentData', JSON.stringify(parsed));
       }
-    } catch {}
+    } catch { }
   };
   const [isCourseExpired, setIsCourseExpired] = useState(false);
   const [enrollmentStatus, setEnrollmentStatus] = useState<string>('not_enrolled');
@@ -333,17 +333,17 @@ const CourseDetails: React.FC = () => {
     const canPlay = (isEnrolled && !isCourseExpired) || video.isFree || video.isDemo || isFirstVideoInRoot;
 
     // Resolve raw URL first (include recorded links for ended live streams)
-    const rawUrl = video.recordedLink || 
-                   video.recordingUrl || 
-                   video.replayUrl || 
-                   video.youtubeUrl || 
-                   video.videoUrl || 
-                   video.url || 
-                   video.meetingLink || 
-                   video.liveUrl || 
-                   video.streamUrl || 
-                   (video as any).streamId || 
-                   '';
+    const rawUrl = video.recordedLink ||
+      video.recordingUrl ||
+      video.replayUrl ||
+      video.youtubeUrl ||
+      video.videoUrl ||
+      video.url ||
+      video.meetingLink ||
+      video.liveUrl ||
+      video.streamUrl ||
+      (video as any).streamId ||
+      '';
 
     const url = toYouTubeEmbed(rawUrl);
     if (canPlay && url) {
@@ -434,7 +434,7 @@ const CourseDetails: React.FC = () => {
       const progressRes = await fetch(`${API_BASE_URL}/students/${studentId}/courses/${id}/progress`, { headers: getAuthHeaders() });
       if (progressRes.ok) {
         const progressData = await progressRes.json();
-        
+
         // STRICT SAFETY: Do not overwrite if response is missing critical arrays
         if (progressData && Array.isArray(progressData.completedVideos)) {
           setProgress(prev => {
@@ -451,7 +451,7 @@ const CourseDetails: React.FC = () => {
           });
         }
       }
-    } catch (e) { 
+    } catch (e) {
       console.warn('[Progress] Fetch failed, keeping local state');
     }
   }, [student?.id, id]);
@@ -514,7 +514,7 @@ const CourseDetails: React.FC = () => {
           setLoading(false);
           try {
             sessionStorage.setItem(`course_cache_${id}`, JSON.stringify(courseData));
-          } catch {}
+          } catch { }
         }
       });
 
@@ -531,7 +531,7 @@ const CourseDetails: React.FC = () => {
         setCourse(courseData);
         try {
           sessionStorage.setItem(`course_cache_${id}`, JSON.stringify(courseData));
-        } catch {}
+        } catch { }
       }
 
       setVideos(Array.isArray(videosData) ? videosData : []);
@@ -553,7 +553,7 @@ const CourseDetails: React.FC = () => {
             setMainTab('content');
           }
         }
-      } else {
+      } else if (id && sessionStorage.getItem(`course_enrolled_${id}`) !== 'true') {
         setIsEnrolled(false);
         setIsCourseExpired(false);
         setEnrollmentStatus('not_enrolled');
@@ -585,7 +585,7 @@ const CourseDetails: React.FC = () => {
           localStorage.setItem(key, JSON.stringify(parsed));
         }
       });
-    } catch {}
+    } catch { }
   };
 
   const performDirectEnrollment = async (couponCode?: string) => {
@@ -626,7 +626,7 @@ const CourseDetails: React.FC = () => {
         setShowSuccessModal(true);
         fetchCourseData();
         fetchCourseProgress();
-        useAuthStore.getState().checkAuth().catch(() => {});
+        useAuthStore.getState().checkAuth().catch(() => { });
       } else {
         const error = await response.json().catch(() => ({}));
         if (response.status === 401) {
@@ -790,7 +790,7 @@ const CourseDetails: React.FC = () => {
               setShowSuccessModal(true);
               fetchCourseData();
               fetchCourseProgress();
-              useAuthStore.getState().checkAuth().catch(() => {});
+              useAuthStore.getState().checkAuth().catch(() => { });
             } else {
               alert(verifyData.error || 'Payment verification failed. If money was debited, it will be updated shortly.');
             }
@@ -901,7 +901,7 @@ const CourseDetails: React.FC = () => {
           return;
         }
       }
-    } catch {}
+    } catch { }
     setIsEnrolled(false);
     setIsCourseExpired(false);
     setEnrollmentStatus('not_enrolled');
@@ -935,12 +935,17 @@ const CourseDetails: React.FC = () => {
     };
   }, [id, location.pathname, student?.id, activeTab, showVideoPlayer]);
 
-  // Sync Bottom Navigation: Show BottomNav on course page ONLY when student is enrolled & active
+  // Sync Bottom Navigation: Show BottomNav on course page when student is enrolled & active
   useEffect(() => {
     const isEnrolledActive = Boolean(isEnrolled && !isCourseExpired);
     if (isEnrolledActive && !showVideoPlayer) {
       setBottomNavHidden(false);
       setShowBottomNavOnCourse(true);
+      if (id) {
+        try {
+          sessionStorage.setItem(`course_enrolled_${id}`, 'true');
+        } catch { }
+      }
     } else {
       setBottomNavHidden(true);
       setShowBottomNavOnCourse(false);
@@ -949,7 +954,7 @@ const CourseDetails: React.FC = () => {
       setBottomNavHidden(false);
       setShowBottomNavOnCourse(false);
     };
-  }, [isEnrolled, isCourseExpired, showVideoPlayer, setBottomNavHidden, setShowBottomNavOnCourse]);
+  }, [id, isEnrolled, isCourseExpired, showVideoPlayer, setBottomNavHidden, setShowBottomNavOnCourse]);
 
   // Keep selected video in sync with latest videos list for real-time live status updates
   useEffect(() => {
@@ -965,15 +970,15 @@ const CourseDetails: React.FC = () => {
   useEffect(() => {
     if (course) {
       document.title = `${course.name || course.title} | Aone Target`;
-      
+
       // TRACK RECENTLY VIEWED
       try {
         const viewed = JSON.parse(localStorage.getItem('recently_viewed_courses') || '[]');
         const filtered = viewed.filter((c: any) => (c.id || c._id) !== (course.id || course._id));
-        const updated = [{ 
-          id: course.id || course._id || "", 
-          name: course.name || course.title, 
-          imageUrl: course.imageUrl || course.thumbnail 
+        const updated = [{
+          id: course.id || course._id || "",
+          name: course.name || course.title,
+          imageUrl: course.imageUrl || course.thumbnail
         }, ...filtered].slice(0, 10);
         localStorage.setItem('recently_viewed_courses', JSON.stringify(updated));
       } catch (e) { console.error(e); }
@@ -1012,7 +1017,7 @@ const CourseDetails: React.FC = () => {
         const found = videos.find(v => watchedIds.includes(String(v.id || v._id)));
         if (found) return found;
       }
-    } catch {}
+    } catch { }
     return videos[0] || null;
   }, [videos]);
 
@@ -1034,8 +1039,8 @@ const CourseDetails: React.FC = () => {
       const nextVideo = videos[currentIndex + 1];
       // Skip if it's a folder or non-playable
       if (nextVideo.contentType === 'folder') {
-         // Optionally navigate into folder, but for simple auto-next we just stop or skip
-         return;
+        // Optionally navigate into folder, but for simple auto-next we just stop or skip
+        return;
       }
       handleVideoClick(nextVideo);
     }
@@ -1049,14 +1054,14 @@ const CourseDetails: React.FC = () => {
 
   const currentFolder = navigationHistory.length > 0 ? navigationHistory[navigationHistory.length - 1] : null;
 
-  const recordedVideos = videos.filter(v => 
-    v.contentType === 'video' || 
-    v.contentType === 'recorded' || 
-    !v.contentType || 
+  const recordedVideos = videos.filter(v =>
+    v.contentType === 'video' ||
+    v.contentType === 'recorded' ||
+    !v.contentType ||
     computeEffectiveStatus(v) === 'ended'
   );
-  const liveStreams = videos.filter(v => 
-    (v.contentType === 'live_stream' || v.contentType === 'youtube_zoom') && 
+  const liveStreams = videos.filter(v =>
+    (v.contentType === 'live_stream' || v.contentType === 'youtube_zoom') &&
     computeEffectiveStatus(v) !== 'ended'
   );
 
@@ -1093,7 +1098,7 @@ const CourseDetails: React.FC = () => {
   const totalVideos = recordedVideos.length;
   // Deduplicate using Set to prevent > 100% progress if backend/frontend state has duplicates
   const uniqueCompletedVideos = new Set(progress.completedVideos || []);
-  
+
   // Calculate count of uniquely completed videos that actually exist in the current recordedVideos list
   const validCompletedCount = recordedVideos.filter((v, idx) => {
     const vId = getVideoId(v, idx);
@@ -1370,11 +1375,10 @@ const CourseDetails: React.FC = () => {
           <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1">
             <button
               onClick={() => setActiveTab('videos')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
-                activeTab === 'videos'
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'videos'
                   ? 'bg-[#1e293b] text-white shadow-xs'
                   : 'bg-white text-gray-600 border border-gray-200/80 hover:bg-gray-50'
-              }`}
+                }`}
             >
               <span className="material-symbols-rounded text-base">play_circle</span>
               <span>Videos ({recordedVideos.length})</span>
@@ -1382,11 +1386,10 @@ const CourseDetails: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('notes')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
-                activeTab === 'notes'
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'notes'
                   ? 'bg-orange-500 text-white shadow-xs'
                   : 'bg-white text-gray-600 border border-gray-200/80 hover:bg-gray-50'
-              }`}
+                }`}
             >
               <span className="material-symbols-rounded text-base">description</span>
               <span>Notes ({notes.length})</span>
@@ -1394,11 +1397,10 @@ const CourseDetails: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('tests')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
-                activeTab === 'tests'
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'tests'
                   ? 'bg-purple-600 text-white shadow-xs'
                   : 'bg-white text-gray-600 border border-gray-200/80 hover:bg-gray-50'
-              }`}
+                }`}
             >
               <span className="material-symbols-rounded text-base">quiz</span>
               <span>Tests ({tests.length})</span>
@@ -1406,11 +1408,10 @@ const CourseDetails: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('live')}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
-                activeTab === 'live'
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'live'
                   ? 'bg-rose-600 text-white shadow-xs'
                   : 'bg-white text-gray-600 border border-gray-200/80 hover:bg-gray-50'
-              }`}
+                }`}
             >
               <span className="material-symbols-rounded text-base">sensors</span>
               <span>Live ({liveStreams.length})</span>
@@ -1419,7 +1420,7 @@ const CourseDetails: React.FC = () => {
 
           {/* Subtab Contents */}
           {activeTab === 'videos' && (
-            <RecordedTab 
+            <RecordedTab
               filteredFolders={filteredFolders}
               filteredVideos={filteredVideos}
               navigationHistory={navigationHistory}
@@ -1438,7 +1439,7 @@ const CourseDetails: React.FC = () => {
           )}
 
           {activeTab === 'notes' && (
-            <NotesTab 
+            <NotesTab
               notes={notes}
               isEnrolled={isEnrolled}
               isExpired={isCourseExpired}
@@ -1452,21 +1453,21 @@ const CourseDetails: React.FC = () => {
           )}
 
           {activeTab === 'tests' && (
-            <TestsTab 
+            <TestsTab
               tests={tests}
               isEnrolled={isEnrolled}
               isExpired={isCourseExpired}
               coursePrice={course.price}
               enrolling={enrolling}
               completedTests={progress.completedTests || []}
-              onStartTest={(testId) => { 
-                if (isCourseExpired) { 
-                  alert('Your access to this course has expired. Please renew to continue.'); 
-                  return; 
-                } 
-                navigate(`/test/${testId}`, { 
-                  state: { from: location.pathname + location.search } 
-                }); 
+              onStartTest={(testId) => {
+                if (isCourseExpired) {
+                  alert('Your access to this course has expired. Please renew to continue.');
+                  return;
+                }
+                navigate(`/test/${testId}`, {
+                  state: { from: location.pathname + location.search }
+                });
               }}
               onEnroll={handleEnroll}
               onBuyNow={handleBuyNow}
@@ -1474,7 +1475,7 @@ const CourseDetails: React.FC = () => {
           )}
 
           {activeTab === 'live' && (
-            <LiveTab 
+            <LiveTab
               liveStreams={liveStreams}
               isEnrolled={isEnrolled}
               isExpired={isCourseExpired}
@@ -1531,15 +1532,15 @@ const CourseDetails: React.FC = () => {
         <StudentVideoPlayer
           videoId={selectedVideo.id || selectedVideo._id || ''}
           src={toYouTubeEmbed(
-            selectedVideo.recordedLink || 
-            selectedVideo.recordingUrl || 
-            selectedVideo.replayUrl || 
-            selectedVideo.youtubeUrl || 
-            selectedVideo.videoUrl || 
-            selectedVideo.url || 
-            selectedVideo.meetingLink || 
-            selectedVideo.liveUrl || 
-            selectedVideo.streamUrl || 
+            selectedVideo.recordedLink ||
+            selectedVideo.recordingUrl ||
+            selectedVideo.replayUrl ||
+            selectedVideo.youtubeUrl ||
+            selectedVideo.videoUrl ||
+            selectedVideo.url ||
+            selectedVideo.meetingLink ||
+            selectedVideo.liveUrl ||
+            selectedVideo.streamUrl ||
             ''
           )}
           title={selectedVideo.title}
