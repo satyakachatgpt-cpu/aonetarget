@@ -131,6 +131,14 @@ export const getCourseCategoryKey = (c: any) => {
 };
 
 export const getCourseLevel1Key = (c: any) => normalizeKey(c.level1Branch || c.examType || c.boardType || "");
+export const getCourseLevel1Keys = (c: any): string[] => {
+  const raw: string[] = [];
+  if (Array.isArray(c?.level1Branches)) raw.push(...c.level1Branches.map(String));
+  if (c?.level1Branch) raw.push(...String(c.level1Branch).split(','));
+  if (c?.examType) raw.push(String(c.examType));
+  if (c?.boardType) raw.push(String(c.boardType));
+  return Array.from(new Set(raw.map(normalizeKey).filter(Boolean)));
+};
 export const getCourseLevel2Key = (c: any) => normalizeKey(c.level2Branch || c.class || c.className || "");
 export const getCourseSubKey = (c: any) => normalizeKey(c.subcategoryId || c.contentType || c.subcategory || "");
 
@@ -696,11 +704,11 @@ const NeetIitJeePage: React.FC<{
       const matchesCat = isCategoryMatch(c, category);
       if (!matchesCat) return false;
       
-      const cL1 = getCourseLevel1Key(c);
+      const cL1Keys = getCourseLevel1Keys(c);
       const aL1 = normalizeKey(activeBranch);
       
-      // Strict Match for primary list
-      if (cL1 && cL1 !== aL1) return false;
+      // Strict Match when branches exist
+      if (branches.length > 0 && aL1 && !cL1Keys.includes(aL1)) return false;
 
       return true;
     });
@@ -1113,17 +1121,17 @@ const GeneralClassPage: React.FC<{
       const matchesCat = isCategoryMatch(c, category);
       if (!matchesCat) return false;
       
-      const cL1 = getCourseLevel1Key(c);
+      const cL1Keys = getCourseLevel1Keys(c);
       const aL1 = normalizeKey(activeL1);
       
       const cL2 = getCourseLevel2Key(c);
       const aL2 = normalizeKey(activeL2);
       
-      // Level 1 (Board) must match if present
-      if (cL1 && cL1 !== aL1) return false;
+      // Strict Level 1 (Board) match: when boards exist, course must include selected board
+      if (branchesL1.length > 0 && aL1 && !cL1Keys.includes(aL1)) return false;
 
-      // Level 2 (Class) must match if present
-      if (cL2 && cL2 !== aL2) return false;
+      // Strict Level 2 (Class) match: when classes exist, course must match selected class
+      if (branchesL2.length > 0 && aL2 && cL2 !== aL2) return false;
 
       // Robust Subject Matching
       if (selectedSubject && selectedSubject !== 'all' && selectedSubject !== '') {
@@ -1186,30 +1194,23 @@ const GeneralClassPage: React.FC<{
         </div>
       </header>
 
-      <main className="px-4 -mt-6 space-y-5 pb-20">
+      <main className="px-4 -mt-5 space-y-4 pb-20">
         <div className="grid grid-cols-2 gap-3">
           {branchesL2.map(b => (
             <button
               key={b.slug}
               onClick={() => { setActiveL2(b.slug); setSelectedSubject(null); }}
-              className={`relative rounded-3xl p-5 text-left transition-all active:scale-95 overflow-hidden h-40 shadow-sm ${
-                activeL2 === b.slug ? 'ring-2 ring-white border-transparent' : 'border border-gray-100'
+              className={`relative rounded-2xl p-4 text-left transition-all active:scale-95 overflow-hidden h-24 shadow-sm flex items-center justify-between ${
+                activeL2 === b.slug ? 'ring-2 ring-white border-transparent shadow-md' : 'border border-white/15 opacity-90 hover:opacity-100'
               }`}
             >
               <div className="absolute inset-0 bg-gradient-to-br from-indigo-600 to-violet-700"></div>
-              <div className="relative z-10 flex flex-col h-full justify-between">
-                {false && (
-                  <div className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-lg bg-white/20">
-                    <span className="text-2xl font-black text-white">{b.slug.replace(/\D/g, '')}</span>
-                  </div>
-                )}
-                <div>
-                  <h3 className="font-black text-lg text-white">{b.label}</h3>
-                  <p className="text-white/60 text-xs font-medium">{category.subtitle || 'Academic Success'}</p>
-                </div>
+              <div className="relative z-10 min-w-0 pr-2">
+                <h3 className="font-black text-base text-white leading-tight">{b.label}</h3>
+                <p className="text-white/75 text-[11px] font-medium mt-1">{category.subtitle || 'Academic Success'}</p>
               </div>
               {activeL2 === b.slug && (
-                <div className="absolute top-2 right-2 w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
+                <div className="relative z-10 w-6 h-6 bg-white/25 rounded-full flex items-center justify-center shrink-0">
                   <span className="material-symbols-rounded text-white text-xs">check</span>
                 </div>
               )}
@@ -1321,7 +1322,9 @@ const GeneralClassPage: React.FC<{
                         ) : (
                           <span className="text-sm font-bold text-blue-600">{isFree ? 'Free' : `₹${coursePrice}`}</span>
                         )}
-                        <span className="px-2 py-0.5 text-[10px] bg-blue-50 text-blue-600 rounded-full font-bold uppercase">{activeL1} • {activeL2}</span>
+                        <span className="px-2 py-0.5 text-[10px] bg-blue-50 text-blue-600 rounded-full font-bold uppercase">
+                          {activeL1 || (course as any).level1Branch}{((course as any).level2Branch || activeL2) ? ` • ${(course as any).level2Branch || activeL2}` : ''}
+                        </span>
                       </div>
                     </div>
                     

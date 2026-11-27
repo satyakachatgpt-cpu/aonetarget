@@ -60,7 +60,16 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
     const [allSubCategories, setAllSubCategories] = useState<any[]>([]);
     const [loadingSubCategories, setLoadingSubCategories] = useState(false);
     const [allSubjects, setAllSubjects] = useState<any[]>([]);
-    const [level1Branch, setLevel1Branch] = useState(courseData?.level1Branch || '');
+    const [level1Branches, setLevel1Branches] = useState<string[]>(() => {
+        if (Array.isArray(courseData?.level1Branches) && courseData.level1Branches.length > 0) {
+            return courseData.level1Branches.map(String);
+        }
+        if (courseData?.level1Branch) {
+            return String(courseData.level1Branch).split(',').map(s => s.trim()).filter(Boolean);
+        }
+        return [];
+    });
+    const level1Branch = level1Branches[0] || '';
     const [level2Branch, setLevel2Branch] = useState(courseData?.level2Branch || '');
     const [selectedSubjectId, setSelectedSubjectId] = useState(courseData?.subjectId || '');
     const [selectedCategoryId, setSelectedCategoryId] = useState(courseData?.categoryId || '');
@@ -128,8 +137,10 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
                 setSelectedCategoryId(courseData.categoryId);
             }
 
-            if (courseData.level1Branch) {
-                setLevel1Branch(courseData.level1Branch);
+            if (Array.isArray(courseData.level1Branches) && courseData.level1Branches.length > 0) {
+                setLevel1Branches(courseData.level1Branches.map(String));
+            } else if (courseData.level1Branch) {
+                setLevel1Branches(String(courseData.level1Branch).split(',').map((s: string) => s.trim()).filter(Boolean));
             }
 
             if (courseData.level2Branch) {
@@ -405,7 +416,8 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
                 categoryId: selectedCategoryId,
                 subcategoryId: finalSubcategoryId,
                 contentType: normalizeSubcategoryToContentType(finalSubcategoryId),
-                level1Branch: level1Branch,
+                level1Branch: level1Branches[0] || '',
+                level1Branches: level1Branches,
                 level2Branch: level2Branch,
                 subjectId: selectedSubjectId,
                 subject: selectedSubjectObj?.name || '',
@@ -709,11 +721,13 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
     (Array.isArray(selectedCategories) && selectedCategories.some(sc => String(sc).toLowerCase().trim() === String(c.title || '').toLowerCase().trim()))
 );
                                          if (cat && cat.branchesL1 && cat.branchesL1.length > 0) {
-                                             const branch = cat.branchesL1.find((b: any) => b.slug === level1Branch);
+                                             const selectedLabels = cat.branchesL1
+                                                 .filter((b: any) => level1Branches.includes(b.slug))
+                                                 .map((b: any) => b.label);
                                              return (
                                                  <div className="flex items-center gap-2 animate-in fade-in transition-all">
-                                                     <span className={`px-2 py-0.5 text-[11px] font-bold rounded-sm border ${level1Branch ? 'bg-indigo-100 text-indigo-800 border-indigo-200/50' : 'bg-slate-100 text-slate-400 border-slate-200'}`}>
-                                                         {branch?.label || (cat.level1Label || 'Branch')}
+                                                     <span className={`px-2 py-0.5 text-[11px] font-bold rounded-sm border ${level1Branches.length > 0 ? 'bg-indigo-100 text-indigo-800 border-indigo-200/50' : 'bg-slate-100 text-slate-400 border-slate-200'}`}>
+                                                         {selectedLabels.length > 0 ? selectedLabels.join(', ') : (cat.level1Label || 'Branch')}
                                                      </span>
                                                      <span className="material-symbols-outlined text-slate-300 text-[14px]">chevron_right</span>
                                                  </div>
@@ -760,7 +774,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
                                          // Strict Path-Aware Filtering for Subcategories
                                          const filteredSubCategories = allSubCategories.filter(sub => 
                                              String(sub.categoryId) === String(selectedCategoryId) &&
-                                             (hasL1 ? sub.level1Branch === level1Branch : true) &&
+                                             (hasL1 ? (level1Branches.length === 0 || level1Branches.includes(sub.level1Branch)) : true) &&
                                              (hasL2 ? sub.level2Branch === level2Branch : true)
                                          );
 
@@ -798,19 +812,19 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
                                          // Strict Path-Aware Filtering for Subcategories
                                          const filteredSubCategories = allSubCategories.filter(sub => 
                                              String(sub.categoryId) === String(selectedCategoryId) &&
-                                             (hasL1 ? sub.level1Branch === level1Branch : true) &&
+                                             (hasL1 ? (level1Branches.length === 0 || level1Branches.includes(sub.level1Branch)) : true) &&
                                              (hasL2 ? sub.level2Branch === level2Branch : true)
                                          );
 
                                          const showSubCategoryStep = filteredSubCategories.length > 0 || (isEditMode && selectedSubCategoryId);
 
                                          // Path is valid if branches are selected (if they exist)
-                                         const isBranchPathSelected = (!hasL1 || level1Branch) && (!hasL2 || level2Branch);
+                                         const isBranchPathSelected = (!hasL1 || level1Branches.length > 0) && (!hasL2 || level2Branch);
                                          if (!isBranchPathSelected) return null;
 
                                          const filteredSubjects = allSubjects.filter(subj => 
                                              String(subj.categoryId) === String(selectedCategoryId) &&
-                                             (hasL1 ? subj.level1Branch === level1Branch : true) &&
+                                             (hasL1 ? level1Branches.includes(subj.level1Branch) : true) &&
                                              (hasL2 ? subj.level2Branch === level2Branch : true) &&
                                              (showSubCategoryStep ? (selectedSubCategoryId ? (String(subj.subcategoryId) === String(selectedSubCategoryId) || subj.course === subObj?.title) : true) : true)
                                          );
@@ -852,7 +866,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
                                                                          setSelectedCategories([catName]);
                                                                          setSelectedCategoryId(String(catId));
                                                                          // Cascading Reset
-                                                                         setLevel1Branch('');
+                                                                         setLevel1Branches([]);
                                                                          setLevel2Branch('');
                                                                          setSelectedSubCategoryId('');
                                                                          setSelectedSubjectId('');
@@ -886,7 +900,7 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
                                          // Strict Path-Aware Filtering for Subcategories
                                          const filteredSubCategories = allSubCategories.filter(sub => 
                                              String(sub.categoryId) === String(selectedCategoryId) &&
-                                             (hasL1 ? sub.level1Branch === level1Branch : true) &&
+                                             (hasL1 ? (level1Branches.length === 0 || level1Branches.includes(sub.level1Branch)) : true) &&
                                              (hasL2 ? sub.level2Branch === level2Branch : true)
                                          );
 
@@ -895,33 +909,48 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
 
                                          return (
                                              <div className="space-y-4 animate-in fade-in duration-500 overflow-visible">
-                                                 {/* STEP 2: Level 1 (Branch/Board) */}
+                                                 {/* STEP 2: Level 1 (Branch/Board - Multi-select) */}
                                                  {hasL1 && (
                                                      <div className={`flex items-start gap-4 p-4 rounded-lg bg-white border border-slate-100 hover:border-slate-200 transition-all shadow-sm relative ${showLevel1Branch ? 'z-[9999]' : 'z-auto'}`}>
                                                          <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center text-[11px] font-black flex-shrink-0">02</div>
                                                          <div className="flex-1 space-y-2">
-                                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">{selectedCatObj.level1Label || 'Branch'}*</label>
+                                                             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest block">{selectedCatObj.level1Label || 'Branch'}* (Multi-select)</label>
                                                              <div className="relative">
                                                                  <div onMouseDown={(e) => { e.preventDefault(); setShowLevel1Branch(!showLevel1Branch); setShowLevel2Branch(false); setShowSubCategories(false); setShowSubjects(false); }} className="w-full border border-slate-200 px-3 py-2 rounded text-[13px] transition-all cursor-pointer flex items-center justify-between hover:border-blue-400 bg-white font-medium">
-                                                                     <span className={level1Branch ? 'text-slate-900 font-bold' : 'text-slate-400'}>
-                                                                         {selectedCatObj.branchesL1.find((b: any) => b.slug === level1Branch)?.label || `Select ${selectedCatObj.level1Label || 'Branch'}`}
+                                                                     <span className={level1Branches.length > 0 ? 'text-slate-900 font-bold' : 'text-slate-400'}>
+                                                                         {level1Branches.length > 0
+                                                                             ? selectedCatObj.branchesL1
+                                                                                 .filter((b: any) => level1Branches.includes(b.slug))
+                                                                                 .map((b: any) => b.label)
+                                                                                 .join(', ')
+                                                                             : `Select ${selectedCatObj.level1Label || 'Branch'}`}
                                                                      </span>
                                                                      <span className={`material-symbols-outlined text-slate-400 transition-transform ${showLevel1Branch ? 'rotate-180' : ''} text-[18px]`}>expand_more</span>
                                                                  </div>
                                                                  {showLevel1Branch && (
                                                                      <div className="absolute top-full left-0 w-full mt-1 bg-white border border-slate-200 rounded shadow-xl z-[101] py-1">
-                                                                         {selectedCatObj.branchesL1.map((branch: any) => (
-                                                                             <div key={branch.slug} onMouseDown={(e) => {
-                                                                                 e.preventDefault();
-                                                                                 setLevel1Branch(branch.slug);
-                                                                                 setLevel2Branch('');
-                                                                                 setSelectedSubCategoryId('');
-                                                                                 setSelectedSubjectId('');
-                                                                                 setShowLevel1Branch(false);
-                                                                             }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-slate-50 flex items-center justify-between ${level1Branch === branch.slug ? 'text-blue-600 bg-blue-50 font-bold' : 'text-slate-600'}`}>
-                                                                                 {branch.label} {level1Branch === branch.slug && <span className="material-symbols-outlined text-[16px]">check_circle</span>}
-                                                                             </div>
-                                                                         ))}
+                                                                         {selectedCatObj.branchesL1.map((branch: any) => {
+                                                                             const isSelected = level1Branches.includes(branch.slug);
+                                                                             return (
+                                                                                 <div key={branch.slug} onMouseDown={(e) => {
+                                                                                     e.preventDefault();
+                                                                                     const next = isSelected
+                                                                                         ? level1Branches.filter(s => s !== branch.slug)
+                                                                                         : [...level1Branches, branch.slug];
+                                                                                     setLevel1Branches(next);
+                                                                                     if (next.length === 0) {
+                                                                                         setLevel2Branch('');
+                                                                                         setSelectedSubCategoryId('');
+                                                                                         setSelectedSubjectId('');
+                                                                                     }
+                                                                                 }} className={`px-4 py-2 text-[13px] cursor-pointer hover:bg-slate-50 flex items-center justify-between ${isSelected ? 'text-blue-600 bg-blue-50 font-bold' : 'text-slate-600'}`}>
+                                                                                     <span>{branch.label}</span>
+                                                                                     <span className="material-symbols-outlined text-[18px]">
+                                                                                         {isSelected ? 'check_box' : 'check_box_outline_blank'}
+                                                                                     </span>
+                                                                                 </div>
+                                                                             );
+                                                                         })}
                                                                      </div>
                                                                  )}
                                                              </div>
@@ -1009,12 +1038,12 @@ const AddCourse: React.FC<Props> = ({ onClose, courseData, showToast, onSave }) 
 
                                                   {/* STEP 5: Subjects */}
                                                   {(() => {
-                                                       const isPathValid = (!hasL1 || level1Branch) && (!hasL2 || (hasL2 && level2Branch));
+                                                       const isPathValid = (!hasL1 || level1Branches.length > 0) && (!hasL2 || (hasL2 && level2Branch));
                                                        if (!isPathValid) return null;
                                                       const subObj = allSubCategories.find(s => String(s.id || s._id) === String(selectedSubCategoryId));
                                                       const filteredSubjects = allSubjects.filter(subj => 
                                                           String(subj.categoryId) === String(selectedCategoryId) &&
-                                                          (hasL1 ? subj.level1Branch === level1Branch : true) &&
+                                                          (hasL1 ? level1Branches.includes(subj.level1Branch) : true) &&
                                                           (hasL2 ? subj.level2Branch === level2Branch : true) &&
                                                           (showSubCategoryStep ? (selectedSubCategoryId ? (String(subj.subcategoryId) === String(selectedSubCategoryId) || subj.course === subObj?.title) : true) : true)
                                                       );
