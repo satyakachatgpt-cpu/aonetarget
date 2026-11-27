@@ -1,6 +1,9 @@
 import { db, getDb } from '../config/db.js';
 import Student from '../models/Student.js';
 import mongoose from 'mongoose';
+import { getCache, setCache } from '../utils/memoryCache.js';
+
+const { ObjectId } = mongoose.Types;
 
 /**
  * GET /api/admin/verify
@@ -39,6 +42,12 @@ export const verifyAdmin = async (req, res) => {
 export const getDashboardStats = async (req, res) => {
   try {
     const { type = 'Daily', date, from, to } = req.query;
+    const cacheKey = `admin:stats:${type}:${date || ''}:${from || ''}:${to || ''}`;
+    const cached = getCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const db = getDb();
     const now = new Date();
 
@@ -68,21 +77,22 @@ export const getDashboardStats = async (req, res) => {
       start.setHours(0, 0, 0, 0);
     }
 
-    const totalStudents = await db.collection('students').countDocuments();
-    const totalCourses = await db.collection('courses').countDocuments();
-
     const duration = end.getTime() - start.getTime();
     const prevStart = new Date(start.getTime() - duration - 1);
     const prevEnd = new Date(start.getTime() - 1);
 
-    const purchases = await db.collection('purchases').find({
-      status: 'completed',
-      createdAt: { $gte: prevStart, $lte: end }
-    }).toArray();
-
-    const students = await db.collection('students').find({
-      createdAt: { $gte: prevStart, $lte: end }
-    }).toArray();
+    const [totalStudents, totalCourses, purchases, students] = await Promise.all([
+      db.collection('students').countDocuments(),
+      db.collection('courses').countDocuments(),
+      db.collection('purchases')
+        .find({ status: 'completed', createdAt: { $gte: prevStart, $lte: end } })
+        .project({ createdAt: 1, amount: 1, _id: 0 })
+        .toArray(),
+      db.collection('students')
+        .find({ createdAt: { $gte: prevStart, $lte: end } })
+        .project({ createdAt: 1, _id: 0 })
+        .toArray()
+    ]);
 
     let currentRevenue = 0, currentSales = 0;
     let prevRevenue = 0, prevSales = 0;
@@ -167,7 +177,7 @@ export const getDashboardStats = async (req, res) => {
       signups: chartData.map(t => Number(t.signups) || 0)
     };
 
-    res.json({
+    const payload = {
       success: true,
       totalStudents, totalCourses,
       totalRevenue: currentRevenue,
@@ -176,7 +186,9 @@ export const getDashboardStats = async (req, res) => {
       rank: Math.max(1, 1271 - Math.floor(totalStudents / 5)),
       chartData,
       recentTrends
-    });
+    };
+    setCache(cacheKey, payload, 30);
+    res.json(payload);
   } catch (error) {
     console.error('Stats Error:', error);
     res.status(500).json({ error: 'Failed' });
@@ -222,7 +234,15 @@ export const updateInstituteSettings = async (req, res) => {
 export const approveDevice = async (req, res) => {
   try {
     const { studentId } = req.body;
-    const student = await Student.findById(studentId);
+    if (!studentId) return res.status(400).json({ error: 'studentId is required' });
+
+    const student = await Student.findOne({
+      $or: [
+        { id: studentId },
+        { userId: studentId },
+        ...(ObjectId.isValid(studentId) ? [{ _id: new ObjectId(studentId) }] : [])
+      ]
+    });
     if (!student) return res.status(404).json({ error: 'Student not found' });
     
     if (!student.pendingDeviceId) {
@@ -256,7 +276,8 @@ export const approveDevice = async (req, res) => {
     
     res.json({ success: true, message: 'Device approved successfully' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to approve device' });
+    console.error('[approveDevice error]:', error);
+    res.status(500).json({ error: error?.message || 'Failed to approve device' });
   }
 };
 
@@ -267,7 +288,15 @@ export const approveDevice = async (req, res) => {
 export const rejectDevice = async (req, res) => {
   try {
     const { studentId } = req.body;
-    const student = await Student.findById(studentId);
+    if (!studentId) return res.status(400).json({ error: 'studentId is required' });
+
+    const student = await Student.findOne({
+      $or: [
+        { id: studentId },
+        { userId: studentId },
+        ...(ObjectId.isValid(studentId) ? [{ _id: new ObjectId(studentId) }] : [])
+      ]
+    });
     if (!student) return res.status(404).json({ error: 'Student not found' });
     
     student.pendingDeviceId = null;
@@ -282,7 +311,8 @@ export const rejectDevice = async (req, res) => {
     
     res.json({ success: true, message: 'Device request rejected' });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to reject device' });
+    console.error('[rejectDevice error]:', error);
+    res.status(500).json({ error: error?.message || 'Failed to reject device' });
   }
 };
 
@@ -293,7 +323,13 @@ export const rejectDevice = async (req, res) => {
 export const resetDevice = async (req, res) => {
   try {
     const { studentId } = req.body;
-    const student = await Student.findById(studentId);
+    const student = await Student.findOne({
+      $or: [
+        { id: studentId },
+        { userId: studentId },
+        ...(mongoose.Types.ObjectId.isValid(studentId) ? [{ _id: new mongoose.Types.ObjectId(studentId) }] : [])
+      ]
+    });
     if (!student) return res.status(404).json({ error: 'Student not found' });
     
     student.deviceId = null;
@@ -315,11 +351,19 @@ export const resetDevice = async (req, res) => {
     
     student.deviceLocked = true;
     
-    // Also remove any active session traces
+    // Also remove any active session traces and invalidate all tokens
     student.sessionToken = null;
     student.activeSessions = [];
     
     await student.save();
+
+    try {
+      const database = getDb ? getDb() : mongoose.connection.db;
+      const studentIds = [student.id, String(student._id), student.userId].filter(Boolean);
+      await database.collection('refresh_tokens').deleteMany({ studentId: { $in: studentIds } });
+    } catch (tokenErr) {
+      console.error('[resetDevice] Error clearing refresh tokens:', tokenErr);
+    }
     
     res.json({ success: true, message: 'Device limit reset successfully' });
   } catch (error) {

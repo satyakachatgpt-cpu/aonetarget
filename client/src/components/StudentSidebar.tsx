@@ -29,15 +29,25 @@ const StudentSidebar: React.FC<StudentSidebarProps> = ({ isOpen, onClose, studen
     if (isOpen) {
       document.body.style.overflow = 'hidden';
       document.body.style.touchAction = 'none';
+      document.body.setAttribute('data-sidebar-open', 'true');
     } else {
       document.body.style.overflow = 'unset';
       document.body.style.touchAction = 'auto';
+      document.body.removeAttribute('data-sidebar-open');
     }
+
+    const handleCloseOverlay = () => {
+      onClose();
+    };
+    window.addEventListener('app:close-overlays', handleCloseOverlay);
+
     return () => {
       document.body.style.overflow = 'unset';
       document.body.style.touchAction = 'auto';
+      document.body.removeAttribute('data-sidebar-open');
+      window.removeEventListener('app:close-overlays', handleCloseOverlay);
     };
-  }, [isOpen]);
+  }, [isOpen, onClose]);
 
   const menuItems = [
     { icon: 'home', label: 'Home', path: '/' },

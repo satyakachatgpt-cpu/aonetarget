@@ -13,21 +13,20 @@ if (!rootElement) {
 
 const root = ReactDOM.createRoot(rootElement);
 
+// Instant font readiness without 3-second block
+document.documentElement.classList.add('material-symbols-ready');
 if ('fonts' in document) {
   Promise.all([
     document.fonts.load("24px 'Material Symbols Rounded'"),
     document.fonts.load("24px 'Material Symbols Outlined'")
-  ]).then(() => {
-    document.documentElement.classList.add('material-symbols-ready');
-  }).catch(() => {
-    setTimeout(() => {
-      document.documentElement.classList.add('material-symbols-ready');
-    }, 3000);
-  });
-} else {
-  setTimeout(() => {
-    document.documentElement.classList.add('material-symbols-ready');
-  }, 3000);
+  ]).catch(() => {});
+}
+
+// In dev mode, unregister any leftover Service Workers so localhost never serves stale cached chunks
+if (import.meta.env.DEV && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    regs.forEach((reg) => reg.unregister());
+  }).catch(() => {});
 }
 
 root.render(
@@ -35,16 +34,3 @@ root.render(
     <App />
   </Provider>
 );
-
-// Register Service Worker
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js')
-      .then(registration => {
-        console.log('SW registered: ', registration);
-      })
-      .catch(registrationError => {
-        console.log('SW registration failed: ', registrationError);
-      });
-  });
-}

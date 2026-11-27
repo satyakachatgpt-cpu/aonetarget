@@ -2,10 +2,12 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import DOMPurify from 'dompurify';
 import { useDebounce } from '../hooks/useDebounce';
 import { useNavigate } from 'react-router-dom';
-import { coursesAPI, blogAPI, newsAPI, categoriesAPI, bannersAPI, testsAPI, testSeriesAPI, liveVideosAPI, quickLinksAPI, API_BASE_URL } from '../services/apiClient';
+import { coursesAPI, blogAPI, newsAPI, categoriesAPI, bannersAPI, testsAPI, testSeriesAPI, liveVideosAPI, quickLinksAPI, API_BASE_URL, cachedFetch } from '../services/apiClient';
 import StudentSidebar from '../components/StudentSidebar';
 import { useAuthStore } from '../store/authStore';
 import { Course, Student } from '../types';
+import { Capacitor } from '@capacitor/core';
+import { openPlayStoreForNews } from '../lib/utils';
 
 
 interface NewsItem {
@@ -125,10 +127,30 @@ const Home: React.FC = () => {
     const timer = setInterval(() => setTick(t => t + 1), 30000);
     return () => clearInterval(timer);
   }, []);
-  const [courses, setCourses] = useState<Course[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [filteredCategories, setFilteredCategories] = useState<any[]>([]);
-  const [banners, setBanners] = useState<Banner[]>([]);
+  const [courses, setCourses] = useState<Course[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('home_courses_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
+  const [categories, setCategories] = useState<any[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('home_categories_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
+  const [filteredCategories, setFilteredCategories] = useState<any[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('home_categories_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
+  const [banners, setBanners] = useState<Banner[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('home_banners_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
   const [newsModal, setNewsModal] = useState<NewsItem | null>(null);
   const [showNewsModal, setShowNewsModal] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
@@ -139,9 +161,21 @@ const Home: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const [isSearching, setIsSearching] = useState(false);
-  const [quickLinks, setQuickLinks] = useState<any[]>([]);
-  const [allNews, setAllNews] = useState<any[]>([]);
-  const [newsLoading, setNewsLoading] = useState(true);
+  const [quickLinks, setQuickLinks] = useState<any[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('home_quicklinks_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
+  const [allNews, setAllNews] = useState<any[]>(() => {
+    try {
+      const cached = sessionStorage.getItem('home_news_cache');
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
+  const [newsLoading, setNewsLoading] = useState(() => {
+    return !sessionStorage.getItem('home_news_cache');
+  });
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   // Hide content initially if returning from a news article, to avoid top-flash
   const [isRestoringScroll, setIsRestoringScroll] = useState(
@@ -288,6 +322,7 @@ const Home: React.FC = () => {
         });
 
         setCourses(sorted);
+        try { sessionStorage.setItem('home_courses_cache', JSON.stringify(sorted)); } catch {}
       } catch (error) {
         console.error('Failed to fetch from MongoDB:', error);
       }
@@ -309,6 +344,7 @@ const Home: React.FC = () => {
             return String(a._id || a.id).localeCompare(String(b._id || b.id));
           });
         setCategories(active);
+        try { sessionStorage.setItem('home_categories_cache', JSON.stringify(active)); } catch {}
       } catch (error) {
         console.error('Failed to fetch categories:', error);
       }
@@ -327,6 +363,7 @@ const Home: React.FC = () => {
             return getOrderValue(a.order) - getOrderValue(b.order);
           });
           setBanners(activeBanners);
+          try { sessionStorage.setItem('home_banners_cache', JSON.stringify(activeBanners)); } catch {}
         } else {
           setBanners([{ imageUrl: '/attached_assets/download_1770552281686.png', title: 'Aone Target Institute' }]);
         }
@@ -370,7 +407,9 @@ const Home: React.FC = () => {
           return getTimestamp(b) - getTimestamp(a);
         });
 
-        setAllNews(activeNews.slice(0, 8));
+        const latestSlice = activeNews.slice(0, 8);
+        setAllNews(latestSlice);
+        try { sessionStorage.setItem('home_news_cache', JSON.stringify(latestSlice)); } catch {}
 
         const modalNews = activeNews.find((n: any) => n.showAsModal || n.featured);
         if (modalNews) {
@@ -440,19 +479,16 @@ const Home: React.FC = () => {
 
     const fetchExamDocs = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/exam-documents`);
-        if (response.ok) {
-          const data = await response.json();
-          const active = (Array.isArray(data) ? data : [])
-            .filter((d: any) => d.status === 'active')
-            .sort((a: any, b: any) => {
-              const aOrder = typeof a.order === 'number' ? a.order : Infinity;
-              const bOrder = typeof b.order === 'number' ? b.order : Infinity;
-              if (aOrder !== bOrder) return aOrder - bOrder;
-              return String(a._id || '').localeCompare(String(b._id || ''));
-            });
-          setExamDocs(active);
-        }
+        const data = await cachedFetch(`${API_BASE_URL}/exam-documents`);
+        const active = (Array.isArray(data) ? data : [])
+          .filter((d: any) => d.status === 'active')
+          .sort((a: any, b: any) => {
+            const aOrder = typeof a.order === 'number' ? a.order : Infinity;
+            const bOrder = typeof b.order === 'number' ? b.order : Infinity;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return String(a._id || '').localeCompare(String(b._id || ''));
+          });
+        setExamDocs(active);
       } catch (error) {
         console.error('Failed to fetch exam docs:', error);
       }
@@ -461,7 +497,9 @@ const Home: React.FC = () => {
     const fetchQuickLinks = async () => {
       try {
         const data = await quickLinksAPI.getAll();
-        setQuickLinks(Array.isArray(data) ? data : []);
+        const links = Array.isArray(data) ? data : [];
+        setQuickLinks(links);
+        try { sessionStorage.setItem('home_quicklinks_cache', JSON.stringify(links)); } catch {}
       } catch (error) {
         console.error('Failed to fetch quick links:', error);
       }
@@ -486,6 +524,20 @@ const Home: React.FC = () => {
     };
 
     fetchAll();
+
+    const handleContentUpdate = () => {
+      fetchAll();
+    };
+
+    window.addEventListener('app:content-updated', handleContentUpdate);
+    window.addEventListener('app:live-status-changed', handleContentUpdate);
+    window.addEventListener('focus', fetchAll);
+
+    return () => {
+      window.removeEventListener('app:content-updated', handleContentUpdate);
+      window.removeEventListener('app:live-status-changed', handleContentUpdate);
+      window.removeEventListener('focus', fetchAll);
+    };
   }, [isAuthenticated, student]);
 
   const dismissNewsModal = () => {
@@ -511,37 +563,25 @@ const Home: React.FC = () => {
     return window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone === true;
   };
 
+  const isNativeApp = () => {
+    return Capacitor.isNativePlatform() || isStandalone();
+  };
+
+  const PLAYSTORE_URL = 'https://play.google.com/store/apps/details?id=com.aonetarget.education';
+
   const handleDownloadAPK = () => {
-    if (isStandalone()) {
-      alert('App is already installed!');
+    if (isNativeApp()) {
       return;
     }
     setShowDownloadModal(true);
     setInstallSuccess(false);
     setIsInstalling(false);
     setShowIOSSteps(false);
+    setShowAndroidSteps(false);
   };
 
-  const handleInstallAndroid = async () => {
-    // If PWA install prompt is available (HTTPS + Chrome + not yet installed)
-    if (deferredPrompt) {
-      setIsInstalling(true);
-      try {
-        await deferredPrompt.prompt();
-        const choiceResult = await deferredPrompt.userChoice;
-        if (choiceResult.outcome === 'accepted') {
-          setInstallSuccess(true);
-          setDeferredPrompt(null);
-        }
-      } catch (err) {
-        console.error('Install prompt failed:', err);
-      }
-      setIsInstalling(false);
-    } else {
-      // No native prompt available — show Android manual steps
-      setShowIOSSteps(false);
-      setShowAndroidSteps(true);
-    }
+  const handleInstallAndroid = () => {
+    window.open(PLAYSTORE_URL, '_blank');
   };
 
   const handleInstallIOS = () => {
@@ -643,19 +683,30 @@ const Home: React.FC = () => {
     
     if (isYT) {
       const videoId = lc.id || lc._id || 'live';
-      navigate(`/watch/${videoId}`, {
+      navigate(`/watch/${videoId}?returnTo=/`, {
         state: {
           video: {
             ...lc,
             title: lc.title || lc.name || 'Live Class',
             embedUrl: getEmbedUrl(url)
-          }
+          },
+          returnTo: '/'
         }
       });
     } else {
-      // Fallback for Zoom, Google Meet, etc.
       window.open(url, '_blank');
     }
+  };
+
+  const openPdf = (url: string, title: string) => {
+    const currentPath = window.location.hash.replace(/^#/, '') || window.location.pathname;
+    navigate(`/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent(title)}&returnTo=${encodeURIComponent(currentPath)}`, {
+      state: {
+        pdf: { fileUrl: getPdfUrl(url) },
+        title,
+        returnTo: currentPath
+      }
+    });
   };
 
   // Tick every 30s for client-side auto-promotion
@@ -845,13 +896,8 @@ const Home: React.FC = () => {
                   key={cat._id || cat.id || i}
                   onClick={() => {
                     const lTitle = (cat.title || '').toLowerCase();
-                    if (cat.id === 'mock-test' || lTitle.includes('mock test')) {
-                      navigate('/mock-tests');
-                    } else if (cat.id === 'ebooks' || lTitle.includes('ebook') || lTitle.includes('notes')) {
-                      navigate('/ebook-notes');
-                    } else {
-                      navigate(`/explore/${cat.id}`);
-                    }
+                    const targetCatId = cat.id || cat._id || encodeURIComponent(lTitle.replace(/\s+/g, '-'));
+                    navigate(`/explore/${targetCatId}`);
                   }}
                   className={`relative p-3 rounded-3xl h-[140px] flex flex-col justify-between text-white bg-gradient-to-br ${cat.gradient || CATEGORY_GRADIENTS[i % CATEGORY_GRADIENTS.length]} overflow-hidden cursor-pointer active:scale-[0.97] transition-all duration-200 shadow-elevated hover:shadow-card-hover hover:-translate-y-0.5 group`}
                 >
@@ -959,7 +1005,7 @@ const Home: React.FC = () => {
                             <div className="px-3 pb-3 -mt-1 flex flex-wrap gap-2 relative z-10">
                               {lc.pdf1 && (
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.pdf1))}&title=${encodeURIComponent('PDF 1')}`, '_blank'); }}
+                                  onClick={(e) => { e.stopPropagation(); openPdf(lc.pdf1, 'PDF 1'); }}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 text-red-600 text-[10px] font-bold border border-red-100 hover:bg-white transition-all shadow-sm"
                                 >
                                   <span className="material-symbols-rounded text-sm">picture_as_pdf</span>
@@ -968,7 +1014,7 @@ const Home: React.FC = () => {
                               )}
                               {lc.pdf2 && (
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.pdf2))}&title=${encodeURIComponent('PDF 2')}`, '_blank'); }}
+                                  onClick={(e) => { e.stopPropagation(); openPdf(lc.pdf2, 'PDF 2'); }}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 text-red-600 text-[10px] font-bold border border-red-100 hover:bg-white transition-all shadow-sm"
                                 >
                                   <span className="material-symbols-rounded text-sm">picture_as_pdf</span>
@@ -977,7 +1023,7 @@ const Home: React.FC = () => {
                               )}
                               {lc.studyMaterial && (
                                 <button
-                                  onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(lc.studyMaterial))}&title=${encodeURIComponent('Study Material')}`, '_blank'); }}
+                                  onClick={(e) => { e.stopPropagation(); openPdf(lc.studyMaterial, 'Study Material'); }}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/80 text-blue-600 text-[10px] font-bold border border-blue-100 hover:bg-white transition-all shadow-sm"
                                 >
                                   <span className="material-symbols-rounded text-sm">auto_stories</span>
@@ -1520,43 +1566,45 @@ const Home: React.FC = () => {
           </div>
         </button>
 
-        <button
-          onClick={handleDownloadAPK}
-          className="w-full bg-[#F3F6F3] rounded-[32px] p-6 flex items-center justify-between active:scale-[0.98] transition-all duration-300 border border-white group overflow-hidden relative shadow-sm"
-        >
-          {/* Material You blur effects */}
-          <div className="absolute -right-4 -top-4 w-32 h-32 bg-[#3DDC84]/15 rounded-full blur-2xl group-hover:bg-[#3DDC84]/25 transition-all duration-500"></div>
-          <div className="absolute -left-4 -bottom-4 w-32 h-32 bg-[#1A237E]/5 rounded-full blur-2xl"></div>
+        {!isNativeApp() && (
+          <button
+            onClick={handleDownloadAPK}
+            className="w-full bg-[#F3F6F3] rounded-[32px] p-6 flex items-center justify-between active:scale-[0.98] transition-all duration-300 border border-white group overflow-hidden relative shadow-sm"
+          >
+            {/* Material You blur effects */}
+            <div className="absolute -right-4 -top-4 w-32 h-32 bg-[#3DDC84]/15 rounded-full blur-2xl group-hover:bg-[#3DDC84]/25 transition-all duration-500"></div>
+            <div className="absolute -left-4 -bottom-4 w-32 h-32 bg-[#1A237E]/5 rounded-full blur-2xl"></div>
 
-          <div className="flex items-center gap-5 relative z-10">
-            {/* Premium Icon Container */}
-            <div className="w-16 h-16 bg-white/80 backdrop-blur-md rounded-[24px] flex items-center justify-center shrink-0 shadow-sm border border-white/50 group-hover:scale-105 transition-transform duration-500">
-              <svg className="w-10 h-10" viewBox="0 0 24 24" fill="#3DDC84">
-                <path d="M17.523 15.3414C17.0232 15.3414 16.6179 14.9362 16.6179 14.4363C16.6179 13.9365 17.0232 13.5312 17.523 13.5312C18.0229 13.5312 18.4281 13.9365 18.4281 14.4363C18.4281 14.9362 18.0229 15.3414 17.523 15.3414ZM6.47702 15.3414C5.9772 15.3414 5.57195 14.9362 5.57195 14.4363C5.57195 13.9365 5.9772 13.5312 6.47702 13.5312C6.97684 13.5312 7.38209 13.9365 7.38209 14.4363C7.38209 14.9362 6.97684 15.3414 6.47702 15.3414ZM17.9616 10.0571L19.7289 7.00041C19.8217 6.83979 19.7663 6.6353 19.6057 6.54252C19.445 6.44975 19.2405 6.50518 19.1478 6.6658L17.3468 9.77884C15.8239 9.08889 14.0734 8.71875 12.2039 8.71875C10.3344 8.71875 8.58394 9.08889 7.06105 9.77884L5.26006 6.6658C5.16728 6.50518 4.96279 6.44975 4.80217 6.54252C4.64155 6.6353 4.58612 6.83979 4.6789 7.00041L6.44621 10.0571C3.12004 11.8385 0.887207 15.1438 0.887207 19.0062H23.5206C23.5206 15.1438 21.2878 11.8385 17.9616 10.0571Z" />
-              </svg>
+            <div className="flex items-center gap-5 relative z-10">
+              {/* Premium Icon Container */}
+              <div className="w-16 h-16 bg-white/80 backdrop-blur-md rounded-[24px] flex items-center justify-center shrink-0 shadow-sm border border-white/50 group-hover:scale-105 transition-transform duration-500">
+                <svg className="w-10 h-10" viewBox="0 0 24 24" fill="#3DDC84">
+                  <path d="M17.523 15.3414C17.0232 15.3414 16.6179 14.9362 16.6179 14.4363C16.6179 13.9365 17.0232 13.5312 17.523 13.5312C18.0229 13.5312 18.4281 13.9365 18.4281 14.4363C18.4281 14.9362 18.0229 15.3414 17.523 15.3414ZM6.47702 15.3414C5.9772 15.3414 5.57195 14.9362 5.57195 14.4363C5.57195 13.9365 5.9772 13.5312 6.47702 13.5312C6.97684 13.5312 7.38209 13.9365 7.38209 14.4363C7.38209 14.9362 6.97684 15.3414 6.47702 15.3414ZM17.9616 10.0571L19.7289 7.00041C19.8217 6.83979 19.7663 6.6353 19.6057 6.54252C19.445 6.44975 19.2405 6.50518 19.1478 6.6658L17.3468 9.77884C15.8239 9.08889 14.0734 8.71875 12.2039 8.71875C10.3344 8.71875 8.58394 9.08889 7.06105 9.77884L5.26006 6.6658C5.16728 6.50518 4.96279 6.44975 4.80217 6.54252C4.64155 6.6353 4.58612 6.83979 4.6789 7.00041L6.44621 10.0571C3.12004 11.8385 0.887207 15.1438 0.887207 19.0062H23.5206C23.5206 15.1438 21.2878 11.8385 17.9616 10.0571Z" />
+                </svg>
+              </div>
+
+              <div className="text-left">
+                <h4 className="text-[19px] font-semibold text-gray-900 tracking-tight leading-none mb-1.5 flex items-center gap-2">
+                  Get Android App
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3DDC84] opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-[#3DDC84]"></span>
+                  </span>
+                </h4>
+                <p className="text-[12px] text-gray-500 font-medium">Compatible with Android 8.0+</p>
+              </div>
             </div>
 
-            <div className="text-left">
-              <h4 className="text-[19px] font-semibold text-gray-900 tracking-tight leading-none mb-1.5 flex items-center gap-2">
-                Get Android App
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#3DDC84] opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#3DDC84]"></span>
-                </span>
-              </h4>
-              <p className="text-[12px] text-gray-500 font-medium">Compatible with Android 8.0+</p>
+            <div className="flex items-center gap-4 relative z-10">
+              <span className="bg-white/80 backdrop-blur-sm py-1.5 px-3 rounded-full text-[10px] font-bold text-[#2E7D32] border border-[#3DDC84]/20 shadow-sm uppercase tracking-wider hidden sm:block">
+                Free
+              </span>
+              <div className="w-14 h-14 bg-gray-900 text-white rounded-[20px] flex items-center justify-center shadow-lg group-hover:bg-[#3DDC84] group-hover:shadow-[#3DDC84]/30 transition-all duration-500 group-hover:translate-x-1">
+                <span className="material-symbols-rounded text-[28px]">download_for_offline</span>
+              </div>
             </div>
-          </div>
-
-          <div className="flex items-center gap-4 relative z-10">
-            <span className="bg-white/80 backdrop-blur-sm py-1.5 px-3 rounded-full text-[10px] font-bold text-[#2E7D32] border border-[#3DDC84]/20 shadow-sm uppercase tracking-wider hidden sm:block">
-              Free
-            </span>
-            <div className="w-14 h-14 bg-gray-900 text-white rounded-[20px] flex items-center justify-center shadow-lg group-hover:bg-[#3DDC84] group-hover:shadow-[#3DDC84]/30 transition-all duration-500 group-hover:translate-x-1">
-              <span className="material-symbols-rounded text-[28px]">download_for_offline</span>
-            </div>
-          </div>
-        </button>
+          </button>
+        )}
       </div>
     </div>
 
@@ -1610,17 +1658,13 @@ const Home: React.FC = () => {
                     </div>
                     <div className="text-left flex-1 relative z-10">
                       <h4 className="text-[16px] font-semibold text-gray-900 flex items-center gap-2">
-                        {isInstalling ? 'Installing...' : 'Get Android App'}
+                        Get Android App
                         <span className="bg-[#E8F5E9] py-0.5 px-2 rounded-full text-[10px] font-bold text-[#2E7D32] uppercase">Free</span>
                       </h4>
-                      <p className="text-[12px] text-gray-500 mt-0.5">Compatible with Android 8.0+</p>
+                      <p className="text-[12px] text-gray-500 mt-0.5">Install from Google Play Store</p>
                     </div>
                     <div className="w-12 h-12 bg-gray-900 text-white rounded-2xl flex items-center justify-center shadow-md group-hover:bg-[#3DDC84] transition-all duration-300 relative z-10 shrink-0">
-                      {isInstalling ? (
-                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                      ) : (
-                        <span className="material-symbols-rounded text-xl">download</span>
-                      )}
+                      <span className="material-symbols-rounded text-xl">open_in_new</span>
                     </div>
                   </button>
 

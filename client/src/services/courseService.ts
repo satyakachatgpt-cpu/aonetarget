@@ -159,6 +159,28 @@ export const uploadAPI = {
   // Alias for backward compatibility
   uploadPDF: async (file: File, options: any = {}) => {
     return uploadAPI.uploadDocument(file, options);
+  },
+
+  // Dedicated server-disk storage for News / Job Vacancy PDFs
+  uploadNewsPDF: async (file: File, options: any = {}) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const config = {
+      headers: { ...getAdminHeaders() },
+      onUploadProgress: options.onUploadProgress
+    };
+
+    try {
+      const res = await axios.post(`${API_BASE_URL}/v2/upload/news-pdf`, formData, config);
+      return res.data;
+    } catch (err: any) {
+      if (err.response) {
+        await handleUnauthorized(err.response, `${API_BASE_URL}/v2/upload/news-pdf`);
+      }
+      const errMsg = err.response?.data?.error || err.message || 'News PDF upload failed';
+      throw new Error(errMsg);
+    }
   }
 };
 
@@ -313,8 +335,18 @@ export const liveVideosAPI = {
 
 // PDFs API
 export const pdfsAPI = {
-  getAll: async () => {
-    const response = await fetch(`${API_BASE_URL}/pdfs`);
+  getAll: async (params?: { courseId?: string; isFree?: boolean; categoryId?: string; branch?: string }) => {
+    let url = `${API_BASE_URL}/pdfs`;
+    if (params) {
+      const q = new URLSearchParams();
+      if (params.courseId) q.append('courseId', params.courseId);
+      if (params.isFree !== undefined) q.append('isFree', String(params.isFree));
+      if (params.categoryId) q.append('categoryId', params.categoryId);
+      if (params.branch) q.append('branch', params.branch);
+      const qs = q.toString();
+      if (qs) url += `?${qs}`;
+    }
+    const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to fetch PDFs');
     return response.json();
   },

@@ -5,8 +5,19 @@ import { Capacitor } from '@capacitor/core';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getImageUrl, getVideoUrl, getPdfUrl, getYouTubeThumbnail, getGradientPlaceholder, toYouTubeEmbed, isYouTubeUrl, isLiveUrl } from '../lib/utils';
 import StudentVideoPlayer from '../components/student/StudentVideoPlayer';
+import { CourseTopNav } from './course-details/components/CourseTopNav';
+import { CourseOverviewHeader } from './course-details/components/CourseOverviewHeader';
+import { VisualPreviewCarousel } from './course-details/components/VisualPreviewCarousel';
+import { AboutCourseSpecs } from './course-details/components/AboutCourseSpecs';
+import { FreeContentSection } from './course-details/components/FreeContentSection';
+import { DifficultySupportCard } from './course-details/components/DifficultySupportCard';
+import { InPagePricingSection } from './course-details/components/InPagePricingSection';
+import { CouponBottomSheet } from './course-details/components/CouponBottomSheet';
+import { StateSelectionBottomSheet } from './course-details/components/StateSelectionBottomSheet';
+import { CourseBottomBar } from './course-details/components/CourseBottomBar';
 import CourseHero from './course-details/components/CourseHero';
 import CourseMetadata from './course-details/components/CourseMetadata';
+import CourseCheckoutBar from './course-details/components/CourseCheckoutBar';
 import NotesTab from './course-details/components/NotesTab';
 import TestsTab from './course-details/components/TestsTab';
 import LiveTab from './course-details/components/LiveTab';
@@ -15,7 +26,7 @@ import { Course, Video, Progress } from '../types';
 import { useAuthStore } from '../store/authStore';
 import { useUIStore } from '../store/uiStore';
 import { CATEGORY_GRADIENTS } from '../constants';
-import { API_BASE_URL as _API_BASE_URL } from '../services/apiClient';
+import { API_BASE_URL as _API_BASE_URL, getAuthHeaders as getStudentAuthHeaders } from '../services/apiClient';
 const API_BASE_URL = _API_BASE_URL;
 
 // Local Video interface removed; using Course/Video/Progress from ../types
@@ -31,10 +42,10 @@ interface Note {
 
 function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' | 'recorded' {
   const raw = (lc.streamStatus || lc.status || lc.liveStatus || lc.eventStatus || 'upcoming').toLowerCase();
-  
+
   const isExplicitlyEnded = ['ended', 'completed', 'inactive', 'recorded', 'disable', 'finished'].includes(raw);
-  const isImplicitlyEnded = (lc.isLive === false && (lc.endedAt || lc.endTime)) || 
-                           (lc.type === 'recorded' || lc.contentType === 'recorded' || lc.contentType === 'video');
+  const isImplicitlyEnded = (lc.isLive === false && (lc.endedAt || lc.endTime)) ||
+    (lc.type === 'recorded' || lc.contentType === 'recorded' || lc.contentType === 'video');
   const hasEndedLabel = lc.statusLabel === 'EVENT ENDED' || lc.label === 'EVENT ENDED';
 
   if (isExplicitlyEnded || isImplicitlyEnded || hasEndedLabel) return 'ended';
@@ -47,7 +58,7 @@ function computeEffectiveStatus(lc: any): 'live' | 'upcoming' | 'ended' | 'recor
     if (scheduledTime > Date.now()) {
       return 'upcoming';
     } else if (!isExplicitlyEnded) {
-       return 'live'; // Promote to live if time passed and not explicitly ended
+      return 'live'; // Promote to live if time passed and not explicitly ended
     }
   }
 
@@ -67,17 +78,110 @@ interface Test {
 const CourseDetails: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { student } = useAuthStore();
-  const [course, setCourse] = useState<Course | null>(null);
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [tests, setTests] = useState<Test[]>([]);
+  const setShowBottomNavOnCourse = useUIStore(s => s.setShowBottomNavOnCourse);
+  const [course, setCourse] = useState<Course | null>(() => {
+    try {
+      const cached = sessionStorage.getItem(`course_cache_${id}`);
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [videos, setVideos] = useState<Video[]>(() => {
+    try {
+      const cached = sessionStorage.getItem(`course_media_cache_${id}`);
+      if (cached) return JSON.parse(cached).videos || [];
+    } catch {}
+    return [];
+  });
+  const [notes, setNotes] = useState<Note[]>(() => {
+    try {
+      const cached = sessionStorage.getItem(`course_media_cache_${id}`);
+      if (cached) return JSON.parse(cached).notes || [];
+    } catch {}
+    return [];
+  });
+  const [tests, setTests] = useState<Test[]>(() => {
+    try {
+      const cached = sessionStorage.getItem(`course_media_cache_${id}`);
+      if (cached) return JSON.parse(cached).tests || [];
+    } catch {}
+    return [];
+  });
   const [progress, setProgress] = useState<Progress>({ completedVideos: [], completedTests: [], completedNotes: [] });
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(() => {
+    try {
+      const cached = sessionStorage.getItem(`course_cache_${id}`);
+      return !cached;
+    } catch {
+      return true;
+    }
+  });
+  const [isEnrolled, setIsEnrolled] = useState(() => {
+    try {
+      const studentData = localStorage.getItem('student') || localStorage.getItem('studentData');
+      if (studentData) {
+        const parsed = JSON.parse(studentData);
+        const enrolledList = parsed.enrolledCourses || [];
+        const enrolledBatch = parsed.enrolledBatch;
+        const currentId = id ? String(id) : '';
+        return enrolledList.some((c: any) => String(c.id || c._id || c) === currentId) || String(enrolledBatch) === currentId;
+      }
+    } catch { }
+    return false;
+  });
+  const [mainTab, setMainTab] = useState<'overview' | 'content'>(() => {
+    if (location.state?.tab === 'content' || location.state?.openContent) return 'content';
+    try {
+      const studentData = localStorage.getItem('student') || localStorage.getItem('studentData');
+      if (studentData) {
+        const parsed = JSON.parse(studentData);
+        const enrolledList = parsed.enrolledCourses || [];
+        const enrolledBatch = parsed.enrolledBatch;
+        const currentId = id ? String(id) : '';
+        const isPreEnrolled = enrolledList.some((c: any) => String(c.id || c._id || c) === currentId) || String(enrolledBatch) === currentId;
+        if (isPreEnrolled) return 'content';
+      }
+    } catch { }
+    return 'overview';
+  });
   const [activeTab, setActiveTab] = useState<'videos' | 'notes' | 'tests' | 'live'>('videos');
-  const [isEnrolled, setIsEnrolled] = useState(false);
+  const [appliedCoupon, setAppliedCoupon] = useState<string | null>(null);
+  const [discountAmount, setDiscountAmount] = useState<number>(0);
+  const [isCouponSheetOpen, setIsCouponSheetOpen] = useState<boolean>(false);
+  const [processingPayment, setProcessingPayment] = useState<boolean>(false);
+  const [selectedState, setSelectedState] = useState<string>(() => {
+    try {
+      const stored = localStorage.getItem('student_selected_state');
+      if (stored) return stored;
+      const studentData = localStorage.getItem('studentData');
+      if (studentData) {
+        const parsed = JSON.parse(studentData);
+        if (parsed.state) return parsed.state;
+      }
+    } catch { }
+    return (student as any)?.state || 'Haryana';
+  });
+  const [isStateSheetOpen, setIsStateSheetOpen] = useState<boolean>(false);
+  const [showSuccessModal, setShowSuccessModal] = useState<boolean>(false);
+
+  const handleSelectState = (newState: string) => {
+    setSelectedState(newState);
+    try {
+      localStorage.setItem('student_selected_state', newState);
+      const studentData = localStorage.getItem('studentData');
+      if (studentData) {
+        const parsed = JSON.parse(studentData);
+        parsed.state = newState;
+        localStorage.setItem('studentData', JSON.stringify(parsed));
+      }
+    } catch { }
+  };
   const [isCourseExpired, setIsCourseExpired] = useState(false);
   const [enrollmentStatus, setEnrollmentStatus] = useState<string>('not_enrolled');
+  const [checkingEnrollment, setCheckingEnrollment] = useState<boolean>(() => !isEnrolled);
   const [showVideoPlayer, setShowVideoPlayer] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
   const [liveMessages, setLiveMessages] = useState<any[]>([]);
@@ -99,7 +203,15 @@ const CourseDetails: React.FC = () => {
 
   const fetchLiveMessages = async (vId: string) => {
     try {
-      const res = await fetch(`${API_BASE_URL}/live-chat/${vId}/messages`);
+      const studentToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
+      const adminToken = localStorage.getItem('adminToken');
+      const authHeader = studentToken ? { 'Authorization': `Bearer ${studentToken}` } : (adminToken ? { 'Authorization': `Bearer ${adminToken}` } : {});
+      const res = await fetch(`${API_BASE_URL}/live-chat/${vId}/messages`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeader
+        }
+      });
       if (res.ok) {
         const data = await res.json();
         // Normalize fields for StudentVideoPlayer
@@ -177,18 +289,11 @@ const CourseDetails: React.FC = () => {
   };
 
   const getAuthHeaders = () => {
-    const adminId = localStorage.getItem('adminId');
-    const adminToken = localStorage.getItem('adminToken');
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json'
+    const studentHeaders = getStudentAuthHeaders();
+    return {
+      'Content-Type': 'application/json',
+      ...studentHeaders
     };
-    if (adminId) headers['x-admin-id'] = adminId;
-    if (adminToken) headers['Authorization'] = `Bearer ${adminToken}`;
-    if (!headers['Authorization']) {
-      const studentToken = localStorage.getItem('accessToken') || localStorage.getItem('token');
-      if (studentToken) headers['Authorization'] = `Bearer ${studentToken}`;
-    }
-    return headers;
   };
 
 
@@ -202,10 +307,26 @@ const CourseDetails: React.FC = () => {
 
   const setBottomNavHidden = useUIStore(s => s.setBottomNavHidden);
 
+  // Handle mobile web / browser back button when video is open (fallback for non-Capacitor environments)
   useEffect(() => {
-    setBottomNavHidden(showVideoPlayer);
-    return () => setBottomNavHidden(false);
-  }, [showVideoPlayer, setBottomNavHidden]);
+    if (Capacitor.isNativePlatform()) return;
+    if (!showVideoPlayer) return;
+
+    window.history.pushState({ videoModal: true }, '');
+
+    const handlePopState = () => {
+      setShowVideoPlayer(false);
+      setSelectedVideo(null);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+      if (window.history.state?.videoModal) {
+        window.history.back();
+      }
+    };
+  }, [showVideoPlayer]);
 
 
   const handleImageError = useCallback((id: string) => {
@@ -221,22 +342,27 @@ const CourseDetails: React.FC = () => {
       return;
     }
 
+    if (status === 'live') {
+      video.streamStatus = 'live';
+      video.isLive = true;
+    }
+
     const isFirstVideoInRoot = navigationHistory.length === 0 && filteredVideos[0] === video;
 
     const canPlay = (isEnrolled && !isCourseExpired) || video.isFree || video.isDemo || isFirstVideoInRoot;
 
     // Resolve raw URL first (include recorded links for ended live streams)
-    const rawUrl = video.recordedLink || 
-                   video.recordingUrl || 
-                   video.replayUrl || 
-                   video.youtubeUrl || 
-                   video.videoUrl || 
-                   video.url || 
-                   video.meetingLink || 
-                   video.liveUrl || 
-                   video.streamUrl || 
-                   (video as any).streamId || 
-                   '';
+    const rawUrl = video.recordedLink ||
+      video.recordingUrl ||
+      video.replayUrl ||
+      video.youtubeUrl ||
+      video.videoUrl ||
+      video.url ||
+      video.meetingLink ||
+      video.liveUrl ||
+      video.streamUrl ||
+      (video as any).streamId ||
+      '';
 
     const url = toYouTubeEmbed(rawUrl);
     if (canPlay && url) {
@@ -313,7 +439,13 @@ const CourseDetails: React.FC = () => {
   };
   const studentId = getStudentId();
 
-  const [folders, setFolders] = useState<any[]>([]);
+  const [folders, setFolders] = useState<any[]>(() => {
+    try {
+      const cached = sessionStorage.getItem(`course_media_cache_${id}`);
+      if (cached) return JSON.parse(cached).folders || [];
+    } catch {}
+    return [];
+  });
   const [navigationHistory, setNavigationHistory] = useState<any[]>([]);
 
   const closeVideoPlayer = () => {
@@ -327,7 +459,7 @@ const CourseDetails: React.FC = () => {
       const progressRes = await fetch(`${API_BASE_URL}/students/${studentId}/courses/${id}/progress`, { headers: getAuthHeaders() });
       if (progressRes.ok) {
         const progressData = await progressRes.json();
-        
+
         // STRICT SAFETY: Do not overwrite if response is missing critical arrays
         if (progressData && Array.isArray(progressData.completedVideos)) {
           setProgress(prev => {
@@ -344,7 +476,7 @@ const CourseDetails: React.FC = () => {
           });
         }
       }
-    } catch (e) { 
+    } catch (e) {
       console.warn('[Progress] Fetch failed, keeping local state');
     }
   }, [student?.id, id]);
@@ -352,46 +484,183 @@ const CourseDetails: React.FC = () => {
   const fetchCourseData = async () => {
     try {
       const h = getAuthHeaders();
-      const [courseData, videosData, notesData, testsData, foldersData] = await Promise.all([
-        fetch(`${API_BASE_URL}/courses/${id}`, { headers: h }).then(r => r.ok ? r.json() : null).catch(() => null),
-        fetch(`${API_BASE_URL}/courses/${id}/videos?studentId=${studentId}`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`${API_BASE_URL}/courses/${id}/notes`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`${API_BASE_URL}/courses/${id}/tests`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
-        fetch(`${API_BASE_URL}/courses/${id}/folders`, { headers: h }).then(r => r.ok ? r.json() : []).catch(() => []),
+      const withTimeout = <T,>(promise: Promise<T>, timeoutMs = 8000, fallback: T): Promise<T> => {
+        return Promise.race([
+          promise,
+          new Promise<T>(resolve => setTimeout(() => resolve(fallback), timeoutMs))
+        ]);
+      };
+
+      const t = Date.now();
+      const coursePromise = withTimeout(
+        fetch(`${API_BASE_URL}/courses/${id}?t=${t}`, { headers: h, cache: 'no-store' }).then(r => r.ok ? r.json() : null).catch(() => null),
+        8000,
+        null
+      );
+      const videosPromise = withTimeout(
+        fetch(`${API_BASE_URL}/courses/${id}/videos?studentId=${studentId}&t=${t}`, { headers: h, cache: 'no-store' }).then(r => r.ok ? r.json() : []).catch(() => []),
+        8000,
+        []
+      );
+      const notesPromise = withTimeout(
+        fetch(`${API_BASE_URL}/courses/${id}/notes?t=${t}`, { headers: h, cache: 'no-store' }).then(r => r.ok ? r.json() : []).catch(() => []),
+        8000,
+        []
+      );
+      const testsPromise = withTimeout(
+        fetch(`${API_BASE_URL}/courses/${id}/tests?t=${t}`, { headers: h, cache: 'no-store' }).then(r => r.ok ? r.json() : []).catch(() => []),
+        8000,
+        []
+      );
+      const foldersPromise = withTimeout(
+        fetch(`${API_BASE_URL}/courses/${id}/folders?t=${t}`, { headers: h, cache: 'no-store' }).then(r => r.ok ? r.json() : []).catch(() => []),
+        6000,
+        []
+      );
+      const enrolledPromise = studentId ? withTimeout(
+        (async () => {
+          let res = await fetch(`${API_BASE_URL}/students/${studentId}/enrolled/${id}?t=${t}`, { headers: h, cache: 'no-store' });
+          if (res.status === 401) {
+            const refreshed = await useAuthStore.getState().refreshToken().catch(() => false);
+            if (refreshed) {
+              res = await fetch(`${API_BASE_URL}/students/${studentId}/enrolled/${id}?t=${Date.now()}`, { headers: getAuthHeaders(), cache: 'no-store' });
+            }
+          }
+          return res.ok ? res.json() : null;
+        })().catch(() => null),
+        8000,
+        null
+      ) : Promise.resolve(null);
+
+      // Fast progressive unblock: update each section the instant its API resolves
+      coursePromise.then(courseData => {
+        if (courseData && !courseData.error) {
+          setCourse(courseData);
+          setLoading(false);
+          try {
+            sessionStorage.setItem(`course_cache_${id}`, JSON.stringify(courseData));
+          } catch { }
+        }
+      });
+
+      videosPromise.then(videosData => {
+        if (Array.isArray(videosData)) setVideos(videosData);
+      });
+      notesPromise.then(notesData => {
+        if (Array.isArray(notesData)) setNotes(notesData);
+      });
+      testsPromise.then(testsData => {
+        if (Array.isArray(testsData)) setTests(testsData.filter((t: Test) => !t.status || t.status === 'active'));
+      });
+      foldersPromise.then(foldersData => {
+        if (Array.isArray(foldersData)) setFolders(foldersData);
+      });
+
+      const [courseData, videosData, notesData, testsData, foldersData, enrolledData] = await Promise.all([
+        coursePromise,
+        videosPromise,
+        notesPromise,
+        testsPromise,
+        foldersPromise,
+        enrolledPromise
       ]);
+
+      const finalVideos = Array.isArray(videosData) ? videosData : [];
+      const finalNotes = Array.isArray(notesData) ? notesData : [];
+      const finalTests = Array.isArray(testsData) ? testsData.filter((t: Test) => !t.status || t.status === 'active') : [];
+      const finalFolders = Array.isArray(foldersData) ? foldersData : [];
 
       if (courseData && !courseData.error) {
         setCourse(courseData);
+        try {
+          sessionStorage.setItem(`course_cache_${id}`, JSON.stringify(courseData));
+        } catch { }
       }
 
-      setVideos(Array.isArray(videosData) ? videosData : []);
-      setNotes(Array.isArray(notesData) ? notesData : []);
-      setTests(Array.isArray(testsData) ? testsData.filter((t: Test) => !t.status || t.status === 'active') : []);
-      setFolders(Array.isArray(foldersData) ? foldersData : []);
+      try {
+        sessionStorage.setItem(`course_media_cache_${id}`, JSON.stringify({
+          videos: finalVideos,
+          notes: finalNotes,
+          tests: finalTests,
+          folders: finalFolders
+        }));
+      } catch { }
 
-      if (studentId) {
+      setVideos(finalVideos);
+      setNotes(finalNotes);
+      setTests(finalTests);
+      setFolders(finalFolders);
+
+      if (enrolledData) {
+        const enrolledFlag = Boolean(enrolledData.enrolled);
+        const expiredFlag = Boolean(enrolledData.isExpired);
+        setIsEnrolled(enrolledFlag);
+        setIsCourseExpired(expiredFlag);
+        setEnrollmentStatus(enrolledData.status || (expiredFlag ? 'expired' : (enrolledFlag ? 'active' : 'not_enrolled')));
+
         try {
-          const enrolledRes = await fetch(`${API_BASE_URL}/students/${studentId}/enrolled/${id}`, { headers: getAuthHeaders() });
-          if (enrolledRes.ok) {
-            const enrolledData = await enrolledRes.json();
-            setIsEnrolled(enrolledData.enrolled || false);
-            setIsCourseExpired(enrolledData.isExpired || false);
-            setEnrollmentStatus(enrolledData.status || (enrolledData.isExpired ? 'expired' : (enrolledData.enrolled ? 'active' : 'not_enrolled')));
-
-            if (enrolledData.enrolled) {
-              await fetchCourseProgress();
+          if (id) {
+            if (expiredFlag || !enrolledFlag) {
+              sessionStorage.removeItem(`course_enrolled_${id}`);
+              if (expiredFlag) sessionStorage.setItem(`course_expired_${id}`, 'true');
+              else sessionStorage.removeItem(`course_expired_${id}`);
+            } else {
+              sessionStorage.setItem(`course_enrolled_${id}`, 'true');
+              sessionStorage.removeItem(`course_expired_${id}`);
             }
+          }
+        } catch { }
+
+        if (enrolledFlag) {
+          fetchCourseProgress();
+          // Active enrolled student: show Content tab automatically!
+          if (!expiredFlag) {
+            setMainTab('content');
+          }
+        }
+      } else {
+        setIsEnrolled(false);
+        setIsCourseExpired(false);
+        setEnrollmentStatus('not_enrolled');
+        try {
+          if (id) {
+            sessionStorage.removeItem(`course_enrolled_${id}`);
+            sessionStorage.removeItem(`course_expired_${id}`);
           }
         } catch { }
       }
     } catch (error) {
       // Fetch failed
     } finally {
+      setCheckingEnrollment(false);
       setLoading(false);
     }
   };
 
-  const handleEnroll = async () => {
+  const activateEnrolledState = (targetCourseId?: string) => {
+    setIsEnrolled(true);
+    setIsCourseExpired(false);
+    setEnrollmentStatus('active');
+    setMainTab('content');
+    setBottomNavHidden(false);
+    setShowBottomNavOnCourse(true);
+
+    try {
+      const idsToSave = Array.from(new Set([id, targetCourseId, course?.id, (course as any)?._id].filter(Boolean).map(String)));
+      idsToSave.forEach(cid => sessionStorage.setItem(`course_enrolled_${cid}`, 'true'));
+      ['student', 'studentData'].forEach(key => {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          const existing = Array.isArray(parsed.enrolledCourses) ? parsed.enrolledCourses.map((c: any) => String(c.id || c._id || c)) : [];
+          parsed.enrolledCourses = Array.from(new Set([...existing, ...idsToSave]));
+          localStorage.setItem(key, JSON.stringify(parsed));
+        }
+      });
+    } catch { }
+  };
+
+  const performDirectEnrollment = async (couponCode?: string) => {
     if (!studentId) {
       alert('Please login first to enroll in this course');
       sessionStorage.setItem('postLoginRedirect', location.pathname);
@@ -401,21 +670,43 @@ const CourseDetails: React.FC = () => {
 
     setEnrolling(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/students/${studentId}/enroll`, {
+      let response = await fetch(`${API_BASE_URL}/students/${studentId}/enroll`, {
         method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ courseId: id })
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify({ courseId: id, couponCode })
       });
 
+      if (response.status === 401) {
+        const refreshed = await useAuthStore.getState().refreshToken();
+        if (refreshed) {
+          response = await fetch(`${API_BASE_URL}/students/${studentId}/enroll`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...getAuthHeaders()
+            },
+            body: JSON.stringify({ courseId: id, couponCode })
+          });
+        }
+      }
+
       if (response.ok) {
-        setIsEnrolled(true);
-        alert('Enrollment successful! You now have access to all course content.');
-        const progressRes = await fetch(`${API_BASE_URL}/students/${studentId}/courses/${id}/progress`, { headers: getAuthHeaders() });
-        const progressData = await progressRes.json();
-        setProgress(progressData);
+        activateEnrolledState(String(course?.id || course?._id || id || ''));
+        setShowSuccessModal(true);
+        fetchCourseData();
+        fetchCourseProgress();
+        useAuthStore.getState().checkAuth().catch(() => { });
       } else {
-        const error = await response.json();
-        alert(error.error || 'Failed to enroll. Please try again.');
+        const error = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+          alert('Your session has expired. Please login again to enroll.');
+          navigate('/student-login', { state: { from: location.pathname } });
+        } else {
+          alert(error.error || 'Failed to enroll. Please try again.');
+        }
       }
     } catch (error) {
       alert('Failed to enroll. Please try again.');
@@ -424,14 +715,215 @@ const CourseDetails: React.FC = () => {
     }
   };
 
-  const handleBuyNow = () => {
+  const handleEnroll = async () => {
+    if (isPaidCourse) {
+      handleBuyNow();
+      return;
+    }
+    await performDirectEnrollment();
+  };
+
+  const handleApplyCoupon = async (code: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/coupons/validate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify({
+          code,
+          courseId: id,
+          amount: Number(course?.price || 0)
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok && data.valid) {
+        setAppliedCoupon(code);
+        setDiscountAmount(Number(data.discountAmount || data.discount || 0));
+        return { success: true, message: `Coupon applied! Saved ₹${data.discountAmount || data.discount}` };
+      } else {
+        return { success: false, message: data.message || data.error || 'Invalid coupon code' };
+      }
+    } catch (e: any) {
+      return { success: false, message: e.message || 'Failed to apply coupon' };
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+    setDiscountAmount(0);
+  };
+
+  const handleBuyNow = async () => {
     if (!studentId) {
-      alert('Please login first');
+      alert('Please login first to enroll or purchase this course');
       sessionStorage.setItem('postLoginRedirect', location.pathname);
       navigate('/student-login', { state: { from: location.pathname } });
       return;
     }
-    navigate(`/checkout/${id}`);
+
+    const currentBasePrice = Number(course?.price || 0);
+    const payableAmount = Math.max(0, currentBasePrice - discountAmount);
+
+    // Free course or 100% coupon discount
+    if (payableAmount <= 0 || course?.isFree) {
+      await performDirectEnrollment(appliedCoupon || undefined);
+      return;
+    }
+
+    setProcessingPayment(true);
+    try {
+      const targetCourseId = String(course?.id || course?._id || id);
+
+      let orderRes = await fetch(`${API_BASE_URL}/razorpay/create-order`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify({
+          courseId: targetCourseId,
+          amount: payableAmount,
+          couponCode: appliedCoupon || undefined,
+          studentId: studentId
+        })
+      });
+
+      if (orderRes.status === 401) {
+        const refreshed = await useAuthStore.getState().refreshToken();
+        if (refreshed) {
+          orderRes = await fetch(`${API_BASE_URL}/razorpay/create-order`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...getAuthHeaders()
+            },
+            body: JSON.stringify({
+              courseId: targetCourseId,
+              amount: payableAmount,
+              couponCode: appliedCoupon || undefined,
+              studentId: studentId
+            })
+          });
+        }
+      }
+
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) {
+        if (orderRes.status === 401) {
+          sessionStorage.setItem('postLoginRedirect', location.pathname);
+          alert('Your session has expired. Please login again.');
+          navigate('/student-login', { state: { from: location.pathname } });
+          setProcessingPayment(false);
+          return;
+        }
+        throw new Error(orderData.error || orderData.message || 'Failed to create payment order');
+      }
+
+      const handlePaymentSuccess = async (rawResponse: any) => {
+        try {
+          const response = typeof rawResponse === 'string' ? JSON.parse(rawResponse) : rawResponse;
+          const verifyRes = await fetch(`${API_BASE_URL}/razorpay/verify`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...getAuthHeaders()
+            },
+            body: JSON.stringify({
+              razorpay_order_id: response?.razorpay_order_id || orderData.orderId,
+              razorpay_payment_id: response?.razorpay_payment_id,
+              razorpay_signature: response?.razorpay_signature,
+              courseId: targetCourseId,
+              studentId: studentId,
+              couponCode: appliedCoupon || undefined
+            })
+          });
+
+          const verifyData = await verifyRes.json();
+          if (verifyData.success) {
+            setProcessingPayment(false);
+            activateEnrolledState(targetCourseId);
+            setShowSuccessModal(true);
+            fetchCourseData();
+            fetchCourseProgress();
+            useAuthStore.getState().checkAuth().catch(() => { });
+          } else {
+            alert(verifyData.error || 'Payment verification failed. If money was debited, it will be updated shortly.');
+          }
+        } catch (vErr) {
+          console.error('Payment verification error:', vErr);
+          alert('Payment completed. Please refresh the page if content remains locked.');
+        } finally {
+          setProcessingPayment(false);
+        }
+      };
+
+      const prefillData: Record<string, string> = {
+        name: student?.name || 'Student'
+      };
+      if (student?.email && String(student.email).trim().includes('@')) {
+        prefillData.email = String(student.email).trim();
+      }
+      const rawContact = String(student?.phone || (student as any)?.mobile || '').replace(/\D/g, '');
+      if (rawContact.length >= 10) {
+        prefillData.contact = rawContact.slice(-10);
+      }
+
+      const nativeRazorpay = Capacitor.isNativePlatform() ? (window as any).RazorpayCheckout : null;
+
+      if (nativeRazorpay) {
+        const nativeOptions = {
+          key: orderData.keyId,
+          amount: orderData.amount,
+          currency: orderData.currency || 'INR',
+          name: 'Aone Target Institute',
+          description: (course?.title || course?.name || 'Course Purchase').slice(0, 40),
+          order_id: orderData.orderId,
+          prefill: prefillData,
+          theme: { color: '#008BDC' }
+        };
+        nativeRazorpay.on('payment.success', handlePaymentSuccess);
+        nativeRazorpay.on('payment.cancel', (err: any) => {
+          console.warn('[Razorpay Native Cancel/Error]', err);
+          if (err?.description && !String(err.description).toLowerCase().includes('cancel')) {
+            alert(err.description);
+          }
+          setProcessingPayment(false);
+        });
+        nativeRazorpay.open(nativeOptions);
+      } else if ((window as any).Razorpay) {
+        const webOptions = {
+          key: orderData.keyId,
+          amount: orderData.amount,
+          currency: orderData.currency || 'INR',
+          name: 'Aone Target Institute',
+          description: course?.title || course?.name || 'Course Purchase',
+          order_id: orderData.orderId,
+          prefill: prefillData,
+          theme: { color: '#008BDC' },
+          handler: handlePaymentSuccess,
+          modal: {
+            ondismiss: () => {
+              setProcessingPayment(false);
+            }
+          }
+        };
+        const rzp = new (window as any).Razorpay(webOptions);
+        rzp.on('payment.failed', (resp: any) => {
+          alert(resp.error?.description || 'Payment Failed. Please try again.');
+          setProcessingPayment(false);
+        });
+        rzp.open();
+      } else {
+        alert('Payment gateway is still initializing. Please try again in a few seconds.');
+        setProcessingPayment(false);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Payment initiation failed. Please try again.');
+      setProcessingPayment(false);
+    }
   };
 
   const markVideoComplete = async (videoId: string) => {
@@ -494,27 +986,100 @@ const CourseDetails: React.FC = () => {
     }
   }, [course]);
 
-  const location = useLocation();
+  useEffect(() => {
+    // Check local student enrollment on id change
+    try {
+      const studentData = localStorage.getItem('student') || localStorage.getItem('studentData');
+      if (studentData) {
+        const parsed = JSON.parse(studentData);
+        const enrolledList = parsed.enrolledCourses || [];
+        const enrolledBatch = parsed.enrolledBatch;
+        const currentId = id ? String(id) : '';
+        const isPreEnrolled = enrolledList.some((c: any) => String(c.id || c._id || c) === currentId) || String(enrolledBatch) === currentId;
+        if (isPreEnrolled) {
+          setIsEnrolled(true);
+          setMainTab('content');
+          return;
+        }
+      }
+    } catch { }
+    setIsEnrolled(false);
+    setIsCourseExpired(false);
+    setEnrollmentStatus('not_enrolled');
+  }, [id]);
 
   useEffect(() => {
     fetchCourseData();
     fetchCourseProgress(); // Force initial sync
+
+    const handleContentUpdate = () => {
+      fetchCourseData();
+      fetchCourseProgress();
+    };
+
     window.addEventListener('focus', fetchCourseProgress);
-    return () => window.removeEventListener('focus', fetchCourseProgress);
-  }, [id, location.pathname, student?.id]);
+    window.addEventListener('app:content-updated', handleContentUpdate);
+    window.addEventListener('app:live-status-changed', handleContentUpdate);
+
+    // Auto-poll stream status if on live tab or player is active
+    const pollInterval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible' && (activeTab === 'live' || showVideoPlayer)) {
+        fetchCourseData();
+      }
+    }, 6000);
+
+    return () => {
+      window.removeEventListener('focus', fetchCourseProgress);
+      window.removeEventListener('app:content-updated', handleContentUpdate);
+      window.removeEventListener('app:live-status-changed', handleContentUpdate);
+      clearInterval(pollInterval);
+    };
+  }, [id, location.pathname, student?.id, activeTab, showVideoPlayer]);
+
+  // Sync Bottom Navigation: Show BottomNav on course page when student is enrolled & active
+  useEffect(() => {
+    const isEnrolledActive = Boolean(isEnrolled && !isCourseExpired);
+    if (isEnrolledActive && !showVideoPlayer) {
+      setBottomNavHidden(false);
+      setShowBottomNavOnCourse(true);
+      if (id) {
+        try {
+          sessionStorage.setItem(`course_enrolled_${id}`, 'true');
+        } catch { }
+      }
+    } else {
+      setBottomNavHidden(true);
+      setShowBottomNavOnCourse(false);
+    }
+    return () => {
+      setBottomNavHidden(false);
+      setShowBottomNavOnCourse(false);
+    };
+  }, [id, isEnrolled, isCourseExpired, showVideoPlayer, setBottomNavHidden, setShowBottomNavOnCourse]);
+
+  // Keep selected video in sync with latest videos list for real-time live status updates
+  useEffect(() => {
+    if (selectedVideo && videos.length > 0) {
+      const vId = selectedVideo.id || selectedVideo._id;
+      const updated = videos.find(v => (v.id && v.id === vId) || (v._id && v._id === vId));
+      if (updated && (updated.streamStatus !== selectedVideo.streamStatus || updated.isLive !== selectedVideo.isLive)) {
+        setSelectedVideo(updated);
+      }
+    }
+  }, [videos]);
 
   useEffect(() => {
     if (course) {
       document.title = `${course.name || course.title} | Aone Target`;
-      
+
       // TRACK RECENTLY VIEWED
       try {
         const viewed = JSON.parse(localStorage.getItem('recently_viewed_courses') || '[]');
         const filtered = viewed.filter((c: any) => (c.id || c._id) !== (course.id || course._id));
-        const updated = [{ 
-          id: course.id || course._id || "", 
-          name: course.name || course.title, 
-          imageUrl: course.imageUrl || course.thumbnail 
+        const updated = [{
+          id: course.id || course._id || "",
+          name: course.name || course.title,
+          imageUrl: course.imageUrl || course.thumbnail
         }, ...filtered].slice(0, 10);
         localStorage.setItem('recently_viewed_courses', JSON.stringify(updated));
       } catch (e) { console.error(e); }
@@ -545,18 +1110,25 @@ const CourseDetails: React.FC = () => {
     setNavigationHistory(prev => [...prev, folder]);
   };
 
-  const handleStartLearning = () => {
-    // Find first playable video or resume last one
-    if (videos.length > 0) {
-      // Check for resume video first
-      const resumeVideoId = (navigate as any).state?.resumeVideoId;
-      let targetVideo = videos.find(v => (v.id || v._id) === resumeVideoId);
-      
-      if (!targetVideo) {
-        // Fallback to first video
-        targetVideo = videos[0];
+  const lastWatchedVideo = React.useMemo(() => {
+    try {
+      const progressData = JSON.parse(localStorage.getItem('player_progress') || '{}');
+      const watchedIds = Object.keys(progressData);
+      if (watchedIds.length > 0) {
+        const found = videos.find(v => watchedIds.includes(String(v.id || v._id)));
+        if (found) return found;
       }
-      
+    } catch { }
+    return videos[0] || null;
+  }, [videos]);
+
+  const handleStartLearning = () => {
+    if (isCourseExpired) {
+      alert('Your access to this course has expired. Please renew your subscription to continue.');
+      return;
+    }
+    const targetVideo = lastWatchedVideo || videos[0];
+    if (targetVideo) {
       handleVideoClick(targetVideo);
     }
   };
@@ -568,8 +1140,8 @@ const CourseDetails: React.FC = () => {
       const nextVideo = videos[currentIndex + 1];
       // Skip if it's a folder or non-playable
       if (nextVideo.contentType === 'folder') {
-         // Optionally navigate into folder, but for simple auto-next we just stop or skip
-         return;
+        // Optionally navigate into folder, but for simple auto-next we just stop or skip
+        return;
       }
       handleVideoClick(nextVideo);
     }
@@ -583,14 +1155,14 @@ const CourseDetails: React.FC = () => {
 
   const currentFolder = navigationHistory.length > 0 ? navigationHistory[navigationHistory.length - 1] : null;
 
-  const recordedVideos = videos.filter(v => 
-    v.contentType === 'video' || 
-    v.contentType === 'recorded' || 
-    !v.contentType || 
+  const recordedVideos = videos.filter(v =>
+    v.contentType === 'video' ||
+    v.contentType === 'recorded' ||
+    !v.contentType ||
     computeEffectiveStatus(v) === 'ended'
   );
-  const liveStreams = videos.filter(v => 
-    (v.contentType === 'live_stream' || v.contentType === 'youtube_zoom') && 
+  const liveStreams = videos.filter(v =>
+    (v.contentType === 'live_stream' || v.contentType === 'youtube_zoom') &&
     computeEffectiveStatus(v) !== 'ended'
   );
 
@@ -627,7 +1199,7 @@ const CourseDetails: React.FC = () => {
   const totalVideos = recordedVideos.length;
   // Deduplicate using Set to prevent > 100% progress if backend/frontend state has duplicates
   const uniqueCompletedVideos = new Set(progress.completedVideos || []);
-  
+
   // Calculate count of uniquely completed videos that actually exist in the current recordedVideos list
   const validCompletedCount = recordedVideos.filter((v, idx) => {
     const vId = getVideoId(v, idx);
@@ -636,7 +1208,10 @@ const CourseDetails: React.FC = () => {
 
   const completedVideosCount = Math.min(validCompletedCount, totalVideos);
   const progressPercent = totalVideos > 0 ? Math.min(100, Math.round((completedVideosCount / totalVideos) * 100)) : 0;
-  const isPaidCourse = course?.price && course.price > 0;
+  const basePrice = Number(course?.price || 0);
+  const mrp = Number(course?.mrp || (course as any)?.originalPrice || basePrice);
+  const finalPayableAmount = Math.max(0, basePrice - discountAmount);
+  const isPaidCourse = basePrice > 0 && !course?.isFree;
 
   if (loading) {
     return (
@@ -703,281 +1278,386 @@ const CourseDetails: React.FC = () => {
     if (url) window.open(url, '_blank');
   };
 
+  const demoVideos = videos.filter(v => v.isDemo || v.isFree || v.contentType === 'free_video');
+  const previewVideos = demoVideos.length > 0 ? demoVideos : (recordedVideos.length > 0 ? [recordedVideos[0]] : []);
+  const freeVideos = videos.filter(v => v.isFree || v.isDemo);
+
   return (
-    <div className="min-h-screen bg-surface-100 pb-32">
-      <CourseHero 
-        courseImage={courseImage}
-        courseName={course.name || course.title}
+    <div className={`min-h-screen bg-[#f8fafc] font-outfit select-none ${(!isEnrolled || isCourseExpired) ? 'pb-28 sm:pb-32' : 'pb-24 sm:pb-28'}`}>
+      {/* Top Bar with Back, Title, Share & Overview / Content Tabs (Screenshots 6, 7, 8) */}
+      <CourseTopNav
+        courseTitle={course.name || course.title}
+        mainTab={mainTab}
+        onTabChange={setMainTab}
         onBack={() => navigate(-1)}
         onShare={handleShare}
         shareSuccess={shareSuccess}
       />
 
-      <CourseMetadata 
-        courseName={course.name || course.title}
-        instructor={course.instructor}
-        category={course.category}
-        enrollmentCount={course.enrollmentCount}
-        isEnrolled={isEnrolled}
-        progressPercent={progressPercent}
-        completedVideosCount={completedVideosCount}
-        totalVideos={totalVideos}
-        onSharePlatform={shareOnPlatform}
-      />
+      {mainTab === 'overview' ? (
+        <main className="space-y-1 animate-fade-in pb-4">
+          {/* Header with Title, Category, Likes and Tags (Screenshot 6) */}
+          <CourseOverviewHeader
+            title={course.name || course.title}
+            category={course.category}
+            likeCount={160}
+            hasLiveClasses={liveStreams.length > 0}
+            hasFreeContent={freeVideos.length > 0}
+            hasTests={tests.length > 0}
+          />
 
+          {/* Visual Preview Row: Poster + Playable Demo Video with Duration Badge (Screenshot 6) */}
+          <VisualPreviewCarousel
+            courseImage={courseImage}
+            courseTitle={course.name || course.title}
+            demoVideos={previewVideos}
+            onPlayDemo={handleVideoClick}
+          />
 
-      <main className="p-4 origin-top transition-transform duration-200 space-y-4">
+          {/* About Course Specs (Dynamic Validity from Admin + Learning Material Count) (Screenshot 6) */}
+          <AboutCourseSpecs
+            courseName={course.name || course.title}
+            description={course.description}
+            validity={course.validity}
+            expiryMode={course.expiryMode}
+            totalVideos={recordedVideos.length}
+            totalTests={tests.length}
+            totalNotes={notes.length}
+            onViewContent={() => setMainTab('content')}
+          />
 
-
-        {course.description && navigationHistory.length === 0 && (
-          <div className="card-premium p-4 animate-fade-in-up">
-            <h3 className="font-bold text-sm text-primary-800 mb-3 flex items-center gap-2">
-              <div className="w-1 h-4 bg-gradient-to-b from-primary-600 to-primary-400 rounded-full" />
-              <span className="material-symbols-rounded text-base">info</span>
-              About this Course
-            </h3>
-            <div
-              className="text-sm text-gray-600 leading-relaxed prose prose-sm max-w-none [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5 [&_li]:mb-1"
-              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(course.description || '') }}
+          {/* Free Content (Only shown if student is NOT enrolled or course is expired) */}
+          {(!isEnrolled || isCourseExpired) && freeVideos.length > 0 && (
+            <FreeContentSection
+              freeVideos={freeVideos}
+              onPlayVideo={handleVideoClick}
+              onViewSyllabus={() => setMainTab('content')}
             />
-          </div>
-        )}
+          )}
 
-        {(videos.length > 0 || notes.length > 0 || tests.length > 0) && navigationHistory.length === 0 && (
-          <div className="card-premium p-4 animate-fade-in-up" style={{ animationDelay: '80ms' }}>
-            <h3 className="font-bold text-sm text-primary-800 mb-3 flex items-center gap-2">
-              <div className="w-1 h-4 bg-gradient-to-b from-primary-600 to-primary-400 rounded-full" />
-              <span className="material-symbols-rounded text-base">inventory_2</span>
-              What's Included
-            </h3>
-            <div className="grid grid-cols-2 gap-3">
-              {recordedVideos.length > 0 && (
-                <div 
-                  onClick={() => setActiveTab('videos')}
-                  className="flex items-center gap-2.5 bg-primary-50 rounded-2xl px-3 py-3 cursor-pointer hover:bg-primary-100 transition-all active:scale-95 group"
-                >
-                  <span className="material-symbols-rounded text-primary-600 text-xl group-hover:scale-110 transition-transform">play_circle</span>
-                  <span className="text-xs font-bold text-gray-700">{recordedVideos.length} Videos</span>
-                </div>
-              )}
-              {notes.length > 0 && (
-                <div 
-                  onClick={() => setActiveTab('notes')}
-                  className="flex items-center gap-2.5 bg-orange-50 rounded-2xl px-3 py-3 cursor-pointer hover:bg-orange-100 transition-all active:scale-95 group"
-                >
-                  <span className="material-symbols-rounded text-orange-500 text-xl group-hover:scale-110 transition-transform">description</span>
-                  <span className="text-xs font-bold text-gray-700">{notes.length} Notes</span>
-                </div>
-              )}
-              {tests.length > 0 && (
-                <div 
-                  onClick={() => setActiveTab('tests')}
-                  className="flex items-center gap-2.5 bg-purple-50 rounded-2xl px-3 py-3 cursor-pointer hover:bg-purple-100 transition-all active:scale-95 group"
-                >
-                  <span className="material-symbols-rounded text-purple-500 text-xl group-hover:scale-110 transition-transform">quiz</span>
-                  <span className="text-xs font-bold text-gray-700">{tests.length} Tests</span>
-                </div>
-              )}
-              <div 
-                onClick={() => setActiveTab('live')}
-                className="flex items-center gap-2.5 bg-accent-50 rounded-2xl px-3 py-3 cursor-pointer hover:bg-accent-100 transition-all active:scale-95 group"
-              >
-                <span className="material-symbols-rounded text-accent-500 text-xl group-hover:scale-110 transition-transform">sensors</span>
-                <span className="text-xs font-bold text-gray-700">Live Classes ({liveStreams.length})</span>
+          {/* Support Card (Screenshot 7, 8) */}
+          <DifficultySupportCard
+            studentName={student?.name}
+            courseTitle={course?.name || course?.title}
+            supportPhone="919009008148"
+          />
+
+          {/* In-Page Pricing Details (Hidden for enrolled students with active access) */}
+          {isPaidCourse && (!isEnrolled || isCourseExpired) && (
+            <InPagePricingSection
+              price={basePrice}
+              mrp={mrp}
+              discountAmount={discountAmount}
+              gstAmount={0}
+              finalAmount={finalPayableAmount}
+              appliedCoupon={appliedCoupon}
+              studentState={selectedState}
+              onOpenCoupons={() => setIsCouponSheetOpen(true)}
+              onRemoveCoupon={handleRemoveCoupon}
+              onStateClick={() => setIsStateSheetOpen(true)}
+            />
+          )}
+
+          {/* Recommended / Upsell */}
+          {upsellData.length > 0 && (
+            <div className="mt-6 px-4 pb-4">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="material-symbols-rounded text-primary-600 text-lg">recommend</span>
+                <h3 className="font-black text-gray-900 text-xs tracking-tight">
+                  Recommended for you
+                </h3>
               </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'videos' && (
-          <RecordedTab 
-            filteredFolders={filteredFolders}
-            filteredVideos={filteredVideos}
-            navigationHistory={navigationHistory}
-            isEnrolled={isEnrolled}
-            isExpired={isCourseExpired}
-            uniqueCompletedVideos={uniqueCompletedVideos}
-            failedImages={failedImages}
-            onNavigateIntoFolder={navigateIntoFolder}
-            onNavigateUp={navigateUp}
-            onVideoClick={handleVideoClick}
-            onImageError={handleImageError}
-            getVideoId={getVideoId}
-            normalizeId={normalizeId}
-            computeStatus={computeEffectiveStatus}
-          />
-        )}
-
-        {activeTab === 'notes' && (
-          <NotesTab 
-            notes={notes}
-            isEnrolled={isEnrolled}
-            isExpired={isCourseExpired}
-            isPaidCourse={isPaidCourse}
-            coursePrice={course.price}
-            enrolling={enrolling}
-            onViewNote={handleViewNote}
-            onEnroll={handleEnroll}
-            onBuyNow={handleBuyNow}
-          />
-        )}
-
-        {activeTab === 'tests' && (
-          <TestsTab 
-            tests={tests}
-            isEnrolled={isEnrolled}
-            isExpired={isCourseExpired}
-            coursePrice={course.price}
-            enrolling={enrolling}
-            completedTests={progress.completedTests || []}
-            onStartTest={(testId) => { if (isCourseExpired) { alert('Your access to this course has expired. Please renew to continue.'); return; } navigate(`/test/${testId}`); }}
-            onEnroll={handleEnroll}
-            onBuyNow={handleBuyNow}
-          />
-        )}
-
-        {activeTab === 'live' && (
-          <LiveTab 
-            liveStreams={liveStreams}
-            isEnrolled={isEnrolled}
-            isExpired={isCourseExpired}
-            isPaidCourse={isPaidCourse}
-            coursePrice={course.price}
-            enrolling={enrolling}
-            onJoinLive={handleVideoClick}
-            onEnroll={handleEnroll}
-            onBuyNow={handleBuyNow}
-            computeStatus={computeEffectiveStatus}
-          />
-        )}
-
-        {upsellData.length > 0 && (
-          <div className="mt-8 px-1 pb-4">
-            <div className="flex items-center gap-3 mb-5 px-1">
-              <div className="w-1.5 h-6 bg-gradient-to-b from-indigo-600 to-indigo-400 rounded-full" />
-              <h3 className="font-black text-gray-900 text-sm tracking-tight text-primary-800 flex items-center gap-2">
-                <span className="material-symbols-rounded text-base">recommend</span>
-                Recommended for you
-              </h3>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {upsellData.map((up, i) => (
-                <div
-                  key={up.id || (up as any)._id}
-                  onClick={() => navigate(`/course/${up.id || (up as any)._id}`)}
-                  className="card-premium p-4 flex items-center gap-4 cursor-pointer active:scale-[0.98] transition-all hover:border-indigo-100 group animate-fade-in-up shadow-sm bg-white rounded-3xl"
-                  style={{ animationDelay: `${i * 100}ms` }}
-                >
-                  <div className="w-16 h-16 rounded-[1.2rem] overflow-hidden bg-indigo-50 flex items-center justify-center shrink-0 border border-indigo-100/50">
-                    {up.thumbnail || up.imageUrl ? (
-                      <img src={getImageUrl(up.thumbnail || up.imageUrl)} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                    ) : (
-                      <span className="text-indigo-600 font-extrabold text-xl">{(up.title || up.name || 'C').charAt(0)}</span>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-extrabold text-gray-900 line-clamp-1 mb-1 group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{up.title || up.name}</p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[14px] font-black text-green-600 tracking-tight">₹{up.price || 0}</span>
-                      <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest bg-gray-50 px-2 py-0.5 rounded-full">New Course</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {upsellData.map((up, i) => (
+                  <div
+                    key={up.id || (up as any)._id}
+                    onClick={() => navigate(`/course/${up.id || (up as any)._id}`)}
+                    className="p-3 flex items-center gap-3 cursor-pointer active:scale-[0.98] transition-all bg-white rounded-2xl border border-gray-100 shadow-xs hover:border-gray-200"
+                  >
+                    <div className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center shrink-0">
+                      {up.thumbnail || up.imageUrl ? (
+                        <img src={getImageUrl(up.thumbnail || up.imageUrl)} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-primary-600 font-extrabold text-lg">{(up.title || up.name || 'C').charAt(0)}</span>
+                      )}
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-black text-gray-900 line-clamp-1">{up.title || up.name}</p>
+                      <p className="text-xs font-bold text-emerald-600 mt-0.5">₹{up.price || 0}</p>
+                    </div>
+                    <span className="material-symbols-rounded text-gray-400 text-base">chevron_right</span>
                   </div>
-                  <div className="w-8 h-8 rounded-full bg-indigo-50 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-600 group-hover:text-white transition-all">
-                    <span className="material-symbols-rounded text-lg">chevron_right</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {enrollmentStatus === 'expired' ? (
-          <div className="mt-8 mb-24 px-4 sticky bottom-4 z-40">
-            <div className="bg-[#2D0D0D] p-5 rounded-[2.2rem] shadow-[0_20px_50px_rgba(220,38,38,0.3)] flex items-center justify-between border border-red-500/20 mx-auto max-w-sm animate-fade-in-up">
-              <div className="flex flex-col gap-1 ml-1">
-                <span className="text-[9px] font-black text-red-400 uppercase tracking-[0.15em]">Subscription Ended</span>
-                <div className="flex items-center gap-2.5">
-                  <span className="text-xl font-black text-white tracking-tight">EXPIRED</span>
-                </div>
+                ))}
               </div>
             </div>
-          </div>
-        ) : !isEnrolled ? (
-          <div className="mt-8 mb-24 px-4 sticky bottom-4 z-40">
-            <div className="bg-[#0D1B2A] p-5 rounded-[2.2rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] flex items-center justify-between border border-white/10 mx-auto max-w-sm animate-fade-in-up">
-              <div className="flex flex-col gap-1 ml-1">
-                {(course.tsCount || 0) > 0 && (
-                   <div className="flex items-center gap-1.5 mb-1 animate-pulse">
-                      <span className="material-symbols-rounded text-green-400 text-[14px]">card_membership</span>
-                      <span className="text-green-400 text-[9px] font-black uppercase tracking-widest">Includes {course.tsCount} Test Series</span>
-                   </div>
+          )}
+        </main>
+      ) : (
+        /* CONTENT TAB (Curriculum Syllabus with Locks for Un-enrolled) */
+        <main className="p-4 space-y-4 animate-fade-in pb-6">
+          {/* Active Enrolled Student: Clean Modern Learning Card */}
+          {isEnrolled && !isCourseExpired && (
+            <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-xs hover:border-gray-200 transition-all">
+              <div className="flex items-center justify-between mb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Enrolled
+                  </span>
+                  <span className="text-xs text-gray-500 font-medium">
+                    {completedVideosCount} of {totalVideos} completed
+                  </span>
+                </div>
+                <span className="text-xs font-black text-gray-900">
+                  {progressPercent}%
+                </span>
+              </div>
+
+              {/* Progress Bar */}
+              <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden mb-3">
+                <div
+                  className="bg-primary-600 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${Math.max(progressPercent, 2)}%` }}
+                ></div>
+              </div>
+
+              {/* Bottom: Next Lesson Info & Continue Button */}
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-primary-50 text-primary-600 flex items-center justify-center shrink-0">
+                    <span className="material-symbols-rounded text-lg">play_arrow</span>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider leading-none">
+                      {completedVideosCount > 0 ? 'Up Next' : 'First Class'}
+                    </p>
+                    <p className="text-xs font-bold text-gray-800 truncate mt-0.5 max-w-[200px] sm:max-w-md">
+                      {lastWatchedVideo ? lastWatchedVideo.title : 'Ready to start'}
+                    </p>
+                  </div>
+                </div>
+
+                {lastWatchedVideo && (
+                  <button
+                    onClick={() => handleVideoClick(lastWatchedVideo)}
+                    className="px-4 py-2 bg-primary-600 hover:bg-primary-700 active:scale-95 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center gap-1.5 shrink-0"
+                  >
+                    <span className="material-symbols-rounded text-sm">play_circle</span>
+                    <span>{completedVideosCount > 0 ? 'Resume' : 'Start'}</span>
+                  </button>
                 )}
-                <span className="text-[9px] font-black text-white/30 uppercase tracking-[0.15em]">ENROLLMENT FEE</span>
-                <div className="flex items-center gap-2.5">
-                  <span className="text-2xl font-[900] text-white tracking-tight">₹{course.price}</span>
-                  {course.mrp && course.mrp > (course.price || 0) && (
-                    <span className="text-xs text-white/20 line-through font-bold">₹{course.mrp}</span>
-                  )}
+              </div>
+            </div>
+          )}
+
+          {/* Expired Course Notice */}
+          {isCourseExpired && (
+            <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0 text-red-600">
+                  <span className="material-symbols-rounded text-xl">lock_clock</span>
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-red-900">Course Access Expired</h4>
+                  <p className="text-xs text-red-600">Your enrollment period has ended. Renew now to access your videos, notes, and tests.</p>
                 </div>
               </div>
-
-              {isPaidCourse ? (
-                <button
-                  onClick={handleBuyNow}
-                  className="px-8 py-3.5 bg-white text-[#0D1B2A] rounded-2xl text-[10px] font-black uppercase tracking-[0.1em] shadow-xl active:scale-[0.98] transition-all"
-                >
-                  PURCHASE COURSE
-                </button>
-              ) : (
-                <button
-                  onClick={handleEnroll}
-                  disabled={enrolling}
-                  className="px-8 py-3.5 bg-green-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.1em] shadow-xl active:scale-[0.98] transition-all"
-                >
-                  {enrolling ? 'ENROLLING...' : 'ENROLL FREE'}
-                </button>
-              )}
+              <button
+                onClick={handleBuyNow}
+                className="px-4 py-2 bg-red-600 text-white font-bold text-xs rounded-xl shadow hover:bg-red-700 active:scale-95 transition-all flex items-center justify-center gap-1 shrink-0"
+              >
+                <span>Renew Course</span>
+                <span className="material-symbols-rounded text-sm">arrow_forward</span>
+              </button>
             </div>
-          </div>
-        ) : (
-          <div className="mt-8 mb-24 px-4 sticky bottom-4 z-40">
+          )}
+
+          {/* Subtabs Selector */}
+          <div className="flex items-center gap-2 overflow-x-auto hide-scrollbar pb-1">
             <button
-               onClick={handleStartLearning}
-               className="w-full max-w-sm mx-auto flex items-center justify-center gap-3 bg-brandBlue text-white p-5 rounded-[2.2rem] shadow-[0_20px_50px_rgba(46,115,232,0.3)] border border-brandBlue/20 animate-fade-in-up active:scale-[0.98] transition-all"
+              onClick={() => setActiveTab('videos')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'videos'
+                  ? 'bg-[#1e293b] text-white shadow-xs'
+                  : 'bg-white text-gray-600 border border-gray-200/80 hover:bg-gray-50'
+                }`}
             >
-               <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
-                  <span className="material-symbols-rounded text-white">play_arrow</span>
-               </div>
-               <div className="flex flex-col items-start">
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] opacity-60">Success! Enrolled</span>
-                  <span className="text-sm font-black uppercase tracking-widest">START LEARNING</span>
-               </div>
+              <span className="material-symbols-rounded text-base">play_circle</span>
+              <span>Videos ({recordedVideos.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('notes')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'notes'
+                  ? 'bg-orange-500 text-white shadow-xs'
+                  : 'bg-white text-gray-600 border border-gray-200/80 hover:bg-gray-50'
+                }`}
+            >
+              <span className="material-symbols-rounded text-base">description</span>
+              <span>Notes ({notes.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('tests')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'tests'
+                  ? 'bg-purple-600 text-white shadow-xs'
+                  : 'bg-white text-gray-600 border border-gray-200/80 hover:bg-gray-50'
+                }`}
+            >
+              <span className="material-symbols-rounded text-base">quiz</span>
+              <span>Tests ({tests.length})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('live')}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${activeTab === 'live'
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'bg-white text-gray-600 border border-gray-200/80 hover:bg-gray-50'
+                }`}
+            >
+              <span className="material-symbols-rounded text-base">sensors</span>
+              <span>Live ({liveStreams.length})</span>
             </button>
           </div>
-        )}
-      </main>
+
+          {/* Subtab Contents */}
+          {activeTab === 'videos' && (
+            <RecordedTab
+              filteredFolders={filteredFolders}
+              filteredVideos={filteredVideos}
+              navigationHistory={navigationHistory}
+              isEnrolled={isEnrolled}
+              isExpired={isCourseExpired}
+              uniqueCompletedVideos={uniqueCompletedVideos}
+              failedImages={failedImages}
+              onNavigateIntoFolder={navigateIntoFolder}
+              onNavigateUp={navigateUp}
+              onVideoClick={handleVideoClick}
+              onImageError={handleImageError}
+              getVideoId={getVideoId}
+              normalizeId={normalizeId}
+              computeStatus={computeEffectiveStatus}
+            />
+          )}
+
+          {activeTab === 'notes' && (
+            <NotesTab
+              notes={notes}
+              isEnrolled={isEnrolled}
+              isExpired={isCourseExpired}
+              isPaidCourse={isPaidCourse}
+              coursePrice={course.price}
+              enrolling={enrolling}
+              onViewNote={handleViewNote}
+              onEnroll={handleEnroll}
+              onBuyNow={handleBuyNow}
+            />
+          )}
+
+          {activeTab === 'tests' && (
+            <TestsTab
+              tests={tests}
+              isEnrolled={isEnrolled}
+              isExpired={isCourseExpired}
+              coursePrice={course.price}
+              enrolling={enrolling}
+              completedTests={progress.completedTests || []}
+              onStartTest={(testId) => {
+                if (isCourseExpired) {
+                  alert('Your access to this course has expired. Please renew to continue.');
+                  return;
+                }
+                navigate(`/test/${testId}`, {
+                  state: { from: location.pathname + location.search }
+                });
+              }}
+              onEnroll={handleEnroll}
+              onBuyNow={handleBuyNow}
+            />
+          )}
+
+          {activeTab === 'live' && (
+            <LiveTab
+              liveStreams={liveStreams}
+              isEnrolled={isEnrolled}
+              isExpired={isCourseExpired}
+              isPaidCourse={isPaidCourse}
+              coursePrice={course.price}
+              enrolling={enrolling}
+              onJoinLive={handleVideoClick}
+              onEnroll={handleEnroll}
+              onBuyNow={handleBuyNow}
+              computeStatus={computeEffectiveStatus}
+            />
+          )}
+        </main>
+      )}
+
+      {/* Ultra-Premium Floating Gradient Checkout Bar (Hidden during check & for active enrolled students) */}
+      {!checkingEnrollment && !showVideoPlayer && (!isEnrolled || isCourseExpired) && (
+        <CourseCheckoutBar
+          course={course}
+          isPaidCourse={isPaidCourse}
+          isEnrolled={isEnrolled}
+          enrollmentStatus={enrollmentStatus}
+          enrolling={enrolling}
+          processing={processingPayment}
+          payableAmount={finalPayableAmount}
+          progressPercent={progressPercent}
+          completedVideosCount={completedVideosCount}
+          totalVideos={totalVideos}
+          onBuyNow={handleBuyNow}
+          onEnroll={handleEnroll}
+          onStartLearning={handleStartLearning}
+        />
+      )}
+
+      {/* Slide-Up Coupon Bottom Sheet (Screenshot 9) */}
+      <CouponBottomSheet
+        isOpen={isCouponSheetOpen}
+        onClose={() => setIsCouponSheetOpen(false)}
+        courseId={String(id)}
+        appliedCoupon={appliedCoupon}
+        onApplyCoupon={handleApplyCoupon}
+        onRemoveCoupon={handleRemoveCoupon}
+      />
+
+      {/* State Selection Bottom Sheet */}
+      <StateSelectionBottomSheet
+        isOpen={isStateSheetOpen}
+        onClose={() => setIsStateSheetOpen(false)}
+        selectedState={selectedState}
+        onSelectState={handleSelectState}
+      />
 
       {showVideoPlayer && selectedVideo && (
         <StudentVideoPlayer
           videoId={selectedVideo.id || selectedVideo._id || ''}
           src={toYouTubeEmbed(
-            selectedVideo.recordedLink || 
-            selectedVideo.recordingUrl || 
-            selectedVideo.replayUrl || 
-            selectedVideo.youtubeUrl || 
-            selectedVideo.videoUrl || 
-            selectedVideo.url || 
-            selectedVideo.meetingLink || 
-            selectedVideo.liveUrl || 
-            selectedVideo.streamUrl || 
+            selectedVideo.recordedLink ||
+            selectedVideo.recordingUrl ||
+            selectedVideo.replayUrl ||
+            selectedVideo.youtubeUrl ||
+            selectedVideo.videoUrl ||
+            selectedVideo.url ||
+            selectedVideo.meetingLink ||
+            selectedVideo.liveUrl ||
+            selectedVideo.streamUrl ||
             ''
           )}
           title={selectedVideo.title}
           courseTitle={course?.name || course?.title}
           courseId={id}
-          thumbnail={selectedVideo.thumbnail}
-          duration={selectedVideo.duration}
-          isLive={selectedVideo.contentType === 'live_stream'}
+          duration={
+            selectedVideo.duration && selectedVideo.duration !== '00:00'
+              ? selectedVideo.duration
+              : (selectedVideo.startedAt || selectedVideo.startTime) && (selectedVideo.endedAt || selectedVideo.endTime)
+                ? String(Math.floor((new Date(selectedVideo.endedAt || selectedVideo.endTime).getTime() - new Date(selectedVideo.startedAt || selectedVideo.startTime).getTime()) / 1000))
+                : undefined
+          }
+          isLive={
+            (selectedVideo.contentType === 'live_stream' || selectedVideo.type === 'live' || selectedVideo.platform === 'youtube_live') &&
+            computeEffectiveStatus(selectedVideo) === 'live'
+          }
           onClose={closeVideoPlayer}
           onMarkComplete={() => {
             const vId = selectedVideo.id || selectedVideo._id;
@@ -993,6 +1673,39 @@ const CourseDetails: React.FC = () => {
           pdf2={selectedVideo.pdf2 || selectedVideo.pdf2Url}
           studyMaterial={selectedVideo.studyMaterial || selectedVideo.studyMaterialUrl || selectedVideo.documentUrl || selectedVideo.material}
         />
+      )}
+      {/* Enrollment / Payment Success Modal */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-sm w-full p-6 text-center shadow-2xl border border-gray-100 relative overflow-hidden">
+            <div className="w-16 h-16 rounded-full bg-emerald-50 border-4 border-emerald-100 flex items-center justify-center mx-auto mb-4">
+              <span className="material-symbols-rounded text-4xl text-emerald-600">check_circle</span>
+            </div>
+
+            <h3 className="text-xl font-black text-gray-900 tracking-tight">
+              Enrollment Successful!
+            </h3>
+            <p className="text-xs text-gray-500 font-medium mt-1.5 leading-relaxed">
+              You are now enrolled in <span className="font-bold text-gray-800">{course?.name || course?.title}</span>.
+            </p>
+
+            <div className="mt-4 py-2 px-3 rounded-xl bg-emerald-50/70 border border-emerald-100 inline-flex items-center gap-1.5 text-[11px] font-bold text-emerald-700">
+              <span className="material-symbols-rounded text-sm">lock_open</span>
+              <span>Full Batch Content Unlocked</span>
+            </div>
+
+            <button
+              onClick={() => {
+                setShowSuccessModal(false);
+                setMainTab('content');
+              }}
+              className="mt-6 w-full py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-sm shadow-lg shadow-blue-500/25 active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              <span>Start Learning Now</span>
+              <span className="material-symbols-rounded text-lg">arrow_forward</span>
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

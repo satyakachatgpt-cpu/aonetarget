@@ -6,6 +6,7 @@ import { Document, Packer, Paragraph, TextRun, AlignmentType, HeadingLevel } fro
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { getCache, setCache, clearCachePattern } from '../utils/memoryCache.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -115,6 +116,22 @@ export const heartbeat = async (req, res) => {
       return res.json({ valid: false, reason: 'not_authenticated' });
     }
 
+    if (student.isBanned || student.status === 'blocked' || student.status === 'inactive') {
+      return res.json({
+        valid: false,
+        reason: 'user_blocked',
+        message: student.banReason || 'Your account has been blocked by administrator.'
+      });
+    }
+
+    if (!student.isReviewer && student.deviceLocked && !student.activeDeviceId && !student.deviceId) {
+      return res.json({
+        valid: false,
+        reason: 'device_unlinked',
+        message: 'Your device has been unlinked by administrator. Please login again.'
+      });
+    }
+
     if (clientDeviceId && student.activeDeviceId && clientDeviceId !== student.activeDeviceId) {
       return res.json({
         valid: false,
@@ -157,16 +174,27 @@ export const heartbeat = async (req, res) => {
 
     const latestNotificationTime = latestNotif ? new Date(latestNotif.createdAt || latestNotif.updatedAt).getTime() : null;
 
-    return res.json({ valid: true, latestNotificationTime });
+    return res.json({ 
+      valid: true, 
+      latestNotificationTime,
+      contentVersion: global.latestContentVersion || 0
+    });
   } catch (error) {
-    return res.json({ valid: true });
+    return res.json({ valid: true, contentVersion: global.latestContentVersion || 0 });
   }
+};
+
+export const getContentVersion = (req, res) => {
+  res.json({ contentVersion: global.latestContentVersion || 0 });
 };
 
 // --- Splash Screen (Phase 19E) ---
 
 export const getSplashScreen = async (req, res) => {
   try {
+    const cached = getCache('system_splash_screen');
+    if (cached) return res.json(cached);
+
     const splash = await db.collection('settings').findOne({ type: 'splash_screen' });
     const defaultSplash = {
       type: 'splash_screen',
@@ -174,7 +202,9 @@ export const getSplashScreen = async (req, res) => {
       isActive: true,
       duration: 3000
     };
-    res.json(splash || defaultSplash);
+    const result = splash || defaultSplash;
+    setCache('system_splash_screen', result, 120);
+    res.json(result);
   } catch (error) {
     res.json({
       type: 'splash_screen',
@@ -186,6 +216,7 @@ export const getSplashScreen = async (req, res) => {
 };
 export const updateSplashScreen = async (req, res) => {
   try {
+    clearCachePattern('system_splash_screen');
     const { _id, ...updateData } = req.body;
     updateData.type = 'splash_screen';
     await db.collection('settings').updateOne(

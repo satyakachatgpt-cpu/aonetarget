@@ -5,12 +5,19 @@ import Video from '../models/Video.js';
 import { findCourse, getRelatedCourseIds, syncDemoVideoWithFreeContent } from '../services/course.service.js';
 import { db } from '../config/db.js';
 import { isTestExpired } from '../utils/helpers.js';
+import { getCache, setCache, clearCachePattern } from '../utils/memoryCache.js';
 
 /**
  * Get all courses with optional filters and pagination
  */
 export const getCourses = async (req, res) => {
   try {
+    const cacheKey = `courses:${req.originalUrl || req.url}`;
+    const cached = getCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
+
     const filter = {};
     const { 
       examType, contentType, subject, boardType, 
@@ -195,9 +202,11 @@ export const getCourses = async (req, res) => {
       res.setHeader('X-Limit', nLimit);
       res.setHeader('Access-Control-Expose-Headers', 'X-Total-Count, X-Page, X-Limit');
 
+      setCache(cacheKey, coursesWithCounts, 60);
       res.json(coursesWithCounts);
     } else {
       const coursesWithCounts = await db.collection('courses').aggregate(aggregation).toArray();
+      setCache(cacheKey, coursesWithCounts, 60);
       res.json(coursesWithCounts);
     }
   } catch (error) {
@@ -211,6 +220,7 @@ export const getCourses = async (req, res) => {
  */
 export const createCourse = async (req, res) => {
   try {
+    clearCachePattern('courses');
     const courseData = req.body;
     if (courseData.settings && typeof courseData.settings.sortingOrder === 'string') {
       courseData.settings.sortingOrder = parseFloat(courseData.settings.sortingOrder) || 9999;
@@ -233,6 +243,7 @@ export const createCourse = async (req, res) => {
  */
 export const bulkUpdateCourses = async (req, res) => {
   try {
+    clearCachePattern('courses');
     const { updates } = req.body;
     if (!Array.isArray(updates)) return res.status(400).json({ error: 'Updates must be an array' });
 
@@ -271,14 +282,21 @@ export const deleteAllCourses = async (req, res) => {
  */
 export const getCourseById = async (req, res) => {
   try {
+    const cacheKey = `course_detail_${req.params.id}`;
+    const cached = getCache(cacheKey);
+    if (cached) {
+      return res.json(cached);
+    }
     const course = await findCourse(req.params.id);
     if (course) {
       const relatedIds = await getRelatedCourseIds(course, req.params.id);
-      res.json({
+      const result = {
         ...course,
         id: course.id || course._id.toString(),
         relatedIds: relatedIds
-      });
+      };
+      setCache(cacheKey, result, 60);
+      res.json(result);
     } else {
       res.status(404).json({ error: 'Course not found' });
     }
@@ -293,6 +311,7 @@ export const getCourseById = async (req, res) => {
  */
 export const updateCourse = async (req, res) => {
   try {
+    clearCachePattern('courses');
     const { _id, ...updateData } = req.body;
     const id = req.params.id;
 
@@ -351,16 +370,36 @@ export const updateCourse = async (req, res) => {
  */
 export const deleteCourse = async (req, res) => {
   try {
+    clearCachePattern('courses');
     const { id } = req.params;
     let filter = { id: id };
     if (ObjectId.isValid(id)) filter = { _id: new ObjectId(id) };
 
-    let result = await db.collection('courses').deleteOne(filter);
-    if (result.deletedCount === 0) {
-      result = await db.collection('packages').deleteOne(filter);
+    let existing = await db.collection('courses').findOne(filter);
+    let collectionName = 'courses';
+    if (!existing) {
+      existing = await db.collection('packages').findOne(filter);
+      collectionName = 'packages';
     }
-    
-    if (result.deletedCount === 0) return res.status(404).json({ error: 'Course not found' });
+
+    if (!existing) return res.status(404).json({ error: 'Course not found' });
+
+    await db.collection(collectionName).deleteOne({ _id: existing._id });
+
+    // Collect all possible ID variants of this course/package
+    const idVariants = [
+      id,
+      String(existing._id),
+      ...(existing.id ? [String(existing.id)] : []),
+      ...(existing.slug ? [String(existing.slug)] : [])
+    ].filter(Boolean);
+
+    // Automatically remove this course from all students' enrolledCourses
+    await db.collection('students').updateMany(
+      { enrolledCourses: { $in: idVariants } },
+      { $pull: { enrolledCourses: { $in: idVariants } } }
+    );
+
     res.json({ success: true, message: 'Course/Package deleted' });
   } catch (error) {
     console.error('[COURSE CONTROLLER] Delete Error:', error);

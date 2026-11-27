@@ -265,4 +265,185 @@ export const validateImage = (
 
     img.src = objectUrl;
   });
-};
+};
+
+/**
+ * Parse any raw duration string or number into seconds.
+ * Handles: "75:35", "75:35 min", "1:15:35", "75 min", "75", 4535 (seconds), "1 hr 15 min", etc.
+ */
+export const parseDurationToSeconds = (dur: string | number | undefined | null): number => {
+  if (dur === undefined || dur === null) return 0;
+  if (typeof dur === 'number') {
+    return Math.round(dur);
+  }
+  const clean = dur.toString().trim().toLowerCase();
+  if (!clean || clean === '0' || clean === '00:00' || clean === '0:00' || clean === 'video') return 0;
+
+  // If it's a decimal float string without colons (e.g. "11500.101", "4535.041", "450.5"), it is seconds from player
+  if (clean.includes('.') && !clean.includes(':')) {
+    const parsedFloat = parseFloat(clean);
+    return isNaN(parsedFloat) ? 0 : Math.round(parsedFloat);
+  }
+
+  // Handle "1 hr 15 min" or "1 hour 15 mins"
+  const hrMatch = clean.match(/(\d+)\s*(?:hr|hour)s?/);
+  const minMatch = clean.match(/(\d+)\s*(?:min|minute)s?/);
+  const secMatch = clean.match(/(\d+)\s*(?:sec|second)s?/);
+  if (hrMatch || (minMatch && !clean.includes(':'))) {
+    const hours = hrMatch ? parseInt(hrMatch[1], 10) : 0;
+    const mins = minMatch ? parseInt(minMatch[1], 10) : 0;
+    const secs = secMatch ? parseInt(secMatch[1], 10) : 0;
+    return hours * 3600 + mins * 60 + secs;
+  }
+
+  // Strip trailing "min", "mins", etc.
+  const timeOnly = clean.replace(/mins?|minutes?|secs?|seconds?|hrs?|hours?/g, '').trim();
+
+  // Match HH:MM:SS or MM:SS
+  const parts = timeOnly.split(':').map(p => parseFloat(p));
+  if (parts.length === 3 && parts.every(p => !isNaN(p))) {
+    return Math.round(parts[0] * 3600 + parts[1] * 60 + parts[2]);
+  } else if (parts.length === 2 && parts.every(p => !isNaN(p))) {
+    return Math.round(parts[0] * 60 + parts[1]);
+  } else if (parts.length === 1 && !isNaN(parts[0])) {
+    const val = parts[0];
+    if (val > 300) return Math.round(val);
+    return Math.round(val * 60);
+  }
+
+  return 0;
+};
+
+/**
+ * Format duration for video badge / timecode (e.g. "01:15:35" or "15:35")
+ */
+export const formatDurationBadge = (dur: string | number | undefined | null): string => {
+  const totalSeconds = parseDurationToSeconds(dur);
+  if (!totalSeconds || totalSeconds <= 0) return '--:--';
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  const secs = Math.floor(totalSeconds % 60);
+
+  const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
+
+  if (hours > 0) {
+    return `${pad(hours)}:${pad(mins)}:${pad(secs)}`;
+  }
+  return `${pad(mins)}:${pad(secs)}`;
+};
+
+/**
+ * Format duration for human label (e.g. "1 hr 15 min", "45 min")
+ */
+export const formatDurationLabel = (dur: string | number | undefined | null): string => {
+  const totalSeconds = parseDurationToSeconds(dur);
+  if (!totalSeconds || totalSeconds <= 0) return 'Class';
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const mins = Math.floor((totalSeconds % 3600) / 60);
+  const secs = Math.floor(totalSeconds % 60);
+
+  if (hours > 0) {
+    if (mins > 0) return `${hours} hr ${mins} min`;
+    return `${hours} hr`;
+  }
+  if (mins > 0) return `${mins} min`;
+  return `${secs} sec`;
+};
+
+/**
+ * Play Store App Redirection & Deep Link Helper for News
+ */
+export const PLAYSTORE_PACKAGE_ID = 'com.aonetarget.education';
+export const PLAYSTORE_URL = `https://play.google.com/store/apps/details?id=${PLAYSTORE_PACKAGE_ID}`;
+
+export const openPlayStoreForNews = (newsId?: string | number) => {
+  const nId = newsId ? String(newsId).trim() : '';
+  const referrerParam = nId ? `&referrer=utm_source%3Dwebsite%26news_id%3D${encodeURIComponent(nId)}` : '';
+  const fullPlayStoreUrl = `${PLAYSTORE_URL}${referrerParam}`;
+
+  const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
+  if (isAndroid) {
+    // On Android devices:
+    // Try opening native app with custom scheme, or fall back to Play Store directly
+    const fallback = encodeURIComponent(fullPlayStoreUrl);
+    const intentUrl = nId
+      ? `intent://news/${encodeURIComponent(nId)}#Intent;scheme=aonetarget;package=${PLAYSTORE_PACKAGE_ID};S.browser_fallback_url=${fallback};end`
+      : `market://details?id=${PLAYSTORE_PACKAGE_ID}`;
+    window.location.href = intentUrl;
+  } else {
+    // Desktop / non-Android browser: open Play Store in new tab
+    window.open(fullPlayStoreUrl, '_blank', 'noopener,noreferrer');
+  }
+};
+
+/**
+ * Dynamic Course Validity Formatter (Mirrors Admin Panel Settings)
+ */
+export const formatCourseValidity = (validity: any, expiryMode?: string): { title: string; subtitle: string } => {
+  if (expiryMode === 'Lifetime Access' || validity?.tab === 'lifetime') {
+    return {
+      title: 'Lifetime Access',
+      subtitle: 'You will get unlimited access to this course'
+    };
+  }
+
+  if (expiryMode === 'End Date' || validity?.tab === 'end' || validity?.endDate) {
+    const endStr = validity?.endDate || '';
+    return {
+      title: endStr ? `Valid till ${endStr}` : 'Fixed Date Validity',
+      subtitle: endStr ? `Course access valid till ${endStr}` : 'Access ends on specified date'
+    };
+  }
+
+  if (validity && typeof validity === 'object' && validity.value) {
+    const val = parseInt(validity.value, 10);
+    const unit = String(validity.unit || 'Months');
+    
+    if (val === 12 && unit.toLowerCase() === 'months') {
+      return {
+        title: '1 Year Validity',
+        subtitle: 'You will get this course for 1 full Year(s)'
+      };
+    }
+
+    let unitLabel = unit;
+    if (val === 1 && unit.endsWith('s')) {
+      unitLabel = unit.slice(0, -1);
+    }
+
+    return {
+      title: `${val} ${unitLabel} Validity`,
+      subtitle: `You will get this course for ${val} ${unitLabel}`
+    };
+  }
+
+  if (validity) {
+    const str = String(validity).trim();
+    if (/^\d+$/.test(str)) {
+      const num = parseInt(str, 10);
+      if (num === 12) {
+        return {
+          title: '1 Year Validity',
+          subtitle: 'You will get this course for 1 full Year(s)'
+        };
+      }
+      return {
+        title: `${num} Months Validity`,
+        subtitle: `You will get this course for ${num} Months`
+      };
+    }
+    return {
+      title: `${str} Validity`,
+      subtitle: `You will get this course for ${str}`
+    };
+  }
+
+  return {
+    title: '1 Year Validity',
+    subtitle: 'You will get this course for 1 full Year(s)'
+  };
+};
+
+

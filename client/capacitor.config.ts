@@ -5,6 +5,9 @@ const config: CapacitorConfig = {
   appName: 'AONE Target',
   webDir: 'dist',
   plugins: {
+    CapacitorHttp: {
+      enabled: true,
+    },
     SplashScreen: {
       launchShowDuration: 0,
       launchAutoHide: true,

@@ -2,6 +2,7 @@ import { db, getDb } from '../config/db.js';
 import mongoose from 'mongoose';
 import Folder from '../models/Folder.js';
 import { findCourse, getRelatedCourseIds, syncDemoVideoWithFreeContent } from '../services/course.service.js';
+import { getCache, setCache, clearCachePattern } from '../utils/memoryCache.js';
 
 const { ObjectId } = mongoose.Types;
 
@@ -9,7 +10,10 @@ const { ObjectId } = mongoose.Types;
 
 export const getCategories = async (req, res) => {
   try {
+    const cached = getCache('categories:all');
+    if (cached) return res.json(cached);
     const categories = await db.collection('categories').find({}).sort({ order: 1 }).toArray();
+    setCache('categories:all', categories, 60);
     res.json(categories);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch categories' });
@@ -18,7 +22,11 @@ export const getCategories = async (req, res) => {
 
 export const createCategory = async (req, res) => {
   try {
+    clearCachePattern('categories');
     const { _id, ...categoryData } = req.body;
+    if (!categoryData.id && categoryData.title) {
+      categoryData.id = categoryData.title.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || `cat_${Date.now()}`;
+    }
     const result = await db.collection('categories').insertOne(categoryData);
     res.status(201).json({ _id: result.insertedId, ...categoryData });
   } catch (error) {
@@ -29,6 +37,7 @@ export const createCategory = async (req, res) => {
 
 export const updateCategory = async (req, res) => {
   try {
+    clearCachePattern('categories');
     const id = req.params.id;
     const query = {
       $or: [
@@ -56,6 +65,7 @@ export const updateCategory = async (req, res) => {
 
 export const deleteCategory = async (req, res) => {
   try {
+    clearCachePattern('categories');
     let filter;
     try { 
       filter = { _id: new ObjectId(req.params.id) }; 
@@ -174,7 +184,16 @@ export const getSubcategories = async (req, res) => {
   try {
     const { categoryId, level1Branch, level2Branch } = req.query;
     const query = {};
-    if (categoryId) query.categoryId = categoryId;
+    if (categoryId) {
+      const lower = String(categoryId).toLowerCase();
+      if (lower.includes('bsc') && lower.includes('nursing')) {
+        query.categoryId = { $in: [categoryId, 'bsc-nursing', 'bsc_nursing', 'BSC NURSING', 'ENTRANCE EXAM'] };
+      } else if (lower.includes('nursing')) {
+        query.categoryId = { $in: [categoryId, 'nursing', 'nursing-cet', 'Nursing', 'NURSING', 'nursing_cet', 'Govt. Competition '] };
+      } else {
+        query.categoryId = categoryId;
+      }
+    }
     if (level1Branch) query.level1Branch = level1Branch;
     if (level2Branch) query.level2Branch = level2Branch;
     
@@ -277,7 +296,16 @@ export const getSubjects = async (req, res) => {
   try {
     const { categoryId, subcategoryId, level1Branch, level2Branch } = req.query;
     const query = {};
-    if (categoryId) query.categoryId = categoryId;
+    if (categoryId) {
+      const lower = String(categoryId).toLowerCase();
+      if (lower.includes('bsc') && lower.includes('nursing')) {
+        query.categoryId = { $in: [categoryId, 'bsc-nursing', 'bsc_nursing', 'BSC NURSING', 'ENTRANCE EXAM'] };
+      } else if (lower.includes('nursing')) {
+        query.categoryId = { $in: [categoryId, 'nursing', 'nursing-cet', 'Nursing', 'NURSING', 'nursing_cet', 'Govt. Competition '] };
+      } else {
+        query.categoryId = categoryId;
+      }
+    }
     if (subcategoryId) query.subcategoryId = subcategoryId;
     if (level1Branch) query.level1Branch = level1Branch;
     if (level2Branch) query.level2Branch = level2Branch;
@@ -477,9 +505,13 @@ export const getFoldersByCourse = async (req, res) => {
 
     const idVariants = await getRelatedCourseIds(course, req.params.courseId);
     const query = {
-      courseId: { $in: idVariants }
+      courseId: { $in: idVariants },
+      status: { $ne: 'inactive' }
     };
-    const folders = await Folder.find(query).sort({ order: 1, sortingOrder: 1 }).lean();
+    const folders = await Folder.find(query).limit(500).lean();
+    if (Array.isArray(folders)) {
+      folders.sort((a, b) => (a.order || 0) - (b.order || 0) || (a.sortingOrder || 0) - (b.sortingOrder || 0));
+    }
     res.json(folders || []);
   } catch (error) {
     console.error('Fetch folders error:', error);
@@ -690,9 +722,32 @@ export const deletePackage = async (req, res) => {
         { _id: ObjectId.isValid(req.params.id) ? new ObjectId(req.params.id) : null }
       ].filter(f => f.id || f._id)
     };
-    let result = await db.collection('packages').deleteOne(filter);
-    if (result.deletedCount === 0) result = await db.collection('courses').deleteOne(filter);
-    if (result.deletedCount === 0) return res.status(404).json({ error: 'Package not found' });
+
+    let existing = await db.collection('packages').findOne(filter);
+    let collectionName = 'packages';
+    if (!existing) {
+      existing = await db.collection('courses').findOne(filter);
+      collectionName = 'courses';
+    }
+
+    if (!existing) return res.status(404).json({ error: 'Package not found' });
+
+    await db.collection(collectionName).deleteOne({ _id: existing._id });
+
+    // Collect all possible ID variants of this package/course
+    const idVariants = [
+      req.params.id,
+      String(existing._id),
+      ...(existing.id ? [String(existing.id)] : []),
+      ...(existing.slug ? [String(existing.slug)] : [])
+    ].filter(Boolean);
+
+    // Automatically remove this package from all students' enrolledCourses
+    await db.collection('students').updateMany(
+      { enrolledCourses: { $in: idVariants } },
+      { $pull: { enrolledCourses: { $in: idVariants } } }
+    );
+
     res.json({ success: true, message: 'Package/Course deleted' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete package' });

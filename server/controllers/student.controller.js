@@ -399,7 +399,8 @@ export const updateStudent = async (req, res) => {
       'name', 'phone', 'email', 'dob', 'city', 'state', 'district', 'gender',
       'whatsAppNumber', 'alternateNumber', 'alternateWhatsAppNumber', 'class', 'target',
       'fatherName', 'motherName', 'fullAddress', 'address', 'password',
-      'previousClass', 'schoolName', 'marksPercentage', 'passingYear', 'profilePhoto'
+      'previousClass', 'schoolName', 'marksPercentage', 'passingYear', 'profilePhoto',
+      'higherEducation', 'highQualification'
     ];
 
     // Block non-admins from updating sensitive fields
@@ -413,10 +414,10 @@ export const updateStudent = async (req, res) => {
 
     const updateData = {};
     const stringFields = [
-      'name', 'phone', 'userId', 'highQualification', 'dob', 'city', 'state', 
+      'name', 'phone', 'userId', 'highQualification', 'higherEducation', 'dob', 'city', 'state', 
       'course', 'status', 'registrationType', 'registrationDate', 'district', 
       'gender', 'whatsAppNumber', 'alternateNumber', 'alternateWhatsAppNumber', 
-      'class', 'notes', 'paymentStatus', 'banReason', 'target', 'tag'
+      'class', 'notes', 'paymentStatus', 'banReason', 'target', 'tag', 'address'
     ];
 
     stringFields.forEach(field => {
@@ -428,6 +429,13 @@ export const updateStudent = async (req, res) => {
         }
       }
     });
+
+    if (body.higherEducation && !body.highQualification) {
+      updateData.highQualification = body.higherEducation.trim();
+    }
+    if (body.highQualification && !body.higherEducation) {
+      updateData.higherEducation = body.highQualification.trim();
+    }
 
     if (body.email !== undefined) {
       updateData.email = (body.email && body.email.trim()) ? body.email.toLowerCase().trim() : null;
@@ -508,13 +516,65 @@ export const updateStudent = async (req, res) => {
 export const deleteStudent = async (req, res) => {
   try {
     const db = getDb();
-    console.log('DELETE /api/students/:id - Deleting student:', req.params.id);
-    const result = await Student.findOneAndDelete({ id: req.params.id });
-    if (!result) {
-      console.warn('Student not found for deletion:', req.params.id);
+    const targetId = req.params.id;
+    console.log('DELETE /api/students/:id - Deleting student:', targetId);
+
+    const deletedStudent = await Student.findOneAndDelete({
+      $or: [
+        { id: targetId },
+        { userId: targetId },
+        ...(ObjectId.isValid(targetId) ? [{ _id: new ObjectId(targetId) }] : [])
+      ]
+    });
+
+    if (!deletedStudent) {
+      console.warn('Student not found for deletion:', targetId);
       return res.status(404).json({ error: 'Student not found' });
     }
-    console.log('Student deleted successfully:', req.params.id);
+
+    // Cascade-clean all enrollment, purchase, progress, and session records so re-signup starts 100% fresh
+    const studentIdStrings = [...new Set([
+      deletedStudent.id,
+      deletedStudent.userId,
+      String(deletedStudent._id)
+    ].filter(Boolean).map(String))];
+    const allStudentIds = [...studentIdStrings, deletedStudent._id].filter(Boolean);
+
+    const rawPhone = String(deletedStudent.phone || '').replace(/\D/g, '');
+    const cleanPhone10 = rawPhone.length > 10 ? rawPhone.slice(-10) : rawPhone;
+    const phoneVariants = cleanPhone10
+      ? [...new Set([deletedStudent.phone, cleanPhone10, `+91${cleanPhone10}`, `91${cleanPhone10}`].filter(Boolean))]
+      : [];
+
+    await Promise.allSettled([
+      db.collection('purchases').deleteMany({
+        $or: [
+          { studentId: { $in: allStudentIds } },
+          { studentMongoId: { $in: [String(deletedStudent._id), deletedStudent._id] } },
+          ...(phoneVariants.length ? [{ studentPhone: { $in: phoneVariants } }] : []),
+          ...(deletedStudent.email ? [{ studentEmail: deletedStudent.email }] : [])
+        ]
+      }),
+      db.collection('enrollments').deleteMany({
+        $or: [
+          { studentId: { $in: allStudentIds } },
+          { studentMongoId: { $in: [String(deletedStudent._id), deletedStudent._id] } },
+          { userId: { $in: allStudentIds } }
+        ]
+      }),
+      db.collection('pendingOrders').deleteMany({
+        $or: [
+          { studentId: { $in: allStudentIds } },
+          { studentMongoId: { $in: [String(deletedStudent._id), deletedStudent._id] } }
+        ]
+      }),
+      db.collection('courseProgress').deleteMany({ studentId: { $in: allStudentIds } }),
+      db.collection('refresh_tokens').deleteMany({ studentId: { $in: allStudentIds } }),
+      db.collection('testResults').deleteMany({ studentId: { $in: allStudentIds } }),
+      db.collection('testAttempts').deleteMany({ studentId: { $in: allStudentIds } })
+    ]);
+
+    console.log('Student and all linked access/purchase records deleted:', targetId);
     res.json({ success: true, message: 'Student deleted' });
   } catch (error) {
     console.error('Error deleting student:', error);
@@ -530,7 +590,13 @@ export const banStudent = async (req, res) => {
     if (!userId) return res.status(400).json({ error: 'userId is required' });
 
     const student = await Student.findOneAndUpdate(
-      { id: userId },
+      { 
+        $or: [
+          { id: userId },
+          { userId: userId },
+          ...(ObjectId.isValid(userId) ? [{ _id: new ObjectId(userId) }] : [])
+        ]
+      },
       { 
         $set: { 
           isBanned: true, 
@@ -550,6 +616,14 @@ export const banStudent = async (req, res) => {
       return res.status(404).json({ error: 'Student not found' });
     }
 
+    try {
+      const db = getDb ? getDb() : mongoose.connection.db;
+      const studentIds = [student.id, String(student._id), student.userId].filter(Boolean);
+      await db.collection('refresh_tokens').deleteMany({ studentId: { $in: studentIds } });
+    } catch (e) {
+      console.error('Error clearing tokens on ban:', e);
+    }
+
     console.log('Student banned and sessions cleared:', userId);
     res.json({ success: true, message: 'User has been banned and sessions cleared' });
   } catch (error) {
@@ -566,7 +640,13 @@ export const unbanStudent = async (req, res) => {
     if (!userId) return res.status(400).json({ error: 'userId is required' });
 
     const student = await Student.findOneAndUpdate(
-      { id: userId },
+      { 
+        $or: [
+          { id: userId },
+          { userId: userId },
+          ...(ObjectId.isValid(userId) ? [{ _id: new ObjectId(userId) }] : [])
+        ]
+      },
       { 
         $set: { 
           isBanned: false, 
@@ -591,7 +671,14 @@ export const unbanStudent = async (req, res) => {
 
 export const deleteAllStudents = async (req, res) => {
   try {
+    const { confirm } = req.body || {};
+    if (confirm !== 'DELETE_ALL_STUDENTS_CONFIRM') {
+      return res.status(400).json({ 
+        error: 'Confirmation required. Pass { confirm: "DELETE_ALL_STUDENTS_CONFIRM" } in request body to execute.' 
+      });
+    }
     const result = await Student.deleteMany({});
+    console.warn(`[SECURITY AUDIT] All students deleted by admin: ${req.admin?._id || req.user?._id || 'unknown'}. Count: ${result.deletedCount}`);
     res.json({ success: true, message: `Deleted ${result.deletedCount} students` });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete all students' });
@@ -603,7 +690,26 @@ export const bulkCreateStudents = async (req, res) => {
     const db = getDb();
     const { students } = req.body;
     if (!Array.isArray(students) || students.length === 0) return res.status(400).json({ error: 'No students provided' });
-    const result = await Student.insertMany(students);
+
+    // Allowlist safe fields to prevent mass-assignment
+    const allowedFields = [
+      'name', 'phone', 'email', 'dob', 'city', 'state', 'course', 'class',
+      'gender', 'highQualification', 'registrationType', 'registrationDate',
+      'status', 'notes', 'paymentStatus'
+    ];
+
+    const sanitizedStudents = students.map(s => {
+      const clean = {};
+      allowedFields.forEach(f => {
+        if (s[f] !== undefined) clean[f] = typeof s[f] === 'string' ? s[f].trim() : s[f];
+      });
+      clean.id = s.id || `STU-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      clean.status = clean.status || 'active';
+      clean.paymentStatus = clean.paymentStatus || 'pending';
+      return clean;
+    });
+
+    const result = await Student.insertMany(sanitizedStudents);
     res.status(201).json({ success: true, inserted: result.length });
   } catch (error) {
     res.status(500).json({ error: 'Failed to bulk create students' });
@@ -710,6 +816,21 @@ export const getCurrentUser = async (req, res) => {
       return res.status(401).json({ error: 'Student not found' });
     }
 
+    if (student.isBanned || student.status === 'blocked' || student.status === 'inactive') {
+      return res.status(403).json({
+        error: student.banReason || 'Your account has been blocked by administrator.',
+        code: 'USER_BLOCKED'
+      });
+    }
+
+    // Enforce logout if device was unlinked / reset by admin
+    if (!student.isReviewer && student.deviceLocked && !student.activeDeviceId && !student.deviceId) {
+      return res.status(401).json({ 
+        error: 'Your device has been unlinked by administrator. Please log in again.', 
+        code: 'DEVICE_UNLINKED' 
+      });
+    }
+
     const { sessionToken: __, password: _pw, ...studentData } = student.toObject();
     return res.json({ student: studentData });
   } catch (err) {
@@ -806,8 +927,18 @@ export const deleteDownload = async (req, res) => {
 export const getWatchHistory = async (req, res) => {
   try {
     const db = getDb();
+    const id = req.params.id;
+    const student = await db.collection('students').findOne({
+      $or: [
+        { id: id },
+        { userId: id },
+        ...(ObjectId.isValid(id) ? [{ _id: new ObjectId(id) }] : [])
+      ]
+    });
+    const studentIds = student ? [student.id, String(student._id), student.userId].filter(Boolean) : [id];
+
     const history = await db.collection('watchHistory')
-      .find({ studentId: req.params.id })
+      .find({ studentId: { $in: studentIds } })
       .sort({ updatedAt: -1, watchedAt: -1 })
       .limit(100)
       .toArray();

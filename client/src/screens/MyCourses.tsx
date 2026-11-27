@@ -1,69 +1,96 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
-import { getAuthHeaders } from '../services/apiClient';
-import { API_BASE_URL } from '../services/apiClient';
+import { fetchStudentCoursesWithAuth, getCachedStudentCourses } from '../services/studentService';
+import { getImageUrl } from '../lib/utils';
 
 const MyCourses: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [student, setStudent] = useState<any>(null);
-  const [courses, setCourses] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const init = () => {
-      const storedStudent = localStorage.getItem('studentData');
-      if (storedStudent) {
-        const studentData = JSON.parse(storedStudent);
-        setStudent(studentData);
-        const studentId = studentData._id || studentData.id || studentData.userId;
-        if (studentId) fetchCourses(studentId);
-        else setLoading(false);
-      } else {
-        navigate('/student-login');
-      }
-    };
-
-    init();
-    window.addEventListener('focus', init);
-    return () => window.removeEventListener('focus', init);
-  }, [location.pathname, student?.id]);
-
-  const fetchCourses = async (studentId: string) => {
+  // Initialize student from localStorage
+  const [student, setStudent] = useState<any>(() => {
     try {
-      if (import.meta.env.DEV) console.log(`[MyCourses] API URL: /api/students/${studentId}/courses`);
-      const response = await fetch(`${API_BASE_URL}/students/${studentId}/courses`, { headers: getAuthHeaders() });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`[MyCourses] API Error (${response.status}):`, errorText);
-        setLoading(false);
-        return;
+      const stored = localStorage.getItem('studentData');
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const studentId = student?._id || student?.id || student?.userId;
+
+  // Instant render from cache (0ms delay) to prevent empty screen flicker
+  const [courses, setCourses] = useState<any[]>(() => {
+    return studentId ? getCachedStudentCourses(studentId) : [];
+  });
+
+  const [loading, setLoading] = useState<boolean>(() => {
+    return studentId ? getCachedStudentCourses(studentId).length === 0 : true;
+  });
+  const [error, setError] = useState<string | null>(null);
+
+  const loadCourses = useCallback(async (sId: string) => {
+    if (!sId) return;
+    setError(null);
+    try {
+      const list = await fetchStudentCoursesWithAuth(sId);
+      if (Array.isArray(list)) {
+        setCourses(list);
       }
-
-      const data = await response.json();
-      if (import.meta.env.DEV) console.log(`[MyCourses] Raw API Response:`, data);
-      
-      // Handle various response shapes defensively (STRICT ZERO-BREAKING)
-      const courseList: any[] = Array.isArray(data) ? data : (data.courses || data.enrolledCourses || data.data || []);
-      if (import.meta.env.DEV) console.log(`[MyCourses] Parsed Course List Length: ${courseList.length}`);
-
-      // Map courses using progress provided by backend (Final Sync)
-      const coursesWithProgress = courseList.map((course: any) => ({
-        ...course,
-        progress: course.progressPercent ?? course.progress ?? 0,
-        lessons: course.totalVideos ?? course.lessons ?? 0
-      }));
-
-      setCourses(coursesWithProgress);
-    } catch (error) {
-      console.error('[MyCourses] Error fetching courses:', error);
+    } catch (err: any) {
+      console.error('[MyCourses] Failed to load courses:', err);
+      if (courses.length === 0) {
+        setError('Failed to load courses. Please check your connection.');
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, [courses.length]);
+
+  const init = useCallback(() => {
+    try {
+      const stored = localStorage.getItem('studentData');
+      if (stored) {
+        const studentData = JSON.parse(stored);
+        setStudent(studentData);
+        const sId = studentData._id || studentData.id || studentData.userId;
+        if (sId) {
+          const cached = getCachedStudentCourses(sId);
+          if (cached && cached.length > 0) {
+            setCourses(cached);
+            setLoading(false);
+          }
+          loadCourses(sId);
+        } else {
+          setLoading(false);
+        }
+      } else {
+        navigate('/student-login');
+      }
+    } catch (e) {
+      console.error('[MyCourses] Init error:', e);
+      setLoading(false);
+    }
+  }, [navigate, loadCourses]);
+
+  useEffect(() => {
+    init();
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        init();
+      }
+    };
+
+    window.addEventListener('focus', init);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.removeEventListener('focus', init);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [location.pathname, init]);
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
@@ -71,7 +98,7 @@ const MyCourses: React.FC = () => {
 
       <header className="bg-gradient-to-r from-brandBlue to-[#1A237E] text-white pt-8 pb-6 px-4">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-white/20">
+          <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-white/20 active:scale-95 transition-all">
             <span className="material-symbols-rounded">arrow_back</span>
           </button>
           <h1 className="text-lg font-bold">My Courses</h1>
@@ -79,11 +106,25 @@ const MyCourses: React.FC = () => {
       </header>
 
       <div className="p-4 space-y-4">
-        {loading ? (
+        {loading && courses.length === 0 ? (
           <div className="space-y-4">
             {[1, 2, 3].map(i => (
               <div key={i} className="h-28 rounded-xl skeleton" />
             ))}
+          </div>
+        ) : error && courses.length === 0 ? (
+          <div className="bg-white rounded-xl p-8 text-center shadow-sm">
+            <span className="material-symbols-rounded text-6xl text-red-400">cloud_off</span>
+            <p className="text-sm font-semibold text-gray-700 mt-4">{error}</p>
+            <button
+              onClick={() => {
+                setLoading(true);
+                init();
+              }}
+              className="mt-4 bg-brandBlue text-white px-6 py-2 rounded-lg text-sm font-bold active:scale-95 transition-transform"
+            >
+              Try Again
+            </button>
           </div>
         ) : courses.length > 0 ? (
           courses.map((course, idx) => {
@@ -94,7 +135,7 @@ const MyCourses: React.FC = () => {
               <div
                 key={courseId || idx}
                 className={`bg-white rounded-xl p-4 shadow-sm flex gap-4 transition-all relative ${
-                  course.expired ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:shadow-md'
+                  course.expired ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:shadow-md active:scale-[0.98]'
                 }`}
                 onClick={() => !course.expired && navigate(`/course/${courseId}`)}
               >
@@ -105,26 +146,30 @@ const MyCourses: React.FC = () => {
                 )}
                 <div className="w-20 h-20 bg-gradient-to-br from-brandBlue to-[#1A237E] rounded-xl flex items-center justify-center shrink-0 overflow-hidden">
                   {course.thumbnail || course.image ? (
-                    <img src={course.thumbnail || course.image} alt={course.name || course.title} className="w-full h-full object-cover" />
+                    <img 
+                      src={getImageUrl(course.thumbnail || course.image)} 
+                      alt={course.name || course.title} 
+                      className="w-full h-full object-cover" 
+                    />
                   ) : (
                     <span className="material-symbols-rounded text-white text-3xl">play_circle</span>
                   )}
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   {course.expired && (
                     <span className="text-red-600 text-[10px] font-bold uppercase block mb-1">Expired</span>
                   )}
-                  <h4 className="font-bold text-sm line-clamp-1">{course.name || course.title || 'Untitled Course'}</h4>
+                  <h4 className="font-bold text-sm text-gray-800 line-clamp-1">{course.name || course.title || 'Untitled Course'}</h4>
                   <p className="text-[10px] text-gray-400 mt-1">{course.subject || 'Enrolled Course'}</p>
                   <div className="mt-2 flex items-center gap-2">
                     <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-green-500 transition-all duration-500"
-                        style={{ width: `${Number(course.progress) || 0}%` }}
+                        style={{ width: `${Math.min(100, Math.max(0, Number(course.progress ?? course.progressPercent) || 0))}%` }}
                       ></div>
                     </div>
                     <span className="text-[10px] font-bold text-gray-500">
-                      {(Number(course.progress) || 0).toFixed(0)}%
+                      {Math.round(Number(course.progress ?? course.progressPercent) || 0)}%
                     </span>
                   </div>
                 </div>
@@ -136,8 +181,8 @@ const MyCourses: React.FC = () => {
             <span className="material-symbols-rounded text-6xl text-gray-300">school</span>
             <p className="text-sm text-gray-400 mt-4">No enrolled courses yet</p>
             <button
-              onClick={() => navigate('/batches')}
-              className="mt-4 bg-brandBlue text-white px-6 py-2 rounded-lg text-sm font-bold"
+              onClick={() => navigate('/explore')}
+              className="mt-4 bg-brandBlue text-white px-6 py-2 rounded-lg text-sm font-bold active:scale-95 transition-transform"
             >
               Browse Courses
             </button>

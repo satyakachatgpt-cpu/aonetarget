@@ -49,6 +49,7 @@ import adminRoutes from './routes/admin.routes.js';
 import leaderboardRoutes from './routes/leaderboard.routes.js';
 import analyticsRoutes from './routes/analytics.routes.js';
 import counsellingRoutes from './routes/counselling.routes.js';
+import { shareNews } from './controllers/appContent.controller.js';
 
 import { errorMiddleware } from './middleware/error.middleware.js';
 
@@ -64,11 +65,12 @@ app.use(
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
-        scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com", "https://www.youtube.com"],
+        scriptSrc: ["'self'", "'unsafe-inline'", "https://checkout.razorpay.com", "https://www.youtube.com", "https://static.cloudflareinsights.com"],
+        scriptSrcAttr: ["'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         imgSrc: ["'self'", "data:", "https://res.cloudinary.com", "https://img.youtube.com", "https://files.aonetarget.in"],
         frameSrc: ["https://www.youtube.com", "https://checkout.razorpay.com", "https://files.aonetarget.in"],
-        connectSrc: ["'self'", "https://api.razorpay.com", "https://files.aonetarget.in"],
+        connectSrc: ["'self'", "https://api.razorpay.com", "https://files.aonetarget.in", "https://cloudflareinsights.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
       },
     },
@@ -109,24 +111,54 @@ app.use((req, res, next) => {
   if (req.path === '/api/questions/bulk') {
     return next();
   }
-  express.json({ limit: '2mb' })(req, res, next);
+  express.json({
+    limit: '2mb',
+    verify: (req, _res, buf) => {
+      req.rawBody = buf;
+    }
+  })(req, res, next);
 });
 app.use(express.urlencoded({ limit: '2mb', extended: true }));
 app.use(sanitizeInput);
 app.use(cookieParser());
 
-// --- Static Files ---
-app.use('/attach-assist', express.static(path.join(__dirname, '../client/public/attach-assist')));
+// --- Static Files with Optimized Cache-Control Headers ---
+const staticOptions = {
+  maxAge: '7d',
+  etag: true,
+  lastModified: true
+};
+
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), staticOptions));
+app.use('/attach-assist', express.static(path.join(__dirname, '../client/public/attach-assist'), staticOptions));
 app.use('/attached_assets', (req, res, next) => {
   const oldPath = path.join(__dirname, '../attached_assets', req.path);
   if (fs.existsSync(oldPath) && !fs.lstatSync(oldPath).isDirectory()) {
-    return express.static(path.join(__dirname, '../attached_assets'))(req, res, next);
+    return express.static(path.join(__dirname, '../attached_assets'), staticOptions)(req, res, next);
   }
   res.redirect(301, `/attach-assist${req.path}`);
 });
 
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, "../client/dist")));
+  app.use(express.static(path.join(__dirname, "../client/dist"), {
+    maxAge: 0,
+    setHeaders: (res, filePath) => {
+      // Hashed Vite assets in dist/assets get 1-year immutable caching
+      if (filePath.includes(path.join('dist', 'assets')) || filePath.includes('/assets/')) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else if (
+        filePath.endsWith('index.html') ||
+        filePath.endsWith('sw.js') ||
+        filePath.endsWith('registerSW.js') ||
+        filePath.endsWith('manifest.webmanifest')
+      ) {
+        // NEVER cache index.html or service worker — prevents 404 chunk white-screens after deploys
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+      }
+    }
+  }));
 }
 
 // --- Multer Configuration ---
@@ -254,8 +286,10 @@ app.get('/api/proxy-resource', optionalAuth, async (req, res) => {
           // Live stream attachments are accessible to both students and guests
           hasAccess = true;
         } else {
-          // Found in catalog! Check if item is free or user is enrolled
+          // Found in catalog! Check if item is free, admin, or user is enrolled
           if (item.isFree === true) {
+            hasAccess = true;
+          } else if (adminId) {
             hasAccess = true;
           } else if (studentId) {
             const student = await db.collection('students').findOne({
@@ -267,17 +301,22 @@ app.get('/api/proxy-resource', optionalAuth, async (req, res) => {
             
             if (student) {
               const enrolledCourses = (student.enrolledCourses || []).map(id => String(id));
-              const itemCourseId = String(item.courseId);
+              const enrolledBatches = (student.enrolledBatches || []).map(id => String(id));
+              const itemCourseId = String(item.courseId || '');
               
-              hasAccess = enrolledCourses.includes(itemCourseId);
+              hasAccess = enrolledCourses.includes(itemCourseId) || enrolledBatches.includes(itemCourseId);
               
               if (!hasAccess && itemCourseId) {
                 const course = await db.collection('courses').findOne({
                   $or: [{ id: itemCourseId }, { _id: ObjectId.isValid(itemCourseId) ? new ObjectId(itemCourseId) : null }]
                 });
-                if (course && course.relatedBatches) {
-                  const related = (course.relatedBatches || []).map(rb => String(rb.id || rb));
-                  hasAccess = enrolledCourses.some(ec => related.includes(ec));
+                if (course) {
+                  if (course.price === 0 || course.isFree === true) {
+                    hasAccess = true;
+                  } else if (course.relatedBatches) {
+                    const related = (course.relatedBatches || []).map(rb => String(rb.id || rb));
+                    hasAccess = enrolledCourses.some(ec => related.includes(ec)) || enrolledBatches.some(eb => related.includes(eb));
+                  }
                 }
               }
             }
@@ -456,11 +495,19 @@ app.get('/.well-known/assetlinks.json', (req, res) => {
   }
 });
 
+// --- App Direct News Route ---
+app.get('/app/news/:id', shareNews);
+app.get('/share/news/:id', shareNews);
+app.get('/news/:id', shareNews);
+
 // --- React SPA Catch-all (Production) ---
 if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, "../client/dist", "index.html");
   app.get('*', (req, res) => {
     if (fs.existsSync(distPath)) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       res.sendFile(distPath);
     } else {
       res.status(404).send('Frontend build not found');

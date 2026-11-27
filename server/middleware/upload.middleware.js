@@ -1,6 +1,11 @@
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const NEWS_PDF_DIR = path.resolve(__dirname, '../uploads/news_pdfs');
 
 // 1. Storage Configurations
 const memoryStorage = multer.memoryStorage();
@@ -14,8 +19,11 @@ const tempStorage = multer.diskStorage({
     cb(null, dir);
   },
   filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/gi, '');
+    const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf', '.docx', '.xlsx', '.csv', '.apk', '.mp4'];
+    const safeExt = allowed.includes(ext) ? ext : '.bin';
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    cb(null, file.fieldname + '-' + uniqueSuffix + safeExt);
   }
 });
 
@@ -86,18 +94,62 @@ const apkStorage = multer.diskStorage({
     cb(null, dir);
   },
   filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/gi, '');
+    const allowed = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.pdf', '.docx', '.xlsx', '.csv', '.apk', '.mp4'];
+    const safeExt = allowed.includes(ext) ? ext : '.bin';
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    cb(null, file.fieldname + '-' + uniqueSuffix + safeExt);
   }
 });
 
 export const apkUpload = multer({
   storage: apkStorage,
-  limits: { fileSize: 100 * 1024 * 1024 } // 100MB limit
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB limit
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext === '.apk' || file.mimetype === 'application/vnd.android.package-archive' || file.mimetype === 'application/octet-stream') {
+      cb(null, true);
+    } else {
+      cb(new Error('Only Android .apk files are allowed'), false);
+    }
+  }
 });
 
 // 5. excelUpload (Standalone Memory Storage for parsing)
 export const excelUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }
+});
+
+// 6. uploadNewsPDF (Direct Disk Storage for News & Job Vacancy Notification PDFs)
+const newsPdfStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    try {
+      if (!fs.existsSync(NEWS_PDF_DIR)) {
+        fs.mkdirSync(NEWS_PDF_DIR, { recursive: true });
+      }
+      cb(null, NEWS_PDF_DIR);
+    } catch (err) {
+      cb(err, null);
+    }
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase().replace(/[^a-z0-9.]/gi, '') || '.pdf';
+    const baseName = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 50);
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, `${baseName}-${uniqueSuffix}${ext}`);
+  }
+});
+
+export const uploadNewsPDF = multer({
+  storage: newsPdfStorage,
+  limits: { fileSize: 150 * 1024 * 1024 }, // 150MB limit to handle 50MB-100MB+ (200-300 page) documents
+  fileFilter: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ext === '.pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('INVALID_TYPE: Only PDF (.pdf) documents are allowed'), false);
+    }
+  }
 });

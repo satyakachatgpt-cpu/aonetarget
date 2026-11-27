@@ -8,13 +8,19 @@ interface AddPackagesModalProps {
   onClose: () => void;
   onAssign: (selectedIds: string[]) => void;
   isAssigning: boolean;
+  assignedCourseIds?: string[];
+  enrolledDetails?: any[];
+  studentCourse?: string;
 }
 
 export const AddPackagesModal: React.FC<AddPackagesModalProps> = ({ 
   isOpen, 
   onClose, 
   onAssign, 
-  isAssigning 
+  isAssigning,
+  assignedCourseIds = [],
+  enrolledDetails = [],
+  studentCourse
 }) => {
   const [products, setProducts] = React.useState<any[]>([]);
   const [loading, setLoading] = React.useState(false);
@@ -38,11 +44,19 @@ export const AddPackagesModal: React.FC<AddPackagesModalProps> = ({
         testSeriesAPI.getAll().catch(() => [])
       ]);
 
-      const all = [
+      const seenKeys = new Set<string>();
+      const all: any[] = [];
+      [
         ...courses.map((c: any) => ({ ...c, type: 'Batch' })),
         ...pkgs.map((p: any) => ({ ...p, type: 'Package' })),
         ...series.map((s: any) => ({ ...s, type: 'Test Series' }))
-      ];
+      ].forEach((p: any) => {
+        const key = String(p._id || p.id);
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          all.push(p);
+        }
+      });
       setProducts(all);
     } catch (err) {
       toast.error('Failed to load products');
@@ -51,9 +65,79 @@ export const AddPackagesModal: React.FC<AddPackagesModalProps> = ({
     }
   };
 
-  const filtered = products.filter(p => 
-    (p.name || p.title || '').toLowerCase().includes(search.toLowerCase())
-  );
+  // Check if a package/course is already assigned or purchased by this student
+  const isAlreadyAssigned = React.useCallback((p: any) => {
+    const pId = p.id ? String(p.id).trim() : '';
+    const pMongoId = p._id ? String(p._id).trim() : '';
+    const pName = (p.name || p.title || '').trim().toLowerCase();
+
+    // 1. Check against assignedCourseIds (enrolledCourses list from student)
+    if (assignedCourseIds && assignedCourseIds.length > 0) {
+      const matchAssigned = assignedCourseIds.some(id => {
+        if (!id) return false;
+        const strId = String(id).trim();
+        return (pId && strId === pId) || (pMongoId && strId === pMongoId);
+      });
+      if (matchAssigned) return true;
+    }
+
+    // 2. Check against enrolledDetails (currently assigned packages displayed in the table)
+    if (enrolledDetails && enrolledDetails.length > 0) {
+      const matchDetail = enrolledDetails.some(item => {
+        if (!item) return false;
+        const itemId = item.id ? String(item.id).trim() : '';
+        const itemMongoId = item._id ? String(item._id).trim() : '';
+        const itemProductId = item.productId ? String(item.productId).trim() : '';
+        const itemName = (item.name || item.title || '').trim().toLowerCase();
+
+        // Match by any ID
+        if (pId && (itemId === pId || itemMongoId === pId || itemProductId === pId)) return true;
+        if (pMongoId && (itemId === pMongoId || itemMongoId === pMongoId || itemProductId === pMongoId)) return true;
+
+        // Match by Name/Title (exclude placeholder/empty)
+        if (
+          pName && 
+          itemName && 
+          pName === itemName && 
+          itemName !== 'unknown/deleted content' && 
+          itemName !== 'unnamed content'
+        ) {
+          return true;
+        }
+
+        return false;
+      });
+      if (matchDetail) return true;
+    }
+
+    // 3. Check against student's primary registered course
+    if (studentCourse && typeof studentCourse === 'string') {
+      const courseVal = studentCourse.trim();
+      if (
+        (pId && courseVal === pId) ||
+        (pMongoId && courseVal === pMongoId) ||
+        (pName && courseVal.toLowerCase() === pName)
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }, [assignedCourseIds, enrolledDetails, studentCourse]);
+
+  // Available packages (excluding those already assigned/purchased)
+  const availableProducts = React.useMemo(() => {
+    return products.filter(p => !isAlreadyAssigned(p));
+  }, [products, isAlreadyAssigned]);
+
+  const filtered = React.useMemo(() => {
+    if (!search.trim()) return availableProducts;
+    const query = search.toLowerCase().trim();
+    return availableProducts.filter(p => 
+      (p.name || p.title || '').toLowerCase().includes(query) ||
+      (p.type || '').toLowerCase().includes(query)
+    );
+  }, [availableProducts, search]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
@@ -103,8 +187,16 @@ export const AddPackagesModal: React.FC<AddPackagesModalProps> = ({
                 <div className="w-16 h-16 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300 mb-4">
                    <span className="material-symbols-outlined text-[32px]">inventory_2</span>
                 </div>
-                <p className="text-[14px] font-bold text-slate-800">No matching products found</p>
-                <p className="text-[12px] font-medium text-slate-400 mt-1">Try adjusting your search terms</p>
+                <p className="text-[14px] font-bold text-slate-800">
+                  {availableProducts.length === 0 && products.length > 0
+                    ? 'All packages already assigned'
+                    : 'No matching products found'}
+                </p>
+                <p className="text-[12px] font-medium text-slate-400 mt-1">
+                  {availableProducts.length === 0 && products.length > 0
+                    ? 'This student already has all available courses and packages.'
+                    : 'Try adjusting your search terms'}
+                </p>
              </div>
           ) : (
             <div className="divide-y divide-slate-50">

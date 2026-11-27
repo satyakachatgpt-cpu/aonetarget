@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { RightSideDrawer, DrawerBody } from './DrawerSystem';
 import CustomDropdown from './CustomDropdown';
 import RichTextEditor from '../shared/RichTextEditor';
+import { categoriesAPI } from '../../services/apiClient';
 
 interface AddSingleTestDrawerProps {
     isOpen: boolean;
@@ -26,6 +27,7 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
 }) => {
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [showTermsEditor, setShowTermsEditor] = useState(false);
+    const [categories, setCategories] = useState<any[]>([]);
 
     // Get current datetime string for min attribute restriction
     const minDateTime = new Date().toISOString().slice(0, 16);
@@ -96,7 +98,10 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
         sendTelegramNotice: false,
         marksPerQuestion: '',
         negativeMarking: '',
-        termsAndConditions: DEFAULT_TERMS
+        termsAndConditions: DEFAULT_TERMS,
+        categoryId: '',
+        categoryName: '',
+        branch: '',
     });
 
     const [sections, setSections] = useState([
@@ -110,6 +115,29 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
 
     useEffect(() => {
         if (isOpen && !prevOpenRef.current) {
+            categoriesAPI.getAll().then(res => {
+                const catList = Array.isArray(res) ? res.filter((c: any) => c.isActive !== false) : [];
+                setCategories(catList);
+                if (editingTest) {
+                    const rawCat = editingTest.categoryId || editingTest.category || editingTest.categoryName || '';
+                    if (rawCat) {
+                        const str = String(rawCat).toLowerCase().trim();
+                        const found = catList.find((c: any) => 
+                            String(c.id || '').toLowerCase().trim() === str ||
+                            String(c._id || '').toLowerCase().trim() === str ||
+                            (c.title && String(c.title).toLowerCase().trim() === str) ||
+                            (c.name && String(c.name).toLowerCase().trim() === str)
+                        );
+                        if (found) {
+                            setFormData(prev => ({
+                                ...prev,
+                                categoryId: String(found.id || found._id),
+                                categoryName: found.title || found.name || ''
+                            }));
+                        }
+                    }
+                }
+            }).catch(() => []);
             // Drawer just opened - initialize form
             if (editingTest) {
                 setFormData({
@@ -148,7 +176,10 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                     sendTelegramNotice: editingTest.sendTelegramNotice || false,
                     marksPerQuestion: editingTest.marksPerQuestion?.toString() || '',
                     negativeMarking: editingTest.negativeMarking?.toString() || '',
-                    termsAndConditions: editingTest.termsAndConditions || ''
+                    termsAndConditions: editingTest.termsAndConditions || '',
+                    categoryId: editingTest.categoryId || '',
+                    categoryName: editingTest.categoryName || editingTest.category || '',
+                    branch: editingTest.branch || editingTest.level1Branch || ''
                 });
                 if (editingTest.sections && Array.isArray(editingTest.sections)) {
                     setSections(editingTest.sections);
@@ -191,7 +222,10 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                     sendTelegramNotice: false,
                     marksPerQuestion: '',
                     negativeMarking: '',
-                    termsAndConditions: DEFAULT_TERMS
+                    termsAndConditions: DEFAULT_TERMS,
+                    categoryId: '',
+                    categoryName: '',
+                    branch: '',
                 });
                 setSections([{ id: Date.now(), section: '', maxQuestions: -1, partTitle: '', isOptional: true, fixedTiming: false }]);
             }
@@ -362,6 +396,56 @@ const AddSingleTestDrawer: React.FC<AddSingleTestDrawerProps> = ({
                                     </div>
                                 )}
                             </div>
+
+                            {/* Target Category */}
+                            <div className="space-y-2 col-span-1">
+                                <label className="text-[13px] font-bold text-[#2d3748]">Category (Optional / Direct)</label>
+                                <select
+                                    className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-400 transition-all text-gray-800 shadow-sm"
+                                    value={formData.categoryId}
+                                    onChange={(e) => {
+                                        const catId = e.target.value;
+                                        const catObj = categories.find(c => String(c.id || c._id) === catId);
+                                        setFormData(prev => ({
+                                            ...prev,
+                                            categoryId: catId,
+                                            categoryName: catObj ? (catObj.title || catObj.name) : '',
+                                            branch: ''
+                                        }));
+                                    }}
+                                >
+                                    <option value="">None / From Series</option>
+                                    {categories.map(cat => (
+                                        <option key={String(cat.id || cat._id)} value={String(cat.id || cat._id)}>
+                                            {cat.title || cat.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* Branch if available */}
+                            {(() => {
+                                const selectedCat = categories.find(c => String(c.id || c._id) === String(formData.categoryId));
+                                const branches = selectedCat?.branchesL1 || [];
+                                if (branches.length === 0) return null;
+                                return (
+                                    <div className="space-y-2 col-span-1">
+                                        <label className="text-[13px] font-bold text-[#2d3748]">Branch / Tab</label>
+                                        <select
+                                            className="w-full h-12 px-4 bg-white border border-gray-200 rounded-xl text-[14px] font-medium outline-none focus:border-gray-400 transition-all text-gray-800 shadow-sm"
+                                            value={formData.branch}
+                                            onChange={(e) => setFormData(prev => ({ ...prev, branch: e.target.value }))}
+                                        >
+                                            <option value="">All Branches</option>
+                                            {branches.map((b: any) => (
+                                                <option key={b.slug} value={b.slug}>
+                                                    {b.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                );
+                            })()}
 
                             {/* Test Series */}
                             <div className="space-y-2 col-span-1">

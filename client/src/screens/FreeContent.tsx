@@ -82,10 +82,36 @@ const FreeContent: React.FC = () => {
                 return isExplicitlyFree || isZeroPrice;
             };
 
+            const isRealTest = (item: any) => {
+                if (!item) return false;
+                if (item.isSeries === true || item.isSeries === 'true') return false;
+                const duration = Number(item.duration) || 0;
+                const questions = Array.isArray(item.questions)
+                    ? item.questions.length
+                    : Number(item.questions) || Number(item.totalQuestions) || Number(item.numberOfQuestions) || 0;
+                const marks = Number(item.marks || item.totalMarks) || 0;
+                return duration > 0 || questions > 0 || marks > 0;
+            };
+
             const courses = getItems(coursesRes).filter(checkFree);
             const videos = getItems(videosRes).filter(checkFree);
-            const tests = getItems(testsRes).filter(checkFree);
+            const rawTests = getItems(testsRes);
+            const tests = rawTests.filter(t => checkFree(t) && isRealTest(t));
             const notes = getItems(pdfsRes).filter(checkFree);
+
+            // Merge standalone series and series containers from tests collection
+            const rawSeries = [
+                ...getItems(seriesRes),
+                ...rawTests.filter((item: any) => item.isSeries === true || item.isSeries === 'true')
+            ];
+            const seriesMap = new Map();
+            rawSeries.filter(checkFree).forEach(s => {
+                const sId = String(s._id || s.id);
+                if (sId && !seriesMap.has(sId)) {
+                    seriesMap.set(sId, s);
+                }
+            });
+            const combinedSeries = Array.from(seriesMap.values());
 
             // Extract unique subjects from all content
             const allContent = [...courses, ...videos, ...tests, ...notes];
@@ -96,7 +122,7 @@ const FreeContent: React.FC = () => {
             setFreeVideos(videos);
             setFreeTests(tests);
             setFreeSubjectiveTests(getItems(subjTestsRes).filter(checkFree));
-            setFreeTestSeries(getItems(seriesRes).filter(checkFree));
+            setFreeTestSeries(combinedSeries);
 
             // Combine ebooks and pdfs for general notes
             const combinedNotes = [
@@ -128,11 +154,12 @@ const FreeContent: React.FC = () => {
     const handleVideoClick = (video: any) => {
         if (video.videoUrl || video.youtubeUrl || video.url || video.link) {
             const videoId = video._id || video.id;
-            navigate(`/watch/${videoId}`, { 
+            navigate(`/watch/${videoId}?returnTo=/free-content`, { 
                 state: { 
                     video: { ...video }, 
                     courseTitle: 'Free Content', 
-                    courseId: video.courseId || videoId || '' 
+                    courseId: video.courseId || videoId || '',
+                    returnTo: '/free-content'
                 } 
             });
         } else {
@@ -176,7 +203,7 @@ const FreeContent: React.FC = () => {
 
                 <div className="relative flex items-center justify-between gap-4 mb-6 px-1">
                     <div className="flex items-center gap-4">
-                        <button onClick={() => navigate(-1)} className="w-10 h-10 rounded-2xl bg-white/10 hover:bg-white/20 transition-all flex items-center justify-center border border-white/10 active:scale-95">
+                        <button onClick={() => navigate('/')} className="w-10 h-10 rounded-2xl bg-white/10 hover:bg-white/20 transition-all flex items-center justify-center border border-white/10 active:scale-95">
                             <span className="material-symbols-rounded text-xl">arrow_back</span>
                         </button>
                         <div>
@@ -315,7 +342,7 @@ const FreeContent: React.FC = () => {
                                         .map((test) => (
                                             <div
                                                 key={test._id || test.id}
-                                                onClick={() => navigate(`/test/${test._id || test.id}`)}
+                                                onClick={() => navigate(`/test/${test._id || test.id}`, { state: { from: '/free-content' } })}
                                                 className="group bg-white p-4 rounded-3xl flex items-center gap-4 cursor-pointer hover:shadow-xl transition-all duration-300 border border-gray-100"
                                             >
                                                 <div className="w-12 h-12 rounded-2xl bg-red-50 flex items-center justify-center shrink-0 group-hover:bg-red-600 group-hover:text-white transition-all">
@@ -335,7 +362,18 @@ const FreeContent: React.FC = () => {
                                         .map((series) => (
                                             <div
                                                 key={series._id || series.id}
-                                                className="group bg-white p-4 rounded-3xl flex items-center gap-4 cursor-pointer hover:shadow-xl transition-all duration-300 border border-gray-100"
+                                                onClick={() => {
+                                                    const sId = series._id || series.id;
+                                                    navigate('/mock-tests', {
+                                                        state: {
+                                                            seriesId: sId,
+                                                            series,
+                                                            title: series.title || series.name,
+                                                            from: '/free-content'
+                                                        }
+                                                    });
+                                                }}
+                                                className="group bg-white p-4 rounded-3xl flex items-center gap-4 cursor-pointer hover:shadow-xl transition-all duration-300 border border-gray-100 active:scale-[0.98]"
                                             >
                                                 <div className="w-12 h-12 rounded-2xl bg-orange-50 flex items-center justify-center shrink-0 group-hover:bg-orange-600 group-hover:text-white transition-all">
                                                     <span className="material-symbols-rounded">collections_bookmark</span>
@@ -345,9 +383,9 @@ const FreeContent: React.FC = () => {
                                                         <span className="text-[8px] font-black bg-orange-100 text-orange-600 px-2 py-0.5 rounded-full uppercase">Series</span>
                                                         <h3 className="font-bold text-gray-800 text-sm truncate uppercase tracking-tight">{series.title || series.name}</h3>
                                                     </div>
-                                                    <p className="text-[10px] text-gray-400 mt-1">{series.tests?.length || 0} Total Tests</p>
+                                                    <p className="text-[10px] text-gray-400 mt-1">{(series.tests?.length || series.totalTests || 0)} Total Tests</p>
                                                 </div>
-                                                <span className="material-symbols-rounded text-gray-300">chevron_right</span>
+                                                <span className="material-symbols-rounded text-gray-300 group-hover:text-orange-600 transition-colors">chevron_right</span>
                                             </div>
                                         ))}
                                     {freeSubjectiveTests

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { CKEditor } from 'ckeditor4-react';
 
 interface RichTextEditorProps {
@@ -9,19 +9,79 @@ interface RichTextEditorProps {
 }
 
 const RichTextEditor: React.FC<RichTextEditorProps> = ({ label, content, onChange, height = '400px' }) => {
+    const editorRef = useRef<any>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+    const handleDirectImageInsert = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setIsUploadingImage(true);
+        try {
+            const formData = new FormData();
+            formData.append('upload', file);
+
+            const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('accessToken');
+            const headers: Record<string, string> = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const res = await fetch('/api/upload', {
+                method: 'POST',
+                headers,
+                body: formData
+            });
+
+            const data = await res.json();
+            if (data.uploaded && data.url) {
+                if (editorRef.current) {
+                    editorRef.current.insertHtml(`<p><img src="${data.url}" alt="${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}" style="max-width:100%; height:auto; border-radius:8px; margin:14px 0; display:block;" /></p><p><br></p>`);
+                }
+            } else {
+                alert(data.error?.message || 'Failed to upload image');
+            }
+        } catch (err: any) {
+            alert(err.message || 'Image upload failed');
+        } finally {
+            setIsUploadingImage(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
     return (
         <div className="w-full">
-            {label && (
-                <div className="mb-2">
+            <div className="flex items-center justify-between mb-2">
+                {label ? (
                     <label className="text-[14px] font-semibold text-gray-800">{label}</label>
-                    <div className="h-[1px] w-full bg-gray-100 mt-2 mb-4"></div>
+                ) : <div />}
+                
+                <div className="flex items-center gap-2">
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleDirectImageInsert}
+                        accept="image/png,image/jpeg,image/webp,image/gif"
+                        className="hidden"
+                    />
+                    <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploadingImage}
+                        title="Upload & Insert Image directly into Content"
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-lg border border-blue-200 transition-all active:scale-95 shadow-sm cursor-pointer"
+                    >
+                        <span className="material-symbols-outlined text-[17px]">add_photo_alternate</span>
+                        {isUploadingImage ? 'Uploading Image...' : 'Insert Image in Content'}
+                    </button>
                 </div>
-            )}
+            </div>
+            {label && <div className="h-[1px] w-full bg-gray-100 mb-3"></div>}
             <div className="border border-gray-200 rounded-sm overflow-hidden">
                 <CKEditor
                     editorUrl="https://cdn.ckeditor.com/4.22.1/full-all/ckeditor.js"
                     onInstanceReady={(evt: any) => {
                         const editor = evt.editor;
+                        editorRef.current = editor;
                         const doc = editor.document.$;
                         const head = doc.getElementsByTagName('head')[0];
                         if (!head) {
@@ -89,6 +149,120 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ label, content, onChang
                         addMathCommand('mathInt', 'Integral', '\\int_{a}^{b} x dx');
                         addMathCommand('mathLimit', 'Limit', '\\lim_{x \\to \\infty}');
                         addMathCommand('mathVector', 'Vector', '\\vec{a}');
+
+                        // Real Server Image Upload Handler (for Drag & Drop, File Upload, Toolbar Image)
+                        editor.on('fileUploadRequest', function (evt: any) {
+                            const fileLoader = evt.data.fileLoader;
+                            const xhr = fileLoader.xhr;
+                            const formData = new FormData();
+                            formData.append('upload', fileLoader.file);
+                            xhr.open('POST', '/api/upload', true);
+                            const token = localStorage.getItem('adminToken') || localStorage.getItem('token') || localStorage.getItem('accessToken');
+                            if (token) {
+                                xhr.setRequestHeader('Authorization', 'Bearer ' + token);
+                            }
+                            xhr.send(formData);
+                            evt.stop();
+                        });
+
+                        editor.on('fileUploadResponse', function (evt: any) {
+                            evt.stop();
+                            const data = evt.data;
+                            const xhr = data.fileLoader.xhr;
+                            try {
+                                const response = JSON.parse(xhr.responseText);
+                                if (response.uploaded && response.url) {
+                                    data.url = response.url;
+                                } else {
+                                    data.message = response.error?.message || 'Image upload failed';
+                                    evt.cancel();
+                                }
+                            } catch (e) {
+                                data.message = 'Invalid server response';
+                                evt.cancel();
+                            }
+                        });
+
+                        // Direct Clipboard Image Paste Handler (Ctrl+V)
+                        editor.on('paste', function (evt: any) {
+                            const dataTransfer = evt.data?.dataTransfer;
+                            if (dataTransfer && typeof dataTransfer.getFilesCount === 'function' && dataTransfer.getFilesCount() > 0) {
+                                const file = dataTransfer.getFile(0);
+                                if (file && file.type && file.type.startsWith('image/')) {
+                                    const reader = new FileReader();
+                                    reader.onload = function (e) {
+                                        const base64 = e.target?.result as string;
+                                        if (base64) {
+                                            editor.insertHtml(`<p><img src="${base64}" alt="Pasted Image" style="max-width:100%; height:auto; margin:12px 0; border-radius:6px; display:block;" /></p><p><br></p>`);
+                                        }
+                                    };
+                                    reader.readAsDataURL(file);
+                                    evt.cancel();
+                                }
+                            }
+                        });
+
+                        // Fix for PDF Export (Direct Download using html2pdf.js)
+                        const exportPdfCommand = editor.getCommand('exportPdf');
+                        if (exportPdfCommand) {
+                            exportPdfCommand.on('exec', function (evt: any) {
+                                evt.cancel();
+                                
+                                // Provide visual feedback during generation
+                                const uiButton = document.querySelector('.cke_button__exportpdf_icon');
+                                const originalOpacity = uiButton ? (uiButton as HTMLElement).style.opacity : '';
+                                if (uiButton) (uiButton as HTMLElement).style.opacity = '0.3';
+
+                                if (!(window as any).html2pdf) {
+                                    const script = document.createElement('script');
+                                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+                                    script.onload = () => generatePDF();
+                                    document.head.appendChild(script);
+                                } else {
+                                    generatePDF();
+                                }
+
+                                function generatePDF() {
+                                    const content = editor.getData();
+                                    
+                                    // Injecting explicit CSS ensures the PDF formatting has proper 
+                                    // margins, paddings, and font sizes regardless of Tailwind or iframe isolation.
+                                    const htmlString = `
+                                        <div style="font-family: 'Inter', 'Poppins', Arial, sans-serif; font-size: 14px; line-height: 1.6; color: #1f2937; padding: 40px; width: 800px; background-color: #ffffff; box-sizing: border-box;">
+                                            <style>
+                                                p { margin-top: 0; margin-bottom: 1em; }
+                                                ul { margin-top: 0; margin-bottom: 1em; padding-left: 20px; list-style-type: disc; }
+                                                ol { margin-top: 0; margin-bottom: 1em; padding-left: 20px; list-style-type: decimal; }
+                                                li { margin-top: 0.25em; margin-bottom: 0.25em; }
+                                                h1, h2, h3, h4, h5, h6 { color: #111827; font-weight: 700; margin-top: 1.5em; margin-bottom: 0.5em; line-height: 1.2; }
+                                                h1 { font-size: 2em; }
+                                                h2 { font-size: 1.5em; }
+                                                h3 { font-size: 1.25em; }
+                                                strong, b { font-weight: 700; }
+                                                img { max-width: 100%; height: auto; }
+                                            </style>
+                                            ${content}
+                                        </div>
+                                    `;
+                                    
+                                    const opt = {
+                                        margin:       0, // Handled by 40px padding in the div for more accurate width
+                                        filename:     'document.pdf',
+                                        image:        { type: 'jpeg', quality: 0.98 },
+                                        html2canvas:  { scale: 2, useCORS: true },
+                                        jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                                    };
+                                    
+                                    (window as any).html2pdf().set(opt).from(htmlString).save().then(() => {
+                                        if (uiButton) (uiButton as HTMLElement).style.opacity = originalOpacity;
+                                    }).catch((err: any) => {
+                                        console.error("PDF generation error:", err);
+                                        if (uiButton) (uiButton as HTMLElement).style.opacity = originalOpacity;
+                                        alert("Error generating PDF. Please try again.");
+                                    });
+                                }
+                            });
+                        }
                     }}
                     initData={content}
                     onChange={(evt: any) => {
@@ -119,6 +293,22 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ label, content, onChang
                         extraPlugins: 'mathjax,justify,font,colorbutton,colordialog,emoji,forms,table,tableresize,uploadimage,uploadfile,codesnippet,embed,autoembed,balloonpanel,sourcearea,bidi,language,dialogadvtab,div,filebrowser,format,horizontalrule,iframe,image,indentblock,indentlist,link,list,liststyle,maximize,newpage,pagebreak,pastefromword,pastetext,preview,print,save,scayt,selectall,showblocks,showborders,smiley,specialchar,stylescombo,tabletools,templates,undo',
                         mathJaxLib: 'https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.4/MathJax.js?config=TeX-AMS_HTML',
                         baseFloatZIndex: 100005,
+                        
+                        // Fix for plugin warnings and errors
+                        embed_provider: '//ckeditor.iframe.ly/api/oembed?url={url}&callback={callback}',
+                        uploadUrl: '/api/upload',
+                        filebrowserUploadUrl: '/api/upload',
+                        filebrowserImageUploadUrl: '/api/upload',
+                        filebrowserUploadMethod: 'xhr',
+                        image_previewText: ' ',
+                        exportPdf_tokenUrl: '', // Providing empty string to try suppressing the warning, though it might still need a valid token for non-watermarked
+                        exportPdf_stylesheets: [
+                            'https://cdn.ckeditor.com/4.22.1/full-all/contents.css',
+                            'https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Roboto:wght@400;700&family=Open+Sans:wght@400;700&family=Lato:wght@400;700&family=Montserrat:wght@400;700&family=Raleway:wght@400;700&family=Oswald:wght@400;700&family=Nunito:wght@400;700&family=Nunito+Sans:wght@400;700&family=Ubuntu:wght@400;700&family=Merriweather:wght@400;700&family=Playfair+Display:wght@400;700&family=Source+Sans+Pro:wght@400;700&family=PT+Sans:wght@400;700&family=Noto+Sans:wght@400;700&family=Libre+Baskerville:wght@400;700&family=Inter:wght@400;700&family=DM+Sans:wght@400;700&family=Work+Sans:wght@400;700&family=Quicksand:wght@400;700&family=Mulish:wght@400;700&family=Barlow:wght@400;700&family=Cabin:wght@400;700&family=Fira+Sans:wght@400;700&family=IBM+Plex+Sans:wght@400;700&family=Josefin+Sans:wght@400;700&display=swap',
+                            'https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&family=Pacifico&family=Lobster&family=Caveat:wght@400;700&family=Indie+Flower&family=Shadows+Into+Light&family=Satisfy&family=Great+Vibes&family=Permanent+Marker&family=Kalam:wght@400;700&family=Amatic+SC:wght@400;700&family=Fredoka+One&family=Orbitron:wght@400;700&family=Russo+One&display=swap',
+                            'https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;700&family=Noto+Serif+Devanagari:wght@400;700&family=Hind:wght@400;700&family=Mukta:wght@400;700&family=Baloo+2:wght@400;700&family=Rajdhani:wght@400;700&family=Tiro+Devanagari:wght@400;700&family=Yatra+One&family=Martel:wght@400;700&family=Eczar:wght@400;700&display=swap'
+                        ],
+
                         font_names: 
                             // ── SYSTEM FONTS ──
                             'Arial/Arial, Helvetica, sans-serif;' +

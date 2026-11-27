@@ -16,14 +16,71 @@ const MAX_LIMIT = 100;
  * Query params:
  *   limit  — number of results (default 50, max 100)
  */
+/**
+ * Helper to resolve all variations of testId, _id, and testName
+ * across platforms (website vs app, cloned tests, ObjectId vs string).
+ */
+export const getTestMatchFilter = async (db, testId, testName = null) => {
+  const ids = new Set();
+  if (testId) {
+    ids.add(String(testId));
+  }
+
+  let resolvedTitle = testName;
+
+  try {
+    const orConds = [
+      { id: testId },
+      { _id: testId },
+      ObjectId.isValid(testId) ? { _id: new ObjectId(testId) } : null,
+      !isNaN(testId) ? { id: Number(testId) } : null
+    ].filter(Boolean);
+
+    const testDoc = await db.collection('tests').findOne({ $or: orConds });
+    if (testDoc) {
+      if (testDoc._id) ids.add(testDoc._id.toString());
+      if (testDoc.id) ids.add(String(testDoc.id));
+      if (!resolvedTitle) resolvedTitle = testDoc.title || testDoc.name;
+    }
+
+    if (resolvedTitle) {
+      const relatedTests = await db.collection('tests').find({
+        $or: [
+          { title: resolvedTitle },
+          { name: resolvedTitle }
+        ]
+      }).project({ _id: 1, id: 1 }).toArray();
+
+      relatedTests.forEach(t => {
+        if (t._id) ids.add(t._id.toString());
+        if (t.id) ids.add(String(t.id));
+      });
+    }
+  } catch (e) {
+    console.error('Error resolving test match filter:', e);
+  }
+
+  const idList = Array.from(ids);
+  const conditions = [
+    { testId: { $in: idList } }
+  ];
+  if (resolvedTitle) {
+    conditions.push({ testName: resolvedTitle });
+  }
+
+  return { filter: { $or: conditions }, resolvedTitle };
+};
+
 export const getLeaderboard = async (req, res) => {
   const testId = req.params.testId;
   try {
     const db = getDb();
     const limit = Math.min(parseInt(req.query.limit) || DEFAULT_LIMIT, MAX_LIMIT);
 
+    const { filter: matchFilter } = await getTestMatchFilter(db, testId);
+
     const pipeline = [
-      { $match: { testId } },
+      { $match: matchFilter },
       // 1. Sort to get best results at the top for each student
       { $sort: { studentId: 1, obtainedMarks: -1, timeTaken: 1 } },
       // 2. Group by studentId and take the first (best) result

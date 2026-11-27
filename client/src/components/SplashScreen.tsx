@@ -20,16 +20,16 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
       setTimeout(onComplete, 300);
     };
 
-    // Auto-close after 2.5 seconds
-    const timer = setTimeout(finish, 2500);
+    // Auto-close after 1.5 seconds maximum
+    const timer = setTimeout(finish, 1500);
 
     // Fetch splash image from API
     splashScreenAPI.get().then(data => {
       if (completed) return;
       if (data?.imageUrl && data?.isActive !== false) {
         setImageUrl(data.imageUrl);
-        // Close after image displays for duration
-        setTimeout(finish, Math.min(data.duration || 2000, 2500));
+        // Close after image displays for duration (max 1.5s)
+        setTimeout(finish, Math.min(data.duration || 1200, 1500));
       } else {
         finish();
       }
@@ -49,9 +49,6 @@ const SplashScreen: React.FC<SplashScreenProps> = ({ onComplete }) => {
     <div
       className={`fixed top-0 left-0 w-full h-[100vh] z-[9999] transition-opacity duration-300 ${fadeOut ? 'opacity-0' : 'opacity-100'} bg-white flex flex-col overflow-hidden font-outfit`}
     >
-      {/* Splash-specific Status Bar to match the brand color */}
-      <div className="pwa-status-bar bg-[#283593] shrink-0" />
-      
       <div className="flex-1 w-full relative bg-white">
         {imageUrl && (
           <img

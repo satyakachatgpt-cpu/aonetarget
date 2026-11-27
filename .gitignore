@@ -1,4 +1,33 @@
-# Logs
+# ==========================================
+# AoneTarget - Project GitIgnore Configuration
+# ==========================================
+
+# 1. Environment & Secrets (NEVER COMMIT CREDENTIALS)
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+
+# 2. Package Dependencies
+node_modules/
+server/node_modules/
+client/node_modules/
+.pnp
+.pnp.js
+
+# 3. Production & Development Builds
+dist/
+dist-ssr/
+client/dist/
+client/dev-dist/
+build/
+.cache/
+
+# 4. Logs & Process Debugging
 logs
 *.log
 npm-debug.log*
@@ -6,35 +35,31 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
+server/gemini_debug.txt
+client/errors.txt
+client/npm_list.txt
 
-# Dependencies
-node_modules/
-dist/
-dist-ssr/
-client/dev-dist/
-*.local
+# 5. User Uploads & Media (Keep directory structure, ignore content)
+server/uploads/temp/
+server/uploads/images/*
+!server/uploads/images/.gitkeep
+server/uploads/videos/*
+!server/uploads/videos/.gitkeep
+server/uploads/pdfs/*
+!server/uploads/pdfs/.gitkeep
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea/
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-
-# Environment
-.env
-.env.*
-
-# Project specific
-# server/uploads/
-client/dist/
-server/node_modules/
-client/node_modules/
+# 6. Heavy Media & Archives
 *.mp4
+*.webm
+*.mov
+*.avi
+*.mkv
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# 7. Diagnostic & Temporary Scratch Files
 *.tmp
 .temp_bulk_server.txt
 .temp_bulk_uploader.txt
@@ -46,13 +71,30 @@ server/diag.cjs
 server/test_db.js
 server/test_email.js
 server/test-razorpay.js
+server/scripts/inspect_wh.mjs
+server/scripts/create_dummy_account.js
 
-# Upload folders - ignore files but keep folder structure
-server/uploads/images/*
-server/uploads/videos/*
-server/uploads/pdfs/*
-!server/uploads/images/.gitkeep
-!server/uploads/videos/.gitkeep
-!server/uploads/pdfs/.gitkeep
+# 8. Capacitor & Android Build Artifacts (Keep Android source, ignore build outputs)
+client/android/.gradle/
+client/android/build/
+client/android/app/build/
+client/android/captures/
+client/android/*.iml
+client/android/.idea/
+client/android/local.properties
+client/android/**/build/
+client/android/**/*.apk
+client/android/**/*.aab
 
-*.zip
+# 9. IDE & OS Metadata
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+ehthumbs.db
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

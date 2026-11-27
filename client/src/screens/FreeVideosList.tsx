@@ -44,11 +44,12 @@ const FreeVideosList: React.FC = () => {
 
     const handleVideoClick = (video: any) => {
         const videoId = video._id || video.id;
-        navigate(`/watch/${videoId}`, { 
+        navigate(`/watch/${videoId}?returnTo=/free-videos`, { 
             state: { 
                 video: { ...video }, 
                 courseTitle: 'Free Content', 
-                courseId: video.courseId || videoId || '' 
+                courseId: video.courseId || videoId || '',
+                returnTo: '/free-videos'
             } 
         });
     };

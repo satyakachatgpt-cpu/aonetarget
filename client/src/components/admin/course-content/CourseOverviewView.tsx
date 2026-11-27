@@ -25,7 +25,7 @@ const CourseOverviewView: React.FC<CourseOverviewViewProps> = ({
               <img
                 src={course.thumbnail || (course as any).imageUrl}
                 alt=""
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                className="w-full h-full object-contain p-1 transition-transform duration-500 group-hover:scale-105"
                 onError={(e) => {
                   e.currentTarget.style.display = 'none';
                   (e.currentTarget.nextSibling as HTMLElement)?.style.setProperty('display', 'flex');

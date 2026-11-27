@@ -42,6 +42,7 @@ export const ForgotStep: React.FC<ForgotStepProps> = ({
                 value={resetPhone}
                 onChange={(e) => setResetPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                 placeholder="10-digit number"
+                onKeyDown={(e) => { if (e.key === 'Enter') handleForgotStep1(e); }}
                 className="w-full px-4 py-4 bg-gray-50 border border-gray-200 rounded-r-2xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold"
               />
             </div>

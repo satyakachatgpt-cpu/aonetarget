@@ -14,7 +14,7 @@ import Student from '../models/Student.js';
 import * as authService from '../services/auth.service.js';
 
 const OTP_EXPIRY_MS = 10 * 60 * 1000;
-const REFRESH_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
+const REFRESH_EXPIRY_MS = 180 * 24 * 60 * 60 * 1000;
 
 function shouldExposeOtp() {
   // CRITICAL: Never expose OTP in API responses
@@ -91,7 +91,7 @@ function setAccessCookie(res, accessToken) {
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     path: '/api',
-    maxAge: 15 * 60 * 1000
+    maxAge: 30 * 24 * 60 * 60 * 1000
   });
 }
 
@@ -106,42 +106,35 @@ async function persistRefreshToken(db, refreshToken, student, ip) {
   });
 }
 
-async function issueStudentSession(req, res, db, student, deviceId) {
+async function issueStudentSession(req, res, db, student, deviceId, { skipDeviceUpdate = false } = {}) {
   const { accessToken, refreshToken } = generateTokens(student);
   const ip = getRealIP(req);
-  const deviceName = req.body.deviceName || 'Unknown Device';
 
-  await persistRefreshToken(db, refreshToken, student, ip);
-  
-  // Sync device info on successful login
-  if (student._id && deviceId) {
+  const tasks = [persistRefreshToken(db, refreshToken, student, ip)];
+
+  // Sync device info on successful login unless caller already updated it
+  if (!skipDeviceUpdate && student._id && deviceId) {
     const incomingDeviceName = req.body.deviceName || req.headers['user-agent'] || 'Unknown Device';
     const incomingDeviceType = req.body.deviceType || 'Browser Device';
 
-    const updated = await db.collection('students').findOneAndUpdate(
-      { _id: student._id },
-      { 
-        $set: { 
-          activeDeviceId: deviceId,
-          activeDeviceName: incomingDeviceName,
-          activeDeviceType: incomingDeviceType,
-          activeDeviceIP: ip,
-          activeDeviceLastLoginAt: new Date(),
-          updatedAt: new Date()
-        } 
-      },
-      { returnDocument: 'after' }
+    tasks.push(
+      db.collection('students').updateOne(
+        { _id: student._id },
+        { 
+          $set: { 
+            activeDeviceId: deviceId,
+            activeDeviceName: incomingDeviceName,
+            activeDeviceType: incomingDeviceType,
+            activeDeviceIP: ip,
+            activeDeviceLastLoginAt: new Date(),
+            updatedAt: new Date()
+          } 
+        }
+      )
     );
-
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('[DEVICE-IP-DEBUG] issueStudentSession', {
-        studentId: student.id || student._id,
-        ipBefore: student.activeDeviceIP,
-        ipAfter: updated?.activeDeviceIP,
-        incomingIP: ip
-      });
-    }
   }
+
+  await Promise.all(tasks);
 
   setAccessCookie(res, accessToken);
   setRefreshCookie(res, refreshToken);
@@ -177,7 +170,15 @@ export const adminLogin = async (req, res) => {
   const db = mongoose.connection.db;
 
   try {
-    const admin = await db.collection('admins').findOne({ adminId: adminId?.trim() });
+    const cleanAdminId = adminId?.trim();
+    const lowerAdminId = cleanAdminId?.toLowerCase();
+
+    const admin = await db.collection('admins').findOne({
+      $or: [
+        { adminId: cleanAdminId },
+        ...(lowerAdminId ? [{ adminId: lowerAdminId }, { email: lowerAdminId }] : [])
+      ].filter(Boolean)
+    });
     const isMatch = await verifyAndMigratePassword(db, admin, password, 'admins', `Admin ${adminId}`);
 
     if (!isMatch) {
@@ -387,7 +388,7 @@ export const loginWithPassword = async (req, res) => {
       });
     }
 
-    const session = await issueStudentSession(req, res, db, student, incomingDeviceId);
+    const session = await issueStudentSession(req, res, db, student, incomingDeviceId, { skipDeviceUpdate: true });
 
     res.json({
       success: true,
@@ -407,26 +408,27 @@ export const registerStudent = async (req, res) => {
     const db = getDb();
     const { name, email, phone, username, class: studentClass, target, address, state, district, gender, dob, password, higherEducation } = req.body;
 
-    if (!name || !phone || !email) {
-      return res.status(400).json({ error: 'Name, email, and phone are required' });
+    if (!name || !phone) {
+      return res.status(400).json({ error: 'Name and phone are required' });
     }
 
     const cleanPhone = phone.replace(/\D/g, '');
-    const stored = await authService.getValidOtp(cleanPhone, 'signup');
-    
+    const normalizedEmail = email && typeof email === 'string' && email.trim() ? email.toLowerCase().trim() : undefined;
+
+    const [stored, existingStudent] = await Promise.all([
+      authService.getValidOtp(cleanPhone, 'signup'),
+      Student.findOne({
+        $or: [
+          { phone: cleanPhone },
+          ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+          ...(username ? [{ userId: username }, { username: username }] : [])
+        ]
+      }).lean()
+    ]);
+
     if (!stored || !stored.verified) {
       return res.status(400).json({ error: 'Please verify your phone number with OTP first' });
     }
-
-    const normalizedEmail = email ? email.toLowerCase().trim() : '';
-
-    const existingStudent = await Student.findOne({
-      $or: [
-        { phone: cleanPhone },
-        ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
-        ...(username ? [{ userId: username }, { username: username }] : [])
-      ]
-    });
 
     if (existingStudent) {
       if (normalizedEmail && existingStudent.email === normalizedEmail) {
@@ -438,22 +440,23 @@ export const registerStudent = async (req, res) => {
       return res.status(400).json({ error: 'Phone number already registered' });
     }
 
-    await authService.consumeOtp(cleanPhone, 'signup');
+    authService.consumeOtp(cleanPhone, 'signup').catch(() => {});
 
     const studentId = username || 'STU-' + Date.now();
-    const salt = password ? await bcrypt.genSalt(10) : null;
-    const hashedPassword = (password && salt) ? await bcrypt.hash(password, salt) : undefined;
+    const hashedPassword = password ? await bcrypt.hash(password, 8) : undefined;
 
     const student = new Student({
       id: studentId,
       userId: studentId,
       username: username || studentId,
       name,
-      email: normalizedEmail,
+      ...(normalizedEmail ? { email: normalizedEmail } : {}),
       phone: cleanPhone,
       password: hashedPassword,
-      class: studentClass || '11th',
+      class: studentClass || '',
+      target: target || '',
       highQualification: higherEducation || '',
+      higherEducation: higherEducation || '',
       admission: {
         fullAddress: address || '',
         admissionDate: new Date()
@@ -555,7 +558,10 @@ export const sendOtp = async (req, res) => {
 
     const purpose = otpPurposeFromRequest(req);
     const startTime = performance.now();
-    const student = await db.collection('students').findOne({ $or: [{ phone: cleanPhone }, { phone }] });
+    const [student, lastSent] = await Promise.all([
+      db.collection('students').findOne({ $or: [{ phone: cleanPhone }, { phone }] }, { projection: { _id: 1 } }),
+      db.collection('otps').findOne({ phone: cleanPhone, purpose }, { projection: { createdAt: 1 } })
+    ]);
     const lookupDuration = (performance.now() - startTime).toFixed(2);
     
     if (purpose === 'signup' && student) {
@@ -565,7 +571,6 @@ export const sendOtp = async (req, res) => {
       return res.status(404).json({ error: 'Account not found. Please sign up first.' });
     }
 
-    const lastSent = await db.collection('otps').findOne({ phone: cleanPhone, purpose });
     if (lastSent?.createdAt && Date.now() - new Date(lastSent.createdAt).getTime() < 30000) {
       return res.status(429).json({ error: 'Please wait 30 seconds before requesting another OTP' });
     }
@@ -740,7 +745,7 @@ export const verifyOtp = async (req, res) => {
     }
 
     await authService.consumeOtp(cleanPhone, purpose);
-    const session = await issueStudentSession(req, res, db, student, incomingDeviceId);
+    const session = await issueStudentSession(req, res, db, student, incomingDeviceId, { skipDeviceUpdate: true });
     res.json({ success: true, message: 'Login successful', ...session });
   } catch (error) {
     console.error('OTP verification failed:', error);
@@ -809,7 +814,10 @@ export const forgotPasswordSendOtp = async (req, res) => {
 export const forgotPasswordVerifyOtp = async (req, res) => {
   try {
     const db = getDb();
-    const { phone, otp } = req.body;
+    const { phone, otp } = req.body || {};
+    if (!phone || typeof phone !== 'string' || !otp) {
+      return res.status(400).json({ error: 'Valid phone number and OTP are required' });
+    }
     const cleanPhone = phone.replace(/\D/g, '');
     
     const stored = await authService.getValidOtp(cleanPhone, 'reset');
@@ -830,7 +838,13 @@ export const forgotPasswordVerifyOtp = async (req, res) => {
 export const resetPasswordWithOtp = async (req, res) => {
   try {
     const db = getDb();
-    const { phone, newPassword } = req.body;
+    const { phone, newPassword } = req.body || {};
+    if (!phone || typeof phone !== 'string' || !newPassword) {
+      return res.status(400).json({ error: 'Valid phone number and new password are required' });
+    }
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
     const cleanPhone = phone.replace(/\D/g, '');
     const stored = await authService.getValidOtp(cleanPhone, 'reset');
 
@@ -961,6 +975,12 @@ export const refreshAccessToken = async (req, res) => {
     
     if (!student) return res.status(401).json({ error: 'User not found' });
     
+    // If device was unlinked / reset by admin, deny token refresh
+    if (!student.isReviewer && student.deviceLocked && !student.activeDeviceId && !student.deviceId) {
+      await db.collection('refresh_tokens').deleteMany({ studentId: { $in: [student.id, String(student._id)] } });
+      return res.status(401).json({ error: 'Device has been unlinked. Please log in again.', code: 'DEVICE_UNLINKED' });
+    }
+
     await db.collection('refresh_tokens').deleteOne({ _id: tokenRecord._id });
     const session = await issueStudentSession(req, res, db, student.toObject(), student.deviceId || null);
     res.json({ accessToken: session.accessToken, refreshToken: session.refreshToken });

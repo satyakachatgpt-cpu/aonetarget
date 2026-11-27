@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { clearStudentSession, API_BASE_URL } from '../services/apiClient';
+import { toast } from 'sonner';
 
 interface AuthState {
     student: any;
@@ -10,7 +11,7 @@ interface AuthState {
     deviceId: string | null;
     setAuth: (student: any, accessToken?: string, deviceId?: string, refreshToken?: string) => void;
     clearAuth: () => void;
-    checkAuth: () => Promise<void>;
+    checkAuth: (isRetry?: boolean) => Promise<void>;
     setUnreadCount: (count: number) => void;
     refreshToken: () => Promise<boolean>;
     startHeartbeat: () => void;
@@ -97,13 +98,17 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ student: null, isAuthenticated: false, accessToken: null, deviceId: null });
     },
 
-    checkAuth: async () => {
+    checkAuth: async (isRetry = false) => {
         try {
             const token = localStorage.getItem('accessToken');
             const headers: Record<string, string> = {};
             if (token) headers['Authorization'] = `Bearer ${token}`;
 
-            const response = await fetch(`${API_BASE_URL}/me`, { headers });
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6000); // 6s max timeout for auth check
+
+            const response = await fetch(`${API_BASE_URL}/me`, { headers, signal: controller.signal });
+            clearTimeout(timeoutId);
 
             if (response.ok) {
                 const data = await response.json();
@@ -114,16 +119,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 }
                 set({ student: data.student, isAuthenticated: true, isLoading: false });
                 get().startHeartbeat();
-            } else if (response.status === 401) {
+            } else if (response.status === 401 || response.status === 403) {
                 const data = await response.json().catch(() => ({}));
-                if (data.code === 'TOKEN_EXPIRED') {
+                if (data.code === 'TOKEN_EXPIRED' && !isRetry) {
                     const refreshed = await get().refreshToken();
                     if (refreshed) {
-                        return get().checkAuth();
+                        return get().checkAuth(true); // retry only ONCE
                     }
                 }
                 clearStudentSession();
-                set({ student: null, isAuthenticated: false, isLoading: false, accessToken: null });
+                set({ student: null, isAuthenticated: false, isLoading: false, accessToken: null, deviceId: null });
+                const isCurrentPageAdmin = typeof window !== 'undefined' && (
+                    window.location.hash.startsWith('#/admin') || 
+                    window.location.pathname.startsWith('/admin')
+                );
+                if (!isCurrentPageAdmin && (data.code === 'DEVICE_UNLINKED' || data.code === 'USER_BLOCKED' || data.code === 'ANOTHER_DEVICE')) {
+                    if (window.location.hash !== '#/student-login') {
+                        window.location.hash = '#/student-login';
+                    }
+                    toast.error(data.error || 'Your session has ended. Please login again.', { duration: 6000 });
+                }
             } else {
                 set((s) => ({ ...s, isLoading: false }));
             }
@@ -161,6 +176,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         if (heartbeatInterval) clearInterval(heartbeatInterval);
 
         const doHeartbeat = async () => {
+            const isCurrentPageAdmin = typeof window !== 'undefined' && (
+                window.location.hash.startsWith('#/admin') || 
+                window.location.pathname.startsWith('/admin')
+            );
+            if (isCurrentPageAdmin) {
+                return;
+            }
+
             const state = get();
             if (!state.isAuthenticated || !state.student) return;
 
@@ -181,8 +204,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 const data = await response.json();
 
                 if (!data.valid) {
-                    if (data.reason === 'another_device' || data.reason === 'not_authenticated') {
+                    if (data.reason === 'another_device' || data.reason === 'not_authenticated' || data.reason === 'device_unlinked' || data.reason === 'user_blocked') {
                         get().clearAuth();
+                        const isCurrentPageAdminNow = typeof window !== 'undefined' && (
+                            window.location.hash.startsWith('#/admin') || 
+                            window.location.pathname.startsWith('/admin')
+                        );
+                        if (!isCurrentPageAdminNow) {
+                            if (window.location.hash !== '#/student-login') {
+                                window.location.hash = '#/student-login';
+                            }
+                            const msg = data.message || (data.reason === 'device_unlinked' 
+                                ? 'Your device has been unlinked by administrator. Please login again.' 
+                                : 'Your session has ended. Please login again.');
+                            toast.error(msg, { duration: 6000 });
+                        }
                     }
                 } else if (data.latestNotificationTime) {
                     const lastSeenStr = localStorage.getItem('lastSeenNotifications');
@@ -193,11 +229,51 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                         set({ unreadNotificationsCount: 0 });
                     }
                 }
+
+                if (data.contentVersion) {
+                    const lastVersion = (window as any).__last_content_version__ || 0;
+                    if (data.contentVersion !== lastVersion && lastVersion !== 0) {
+                        (window as any).__last_content_version__ = data.contentVersion;
+                        window.dispatchEvent(new CustomEvent('app:content-updated', { detail: { version: data.contentVersion } }));
+                    } else if (lastVersion === 0) {
+                        (window as any).__last_content_version__ = data.contentVersion;
+                    }
+                }
             } catch (e) { }
         };
 
         doHeartbeat();
-        heartbeatInterval = setInterval(doHeartbeat, 30000);
+        heartbeatInterval = setInterval(() => {
+            if (typeof document !== 'undefined' && document.hidden) return;
+            doHeartbeat();
+        }, 30000);
+
+        if (typeof window !== 'undefined' && !(window as any).__heartbeat_listeners__) {
+            (window as any).__heartbeat_listeners__ = true;
+            window.addEventListener('focus', () => {
+                const isCurrentPageAdmin = (
+                    window.location.hash.startsWith('#/admin') || 
+                    window.location.pathname.startsWith('/admin')
+                );
+                if (!isCurrentPageAdmin && get().isAuthenticated) {
+                    doHeartbeat();
+                }
+            });
+            window.addEventListener('storage', (e) => {
+                if (e.key === 'isStudentAuthenticated' && e.newValue !== 'true') {
+                    get().clearAuth();
+                    const isCurrentPageAdmin = (
+                        window.location.hash.startsWith('#/admin') || 
+                        window.location.pathname.startsWith('/admin')
+                    );
+                    if (!isCurrentPageAdmin) {
+                        if (window.location.hash !== '#/student-login') {
+                            window.location.hash = '#/student-login';
+                        }
+                    }
+                }
+            });
+        }
     },
 
     stopHeartbeat: () => {
@@ -209,3 +285,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     setUnreadCount: (count: number) => set({ unreadNotificationsCount: count })
 }));
+
+if (typeof window !== 'undefined') {
+    (window as any).__authStore__ = useAuthStore;
+    const isCurrentPageAdmin = window.location.hash.startsWith('#/admin') || window.location.pathname.startsWith('/admin');
+    if (_cached.isAuthenticated && !isCurrentPageAdmin) {
+        setTimeout(() => {
+            useAuthStore.getState().startHeartbeat();
+        }, 50);
+    }
+}

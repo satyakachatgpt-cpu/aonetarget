@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
-import { findCourse, getRelatedCourseIds, getCourseIdVariants } from '../services/course.service.js';
-import { isPurchaseExpired, calculatePriceBreakdown, normalizeDateStr } from '../utils/helpers.js';
+import { findCourse, getRelatedCourseIds, getCourseIdVariants, buildStudentPurchaseQuery } from '../services/course.service.js';
+import { evaluatePurchaseExpiry, isPurchaseExpired, calculatePriceBreakdown, normalizeDateStr } from '../utils/helpers.js';
 import { sendEmail, templates } from '../utils/email.js';
 import Student from '../models/Student.js';
 
@@ -50,12 +50,68 @@ export const getStudentCourses = async (req, res) => {
     console.log(`[DEBUG_MYCOURSES] enrolledBatch:`, enrolledBatch);
 
     // Source C: Successful Purchases (Completed/Captured/Paid)
+    // Check and fulfill any pending orders from Razorpay for this student first
+    try {
+      const pendingOrders = await db.collection('pendingOrders').find({
+        $or: [
+          { studentId: { $in: studentIdVariants } },
+          { studentMongoId: String(student._id) }
+        ],
+        createdAt: { $gte: new Date(Date.now() - 48 * 3600 * 1000) }
+      }).toArray();
+
+      if (pendingOrders.length > 0) {
+        const settings = await db.collection('settings').findOne({});
+        const keyId = (process.env.RAZORPAY_KEY_ID || settings?.razorpayKeyId || '').toString().trim();
+        const keySecret = (process.env.RAZORPAY_KEY_SECRET || settings?.razorpayKeySecret || '').toString().trim();
+        if (keyId && keySecret) {
+          const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+          const { fulfillSuccessfulPayment } = await import('./payment.controller.js');
+          for (const po of pendingOrders) {
+            try {
+              const oRes = await fetch(`https://api.razorpay.com/v1/orders/${po.orderId}`, {
+                headers: { Authorization: `Basic ${auth}` }
+              });
+              if (oRes.ok) {
+                const oData = await oRes.json();
+                if (oData.status === 'paid') {
+                  await fulfillSuccessfulPayment({
+                    db,
+                    orderId: po.orderId,
+                    studentId: student.id || String(student._id),
+                    courseId: po.courseId
+                  });
+                }
+              }
+            } catch (err) {
+              console.warn('[getStudentCourses] Error auto-fulfilling pending order:', err.message);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[getStudentCourses] Pending order scan error:', e.message);
+    }
+
     const purchases = await db.collection('purchases').find({
-      studentId: { $in: studentIdVariants },
+      $or: [
+        { studentId: { $in: studentIdVariants } },
+        { studentMongoId: String(student._id) },
+        ...(student.phone ? [{ studentPhone: student.phone }, { studentPhone: `+91${student.phone}` }] : [])
+      ],
       status: { $in: ['completed', 'success', 'captured', 'paid'] }
     }).toArray();
-    const purchasedCourseIds = purchases.map(p => String(p.courseId));
+    const purchasedCourseIds = purchases.flatMap(p => [String(p.courseId), p.courseMongoId ? String(p.courseMongoId) : null]).filter(Boolean);
     console.log(`[DEBUG_MYCOURSES] purchases count: ${purchases.length}, courseIds:`, purchasedCourseIds);
+
+    // Auto-heal student.enrolledCourses if purchases contain courses not yet in enrolledCourses
+    const missingEnrollments = purchasedCourseIds.filter(id => !enrolledArray.map(String).includes(String(id)));
+    if (missingEnrollments.length > 0) {
+      db.collection('students').updateOne(
+        { _id: student._id },
+        { $addToSet: { enrolledCourses: { $each: missingEnrollments } } }
+      ).catch(e => console.warn('[getStudentCourses] Auto-heal error:', e.message));
+    }
 
     // Merge and deduplicate all IDs
     const allEnrolledIds = [...new Set([
@@ -193,7 +249,7 @@ export const getStudentCourses = async (req, res) => {
 
 export const enrollStudent = async (req, res) => {
   try {
-    const { courseId } = req.body;
+    const { courseId, adminAssign } = req.body;
     if (!courseId) {
       return res.status(400).json({ error: 'Course ID is required' });
     }
@@ -231,13 +287,36 @@ export const enrollStudent = async (req, res) => {
 
     const enrolledCourses = (student.enrolledCourses || []).map(id => String(id));
 
-    // 1. Comprehensive Idempotency Check
+    const db = mongoose.connection.db;
+    const isAdmin = !!(req.admin || req.user?.isAdmin || req.user?.role === 'admin');
+    const isExplicitAdminAssign = isAdmin && adminAssign === true;
+    const studentIdVariants = [String(student._id), student.id, student.userId].filter(Boolean);
+
+    // 1. Comprehensive Idempotency Check & Admin Renewal
     if (idVariants.some(id => enrolledCourses.includes(String(id)))) {
+      if (isExplicitAdminAssign) {
+        // Admin explicitly re-assigning: Refresh/reset the validity start date with a fresh purchase record
+        await db.collection('purchases').deleteMany(buildStudentPurchaseQuery(student, idVariants, null));
+        await db.collection('purchases').insertOne({
+          id: `manual_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          studentId: student.id || String(student._id),
+          studentName: student.name || 'Student',
+          courseId: canonicalId,
+          courseMongoId: course._id ? String(course._id) : undefined,
+          courseName: course.name || course.title || courseId,
+          amount: 0,
+          basePrice: 0,
+          gstAmount: 0,
+          gstPercentage: 0,
+          discountAmount: 0,
+          paymentMethod: 'admin_assigned',
+          status: 'completed',
+          createdAt: new Date()
+        });
+        return res.status(200).json({ success: true, message: 'Enrollment renewed successfully' });
+      }
       return res.status(200).json({ success: true, message: 'Already enrolled' });
     }
-
-    // 2. Security Check: Only allow free courses (Price = 0) via this endpoint
-    const isAdmin = !!(req.admin || req.user?.isAdmin || req.user?.role === 'admin');
     
     // Robust Price Verification (Server-side ground truth)
     const breakdown = calculatePriceBreakdown(course, null);
@@ -245,16 +324,16 @@ export const enrollStudent = async (req, res) => {
     // Safe fallback to a high price if totalAmount is missing or NaN
     const finalPayable = safeNumber(breakdown.totalAmount ?? basePrice, 999999);
 
-    if (finalPayable > 0 && !isAdmin) {
+    if (finalPayable > 0 && !isExplicitAdminAssign) {
        console.warn(`[SECURITY] Blocked direct enrollment attempt for student ${req.params.id} on course ${canonicalId}`);
        return res.status(402).json({ error: 'This is a paid course. Please purchase it via the checkout flow.' });
     }
 
     // SECURITY GATE: Only allow free courses to be enrolled via this direct endpoint for students.
-    // Paid courses MUST be enrolled via the payment flow (razorpay/purchase controllers).
-    const isPaid = (course.price > 0) && !course.isFree && course.free !== true;
+    // Paid courses MUST be enrolled via the payment flow (razorpay/purchase controllers) or explicit admin assignment.
+    const isPaid = (safeNumber(course.price, 0) > 0) && !course.isFree && course.free !== true;
 
-    if (isPaid && !isAdmin) {
+    if (isPaid && !isExplicitAdminAssign) {
       console.warn(`[SECURITY] Blocked free enrollment attempt for paid course: ${courseId} by student ${req.params.id}`);
       return res.status(403).json({ 
         error: 'This is a paid course. Please complete payment to enroll.', 
@@ -262,13 +341,61 @@ export const enrollStudent = async (req, res) => {
       });
     }
 
+    const directLinkedSeriesIds = (course.content?.testSeries || []).filter(id => id && typeof id === 'string');
+    const batchVariants = await getRelatedCourseIds(course, canonicalId);
+    const [reverseSeriesColl, reverseSeriesTests] = await Promise.all([
+      db.collection('testSeries').find({
+        $or: [
+          { courseId: { $in: batchVariants } },
+          { courseIds: { $in: batchVariants } }
+        ]
+      }).toArray(),
+      db.collection('tests').find({
+        isSeries: true,
+        $or: [
+          { courseId: { $in: batchVariants } },
+          { courseIds: { $in: batchVariants } }
+        ]
+      }).toArray()
+    ]);
+    const reverseLinkedSeriesIds = [
+      ...reverseSeriesColl.map(ts => ts.id || ts._id.toString()),
+      ...reverseSeriesTests.map(ts => ts.id || ts._id.toString())
+    ];
+    const allEnrollmentIds = [
+      canonicalId,
+      String(course._id),
+      ...(course.id ? [String(course.id)] : []),
+      ...batchVariants,
+      ...directLinkedSeriesIds,
+      ...reverseLinkedSeriesIds
+    ].filter(Boolean);
+
     await Student.updateOne(
       { _id: student._id },
-      { $addToSet: { enrolledCourses: canonicalId } }
+      { $addToSet: { enrolledCourses: { $each: allEnrollmentIds } } }
     );
 
+    // Record purchase so validity starts from NOW (assignment date), not account creation date
+    await db.collection('purchases').deleteMany(buildStudentPurchaseQuery(student, idVariants, null));
+    await db.collection('purchases').insertOne({
+      id: `manual_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      studentId: student.id || String(student._id),
+      studentName: student.name || 'Student',
+      courseId: canonicalId,
+      courseMongoId: course._id ? String(course._id) : undefined,
+      courseName: course.name || course.title || courseId,
+      amount: 0,
+      basePrice: 0,
+      gstAmount: 0,
+      gstPercentage: 0,
+      discountAmount: 0,
+      paymentMethod: 'admin_assigned',
+      status: 'completed',
+      createdAt: new Date()
+    });
+
     // Update course enrollment count
-    const db = mongoose.connection.db;
     await db.collection('courses').updateOne(
       { _id: course._id },
       { $inc: { studentsEnrolled: 1 } }
@@ -346,6 +473,67 @@ export const checkEnrollment = async (req, res) => {
       }
     }
 
+    // 2b. Purchases Fallback & Auto-Heal: Check if a completed purchase exists for THIS student and THIS course
+    if (!isEnrolled) {
+      const db = mongoose.connection.db;
+      const purchaseRecord = await db.collection('purchases').findOne(
+        buildStudentPurchaseQuery(student, idVariants)
+      );
+
+      if (purchaseRecord) {
+        isEnrolled = true;
+        // Auto-heal student document in background
+        Student.updateOne(
+          { _id: student._id },
+          { $addToSet: { enrolledCourses: { $each: idVariants } } }
+        ).catch(e => console.warn('[checkEnrollment] Auto-heal error:', e.message));
+      }
+    }
+
+    // 2c. Pending Orders Auto-Recovery: Check if student paid via Razorpay recently
+    if (!isEnrolled) {
+      const db = mongoose.connection.db;
+      const studentIdVariants = [String(student._id), student.id, student.userId].filter(Boolean);
+      const pendingOrder = await db.collection('pendingOrders').findOne({
+        $or: [
+          { studentId: { $in: studentIdVariants } },
+          { studentMongoId: String(student._id) }
+        ],
+        courseId: { $in: idVariants },
+        createdAt: { $gte: new Date(Date.now() - 48 * 3600 * 1000) }
+      });
+
+      if (pendingOrder) {
+        try {
+          const keyId = (process.env.RAZORPAY_KEY_ID || '').toString().trim();
+          const keySecret = (process.env.RAZORPAY_KEY_SECRET || '').toString().trim();
+          if (keyId && keySecret) {
+            const auth = Buffer.from(`${keyId}:${keySecret}`).toString('base64');
+            const oRes = await fetch(`https://api.razorpay.com/v1/orders/${pendingOrder.orderId}`, {
+              headers: { Authorization: `Basic ${auth}` }
+            });
+            if (oRes.ok) {
+              const oData = await oRes.json();
+              if (oData.status === 'paid') {
+                const { fulfillSuccessfulPayment } = await import('./payment.controller.js');
+                const result = await fulfillSuccessfulPayment({
+                  db,
+                  orderId: pendingOrder.orderId,
+                  studentId: student.id || String(student._id),
+                  courseId: pendingOrder.courseId
+                });
+                if (result?.success) {
+                  isEnrolled = true;
+                }
+              }
+            }
+          }
+        } catch (poErr) {
+          console.warn('[checkEnrollment] Pending order recovery error:', poErr.message);
+        }
+      }
+    }
+
     // 3. Expiry Check (works for both purchased AND manually enrolled students)
     let isExpired = false;
     let accessAllowed = true;
@@ -355,93 +543,34 @@ export const checkEnrollment = async (req, res) => {
     if (isEnrolled) {
       const db = mongoose.connection.db;
 
-      // Resolve expiry configuration from course (robust parsing)
-      const valObj = course.validity;
-      let currentMode = course.expiryMode;
-      let validityVal = valObj;
-      let unit = 'months'; // Standard default
-
-      if (typeof valObj === 'object' && valObj !== null) {
-        if (valObj.tab === 'end') { 
-          currentMode = 'End Date'; 
-          validityVal = valObj.endDate; 
-        } else if (valObj.tab === 'set') { 
-          currentMode = 'Validity'; 
-          validityVal = valObj.value;
-          unit = valObj.unit || 'months'; 
-        } else if (valObj.tab === 'lifetime') { 
-          currentMode = 'Lifetime Access'; 
-          validityVal = null; 
-        }
-      }
-
       // Identify student and fetch most recent valid purchase
-      const studentIdVariants = [String(student._id), student.id, student.userId].filter(Boolean);
-      const purchase = await db.collection('purchases').findOne({
-        studentId: { $in: studentIdVariants },
-        courseId: { $in: idVariants },
-        status: { $in: ['completed', 'success', 'captured', 'paid'] }
-      }, { sort: { createdAt: -1 } });
+      let purchase = await db.collection('purchases').findOne(
+        buildStudentPurchaseQuery(student, idVariants),
+        { sort: { createdAt: -1 } }
+      );
 
-      if (currentMode === 'End Date' && validityVal) {
-        // End Date mode: Absolute cutoff, no purchase required
-        let dateStr = String(validityVal).trim();
-        // Support DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD, YYYY/MM/DD
-        const dmyMatch = dateStr.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
-        const ymdMatch = dateStr.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
-        
-        if (dmyMatch) dateStr = `${dmyMatch[3]}-${dmyMatch[2].padStart(2, '0')}-${dmyMatch[1].padStart(2, '0')}`;
-        else if (ymdMatch) dateStr = `${ymdMatch[1]}-${ymdMatch[2].padStart(2, '0')}-${ymdMatch[3].padStart(2, '0')}`;
-        
-        const expiryDate = new Date(dateStr);
-        if (!isNaN(expiryDate.getTime())) {
-          expiryDate.setHours(23, 59, 59, 999);
-          if (new Date() > expiryDate) {
-            isExpired = true;
-          }
-          expiryInfo = { type: 'endDate', value: validityVal };
-        }
-      } else if (currentMode === 'Validity' && validityVal) {
-        // Validity mode: Relative to enrollment/purchase date
-        // Priority: Purchase Date > Admission Date > Student Account Creation Date
-        const startDate = purchase?.createdAt 
-          || student.admission?.admissionDate 
-          || student.createdAt;
-        
-        if (startDate) {
-          const value = parseInt(validityVal);
-          if (!isNaN(value)) {
-            const expDate = new Date(startDate);
-            const lowerUnit = String(unit).toLowerCase();
-            
-            if (lowerUnit === 'days' || lowerUnit === 'day') {
-              expDate.setDate(expDate.getDate() + value);
-            } else if (lowerUnit === 'weeks' || lowerUnit === 'week') {
-              expDate.setDate(expDate.getDate() + (value * 7));
-            } else if (lowerUnit === 'years' || lowerUnit === 'year') {
-              expDate.setFullYear(expDate.getFullYear() + value);
-            } else {
-              // Default and backward compatibility: Months
-              expDate.setMonth(expDate.getMonth() + value);
-            }
-            
-            expDate.setHours(23, 59, 59, 999);
-            if (new Date() > expDate) {
-              isExpired = true;
-            }
-            expiryInfo = { 
-              type: 'months', 
-              value: validityVal, 
-              unit: lowerUnit, 
-              expiryDate: expDate.toISOString(),
-              isManual: !purchase 
-            };
-          }
-        }
-      } else if (!currentMode || currentMode === 'Lifetime Access' || currentMode === 'lifetime') {
-        expiryInfo = { type: 'lifetime' };
-        isExpired = false;
+      if (!purchase && isEnrolled) {
+        // Auto-heal manual enrollment: record an assignment purchase starting from student assignment date
+        purchase = {
+          id: `manual_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          studentId: student.id || String(student._id),
+          studentName: student.name || 'Student',
+          courseId: String(course._id || course.id || courseId),
+          courseMongoId: course._id ? String(course._id) : undefined,
+          courseName: course.name || course.title || courseId,
+          amount: 0,
+          basePrice: 0,
+          gstAmount: 0,
+          paymentMethod: 'admin_assigned',
+          status: 'completed',
+          createdAt: new Date()
+        };
+        await db.collection('purchases').insertOne(purchase);
       }
+
+      const evalResult = evaluatePurchaseExpiry(purchase, course, student.updatedAt || new Date());
+      isExpired = evalResult.isExpired;
+      expiryInfo = evalResult.expiryInfo;
 
       if (isExpired) {
         accessAllowed = false;
@@ -452,7 +581,7 @@ export const checkEnrollment = async (req, res) => {
       }
 
       if (process.env.NODE_ENV !== 'production' && isExpired) {
-        console.log(`[checkEnrollment] Access expired for student ${studentId} on course ${courseId}. Mode: ${currentMode}`);
+        console.log(`[checkEnrollment] Access expired for student ${studentId} on course ${courseId}. ExpiryInfo:`, expiryInfo);
       }
     } else {
       accessAllowed = false;
@@ -615,20 +744,131 @@ export const unenrollStudent = async (req, res) => {
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    // Pull from enrolledCourses array
+    const course = await findCourse(courseId);
+    const idVariants = [...new Set([
+      String(courseId),
+      ...(course?._id ? [String(course._id)] : []),
+      ...(course?.id ? [String(course.id)] : []),
+      ...(course?.slug ? [String(course.slug)] : [])
+    ].filter(Boolean))];
+    const objectIdVariants = idVariants
+      .filter(id => ObjectId.isValid(id))
+      .map(id => new ObjectId(id));
+
+    const pullValues = [...idVariants, ...objectIdVariants];
+    const studentUpdateOp = {
+      $pull: { enrolledCourses: { $in: pullValues } }
+    };
+    if (student.enrolledBatch && idVariants.includes(String(student.enrolledBatch))) {
+      studentUpdateOp.$unset = { enrolledBatch: '' };
+    }
+
+    // Pull from enrolledCourses array (and legacy enrolledBatch if matching)
     await Student.updateOne(
       { _id: student._id },
-      { $pull: { enrolledCourses: courseId } }
+      studentUpdateOp
     );
 
-    // Update course enrollment count
-    const course = await findCourse(courseId);
+    const studentIdVariants = [String(student._id), student.id, student.userId].filter(Boolean);
+    const db = mongoose.connection.db;
+
+    // Delete matching purchases (completed, manual, or pending) across all student/course ID variants
+    await db.collection('purchases').deleteMany(
+      buildStudentPurchaseQuery(student, idVariants, null)
+    );
+
+    // Clear enrollment records and any recent pendingOrders so auto-heal/recovery cannot restore access
+    await Promise.all([
+      db.collection('enrollments').deleteMany({
+        $and: [
+          {
+            $or: [
+              { studentId: { $in: [...studentIdVariants, student._id] } },
+              { studentMongoId: { $in: [String(student._id), student._id] } },
+              { userId: { $in: [...studentIdVariants, student._id] } }
+            ]
+          },
+          {
+            $or: [
+              { courseId: { $in: pullValues } },
+              { testSeriesId: { $in: pullValues } },
+              { batchId: { $in: pullValues } }
+            ]
+          }
+        ]
+      }),
+      db.collection('pendingOrders').deleteMany({
+        $and: [
+          {
+            $or: [
+              { studentId: { $in: [...studentIdVariants, student._id] } },
+              { studentMongoId: { $in: [String(student._id), student._id] } }
+            ]
+          },
+          { courseId: { $in: pullValues } }
+        ]
+      })
+    ]);
+
+    // Remove linked test-series IDs that were auto-added by this course unless covered by another course/purchase
     if (course) {
-      const db = mongoose.connection.db;
-      await db.collection(course._collection || 'courses').updateOne(
-        { _id: course._id },
-        { $inc: { studentsEnrolled: -1 } }
-      );
+      const directLinked = (course.content?.testSeries || []).filter(id => id && typeof id === 'string');
+      const [rev1, rev2] = await Promise.all([
+        db.collection('testSeries').find({
+          $or: [{ courseId: { $in: idVariants } }, { courseIds: { $in: idVariants } }]
+        }).project({ _id: 1, id: 1 }).toArray(),
+        db.collection('tests').find({
+          isSeries: true,
+          $or: [{ courseId: { $in: idVariants } }, { courseIds: { $in: idVariants } }]
+        }).project({ _id: 1, id: 1 }).toArray()
+      ]);
+      const candidateSeriesIds = [...new Set([
+        ...directLinked,
+        ...rev1.flatMap(ts => [ts.id, ts._id?.toString()]),
+        ...rev2.flatMap(ts => [ts.id, ts._id?.toString()])
+      ].filter(Boolean).map(String))];
+
+      if (candidateSeriesIds.length > 0) {
+        const refreshedStudent = await Student.findById(student._id).lean();
+        const remainingIds = (refreshedStudent?.enrolledCourses || []).map(String);
+
+        // Keep any linked series that still has its own purchase or is included in a remaining enrolled batch
+        const [directPurchases, remainingParentCourses] = await Promise.all([
+          db.collection('purchases').find(
+            buildStudentPurchaseQuery(student, candidateSeriesIds)
+          ).project({ courseId: 1, courseMongoId: 1 }).toArray(),
+          remainingIds.length > 0
+            ? db.collection('courses').find({
+                $or: [
+                  { id: { $in: remainingIds } },
+                  { _id: { $in: remainingIds.filter(id => ObjectId.isValid(id)).map(id => new ObjectId(id)) } }
+                ]
+              }).project({ content: 1, id: 1, _id: 1 }).toArray()
+            : Promise.resolve([])
+        ]);
+
+        const keepIds = new Set(
+          directPurchases.flatMap(p => [p.courseId, p.courseMongoId]).filter(Boolean).map(String)
+        );
+        remainingParentCourses.forEach(rc => {
+          (rc.content?.testSeries || []).forEach(tid => keepIds.add(String(tid)));
+        });
+
+        const toPullSeries = candidateSeriesIds.filter(sid => !keepIds.has(sid));
+        if (toPullSeries.length > 0) {
+          await Student.updateOne(
+            { _id: student._id },
+            { $pull: { enrolledCourses: { $in: toPullSeries } } }
+          );
+        }
+      }
+
+      if ((course.studentsEnrolled || 0) > 0) {
+        await db.collection(course._collection || 'courses').updateOne(
+          { _id: course._id },
+          { $inc: { studentsEnrolled: -1 } }
+        );
+      }
     }
 
     res.json({ success: true, message: 'Unenrolled successfully' });

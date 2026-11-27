@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { db } from '../config/db.js';
 import { generateSignedUrl } from '../middleware/auth.js';
+import { getCourseIdVariants, buildStudentPurchaseQuery } from '../services/course.service.js';
 
 const { ObjectId } = mongoose.Types;
 
@@ -28,8 +29,25 @@ export const signVideoUrl = async (req, res) => {
     }
 
     if (courseId) {
+      const idVariants = await getCourseIdVariants(courseId);
+      const targetCourseIds = idVariants.length > 0 ? idVariants : [String(courseId)];
       const enrolled = (student.enrolledCourses || []).map(c => String(c));
-      if (!enrolled.includes(String(courseId))) {
+      let isEnrolled = targetCourseIds.some(id => enrolled.includes(String(id)));
+
+      if (!isEnrolled) {
+        const purchase = await db.collection('purchases').findOne(
+          buildStudentPurchaseQuery(student, targetCourseIds)
+        );
+        if (purchase) {
+          isEnrolled = true;
+          db.collection('students').updateOne(
+            { _id: student._id },
+            { $addToSet: { enrolledCourses: { $each: targetCourseIds } } }
+          ).catch(() => {});
+        }
+      }
+
+      if (!isEnrolled) {
         const video = await db.collection('videos').findOne({
           $or: [
             { url: { $regex: videoPath } },

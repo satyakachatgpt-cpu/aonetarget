@@ -55,25 +55,42 @@ export const StudentProfileContent: React.FC<StudentProfileContentProps> = React
         testSeriesAPI.getAll().catch(() => [])
       ]);
 
-      const details = (student.enrolledCourses || []).map((id: any) => {
+      const matchProduct = (item: any, searchId: any) => {
+        if (!item || !searchId) return false;
+        const sId = String(searchId).trim();
+        return (item.id && String(item.id).trim() === sId) || 
+               (item._id && String(item._id).trim() === sId);
+      };
+
+      const seenKeys = new Set<string>();
+      const details: any[] = [];
+
+      (student.enrolledCourses || []).forEach((id: any) => {
         const isExpired = (student as any).enrolledCoursesExpiry?.[String(id)] || false;
 
         const item = 
-          allCourses.find((c: any) => (c.id || c._id) === id) ||
-          allPkgs.find((p: any) => (p.id || p._id) === id) ||
-          allSeries.find((s: any) => (s.id || s._id) === id);
+          allCourses.find((c: any) => matchProduct(c, id)) ||
+          allPkgs.find((p: any) => matchProduct(p, id)) ||
+          allSeries.find((s: any) => matchProduct(s, id));
         
         if (item) {
-          return {
+          const uniqueKey = String(item._id || item.id);
+          if (seenKeys.has(uniqueKey)) {
+            return; // Avoid duplicate display of same product
+          }
+          seenKeys.add(uniqueKey);
+
+          details.push({
             id: id,
+            _id: item._id,
+            productId: item.id || item._id,
             name: item.name || item.title || 'Unnamed Content',
-            type: allCourses.some((c: any) => (c.id || c._id) === id) ? 'Batch' : 
-                  allPkgs.some((p: any) => (p.id || p._id) === id) ? 'Package' : 'Test Series',
+            type: allCourses.some((c: any) => matchProduct(c, id)) ? 'Batch' : 
+                  allPkgs.some((p: any) => matchProduct(p, id)) ? 'Package' : 'Test Series',
             price: item.price || 0,
             isExpired: isExpired
-          };
+          });
         }
-        return { id: id, name: 'Unknown/Deleted Content', type: 'Unknown', price: 0, isExpired: isExpired };
       });
       setEnrolledDetails(details);
     } catch (error) {
@@ -633,6 +650,9 @@ export const StudentProfileContent: React.FC<StudentProfileContentProps> = React
         onClose={() => setShowAddPackages(false)}
         onAssign={handleAssignPackages}
         isAssigning={isAssigning}
+        assignedCourseIds={student.enrolledCourses}
+        enrolledDetails={enrolledDetails}
+        studentCourse={student.course}
       />
     </div>
   );

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import StudentSidebar from '../components/StudentSidebar';
-import { getImageUrl, getVideoUrl, getYouTubeThumbnail, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
+import { getImageUrl, getVideoUrl, getYouTubeThumbnail, toYouTubeEmbed, isYouTubeUrl, formatDurationBadge } from '../lib/utils';
 import { getAuthHeaders } from '../services/apiClient';
 import { API_BASE_URL } from '../services/apiClient';
 
@@ -83,6 +83,37 @@ const WatchHistory: React.FC = () => {
         });
       }
 
+      // 3. Add or update from local player_progress in localStorage
+      try {
+        const localProgress = JSON.parse(localStorage.getItem('player_progress') || '{}');
+        Object.values(localProgress).forEach((item: any) => {
+          const vId = item.videoId || item.id;
+          if (!vId) return;
+          const progressPct = item.duration > 0 ? Math.round((item.timestamp / item.duration) * 100) : 0;
+          const existingIdx = merged.findIndex(m => m.videoId === vId);
+          if (existingIdx !== -1) {
+            merged[existingIdx].watchProgress = Math.max(merged[existingIdx].watchProgress || 0, progressPct);
+            if (!merged[existingIdx].duration && item.duration) merged[existingIdx].duration = item.duration;
+            if (!merged[existingIdx].title && item.title) merged[existingIdx].title = item.title;
+            if (!merged[existingIdx].thumbnail && item.thumbnail) merged[existingIdx].thumbnail = item.thumbnail;
+          } else {
+            merged.push({
+              videoId: vId,
+              title: item.title || 'Video',
+              duration: item.duration || 0,
+              watchProgress: progressPct,
+              thumbnail: item.thumbnail,
+              courseId: item.courseId,
+              courseTitle: item.courseTitle,
+              watchedAt: item.updated ? new Date(item.updated).toISOString() : new Date().toISOString()
+            });
+            seenIds.add(vId);
+          }
+        });
+      } catch (e) {
+        console.warn('Failed to parse local player_progress:', e);
+      }
+
       // Sort by recency (watchedAt or lastUpdated)
       merged.sort((a, b) => {
         const dateA = new Date(a.watchedAt || a.lastUpdated || a.updatedAt || 0).getTime();
@@ -115,7 +146,7 @@ const WatchHistory: React.FC = () => {
       courseTitle: item.courseTitle || item.subject || '',
     };
 
-    navigate(`/watch/${item.courseId || 'history'}/${vId}`, {
+    navigate(`/watch/${item.courseId || 'history'}/${vId}?returnTo=/watch-history`, {
       state: {
         video: (videoObj.videoUrl || videoObj.youtubeUrl) ? videoObj : null,
         courseTitle: item.courseTitle || 'Watch History',
@@ -233,7 +264,7 @@ const WatchHistory: React.FC = () => {
                     <div className="absolute inset-0 bg-black/5 group-hover:bg-black/0 transition-colors" />
                     {item.duration && (
                       <div className="absolute bottom-1 right-1 px-1 py-0.5 bg-black/70 rounded text-[8px] font-bold text-white tracking-tighter">
-                        {item.duration}
+                        {formatDurationBadge(item.duration)}
                       </div>
                     )}
                   </div>

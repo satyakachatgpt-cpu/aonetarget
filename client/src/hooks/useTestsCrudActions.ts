@@ -64,12 +64,20 @@ export const useTestsCrudActions = ({
         id: editingTest?.id || `test_${Date.now()}`,
         name: data.name,
         courseId: effectiveCourseId,
+        courseIds: Array.isArray(data.courseIds) && data.courseIds.length > 0 
+          ? data.courseIds 
+          : (data.courseId ? [data.courseId] : (effectiveCourseId ? [effectiveCourseId] : [])),
         courseName: selectedCourse
           ? selectedCourse.name || selectedCourse.title
           : effectiveCourseName,
         course: selectedCourse
           ? selectedCourse.name || selectedCourse.title
           : effectiveCourseName,
+        categoryId: data.categoryId || '',
+        categoryName: data.categoryName || '',
+        category: data.category || data.categoryName || data.categoryId || '',
+        branch: data.branch || '',
+        level1Branch: data.level1Branch || data.branch || '',
         noOfQuestions: parseInt(data.noOfQuestions || data.questions) || 0,
         duration: parseInt(data.duration || 0) || 0,
         status: data.status || "active",
@@ -104,27 +112,27 @@ export const useTestsCrudActions = ({
       };
 
       if (editingTest) {
+        const targetId = editingTest.id || (editingTest as any)._id;
         try {
           await testsAPI.update(
-            editingTest.id || (editingTest as any)._id,
+            targetId,
             testData,
           );
-          setTests(
-            tests.map((t) =>
-              (t.id || (t as any)._id) ===
-                (editingTest.id || (editingTest as any)._id)
-                ? testData
+          setTests((prev: any[]) =>
+            prev.map((t) =>
+              (t.id || (t as any)._id) === targetId
+                ? { ...t, ...testData }
                 : t,
             ),
           );
+          await loadData();
           showToast("Test updated successfully!");
         } catch (apiError) {
           console.error("API update error:", apiError);
-          setTests(
-            tests.map((t) =>
-              (t.id || (t as any)._id) ===
-                (editingTest.id || (editingTest as any)._id)
-                ? testData
+          setTests((prev: any[]) =>
+            prev.map((t) =>
+              (t.id || (t as any)._id) === targetId
+                ? { ...t, ...testData }
                 : t,
             ),
           );
@@ -134,7 +142,7 @@ export const useTestsCrudActions = ({
         try {
           await testsAPI.create(testData);
           setTests((prev: any) => [...prev, testData]);
-          loadData();
+          await loadData();
           if (viewingTestSeries) {
             const seriesId =
               viewingTestSeries.id || (viewingTestSeries as any)._id;

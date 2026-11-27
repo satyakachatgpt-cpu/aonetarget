@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import LiveClassesCalendar from '../components/student/LiveClassesCalendar';
-import { getPdfUrl, getVideoUrl, getImageUrl, getYouTubeThumbnail, toYouTubeEmbed, isYouTubeUrl } from '../lib/utils';
+import { getPdfUrl, getVideoUrl, getImageUrl, getYouTubeThumbnail, toYouTubeEmbed, isYouTubeUrl, formatDurationBadge } from '../lib/utils';
 import { useAuthStore } from '../store/authStore';
 import { getAuthHeaders, API_BASE_URL } from '../services/apiClient';
 
@@ -65,12 +65,13 @@ const StudyDashboard: React.FC = () => {
       try {
         setLoading(true);
         const sId = storedStudent ? JSON.parse(storedStudent).id : '';
+        const t = Date.now();
         const [courseRes, vRes, nRes, tRes, fRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/courses/${id}`).then(r => r.ok ? r.json() : null),
-          fetch(`${API_BASE_URL}/courses/${id}/videos?studentId=${sId}`).then(r => r.ok ? r.json() : []),
-          fetch(`${API_BASE_URL}/courses/${id}/notes`).then(r => r.ok ? r.json() : []),
-          fetch(`${API_BASE_URL}/courses/${id}/tests`).then(r => r.ok ? r.json() : []),
-          fetch(`${API_BASE_URL}/courses/${id}/folders`).then(r => r.ok ? r.json() : [])
+          fetch(`${API_BASE_URL}/courses/${id}?t=${t}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null),
+          fetch(`${API_BASE_URL}/courses/${id}/videos?studentId=${sId}&t=${t}`, { headers: getAuthHeaders(), cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+          fetch(`${API_BASE_URL}/courses/${id}/notes?t=${t}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+          fetch(`${API_BASE_URL}/courses/${id}/tests?t=${t}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : []),
+          fetch(`${API_BASE_URL}/courses/${id}/folders?t=${t}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : [])
         ]);
         setCourse(courseRes);
         setVideos(Array.isArray(vRes) ? vRes.sort((a: any, b: any) => (Number(a.order) || 0) - (Number(b.order) || 0)) : []);
@@ -80,14 +81,19 @@ const StudyDashboard: React.FC = () => {
         // Fetch Enrollment Status
         if (sId) {
           try {
-            const enrolledRes = await fetch(`${API_BASE_URL}/students/${sId}/enrolled/${id}`, { headers: getAuthHeaders() });
+            const enrolledRes = await fetch(`${API_BASE_URL}/students/${sId}/enrolled/${id}?t=${Date.now()}`, { headers: getAuthHeaders(), cache: 'no-store' });
             if (enrolledRes.ok) {
               const enrolledData = await enrolledRes.json();
               setIsEnrolled(enrolledData.accessAllowed || false);
+            } else {
+              setIsEnrolled(false);
             }
           } catch (e) {
             console.error('Enrollment check failed:', e);
+            setIsEnrolled(false);
           }
+        } else {
+          setIsEnrolled(false);
         }
       } catch (err) {
         console.error('Fetch error:', err);
@@ -376,7 +382,7 @@ const StudyDashboard: React.FC = () => {
                               <h4 className="font-bold text-sm truncate">{video.title}</h4>
                               <div className="flex gap-2 mt-1">
                                 <span className="text-[8px] bg-blue-50 text-brandBlue px-1.5 py-0.5 rounded font-bold uppercase">Video</span>
-                                <span className="text-[8px] text-gray-400">{video.duration}</span>
+                                <span className="text-[8px] text-gray-400">{formatDurationBadge(video.duration)}</span>
                               </div>
                             </div>
                               <button

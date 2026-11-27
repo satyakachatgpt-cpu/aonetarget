@@ -398,12 +398,13 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
 
     const handleDeleteItem = async (item: ContentItem) => {
         if (!confirm(`Are you sure you want to delete "${item.title}"? This cannot be undone.`)) return;
+        const targetId = String(item.raw?._id || item.raw?.id || item.id);
         setActionLoading(item.id);
         try {
-            if (item.type === 'PDF') await pdfsAPI.delete(item.id);
-            else if (item.type === 'Test') await testsAPI.delete(item.id);
-            else if (item.type === 'Live') await liveVideosAPI.delete(item.id);
-            else await videosAPI.delete(item.id);
+            if (item.type === 'PDF') await pdfsAPI.delete(targetId);
+            else if (item.type === 'Test') await testsAPI.delete(targetId);
+            else if (item.type === 'Live') await liveVideosAPI.delete(targetId);
+            else await videosAPI.delete(targetId);
             setContent(prev => prev.filter(c => c.id !== item.id));
         } catch (error) {
             alert('Failed to delete item. Please try again.');
@@ -485,10 +486,11 @@ const ContentManager: React.FC<Props> = ({ mode = 'all' }) => {
                 item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 item.id.toString().toLowerCase().includes(searchTerm.toLowerCase());
 
-            const matchesType = typeFilter === 'all' || item.type === typeFilter;
+            const matchesType = typeFilter === 'all' || item.type?.toLowerCase() === typeFilter.toLowerCase();
 
             const matchesCourse = courseFilter === 'all' ||
-                item.courseId === courseFilter ||
+                String(item.courseId) === String(courseFilter) ||
+                String(item.raw?.courseId) === String(courseFilter) ||
                 item.courseName === courseFilter;
 
             const isActuallyFree = item.raw?.status === 'Free' || item.raw?.isFree === true || item.raw?.isFree === 'true' || item.raw?.isFree === 1;

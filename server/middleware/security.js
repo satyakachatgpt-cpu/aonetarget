@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 
 export const publicLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5000, // Limit each IP to 5000 requests per windowMs (Increased for 100+ concurrent students)
+  max: 600, // Limit each IP to 600 requests per 15 minutes (approx 40 req/min)
   message: { error: 'Too many requests from this IP, please try again after 15 minutes' }
 });
 
@@ -36,7 +36,7 @@ export const videoUploadLimiter = rateLimit({
 // Auth Rate Limiter
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5000, // Limit each IP to 5000 requests per windowMs (Increased for 100+ concurrent students)
+  max: 60, // Limit each IP to 60 auth requests per 15 minutes
   message: { error: 'Too many verify requests from this IP, please try again after 15 minutes' }
 });
 
@@ -77,8 +77,11 @@ export const bruteForceGate = (identifierField = 'phone') => async (req, res, ne
 
     next();
   } catch (error) {
-    console.error('Brute force gate error:', error);
-    next(); // Fallback to allow login if DB fails (preventing self-DOS)
+    console.error('[SECURITY] Brute force gate error:', error.message);
+    if (!mongoose.connection.readyState || mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ error: 'Authentication service temporarily unavailable. Please retry.' });
+    }
+    next();
   }
 };
 
@@ -137,19 +140,31 @@ export const securityHeaders = (req, res, next) => {
   next();
 };
 
-// 🛡️ Safe Input Sanitization
-// Strips potentially dangerous script tags from string fields without breaking rich text/HTML
+// 🛡️ Safe Input Sanitization (Recursive for nested objects)
+// Strips potentially dangerous script tags and inline event handlers from all string values
+const cleanValue = (val) => {
+  if (typeof val === 'string') {
+    return val
+      .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "")
+      .replace(/on\w+="[^"]*"/gim, "")
+      .replace(/on\w+='[^']*'/gim, "")
+      .replace(/javascript:[^"']*/gim, "");
+  }
+  if (Array.isArray(val)) {
+    return val.map(cleanValue);
+  }
+  if (val && typeof val === 'object') {
+    for (const k of Object.keys(val)) {
+      val[k] = cleanValue(val[k]);
+    }
+    return val;
+  }
+  return val;
+};
+
 export const sanitizeInput = (req, res, next) => {
-  if (req.body) {
-    Object.keys(req.body).forEach(key => {
-      if (typeof req.body[key] === 'string') {
-        req.body[key] = req.body[key]
-          .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gim, "")
-          .replace(/on\w+="[^"]*"/gim, "")
-          .replace(/on\w+='[^']*'/gim, "")
-          .replace(/javascript:[^"']*/gim, "");
-      }
-    });
+  if (req.body && typeof req.body === 'object') {
+    cleanValue(req.body);
   }
   next();
 };

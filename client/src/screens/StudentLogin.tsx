@@ -17,29 +17,40 @@ import { AuthLayout } from '../components/auth/AuthLayout';
 import { LoginStep } from '../components/auth/LoginStep';
 import { ForgotStep } from '../components/auth/ForgotStep';
 import { NewPasswordStep } from '../components/auth/NewPasswordStep';
+import { WelcomeStep } from '../components/auth/WelcomeStep';
+import { CompleteProfileStep } from '../components/auth/CompleteProfileStep';
 
 const phoneSchema = z.object({
   phone: z.string().length(10, 'Enter a valid 10-digit phone number').regex(/^\d+$/, 'Digits only'),
 });
 
 const profileSchema = z.object({
-  name: z.string().min(3, 'Name must be at least 3 characters'),
-  email: z.string().email('Invalid email address').min(1, 'Email is required'),
+  name: z.string().min(2, 'Name must be at least 2 characters'),
   phone: z.string().length(10, 'Enter a valid 10-digit phone number').regex(/^\d+$/, 'Digits only'),
-  address: z.string().optional().or(z.literal('')),
+  gender: z.string().min(1, 'Please select gender'),
   state: z.string().min(1, 'Please select a state'),
   district: z.string().min(1, 'Please select a district'),
-  gender: z.string().optional().or(z.literal('')),
-  dob: z.string().optional().or(z.literal('')),
-  class: z.string().min(1, 'Please select a class'),
+  higherEducation: z.string().min(1, 'Please select qualification'),
+  otherEducation: z.string().optional().or(z.literal('')),
   password: z.string().min(6, 'Password must be at least 6 characters'),
   confirmPassword: z.string().min(6, 'Confirm your password'),
+  email: z.string().optional().or(z.literal('')),
+  dob: z.string().optional().or(z.literal('')),
+  address: z.string().optional().or(z.literal('')),
+  class: z.string().optional().or(z.literal('')),
   target: z.string().optional().or(z.literal('')),
   referralCode: z.string().optional().or(z.literal('')),
-  higherEducation: z.string().optional().or(z.literal('')),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
   path: ["confirmPassword"],
+}).refine((data) => {
+  if (data.higherEducation === 'Other') {
+    return Boolean(data.otherEducation && data.otherEducation.trim().length > 0);
+  }
+  return true;
+}, {
+  message: "Please specify your qualification",
+  path: ["otherEducation"],
 });
 
 type PhoneFormData = z.infer<typeof phoneSchema>;
@@ -48,6 +59,7 @@ type ProfileFormData = z.infer<typeof profileSchema>;
 interface StudentLoginProps {
   setAuth: (student: any, accessToken?: string, deviceId?: string, refreshToken?: string) => void;
   onSuccess?: () => void;
+  onClose?: () => void;
 }
 
 const getDeviceType = () => {
@@ -74,7 +86,7 @@ const getDeviceId = () => {
 };
 
 
-const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
+const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess, onClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -108,7 +120,11 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
     return null;
   };
 
-  const [step, setStep] = useState<'login' | 'otp' | 'signup' | 'profile' | 'category' | 'subcategory' | 'forgot-password' | 'reset-otp' | 'new-password' | 'signup-otp'>('login');
+  const searchParams = new URLSearchParams(location.search);
+  const initialStep = searchParams.get('step');
+  const [step, setStep] = useState<
+    'welcome' | 'login' | 'otp' | 'signup' | 'profile' | 'category' | 'subcategory' | 'forgot-password' | 'reset-otp' | 'new-password' | 'signup-otp'
+  >(initialStep === 'login' || initialStep === 'signup' ? initialStep : 'welcome');
 
   const {
     register: loginReg,
@@ -139,6 +155,7 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       dob: '',
       class: '',
       higherEducation: '',
+      otherEducation: '',
       target: '',
       referralCode: ''
     }
@@ -290,6 +307,11 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
   const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
     if (e.key === 'Backspace' && !otp[index] && index > 0) {
       otpRefs.current[index - 1]?.focus();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (step === 'otp') verifyOtpAndLogin();
+      else if (step === 'reset-otp') verifyResetOtp();
+      else if (step === 'signup-otp') verifySignupOtp();
     }
   };
 
@@ -355,7 +377,8 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
 
       setAuth(data.student, data.accessToken, data.deviceId, data.refreshToken);
       toast.success('Login successful!');
-      const redirect = getPostLoginRedirect() || '/student-dashboard';
+      const postLoginRedirect = getPostLoginRedirect();
+      const redirect = (postLoginRedirect && postLoginRedirect !== '/student-dashboard') ? postLoginRedirect : '/';
       navigate(redirect, { replace: true });
     } catch (err: any) {
       toast.error(err.message);
@@ -435,7 +458,8 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
         toast.success('Login successful!');
         setAuth(data.student, data.accessToken, data.deviceId, data.refreshToken);
         if (onSuccess) onSuccess();
-        const redirect = getPostLoginRedirect() || '/student-dashboard';
+        const postLoginRedirect = getPostLoginRedirect();
+        const redirect = (postLoginRedirect && postLoginRedirect !== '/student-dashboard') ? postLoginRedirect : '/';
         navigate(redirect, { replace: true });
       } else {
         if (data.code === 'DEVICE_APPROVAL_REQUIRED') {
@@ -526,8 +550,10 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       });
       if (response.ok) {
         toast.success('Password updated! Please login.');
+        setResetPhone('');
+        setNewPasswordData({ password: '', confirm: '' });
+        setPasswordFormData({ loginId: '', password: '' });
         setStep('login');
-        setPasswordFormData({ loginId: resetPhone, password: '' });
       } else {
         const data = await response.json();
         toast.error(data.error || 'Failed to reset password');
@@ -571,7 +597,11 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       setShowPassword={setShowPassword}
       handlePasswordLogin={handlePasswordLogin}
       onSignupClick={() => setStep('signup')}
-      onForgotPasswordClick={() => setStep('forgot-password')}
+      onForgotPasswordClick={() => {
+        setResetPhone('');
+        setPasswordFormData(prev => ({ ...prev, password: '' }));
+        setStep('forgot-password');
+      }}
     />
   );
 
@@ -581,14 +611,22 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
       resetPhone={resetPhone}
       setResetPhone={setResetPhone}
       handleForgotStep1={handleForgotStep1}
-      onBackToLogin={() => setStep('login')}
+      onBackToLogin={() => {
+        setResetPhone('');
+        setPasswordFormData(prev => ({ ...prev, password: '' }));
+        setNewPasswordData({ password: '', confirm: '' });
+        setStep('login');
+      }}
     />
   );
 
   const renderResetOtpStep = () => (
     <div className="p-8">
       <AuthBackButton 
-        onClick={() => setStep('forgot-password')} 
+        onClick={() => {
+          setResetPhone('');
+          setStep('forgot-password');
+        }} 
         label="Go Back" 
         variant="gray" 
         className="mb-8" 
@@ -764,11 +802,19 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
     </div>
   );
 
+  const renderWelcomeStep = () => (
+    <WelcomeStep
+      onLoginClick={() => setStep('login')}
+      onSignupClick={() => setStep('signup')}
+      onBack={onClose ? onClose : () => navigate('/')}
+    />
+  );
+
   const renderSignupStep = () => (
     <div className="flex flex-col items-center justify-start w-full">
       <div className="w-full p-6 sm:p-8 pb-10 sm:pb-8">
         <AuthBackButton 
-          onClick={() => setStep('login')} 
+          onClick={() => setStep('welcome')} 
           label="Back" 
           className="mb-4 font-semibold hover:text-[#303F9F]" 
         />
@@ -858,277 +904,87 @@ const StudentLogin: React.FC<StudentLoginProps> = ({ setAuth, onSuccess }) => {
     </div>
   );
 
-  const renderProfileStep = () => (
-    <div className="flex flex-col h-full w-full overflow-hidden">
-      <div className="px-6 pt-5 flex-shrink-0 bg-white relative z-20">
-        <div className="flex items-center gap-4">
-          <AuthBackButton 
-            onClick={() => setStep('signup')} 
-            variant="circle" 
-          />
-          <div>
-            <h3 className="text-base font-black text-navy leading-none">Complete Profile</h3>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Final Step</p>
-          </div>
-        </div>
-      </div>
-
-      <form onSubmit={handleProfileSubmit(async (data) => {
-        setLoading(true);
-        try {
-          const response = await fetch(`${API_BASE_URL}/students/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
+  const renderProfileStep = () => {
+    const values = profileWatch();
+    return (
+      <CompleteProfileStep
+        formData={{
+          name: values.name || '',
+          gender: values.gender || '',
+          state: values.state || '',
+          district: values.district || '',
+          higherEducation: values.higherEducation || '',
+          otherEducation: values.otherEducation || '',
+          password: values.password || '',
+          confirmPassword: values.confirmPassword || '',
+        }}
+        setFormData={(newData) => {
+          Object.entries(newData).forEach(([key, val]) => {
+            setProfileValue(key as any, val as string);
           });
-          const resData = await response.json();
-          
-          if (!response.ok) throw new Error(resData.error || 'Registration failed');
-          
-          toast.success('Registration successful! Please login.');
-          localStorage.removeItem('pendingReferralCode');
-          setStep('login');
-          setPasswordFormData({ loginId: data.phone, password: '' });
-        } catch (err: any) {
-          console.error('Registration Catch Error:', err);
-          toast.error(err.message || 'An unexpected error occurred during registration');
-        } finally {
-          setLoading(false);
-        }
-      })} className="flex flex-col flex-1 overflow-hidden">
-        <div className="flex-1 overflow-y-auto px-6 pt-3 pb-2 sm:px-8 space-y-3 hide-scrollbar">
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">Full Name *</label>
-            <input
-              type="text"
-              {...profileReg('name')}
-              placeholder="Enter your full name"
-              className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:border-[#303F9F] text-sm ${profileErrors.name ? 'border-red-500' : 'border-gray-200'}`}
-            />
-            {profileErrors.name && (
-              <p className="text-red-500 text-[10px] mt-1 font-bold">{profileErrors.name.message}</p>
-            )}
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">Email *</label>
-            <input
-              type="email"
-              {...profileReg('email')}
-              placeholder="Enter your email"
-              className={`w-full px-4 py-3 border rounded-xl focus:outline-none focus:border-[#303F9F] text-sm ${profileErrors.email ? 'border-red-500' : 'border-gray-200'}`}
-            />
-            {profileErrors.email && (
-              <p className="text-red-500 text-[10px] mt-1 font-bold">{profileErrors.email.message}</p>
-            )}
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">Address</label>
-            <input
-              type="text"
-              {...profileReg('address')}
-              placeholder="Enter your address"
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-[#303F9F] text-sm"
-            />
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">State *</label>
-              <button
-                type="button"
-                onClick={() => openSelection('state')}
-                className={`w-full px-4 py-3.5 border rounded-xl flex items-center justify-between text-sm transition-all ${profileErrors.state ? 'border-red-500' : 'border-gray-200'
-                  } ${selectedState ? 'text-gray-800 font-bold' : 'text-gray-400 hover:border-gray-300'}`}
-              >
-                <span>{selectedState || 'Select State'}</span>
-                <span className="material-symbols-rounded text-gray-400">expand_more</span>
-              </button>
-              <input type="hidden" {...profileReg('state')} />
-              {profileErrors.state && (
-                <p className="text-red-500 text-[10px] mt-1 font-bold">{profileErrors.state.message}</p>
-              )}
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-600 block mb-1">District *</label>
-              <button
-                type="button"
-                onClick={() => openSelection('district')}
-                className={`w-full px-4 py-3.5 border rounded-xl flex items-center justify-between text-sm transition-all ${profileErrors.district ? 'border-red-500' : 'border-gray-200'
-                  } ${profileWatch('district') ? 'text-gray-800 font-bold' : 'text-gray-400 hover:border-gray-300'} ${!selectedState ? 'opacity-50 cursor-not-allowed bg-gray-50' : ''}`}
-              >
-                <span>{profileWatch('district') || 'Select District'}</span>
-                <span className="material-symbols-rounded text-gray-400">expand_more</span>
-              </button>
-              <input type="hidden" {...profileReg('district')} />
-              {profileErrors.district && (
-                <p className="text-red-500 text-[10px] mt-1 font-bold">{profileErrors.district.message}</p>
-              )}
-            </div>
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-2">Gender</label>
-            <div className="grid grid-cols-3 gap-2">
-              {['Male', 'Female', 'Other'].map((g) => (
-                <button
-                  key={g}
-                  type="button"
-                  onClick={() => setProfileValue('gender', g)}
-                  className={`py-3 rounded-xl text-sm font-bold transition-all border ${profileWatch('gender') === g
-                    ? 'bg-[#1A237E] text-white border-[#1A237E] shadow-lg shadow-blue-900/20'
-                    : 'bg-white text-gray-500 border-gray-100 hover:border-gray-200'
-                    }`}
-                >
-                  {g}
-                </button>
-              ))}
-            </div>
-            <input type="hidden" {...profileReg('gender')} />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-2">Date of Birth *</label>
-            <div className="flex gap-3 mb-4">
-              <ScrollPicker
-                label="Day"
-                value={dobDay}
-                onChange={setDobDay}
-                options={Array.from({ length: 31 }, (_, i) => ({
-                  value: String(i + 1),
-                  label: String(i + 1).padStart(2, '0')
-                }))}
-              />
-              <ScrollPicker
-                label="Month"
-                value={dobMonth}
-                onChange={setDobMonth}
-                options={[
-                  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-                ].map((m, i) => ({
-                  value: String(i + 1),
-                  label: m
-                }))}
-              />
-              <ScrollPicker
-                label="Year"
-                value={dobYear}
-                onChange={setDobYear}
-                options={Array.from({ length: 40 }, (_, i) => {
-                  const y = String(new Date().getFullYear() - i - 5);
-                  return { value: y, label: y };
-                })}
-              />
-            </div>
-            <input type="hidden" {...profileReg('dob')} />
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">Target *</label>
-            <button
-              type="button"
-              onClick={() => openSelection('class')}
-              className={`w-full px-4 py-3.5 border rounded-xl flex items-center justify-between text-sm transition-all ${profileErrors.class ? 'border-red-500' : 'border-gray-200'
-                } ${profileWatch('class') ? 'text-gray-800 font-bold' : 'text-gray-400 hover:border-gray-300'}`}
-            >
-              <span>{profileWatch('class') || 'Select Class'}</span>
-              <span className="material-symbols-rounded text-gray-400">expand_more</span>
-            </button>
-            <input type="hidden" {...profileReg('class')} />
-            {profileErrors.class && (
-              <p className="text-red-500 text-[10px] mt-1 font-bold">{profileErrors.class.message}</p>
-            )}
-          </div>
+        }}
+        onSubmit={handleProfileSubmit(async (data) => {
+          setLoading(true);
+          try {
+            const finalEducation = (data.higherEducation === 'Other' && data.otherEducation?.trim())
+              ? data.otherEducation.trim()
+              : data.higherEducation;
 
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">Higher Education</label>
-            <button
-              type="button"
-              onClick={() => openSelection('higherEducation')}
-              className={`w-full px-4 py-3.5 border rounded-xl flex items-center justify-between text-sm transition-all ${
-                profileWatch('higherEducation') ? 'text-gray-800 font-bold' : 'text-gray-400 hover:border-gray-300'
-              }`}
-            >
-              <span>{profileWatch('higherEducation') || 'Select Qualification'}</span>
-              <span className="material-symbols-rounded text-gray-400">expand_more</span>
-            </button>
-            <input type="hidden" {...profileReg('higherEducation')} />
-          </div>
-
-          <div>
-            <label className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-1">Create Password *</label>
-            <div className="relative">
-              <input
-                type={showPassword ? 'text' : 'password'}
-                {...profileReg('password')}
-                required
-                placeholder="Min 6 characters"
-                className={`w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold pr-12`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1A237E] transition-colors"
-                title={showPassword ? "Hide Password" : "Show Password"}
-              >
-                <span className="material-symbols-rounded text-xl">
-                  {showPassword ? 'visibility_off' : 'visibility'}
-                </span>
-              </button>
-            </div>
-            {profileErrors.password && (
-              <p className="text-red-500 text-[10px] mt-1 font-bold">{profileErrors.password.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-1">Confirm Password *</label>
-            <div className="relative">
-              <input
-                type={showConfirmPassword ? 'text' : 'password'}
-                {...profileReg('confirmPassword')}
-                required
-                placeholder="Re-enter password"
-                className={`w-full px-4 py-3.5 bg-gray-50 border border-gray-100 rounded-xl focus:outline-none focus:border-brandBlue focus:bg-white transition-all text-sm font-bold pr-12`}
-              />
-              <button
-                type="button"
-                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#1A237E] transition-colors"
-                title={showConfirmPassword ? "Hide Password" : "Show Password"}
-              >
-                <span className="material-symbols-rounded text-xl">
-                  {showConfirmPassword ? 'visibility_off' : 'visibility'}
-                </span>
-              </button>
-            </div>
-            {profileErrors.confirmPassword && (
-              <p className="text-red-500 text-[10px] mt-1 font-bold">{profileErrors.confirmPassword.message}</p>
-            )}
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">Referral Code (Optional)</label>
-            <input
-              type="text"
-              {...profileReg('referralCode')}
-              placeholder="Enter referral code (e.g. AONE-XXXX)"
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:border-[#303F9F] text-sm"
-            />
-          </div>
-        </div>
-
-        <div className="px-6 py-4 sm:px-8 border-t border-gray-50">
-          <AuthSubmitButton
-            loading={loading}
-            className="w-full bg-gradient-to-r from-[#1A237E] to-[#303F9F] text-white py-4 rounded-xl font-black text-sm shadow-lg hover:shadow-xl"
-          >
-            Save & Continue
-          </AuthSubmitButton>
-        </div>
-      </form>
-    </div>
-  );
+            const response = await fetch(`${API_BASE_URL}/students/register`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                ...data,
+                higherEducation: finalEducation,
+                highQualification: finalEducation,
+                class: data.class || '',
+              })
+            });
+            const resData = await response.json();
+            
+            if (!response.ok) throw new Error(resData.error || 'Registration failed');
+            
+            toast.success('Registration successful! Please login.');
+            localStorage.removeItem('pendingReferralCode');
+            setStep('login');
+            setPasswordFormData({ loginId: data.phone, password: '' });
+          } catch (err: any) {
+            console.error('Registration Catch Error:', err);
+            toast.error(err.message || 'An unexpected error occurred during registration');
+          } finally {
+            setLoading(false);
+          }
+        })}
+        onBack={() => setStep('signup')}
+        loading={loading}
+        errors={{
+          name: profileErrors.name?.message,
+          gender: profileErrors.gender?.message,
+          state: profileErrors.state?.message,
+          district: profileErrors.district?.message,
+          higherEducation: profileErrors.higherEducation?.message || profileErrors.otherEducation?.message,
+          password: profileErrors.password?.message,
+          confirmPassword: profileErrors.confirmPassword?.message,
+        }}
+      />
+    );
+  };
 
   return (
     <>
-      <AuthLayout>
+      <AuthLayout 
+        onBack={() => {
+          if (step === 'login' || step === 'signup') {
+            setStep('welcome');
+          } else if (onClose) {
+            onClose();
+          } else {
+            navigate('/');
+          }
+        }} 
+        showHeader={step === 'login'}
+      >
+        {step === 'welcome' && renderWelcomeStep()}
         {step === 'login' && renderLoginStep()}
         {step === 'otp' && renderOtpStep()}
         {step === 'signup' && renderSignupStep()}

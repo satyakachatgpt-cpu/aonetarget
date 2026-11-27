@@ -4,14 +4,16 @@ const { ObjectId } = mongoose.Types;
 import { findCourse } from '../services/course.service.js';
 import { evaluateTest } from '../services/grading.service.js';
 import { logReevaluation, logError, logSubmission } from '../utils/logger.js';
+import { getTestMatchFilter } from './leaderboard.controller.js';
 
 /**
  * Internal helper to fetch a sorted leaderboard (best attempt per student) for a test.
  * Returns an array of { score, time } objects.
  */
 const getLeaderboard = async (db, testId) => {
+  const { filter: matchFilter } = await getTestMatchFilter(db, testId);
   return await db.collection('testResults').aggregate([
-    { $match: { testId: String(testId) } },
+    { $match: matchFilter },
     {
       $group: {
         _id: "$studentId",
@@ -116,10 +118,10 @@ export const getResultById = async (req, res) => {
 
     // --- Optimized Live Ranking Logic ---
     try {
-      const tid = String(enriched.testId);
-      // Fetch leaderboard results with flexible testId matching
+      const { filter: matchFilter } = await getTestMatchFilter(db, enriched.testId, enriched.testName);
+      // Fetch leaderboard results with flexible testId/name matching
       const lb = await db.collection('testResults').aggregate([
-        { $match: { $or: [{ testId: tid }, { testId: !isNaN(tid) ? Number(tid) : tid }] } },
+        { $match: matchFilter },
         {
           $group: {
             _id: "$studentId",
@@ -780,19 +782,14 @@ export const submitTest = async (req, res) => {
     let rank = 0;
     let totalStudents = 0;
     try {
-      const tid = String(req.params.testId);
+      const { filter: matchFilter } = await getTestMatchFilter(db, req.params.testId, test.name || test.title);
       const studentScore = Number(evaluation.obtainedMarks) || 0;
       const studentTime = Number(timeTaken) || 999999;
 
-      const testIdFilter = [
-        { testId: tid },
-        { testId: !isNaN(Number(tid)) ? Number(tid) : null }
-      ].filter(v => v.testId !== null);
-
       // Fast lookup: Count unique students who scored better or same score but faster
       const betterStudentsIds = await db.collection('testResults').distinct('studentId', {
-        $or: testIdFilter,
         $and: [
+          matchFilter,
           {
             $or: [
               { obtainedMarks: { $gt: studentScore } },
@@ -806,9 +803,7 @@ export const submitTest = async (req, res) => {
       rank = uniqueBetterOthers.length + 1;
 
       // Fast lookup: Count total unique students
-      const allStudentIds = await db.collection('testResults').distinct('studentId', {
-        $or: testIdFilter
-      });
+      const allStudentIds = await db.collection('testResults').distinct('studentId', matchFilter);
       
       const uniqueAllOthers = allStudentIds.filter(id => String(id) !== String(effectiveStudentId));
       totalStudents = uniqueAllOthers.length + 1;

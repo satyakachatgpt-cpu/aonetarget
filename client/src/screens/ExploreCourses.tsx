@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { categoriesAPI } from '../services/apiClient';
+import { categoriesAPI , invalidateCache } from '../services/apiClient';
 import StudentSidebar from '../components/StudentSidebar';
 import CounsellingModal from '../components/CounsellingModal';
 
@@ -65,7 +65,14 @@ const ExploreCourses: React.FC = () => {
       }
     };
     load();
-  }, []);
+  
+    // Auto-refresh when tab regains focus
+    const handleFocus = () => { invalidateCache('categories'); invalidateCache('tests'); invalidateCache('test-series'); };
+    const handleVis = () => { if (document.visibilityState === 'visible') { invalidateCache('categories'); invalidateCache('tests'); invalidateCache('test-series'); } };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVis);
+    return () => { window.removeEventListener('focus', handleFocus); document.removeEventListener('visibilitychange', handleVis); };
+    }, []);
 
   const filteredCategories = categories.filter(cat =>
     (cat.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -147,8 +154,11 @@ const ExploreCourses: React.FC = () => {
             ) : (
               (searchQuery ? filteredCategories : categories).slice(0, 4).map((cat, i) => (
                 <button
-                  key={cat.id}
-                  onClick={() => navigate(`/explore/${cat.id}`)}
+                  key={cat.id || cat._id || i}
+                  onClick={() => {
+                    const catTargetId = cat.id || cat._id || (cat.title ? encodeURIComponent(cat.title.toLowerCase().replace(/\s+/g, '-')) : '');
+                    navigate(`/explore/${catTargetId}`);
+                  }}
                   className="flex flex-col items-center gap-2 min-w-[72px] animate-fade-in-up active:scale-[0.97] transition-all duration-200"
                   style={{ animationDelay: `${i * 80}ms` }}
                 >
@@ -183,8 +193,11 @@ const ExploreCourses: React.FC = () => {
         ) : (
           filteredCategories.map((cat, i) => (
             <button
-              key={cat.id}
-              onClick={() => navigate(`/explore/${cat.id}`)}
+              key={cat.id || cat._id || i}
+              onClick={() => {
+                    const catTargetId = cat.id || cat._id || (cat.title ? encodeURIComponent(cat.title.toLowerCase().replace(/\s+/g, '-')) : '');
+                    navigate(`/explore/${catTargetId}`);
+                  }}
               className="w-full card-premium p-4 flex items-center gap-4 active:scale-[0.97] transition-all duration-200 text-left animate-fade-in-up group"
               style={{ animationDelay: `${i * 60}ms` }}
             >

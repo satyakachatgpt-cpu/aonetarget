@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { getCache, setCache } from '../utils/memoryCache.js';
 const { ObjectId } = mongoose.Types;
 
 /**
@@ -11,34 +12,33 @@ const getDb = () => mongoose.connection.db;
  */
 export async function findCourse(id) {
   if (!id) return null;
+  const cacheKey = `findCourse:${id}`;
+  const cached = getCache(cacheKey);
+  if (cached) return cached;
+
   const db = getDb();
   const collections = ['courses', 'packages', 'testSeries', 'test-series', 'subcourses', 'tests', 'test_series'];
+  const orConditions = [
+    { id: id },
+    { slug: id },
+    { _id: id },
+    ...(ObjectId.isValid(id) ? [{ _id: new ObjectId(id) }] : [])
+  ];
 
-  for (const colName of collections) {
-    try {
-      // Try custom id or slug first
-      let item = await db.collection(colName).findOne({
-        $or: [
-          { id: id },
-          { slug: id }
-        ]
-      });
-
-      // Try _id as string or ObjectId
-      if (!item) {
-        item = await db.collection(colName).findOne({ _id: id });
+  const results = await Promise.all(
+    collections.map(async (colName) => {
+      try {
+        const item = await db.collection(colName).findOne({ $or: orConditions });
+        return item ? { ...item, _collection: colName } : null;
+      } catch (e) {
+        return null;
       }
-      if (!item && ObjectId.isValid(id)) {
-        item = await db.collection(colName).findOne({ _id: new ObjectId(id) });
-      }
+    })
+  );
 
-      if (item) return { ...item, _collection: colName };
-    } catch (e) {
-      console.warn(`Search in ${colName} failed:`, e.message);
-    }
-  }
-
-  return null;
+  const found = results.find(Boolean) || null;
+  if (found) setCache(cacheKey, found, 60);
+  return found;
 }
 
 /**
@@ -47,6 +47,10 @@ export async function findCourse(id) {
 export async function getRelatedCourseIds(course, originalId) {
   const db = getDb();
   if (!course) return [originalId].filter(Boolean);
+
+  const cacheKey = `relatedIds:${course._id || course.id || originalId}:${originalId || ''}`;
+  const cached = getCache(cacheKey);
+  if (cached) return cached;
 
   const relatedIds = new Set([
     String(course.id || ''),
@@ -59,33 +63,22 @@ export async function getRelatedCourseIds(course, originalId) {
     course.courses.forEach(id => relatedIds.add(String(id)));
   }
 
-  // 2. Identify if this course belongs to any packages
-  try {
-    const currentId = String(course.id || course._id || originalId);
-    const parentPackages = await db.collection('packages').find({
-      $or: [
-        { courses: currentId },
-        { courses: { $elemMatch: { $eq: currentId } } },
-        { courses: { $in: [currentId] } }
-      ]
-    }).project({ _id: 1, id: 1 }).toArray();
-
-    parentPackages.forEach(pkg => {
-      if (pkg._id) relatedIds.add(pkg._id.toString());
-      if (pkg.id) relatedIds.add(pkg.id.toString());
-    });
-  } catch (e) {
-    console.warn('Failed to find parent packages:', e.message);
-  }
-
-  // 3. Also check names or titles for cross-collection linking
+  const currentId = String(course.id || course._id || originalId);
   const names = [course.name, course.title].filter(Boolean);
-  if (names.length > 0) {
-    const allPossibleCollections = ['courses', 'packages', 'subcourses', 'testSeries', 'test-series', 'test_series'];
-    for (const col of allPossibleCollections) {
-      try {
+  const allPossibleCollections = ['courses', 'packages', 'subcourses', 'testSeries', 'test-series', 'test_series'];
+
+  const parentPackagesPromise = db.collection('packages').find({
+    $or: [
+      { courses: currentId },
+      { courses: { $elemMatch: { $eq: currentId } } },
+      { courses: { $in: [currentId] } }
+    ]
+  }).project({ _id: 1, id: 1 }).toArray().catch(() => []);
+
+  const nameMatchPromises = names.length > 0
+    ? allPossibleCollections.map((col) => {
         const escapedNames = names.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-        const matchedItems = await db.collection(col).find({
+        return db.collection(col).find({
           $or: [
             { name: { $in: names } },
             { title: { $in: names } },
@@ -94,17 +87,30 @@ export async function getRelatedCourseIds(course, originalId) {
           ],
           status: { $nin: ['inactive', 'deleted'] },
           isPublished: { $ne: false }
-        }).project({ _id: 1, id: 1 }).toArray();
+        }).project({ _id: 1, id: 1 }).toArray().catch(() => []);
+      })
+    : [];
 
-        matchedItems.forEach(item => {
-          if (item._id) relatedIds.add(item._id.toString());
-          if (item.id) relatedIds.add(item.id.toString());
-        });
-      } catch (e) { }
-    }
-  }
+  const [parentPackages, ...matchedArrays] = await Promise.all([
+    parentPackagesPromise,
+    ...nameMatchPromises
+  ]);
 
-  return Array.from(relatedIds);
+  parentPackages.forEach(pkg => {
+    if (pkg._id) relatedIds.add(pkg._id.toString());
+    if (pkg.id) relatedIds.add(pkg.id.toString());
+  });
+
+  matchedArrays.forEach(matchedItems => {
+    matchedItems.forEach(item => {
+      if (item._id) relatedIds.add(item._id.toString());
+      if (item.id) relatedIds.add(item.id.toString());
+    });
+  });
+
+  const result = Array.from(relatedIds);
+  setCache(cacheKey, result, 60);
+  return result;
 }
 
 /**
@@ -114,6 +120,47 @@ export async function getCourseIdVariants(courseId) {
   if (!courseId) return [];
   const course = await findCourse(courseId);
   return getRelatedCourseIds(course, String(courseId));
+}
+
+/**
+ * Build a MongoDB query matching purchases for a specific student AND course.
+ */
+export function buildStudentPurchaseQuery(student, courseIdVariants, statuses = ['completed', 'success', 'captured', 'paid']) {
+  if (!student) return { _id: null };
+
+  const studentIdStrings = [...new Set([String(student._id || ''), student.id, student.userId].filter(Boolean).map(String))];
+  const studentObjectIds = student._id ? [student._id] : [];
+  const courseIds = [...new Set((Array.isArray(courseIdVariants) ? courseIdVariants : [courseIdVariants]).filter(Boolean).map(String))];
+  const courseObjectIds = courseIds.filter(id => ObjectId.isValid(id)).map(id => new ObjectId(id));
+
+  if (courseIds.length === 0) return { _id: null };
+
+  const studentOr = [
+    ...(studentIdStrings.length ? [{ studentId: { $in: [...studentIdStrings, ...studentObjectIds] } }] : []),
+    ...(student._id ? [{ studentMongoId: { $in: [String(student._id), student._id] } }] : []),
+    ...(student.phone ? [{ studentPhone: student.phone }, { studentPhone: `+91${student.phone}` }] : [])
+  ];
+
+  if (studentOr.length === 0) return { _id: null };
+
+  const allCourseTargets = [...courseIds, ...courseObjectIds];
+  const query = {
+    $and: [
+      { $or: studentOr },
+      {
+        $or: [
+          { courseId: { $in: allCourseTargets } },
+          { courseMongoId: { $in: allCourseTargets } }
+        ]
+      }
+    ]
+  };
+
+  if (Array.isArray(statuses) && statuses.length > 0) {
+    query.status = { $in: statuses };
+  }
+
+  return query;
 }
 
 /**

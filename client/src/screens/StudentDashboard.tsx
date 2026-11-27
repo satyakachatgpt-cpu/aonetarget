@@ -8,6 +8,7 @@ import { Course, Student, VideoProgress } from '../types';
 import { useSelector } from 'react-redux';
 import { RootState } from '../store';
 import { API_BASE_URL } from '../services/apiClient';
+import { AvatarProgressRing } from '../components/profile/ProfileCompletionWidget';
 
 interface TestResult {
   id: string;
@@ -195,21 +196,31 @@ const StudentDashboard: React.FC = () => {
         </div>
 
         <div className="text-center">
-          <div className="w-20 h-20 bg-white rounded-full mx-auto mb-3 flex items-center justify-center shadow-xl">
-            <span className="text-3xl font-black text-brandBlue">
-              {student?.name?.charAt(0)?.toUpperCase() || 'S'}
-            </span>
+          <div className="mb-3 flex justify-center">
+            <AvatarProgressRing student={student} size={88}>
+              <div className="w-[72px] h-[72px] bg-white rounded-full flex items-center justify-center shadow-xl">
+                <span className="text-3xl font-black text-brandBlue">
+                  {student?.name?.charAt(0)?.toUpperCase() || 'S'}
+                </span>
+              </div>
+            </AvatarProgressRing>
           </div>
           <h1 className="text-lg font-bold uppercase">{student?.name || 'STUDENT'}</h1>
           <p className="text-blue-200 text-xs mt-1">{student?.email}</p>
-          <div className="flex justify-center gap-3 mt-3">
-            <span className="bg-gray-800 px-4 py-1.5 rounded-full text-xs font-bold">
-              {student?.class || '12th'}
-            </span>
-            <span className="bg-gray-800 px-4 py-1.5 rounded-full text-xs font-bold">
-              {student?.target || 'NEET'}
-            </span>
-          </div>
+          {(student?.class || student?.target) && (
+            <div className="flex justify-center gap-3 mt-3">
+              {student?.class && (
+                <span className="bg-gray-800 px-4 py-1.5 rounded-full text-xs font-bold">
+                  {student.class}
+                </span>
+              )}
+              {student?.target && (
+                <span className="bg-gray-800 px-4 py-1.5 rounded-full text-xs font-bold">
+                  {student.target}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
@@ -270,7 +281,7 @@ const StudentDashboard: React.FC = () => {
                       courseId: v.courseId || '',
                       courseTitle: (v as any).courseTitle || '',
                     };
-                    navigate(`/watch/${v.courseId || 'history'}/${vId}`, {
+                    navigate(`/watch/${v.courseId || 'history'}/${vId}?returnTo=/student-dashboard`, {
                       state: {
                         video: (videoObj.videoUrl || videoObj.youtubeUrl) ? videoObj : null,
                         courseTitle: (v as any).courseTitle || 'Watch History',

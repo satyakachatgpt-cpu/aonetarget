@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getImageUrl, getPdfUrl, getYouTubeThumbnail } from '../../../lib/utils';
 import { Video } from '../../../types';
 
@@ -89,7 +90,19 @@ const LiveTab: React.FC<LiveTabProps> = ({
   onBuyNow,
   computeStatus,
 }) => {
+  const navigate = useNavigate();
   const [, setTick] = useState(0);
+
+  const openPdf = (url: string, title: string) => {
+    const currentPath = window.location.hash.replace(/^#/, '') || window.location.pathname;
+    navigate(`/pdf-viewer?url=${encodeURIComponent(getPdfUrl(url))}&title=${encodeURIComponent(title)}&returnTo=${encodeURIComponent(currentPath)}`, {
+      state: {
+        pdf: { fileUrl: getPdfUrl(url) },
+        title,
+        returnTo: currentPath
+      }
+    });
+  };
 
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 1000);
@@ -159,8 +172,8 @@ const LiveTab: React.FC<LiveTabProps> = ({
                         <div className="flex flex-wrap gap-2 px-4 pb-4 -mt-1 relative z-10">
                           {live.pdf1 && (
                             <button
-                              onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(live.pdf1))}&title=${encodeURIComponent('PDF 1')}`, '_blank'); }}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-red-600 text-[10px] font-black border border-red-100 uppercase tracking-widest shadow-sm"
+                              onClick={(e) => { e.stopPropagation(); openPdf(live.pdf1, 'PDF 1'); }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-red-600 text-[10px] font-black border border-red-100 uppercase tracking-widest shadow-sm hover:bg-red-50 transition-all"
                             >
                               <span className="material-symbols-rounded text-base">picture_as_pdf</span>
                               PDF 1
@@ -168,8 +181,8 @@ const LiveTab: React.FC<LiveTabProps> = ({
                           )}
                           {live.pdf2 && (
                             <button
-                              onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(live.pdf2))}&title=${encodeURIComponent('PDF 2')}`, '_blank'); }}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-red-600 text-[10px] font-black border border-red-100 uppercase tracking-widest shadow-sm"
+                              onClick={(e) => { e.stopPropagation(); openPdf(live.pdf2, 'PDF 2'); }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-red-600 text-[10px] font-black border border-red-100 uppercase tracking-widest shadow-sm hover:bg-red-50 transition-all"
                             >
                               <span className="material-symbols-rounded text-base">picture_as_pdf</span>
                               PDF 2
@@ -177,8 +190,8 @@ const LiveTab: React.FC<LiveTabProps> = ({
                           )}
                           {live.studyMaterial && (
                             <button
-                              onClick={(e) => { e.stopPropagation(); window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(live.studyMaterial))}&title=${encodeURIComponent('Study Material')}`, '_blank'); }}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-indigo-600 text-[10px] font-black border border-indigo-100 uppercase tracking-widest shadow-sm"
+                              onClick={(e) => { e.stopPropagation(); openPdf(live.studyMaterial, 'Study Material'); }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-indigo-600 text-[10px] font-black border border-indigo-100 uppercase tracking-widest shadow-sm hover:bg-indigo-50 transition-all"
                             >
                               <span className="material-symbols-rounded text-base">auto_stories</span>
                               Material
@@ -255,7 +268,7 @@ const LiveTab: React.FC<LiveTabProps> = ({
                                 alert("PDF will be available once the class starts.");
                                 return;
                               }
-                              window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(live.pdf1))}&title=${encodeURIComponent('PDF 1')}`, '_blank');
+                              openPdf(live.pdf1, 'PDF 1');
                             }}
                             className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-[9px] font-black uppercase tracking-widest border border-red-100/50 shadow-sm opacity-50 cursor-not-allowed"
                           >
@@ -272,7 +285,7 @@ const LiveTab: React.FC<LiveTabProps> = ({
                                 alert("PDF will be available once the class starts.");
                                 return;
                               }
-                              window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(live.pdf2))}&title=${encodeURIComponent('PDF 2')}`, '_blank');
+                              openPdf(live.pdf2, 'PDF 2');
                             }}
                             className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 text-[9px] font-black uppercase tracking-widest border border-red-100/50 shadow-sm opacity-50 cursor-not-allowed"
                           >
@@ -289,7 +302,7 @@ const LiveTab: React.FC<LiveTabProps> = ({
                                 alert("Material will be available once the class starts.");
                                 return;
                               }
-                              window.open(`/#/pdf-viewer?url=${encodeURIComponent(getPdfUrl(live.studyMaterial))}&title=${encodeURIComponent('Study Material')}`, '_blank');
+                              openPdf(live.studyMaterial, 'Study Material');
                             }}
                             className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-indigo-50 text-indigo-600 text-[9px] font-black uppercase tracking-widest border border-indigo-100/50 shadow-sm opacity-50 cursor-not-allowed"
                           >
