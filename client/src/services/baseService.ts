@@ -99,6 +99,8 @@ export const clearAdminSession = () => {
 export const clearStudentSession = () => {
   localStorage.removeItem('isStudentAuthenticated');
   localStorage.removeItem('studentData');
+  localStorage.removeItem('student');
+  localStorage.removeItem('player_progress');
   localStorage.removeItem('studentSessionToken');
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');

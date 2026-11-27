@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import DOMPurify from 'dompurify';
 import { useDebounce } from '../hooks/useDebounce';
 import { useNavigate } from 'react-router-dom';
-import { coursesAPI, blogAPI, newsAPI, categoriesAPI, bannersAPI, testsAPI, testSeriesAPI, liveVideosAPI, quickLinksAPI, API_BASE_URL } from '../services/apiClient';
+import { coursesAPI, blogAPI, newsAPI, categoriesAPI, bannersAPI, testsAPI, testSeriesAPI, liveVideosAPI, quickLinksAPI, API_BASE_URL, cachedFetch } from '../services/apiClient';
 import StudentSidebar from '../components/StudentSidebar';
 import { useAuthStore } from '../store/authStore';
 import { Course, Student } from '../types';
@@ -479,19 +479,16 @@ const Home: React.FC = () => {
 
     const fetchExamDocs = async () => {
       try {
-        const response = await fetch(`${API_BASE_URL}/exam-documents`);
-        if (response.ok) {
-          const data = await response.json();
-          const active = (Array.isArray(data) ? data : [])
-            .filter((d: any) => d.status === 'active')
-            .sort((a: any, b: any) => {
-              const aOrder = typeof a.order === 'number' ? a.order : Infinity;
-              const bOrder = typeof b.order === 'number' ? b.order : Infinity;
-              if (aOrder !== bOrder) return aOrder - bOrder;
-              return String(a._id || '').localeCompare(String(b._id || ''));
-            });
-          setExamDocs(active);
-        }
+        const data = await cachedFetch(`${API_BASE_URL}/exam-documents`);
+        const active = (Array.isArray(data) ? data : [])
+          .filter((d: any) => d.status === 'active')
+          .sort((a: any, b: any) => {
+            const aOrder = typeof a.order === 'number' ? a.order : Infinity;
+            const bOrder = typeof b.order === 'number' ? b.order : Infinity;
+            if (aOrder !== bOrder) return aOrder - bOrder;
+            return String(a._id || '').localeCompare(String(b._id || ''));
+          });
+        setExamDocs(active);
       } catch (error) {
         console.error('Failed to fetch exam docs:', error);
       }

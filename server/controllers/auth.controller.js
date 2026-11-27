@@ -106,42 +106,35 @@ async function persistRefreshToken(db, refreshToken, student, ip) {
   });
 }
 
-async function issueStudentSession(req, res, db, student, deviceId) {
+async function issueStudentSession(req, res, db, student, deviceId, { skipDeviceUpdate = false } = {}) {
   const { accessToken, refreshToken } = generateTokens(student);
   const ip = getRealIP(req);
-  const deviceName = req.body.deviceName || 'Unknown Device';
 
-  await persistRefreshToken(db, refreshToken, student, ip);
-  
-  // Sync device info on successful login
-  if (student._id && deviceId) {
+  const tasks = [persistRefreshToken(db, refreshToken, student, ip)];
+
+  // Sync device info on successful login unless caller already updated it
+  if (!skipDeviceUpdate && student._id && deviceId) {
     const incomingDeviceName = req.body.deviceName || req.headers['user-agent'] || 'Unknown Device';
     const incomingDeviceType = req.body.deviceType || 'Browser Device';
 
-    const updated = await db.collection('students').findOneAndUpdate(
-      { _id: student._id },
-      { 
-        $set: { 
-          activeDeviceId: deviceId,
-          activeDeviceName: incomingDeviceName,
-          activeDeviceType: incomingDeviceType,
-          activeDeviceIP: ip,
-          activeDeviceLastLoginAt: new Date(),
-          updatedAt: new Date()
-        } 
-      },
-      { returnDocument: 'after' }
+    tasks.push(
+      db.collection('students').updateOne(
+        { _id: student._id },
+        { 
+          $set: { 
+            activeDeviceId: deviceId,
+            activeDeviceName: incomingDeviceName,
+            activeDeviceType: incomingDeviceType,
+            activeDeviceIP: ip,
+            activeDeviceLastLoginAt: new Date(),
+            updatedAt: new Date()
+          } 
+        }
+      )
     );
-
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('[DEVICE-IP-DEBUG] issueStudentSession', {
-        studentId: student.id || student._id,
-        ipBefore: student.activeDeviceIP,
-        ipAfter: updated?.activeDeviceIP,
-        incomingIP: ip
-      });
-    }
   }
+
+  await Promise.all(tasks);
 
   setAccessCookie(res, accessToken);
   setRefreshCookie(res, refreshToken);
@@ -395,7 +388,7 @@ export const loginWithPassword = async (req, res) => {
       });
     }
 
-    const session = await issueStudentSession(req, res, db, student, incomingDeviceId);
+    const session = await issueStudentSession(req, res, db, student, incomingDeviceId, { skipDeviceUpdate: true });
 
     res.json({
       success: true,
@@ -420,21 +413,22 @@ export const registerStudent = async (req, res) => {
     }
 
     const cleanPhone = phone.replace(/\D/g, '');
-    const stored = await authService.getValidOtp(cleanPhone, 'signup');
-    
+    const normalizedEmail = email && typeof email === 'string' && email.trim() ? email.toLowerCase().trim() : undefined;
+
+    const [stored, existingStudent] = await Promise.all([
+      authService.getValidOtp(cleanPhone, 'signup'),
+      Student.findOne({
+        $or: [
+          { phone: cleanPhone },
+          ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+          ...(username ? [{ userId: username }, { username: username }] : [])
+        ]
+      }).lean()
+    ]);
+
     if (!stored || !stored.verified) {
       return res.status(400).json({ error: 'Please verify your phone number with OTP first' });
     }
-
-    const normalizedEmail = email && typeof email === 'string' && email.trim() ? email.toLowerCase().trim() : undefined;
-
-    const existingStudent = await Student.findOne({
-      $or: [
-        { phone: cleanPhone },
-        ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
-        ...(username ? [{ userId: username }, { username: username }] : [])
-      ]
-    });
 
     if (existingStudent) {
       if (normalizedEmail && existingStudent.email === normalizedEmail) {
@@ -446,11 +440,10 @@ export const registerStudent = async (req, res) => {
       return res.status(400).json({ error: 'Phone number already registered' });
     }
 
-    await authService.consumeOtp(cleanPhone, 'signup');
+    authService.consumeOtp(cleanPhone, 'signup').catch(() => {});
 
     const studentId = username || 'STU-' + Date.now();
-    const salt = password ? await bcrypt.genSalt(10) : null;
-    const hashedPassword = (password && salt) ? await bcrypt.hash(password, salt) : undefined;
+    const hashedPassword = password ? await bcrypt.hash(password, 8) : undefined;
 
     const student = new Student({
       id: studentId,
@@ -565,7 +558,10 @@ export const sendOtp = async (req, res) => {
 
     const purpose = otpPurposeFromRequest(req);
     const startTime = performance.now();
-    const student = await db.collection('students').findOne({ $or: [{ phone: cleanPhone }, { phone }] });
+    const [student, lastSent] = await Promise.all([
+      db.collection('students').findOne({ $or: [{ phone: cleanPhone }, { phone }] }, { projection: { _id: 1 } }),
+      db.collection('otps').findOne({ phone: cleanPhone, purpose }, { projection: { createdAt: 1 } })
+    ]);
     const lookupDuration = (performance.now() - startTime).toFixed(2);
     
     if (purpose === 'signup' && student) {
@@ -575,7 +571,6 @@ export const sendOtp = async (req, res) => {
       return res.status(404).json({ error: 'Account not found. Please sign up first.' });
     }
 
-    const lastSent = await db.collection('otps').findOne({ phone: cleanPhone, purpose });
     if (lastSent?.createdAt && Date.now() - new Date(lastSent.createdAt).getTime() < 30000) {
       return res.status(429).json({ error: 'Please wait 30 seconds before requesting another OTP' });
     }
@@ -750,7 +745,7 @@ export const verifyOtp = async (req, res) => {
     }
 
     await authService.consumeOtp(cleanPhone, purpose);
-    const session = await issueStudentSession(req, res, db, student, incomingDeviceId);
+    const session = await issueStudentSession(req, res, db, student, incomingDeviceId, { skipDeviceUpdate: true });
     res.json({ success: true, message: 'Login successful', ...session });
   } catch (error) {
     console.error('OTP verification failed:', error);

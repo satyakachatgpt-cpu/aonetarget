@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { Capacitor } from '@capacitor/core';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 import mammoth from 'mammoth';
 import DOMPurify from 'dompurify';
@@ -333,23 +334,29 @@ const PDFViewerScreen: React.FC = () => {
 
   const returnTo = location.state?.returnTo || queryParams.get('returnTo');
 
-  const handleExit = useCallback(() => {
-    if (window.opener && !window.opener.closed) {
+  const handleExit = useCallback((e?: React.MouseEvent | React.TouchEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    if (!Capacitor.isNativePlatform() && window.opener && !window.opener.closed) {
       try {
         window.close();
         return;
-      } catch (e) {}
+      } catch (err) {}
     }
 
-    if (returnTo) {
+    if (returnTo && !returnTo.startsWith('/pdf-viewer')) {
       navigate(returnTo, { replace: true });
       return;
     }
 
-    if (window.history.length > 1) {
+    const routerIdx = window.history.state && typeof window.history.state.idx === 'number' ? window.history.state.idx : 0;
+    if (routerIdx > 0) {
       navigate(-1);
     } else {
-      navigate('/courses', { replace: true });
+      navigate('/', { replace: true });
     }
   }, [navigate, returnTo]);
 
@@ -557,7 +564,13 @@ const PDFViewerScreen: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentPage, totalPages, scale]);
 
-  if (!pdfUrl && !location.state) { navigate(-1); return null; }
+  useEffect(() => {
+    if (!pdfUrl && !location.state) {
+      handleExit();
+    }
+  }, [pdfUrl, location.state, handleExit]);
+
+  if (!pdfUrl && !location.state) return null;
 
   return (
     <div
@@ -566,37 +579,43 @@ const PDFViewerScreen: React.FC = () => {
     >
       {/* ── Top Header ── */}
       <div
-        className="bg-zinc-900/95 backdrop-blur-md px-4 pb-2 md:py-3 flex items-center justify-between border-b border-white/10 shadow-lg z-[110] shrink-0 text-white"
-        style={{ paddingTop: 'max(env(safe-area-inset-top), 24px)' }}
+        className="bg-zinc-900/95 backdrop-blur-md px-3 sm:px-4 pb-2.5 md:py-3 flex items-center justify-between border-b border-white/10 shadow-lg z-[130] shrink-0 text-white"
+        style={{
+          paddingTop: Capacitor.isNativePlatform()
+            ? 'max(env(safe-area-inset-top, 0px), 38px)'
+            : 'max(env(safe-area-inset-top, 0px), 16px)',
+        }}
       >
         <button
+          type="button"
           onClick={handleExit}
-          className="w-9 h-9 rounded-xl flex items-center justify-center bg-white/10 text-white hover:bg-white/20 active:scale-95 transition-all z-[120]"
+          className="w-11 h-11 rounded-xl flex items-center justify-center bg-white/10 text-white hover:bg-white/20 active:scale-95 transition-all z-[140] touch-manipulation cursor-pointer shrink-0"
           title="Back"
+          aria-label="Back"
         >
-          <span className="material-symbols-rounded text-[20px]">arrow_back</span>
+          <span className="material-symbols-rounded text-[22px] pointer-events-none">arrow_back</span>
         </button>
 
-        <div className="flex-1 px-3 text-center min-w-0">
+        <div className="flex-1 px-2.5 text-center min-w-0">
           <h1 className="text-[12px] sm:text-sm font-black truncate text-white leading-tight uppercase tracking-tight">
             {title}
           </h1>
           <div className="flex items-center justify-center gap-2 mt-0.5">
             <span className={`w-1.5 h-1.5 rounded-full ${isDocx ? 'bg-blue-400' : 'bg-green-400'}`} />
-            <p className="text-[9px] sm:text-[10px] text-white/50 font-bold uppercase tracking-widest leading-none">
+            <p className="text-[9px] sm:text-[10px] text-white/50 font-bold uppercase tracking-widest leading-none truncate">
               {isDocx ? 'Word Document' : 'Verified Secure PDF'} • {isNewsPdf ? 'Official Notification' : subject}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 z-[120]">
+        <div className="flex items-center gap-2 z-[140] shrink-0">
           {isNewsPdf && fullPdfUrl && (
             <a
               href={fullPdfUrl}
               download={title.toLowerCase().endsWith('.pdf') ? title : `${title}.pdf`}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all shadow-md cursor-pointer"
+              className="px-3.5 h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 active:scale-95 transition-all shadow-md cursor-pointer touch-manipulation"
               title="Download PDF Document"
             >
               <span className="material-symbols-rounded text-[17px]">download</span>
@@ -604,11 +623,13 @@ const PDFViewerScreen: React.FC = () => {
             </a>
           )}
           <button
+            type="button"
             onClick={handleExit}
-            className="w-9 h-9 rounded-xl flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/30 active:scale-95 transition-all cursor-pointer"
+            className="w-11 h-11 rounded-xl flex items-center justify-center bg-red-500/20 text-red-400 hover:bg-red-500/30 active:scale-95 transition-all cursor-pointer touch-manipulation"
             title="Close"
+            aria-label="Close"
           >
-            <span className="material-symbols-rounded text-[20px]">close</span>
+            <span className="material-symbols-rounded text-[22px] pointer-events-none">close</span>
           </button>
         </div>
       </div>

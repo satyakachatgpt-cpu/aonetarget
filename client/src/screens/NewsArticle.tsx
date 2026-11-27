@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { blogAPI } from '../services/apiClient';
 import { counsellingAPI } from '../services/communicationService';
 import { useAuthStore } from '../store/authStore';
@@ -10,6 +10,7 @@ import { Capacitor } from '@capacitor/core';
 
 const NewsArticle: React.FC = () => {
   const { id } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const { isAuthenticated, student } = useAuthStore();
   
@@ -187,7 +188,7 @@ const NewsArticle: React.FC = () => {
   const openPdfInViewer = (pdfUrl: string, pdfName?: string) => {
     const normalizedUrl = getPdfUrl(pdfUrl);
     const docTitle = pdfName || news?.title || 'Official Notification';
-    const returnTo = window.location.hash.replace(/^#/, '') || window.location.pathname;
+    const returnTo = `${location.pathname}${location.search}` || (id ? `/news/${id}` : '/news');
 
     navigate(`/pdf-viewer?url=${encodeURIComponent(normalizedUrl)}&title=${encodeURIComponent(docTitle)}&returnTo=${encodeURIComponent(returnTo)}&source=news&canDownload=true`, {
       state: {

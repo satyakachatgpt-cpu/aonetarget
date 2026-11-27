@@ -22,6 +22,13 @@ if ('fonts' in document) {
   ]).catch(() => {});
 }
 
+// In dev mode, unregister any leftover Service Workers so localhost never serves stale cached chunks
+if (import.meta.env.DEV && typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    regs.forEach((reg) => reg.unregister());
+  }).catch(() => {});
+}
+
 root.render(
   <Provider store={store}>
     <App />

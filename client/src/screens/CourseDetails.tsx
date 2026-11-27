@@ -89,9 +89,27 @@ const CourseDetails: React.FC = () => {
       return null;
     }
   });
-  const [videos, setVideos] = useState<Video[]>([]);
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [tests, setTests] = useState<Test[]>([]);
+  const [videos, setVideos] = useState<Video[]>(() => {
+    try {
+      const cached = sessionStorage.getItem(`course_media_cache_${id}`);
+      if (cached) return JSON.parse(cached).videos || [];
+    } catch {}
+    return [];
+  });
+  const [notes, setNotes] = useState<Note[]>(() => {
+    try {
+      const cached = sessionStorage.getItem(`course_media_cache_${id}`);
+      if (cached) return JSON.parse(cached).notes || [];
+    } catch {}
+    return [];
+  });
+  const [tests, setTests] = useState<Test[]>(() => {
+    try {
+      const cached = sessionStorage.getItem(`course_media_cache_${id}`);
+      if (cached) return JSON.parse(cached).tests || [];
+    } catch {}
+    return [];
+  });
   const [progress, setProgress] = useState<Progress>({ completedVideos: [], completedTests: [], completedNotes: [] });
   const [loading, setLoading] = useState<boolean>(() => {
     try {
@@ -163,6 +181,7 @@ const CourseDetails: React.FC = () => {
   };
   const [isCourseExpired, setIsCourseExpired] = useState(false);
   const [enrollmentStatus, setEnrollmentStatus] = useState<string>('not_enrolled');
+  const [checkingEnrollment, setCheckingEnrollment] = useState<boolean>(() => !isEnrolled);
   const [showVideoPlayer, setShowVideoPlayer] = useState(false);
   const [selectedVideo, setSelectedVideo] = useState<Video | null>(null);
   const [liveMessages, setLiveMessages] = useState<any[]>([]);
@@ -420,7 +439,13 @@ const CourseDetails: React.FC = () => {
   };
   const studentId = getStudentId();
 
-  const [folders, setFolders] = useState<any[]>([]);
+  const [folders, setFolders] = useState<any[]>(() => {
+    try {
+      const cached = sessionStorage.getItem(`course_media_cache_${id}`);
+      if (cached) return JSON.parse(cached).folders || [];
+    } catch {}
+    return [];
+  });
   const [navigationHistory, setNavigationHistory] = useState<any[]>([]);
 
   const closeVideoPlayer = () => {
@@ -507,7 +532,7 @@ const CourseDetails: React.FC = () => {
         null
       ) : Promise.resolve(null);
 
-      // Fast unblock: As soon as main course info arrives, show the page!
+      // Fast progressive unblock: update each section the instant its API resolves
       coursePromise.then(courseData => {
         if (courseData && !courseData.error) {
           setCourse(courseData);
@@ -516,6 +541,19 @@ const CourseDetails: React.FC = () => {
             sessionStorage.setItem(`course_cache_${id}`, JSON.stringify(courseData));
           } catch { }
         }
+      });
+
+      videosPromise.then(videosData => {
+        if (Array.isArray(videosData)) setVideos(videosData);
+      });
+      notesPromise.then(notesData => {
+        if (Array.isArray(notesData)) setNotes(notesData);
+      });
+      testsPromise.then(testsData => {
+        if (Array.isArray(testsData)) setTests(testsData.filter((t: Test) => !t.status || t.status === 'active'));
+      });
+      foldersPromise.then(foldersData => {
+        if (Array.isArray(foldersData)) setFolders(foldersData);
       });
 
       const [courseData, videosData, notesData, testsData, foldersData, enrolledData] = await Promise.all([
@@ -527,6 +565,11 @@ const CourseDetails: React.FC = () => {
         enrolledPromise
       ]);
 
+      const finalVideos = Array.isArray(videosData) ? videosData : [];
+      const finalNotes = Array.isArray(notesData) ? notesData : [];
+      const finalTests = Array.isArray(testsData) ? testsData.filter((t: Test) => !t.status || t.status === 'active') : [];
+      const finalFolders = Array.isArray(foldersData) ? foldersData : [];
+
       if (courseData && !courseData.error) {
         setCourse(courseData);
         try {
@@ -534,10 +577,19 @@ const CourseDetails: React.FC = () => {
         } catch { }
       }
 
-      setVideos(Array.isArray(videosData) ? videosData : []);
-      setNotes(Array.isArray(notesData) ? notesData : []);
-      setTests(Array.isArray(testsData) ? testsData.filter((t: Test) => !t.status || t.status === 'active') : []);
-      setFolders(Array.isArray(foldersData) ? foldersData : []);
+      try {
+        sessionStorage.setItem(`course_media_cache_${id}`, JSON.stringify({
+          videos: finalVideos,
+          notes: finalNotes,
+          tests: finalTests,
+          folders: finalFolders
+        }));
+      } catch { }
+
+      setVideos(finalVideos);
+      setNotes(finalNotes);
+      setTests(finalTests);
+      setFolders(finalFolders);
 
       if (enrolledData) {
         const enrolledFlag = Boolean(enrolledData.enrolled);
@@ -546,6 +598,19 @@ const CourseDetails: React.FC = () => {
         setIsCourseExpired(expiredFlag);
         setEnrollmentStatus(enrolledData.status || (expiredFlag ? 'expired' : (enrolledFlag ? 'active' : 'not_enrolled')));
 
+        try {
+          if (id) {
+            if (expiredFlag || !enrolledFlag) {
+              sessionStorage.removeItem(`course_enrolled_${id}`);
+              if (expiredFlag) sessionStorage.setItem(`course_expired_${id}`, 'true');
+              else sessionStorage.removeItem(`course_expired_${id}`);
+            } else {
+              sessionStorage.setItem(`course_enrolled_${id}`, 'true');
+              sessionStorage.removeItem(`course_expired_${id}`);
+            }
+          }
+        } catch { }
+
         if (enrolledFlag) {
           fetchCourseProgress();
           // Active enrolled student: show Content tab automatically!
@@ -553,14 +618,21 @@ const CourseDetails: React.FC = () => {
             setMainTab('content');
           }
         }
-      } else if (id && sessionStorage.getItem(`course_enrolled_${id}`) !== 'true') {
+      } else {
         setIsEnrolled(false);
         setIsCourseExpired(false);
         setEnrollmentStatus('not_enrolled');
+        try {
+          if (id) {
+            sessionStorage.removeItem(`course_enrolled_${id}`);
+            sessionStorage.removeItem(`course_expired_${id}`);
+          }
+        } catch { }
       }
     } catch (error) {
       // Fetch failed
     } finally {
+      setCheckingEnrollment(false);
       setLoading(false);
     }
   };
@@ -750,66 +822,95 @@ const CourseDetails: React.FC = () => {
         throw new Error(orderData.error || orderData.message || 'Failed to create payment order');
       }
 
-      const options = {
-        key: orderData.keyId,
-        amount: orderData.amount,
-        currency: orderData.currency || 'INR',
-        name: 'Aone Target Institute',
-        description: course?.title || course?.name || 'Course Purchase',
-        order_id: orderData.orderId,
-        prefill: {
-          name: student?.name || '',
-          email: student?.email || '',
-          contact: student?.phone || (student as any)?.mobile || ''
-        },
-        theme: {
-          color: '#008BDC'
-        },
-        handler: async (response: any) => {
-          try {
-            const verifyRes = await fetch(`${API_BASE_URL}/razorpay/verify`, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                ...getAuthHeaders()
-              },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id || orderData.orderId,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                courseId: targetCourseId,
-                studentId: studentId,
-                couponCode: appliedCoupon || undefined
-              })
-            });
+      const handlePaymentSuccess = async (rawResponse: any) => {
+        try {
+          const response = typeof rawResponse === 'string' ? JSON.parse(rawResponse) : rawResponse;
+          const verifyRes = await fetch(`${API_BASE_URL}/razorpay/verify`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...getAuthHeaders()
+            },
+            body: JSON.stringify({
+              razorpay_order_id: response?.razorpay_order_id || orderData.orderId,
+              razorpay_payment_id: response?.razorpay_payment_id,
+              razorpay_signature: response?.razorpay_signature,
+              courseId: targetCourseId,
+              studentId: studentId,
+              couponCode: appliedCoupon || undefined
+            })
+          });
 
-            const verifyData = await verifyRes.json();
-            if (verifyData.success) {
-              setProcessingPayment(false);
-              activateEnrolledState(targetCourseId);
-              setShowSuccessModal(true);
-              fetchCourseData();
-              fetchCourseProgress();
-              useAuthStore.getState().checkAuth().catch(() => { });
-            } else {
-              alert(verifyData.error || 'Payment verification failed. If money was debited, it will be updated shortly.');
-            }
-          } catch (vErr) {
-            console.error('Payment verification error:', vErr);
-            alert('Payment completed. Please refresh the page if content remains locked.');
-          } finally {
+          const verifyData = await verifyRes.json();
+          if (verifyData.success) {
             setProcessingPayment(false);
+            activateEnrolledState(targetCourseId);
+            setShowSuccessModal(true);
+            fetchCourseData();
+            fetchCourseProgress();
+            useAuthStore.getState().checkAuth().catch(() => { });
+          } else {
+            alert(verifyData.error || 'Payment verification failed. If money was debited, it will be updated shortly.');
           }
-        },
-        modal: {
-          ondismiss: () => {
-            setProcessingPayment(false);
-          }
+        } catch (vErr) {
+          console.error('Payment verification error:', vErr);
+          alert('Payment completed. Please refresh the page if content remains locked.');
+        } finally {
+          setProcessingPayment(false);
         }
       };
 
-      if ((window as any).Razorpay) {
-        const rzp = new (window as any).Razorpay(options);
+      const prefillData: Record<string, string> = {
+        name: student?.name || 'Student'
+      };
+      if (student?.email && String(student.email).trim().includes('@')) {
+        prefillData.email = String(student.email).trim();
+      }
+      const rawContact = String(student?.phone || (student as any)?.mobile || '').replace(/\D/g, '');
+      if (rawContact.length >= 10) {
+        prefillData.contact = rawContact.slice(-10);
+      }
+
+      const nativeRazorpay = Capacitor.isNativePlatform() ? (window as any).RazorpayCheckout : null;
+
+      if (nativeRazorpay) {
+        const nativeOptions = {
+          key: orderData.keyId,
+          amount: orderData.amount,
+          currency: orderData.currency || 'INR',
+          name: 'Aone Target Institute',
+          description: (course?.title || course?.name || 'Course Purchase').slice(0, 40),
+          order_id: orderData.orderId,
+          prefill: prefillData,
+          theme: { color: '#008BDC' }
+        };
+        nativeRazorpay.on('payment.success', handlePaymentSuccess);
+        nativeRazorpay.on('payment.cancel', (err: any) => {
+          console.warn('[Razorpay Native Cancel/Error]', err);
+          if (err?.description && !String(err.description).toLowerCase().includes('cancel')) {
+            alert(err.description);
+          }
+          setProcessingPayment(false);
+        });
+        nativeRazorpay.open(nativeOptions);
+      } else if ((window as any).Razorpay) {
+        const webOptions = {
+          key: orderData.keyId,
+          amount: orderData.amount,
+          currency: orderData.currency || 'INR',
+          name: 'Aone Target Institute',
+          description: course?.title || course?.name || 'Course Purchase',
+          order_id: orderData.orderId,
+          prefill: prefillData,
+          theme: { color: '#008BDC' },
+          handler: handlePaymentSuccess,
+          modal: {
+            ondismiss: () => {
+              setProcessingPayment(false);
+            }
+          }
+        };
+        const rzp = new (window as any).Razorpay(webOptions);
         rzp.on('payment.failed', (resp: any) => {
           alert(resp.error?.description || 'Payment Failed. Please try again.');
           setProcessingPayment(false);
@@ -1491,8 +1592,8 @@ const CourseDetails: React.FC = () => {
         </main>
       )}
 
-      {/* Ultra-Premium Floating Gradient Checkout Bar (Hidden for active enrolled students) */}
-      {!showVideoPlayer && (!isEnrolled || isCourseExpired) && (
+      {/* Ultra-Premium Floating Gradient Checkout Bar (Hidden during check & for active enrolled students) */}
+      {!checkingEnrollment && !showVideoPlayer && (!isEnrolled || isCourseExpired) && (
         <CourseCheckoutBar
           course={course}
           isPaidCourse={isPaidCourse}

@@ -243,7 +243,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         };
 
         doHeartbeat();
-        heartbeatInterval = setInterval(doHeartbeat, 4000);
+        heartbeatInterval = setInterval(() => {
+            if (typeof document !== 'undefined' && document.hidden) return;
+            doHeartbeat();
+        }, 30000);
 
         if (typeof window !== 'undefined' && !(window as any).__heartbeat_listeners__) {
             (window as any).__heartbeat_listeners__ = true;

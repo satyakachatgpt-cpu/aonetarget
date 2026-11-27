@@ -3,6 +3,7 @@ import { db } from '../config/db.js';
 import { findCourse, getRelatedCourseIds, buildStudentPurchaseQuery } from '../services/course.service.js';
 import { normalizeId, fetchYouTubeDuration } from '../utils/helpers.js';
 import { syncLiveStream } from '../services/liveStream.service.js';
+import { getCache, setCache } from '../utils/memoryCache.js';
 
 const { ObjectId } = mongoose.Types;
 
@@ -10,6 +11,11 @@ const { ObjectId } = mongoose.Types;
 
 export const getCourseNotes = async (req, res) => {
   try {
+    const isAdmin = req.admin || req.user?.isAdmin || req.user?.role === 'admin';
+    const cacheKey = `course_notes:${req.params.id}:${isAdmin ? 'admin' : 'student'}`;
+    const cached = getCache(cacheKey);
+    if (cached) return res.json(cached);
+
     const course = await findCourse(req.params.id);
     if (!course) return res.json([]);
 
@@ -19,16 +25,17 @@ export const getCourseNotes = async (req, res) => {
       courseId: { $in: idVariants }
     };
 
-    const isAdmin = req.admin || req.user?.isAdmin || req.user?.role === 'admin';
     if (isAdmin) {
       query.status = { $ne: 'deleted' };
     } else {
       query.status = { $nin: ['inactive', 'deleted'] };
     }
 
-    // Check both pdfs and notes collections for backward compatibility
-    const pdfs = await db.collection('pdfs').find(query).sort({ sortBy: 1, order: 1, createdAt: -1 }).toArray();
-    const notes = await db.collection('notes').find(query).sort({ sortBy: 1, order: 1, createdAt: -1 }).toArray();
+    // Check both pdfs and notes collections in parallel
+    const [pdfs, notes] = await Promise.all([
+      db.collection('pdfs').find(query).sort({ sortBy: 1, order: 1, createdAt: -1 }).toArray(),
+      db.collection('notes').find(query).sort({ sortBy: 1, order: 1, createdAt: -1 }).toArray()
+    ]);
     
     // Merge all raw notes
     const allRawNotes = [...pdfs, ...notes];
@@ -80,6 +87,7 @@ export const getCourseNotes = async (req, res) => {
       }
     });
 
+    setCache(cacheKey, uniqueNotes, 30);
     res.json(uniqueNotes);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch notes' });

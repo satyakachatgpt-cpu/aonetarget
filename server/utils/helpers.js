@@ -135,8 +135,8 @@ export const normalizeDateStr = (dateStr) => {
 /**
  * Check if a purchase has expired based on course validity settings
  */
-export const isPurchaseExpired = (purchase, course) => {
-  if (!purchase || !course) return false;
+export const evaluatePurchaseExpiry = (purchase, course, fallbackStartDate = null) => {
+  if (!course) return { isExpired: false, expiryInfo: { type: 'lifetime' } };
 
   const val = course.validity;
   let currentExpiryMode = course.expiryMode || course.validityType;
@@ -155,46 +155,89 @@ export const isPurchaseExpired = (purchase, course) => {
     } else if (val.tab === 'lifetime') {
       currentExpiryMode = 'Lifetime Access';
       validityValue = null;
+    } else if (val.value !== undefined) {
+      currentExpiryMode = 'Validity';
+      validityValue = val.value;
+      validityUnit = val.unit || 'months';
     }
+  } else if (typeof val === 'string' && val.trim()) {
+    const trimmed = val.trim();
+    if (/lifetime/i.test(trimmed)) {
+      currentExpiryMode = 'Lifetime Access';
+      validityValue = null;
+    } else if (/^\d+\s*(year|yr|month|mon|week|wk|day)/i.test(trimmed)) {
+      // Parse strings like "1 Year", "6 Months", "2 Months", "30 Days"
+      currentExpiryMode = 'Validity';
+      const match = trimmed.match(/^(\d+)\s*([a-zA-Z]+)/);
+      if (match) {
+        validityValue = match[1];
+        validityUnit = match[2];
+      }
+    } else if (!currentExpiryMode && /^\d{1,4}[-\/]\d{1,2}[-\/]\d{1,4}$/.test(trimmed)) {
+      currentExpiryMode = 'End Date';
+      validityValue = trimmed;
+    } else if (!currentExpiryMode && /^\d+$/.test(trimmed)) {
+      currentExpiryMode = 'Validity';
+      validityValue = trimmed;
+    }
+  } else if (typeof val === 'number' && val > 0 && !currentExpiryMode) {
+    currentExpiryMode = 'Validity';
+    validityValue = val;
   }
 
   // Check for lifetime access or missing mode
-  if (!currentExpiryMode || currentExpiryMode === 'Lifetime Access' || currentExpiryMode === 'lifetime') {
-    return false;
+  if (!currentExpiryMode || /lifetime/i.test(String(currentExpiryMode))) {
+    return { isExpired: false, expiryInfo: { type: 'lifetime' } };
   }
 
   if (currentExpiryMode === 'End Date' && validityValue) {
     const normalizedDate = normalizeDateStr(validityValue);
     const expiryDate = new Date(normalizedDate);
     if (!isNaN(expiryDate.getTime())) {
-      // Set to end of day to include the full last day
       expiryDate.setHours(23, 59, 59, 999);
-      return new Date() > expiryDate;
+      return {
+        isExpired: new Date() > expiryDate,
+        expiryInfo: { type: 'endDate', value: validityValue, expiryDate: expiryDate.toISOString() }
+      };
     }
-  } else if (currentExpiryMode === 'Validity' && validityValue) {
-    const value = parseInt(validityValue);
-    if (!isNaN(value)) {
-      const createdAt = purchase.createdAt ? new Date(purchase.createdAt) : new Date();
-      const expiryDate = new Date(createdAt);
+  } else if (/validity/i.test(String(currentExpiryMode)) && validityValue) {
+    const value = parseInt(validityValue, 10);
+    if (!isNaN(value) && value > 0) {
+      const startDate = purchase?.createdAt || fallbackStartDate || new Date();
+      const expiryDate = new Date(startDate);
       const lowerUnit = String(validityUnit).toLowerCase();
 
-      if (lowerUnit === 'days' || lowerUnit === 'day') {
+      if (lowerUnit.startsWith('day')) {
         expiryDate.setDate(expiryDate.getDate() + value);
-      } else if (lowerUnit === 'weeks' || lowerUnit === 'week') {
+      } else if (lowerUnit.startsWith('week')) {
         expiryDate.setDate(expiryDate.getDate() + (value * 7));
-      } else if (lowerUnit === 'years' || lowerUnit === 'year') {
+      } else if (lowerUnit.startsWith('year') || lowerUnit.startsWith('yr')) {
         expiryDate.setFullYear(expiryDate.getFullYear() + value);
       } else {
         expiryDate.setMonth(expiryDate.getMonth() + value);
       }
 
-      // Set to end of day to include the full last day
       expiryDate.setHours(23, 59, 59, 999);
-      return new Date() > expiryDate;
+      return {
+        isExpired: new Date() > expiryDate,
+        expiryInfo: {
+          type: 'months',
+          value: validityValue,
+          unit: lowerUnit,
+          expiryDate: expiryDate.toISOString(),
+          purchaseDate: new Date(startDate).toISOString(),
+          isManual: !purchase
+        }
+      };
     }
   }
-  
-  return false;
+
+  return { isExpired: false, expiryInfo: { type: 'lifetime' } };
+};
+
+export const isPurchaseExpired = (purchase, course) => {
+  if (!purchase || !course) return false;
+  return evaluatePurchaseExpiry(purchase, course).isExpired;
 };
 
 /**

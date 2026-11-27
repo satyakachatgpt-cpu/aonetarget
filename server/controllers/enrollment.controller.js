@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { findCourse, getRelatedCourseIds, getCourseIdVariants, buildStudentPurchaseQuery } from '../services/course.service.js';
-import { isPurchaseExpired, calculatePriceBreakdown, normalizeDateStr } from '../utils/helpers.js';
+import { evaluatePurchaseExpiry, isPurchaseExpired, calculatePriceBreakdown, normalizeDateStr } from '../utils/helpers.js';
 import { sendEmail, templates } from '../utils/email.js';
 import Student from '../models/Student.js';
 
@@ -543,26 +543,6 @@ export const checkEnrollment = async (req, res) => {
     if (isEnrolled) {
       const db = mongoose.connection.db;
 
-      // Resolve expiry configuration from course (robust parsing)
-      const valObj = course.validity;
-      let currentMode = course.expiryMode;
-      let validityVal = valObj;
-      let unit = 'months'; // Standard default
-
-      if (typeof valObj === 'object' && valObj !== null) {
-        if (valObj.tab === 'end') { 
-          currentMode = 'End Date'; 
-          validityVal = valObj.endDate; 
-        } else if (valObj.tab === 'set') { 
-          currentMode = 'Validity'; 
-          validityVal = valObj.value;
-          unit = valObj.unit || 'months'; 
-        } else if (valObj.tab === 'lifetime') { 
-          currentMode = 'Lifetime Access'; 
-          validityVal = null; 
-        }
-      }
-
       // Identify student and fetch most recent valid purchase
       let purchase = await db.collection('purchases').findOne(
         buildStudentPurchaseQuery(student, idVariants),
@@ -588,65 +568,9 @@ export const checkEnrollment = async (req, res) => {
         await db.collection('purchases').insertOne(purchase);
       }
 
-      if (currentMode === 'End Date' && validityVal) {
-        // End Date mode: Absolute cutoff, no purchase required
-        let dateStr = String(validityVal).trim();
-        // Support DD-MM-YYYY, DD/MM/YYYY, YYYY-MM-DD, YYYY/MM/DD
-        const dmyMatch = dateStr.match(/^(\d{1,2})[-\/](\d{1,2})[-\/](\d{4})/);
-        const ymdMatch = dateStr.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})/);
-        
-        if (dmyMatch) dateStr = `${dmyMatch[3]}-${dmyMatch[2].padStart(2, '0')}-${dmyMatch[1].padStart(2, '0')}`;
-        else if (ymdMatch) dateStr = `${ymdMatch[1]}-${ymdMatch[2].padStart(2, '0')}-${ymdMatch[3].padStart(2, '0')}`;
-        
-        const expiryDate = new Date(dateStr);
-        if (!isNaN(expiryDate.getTime())) {
-          expiryDate.setHours(23, 59, 59, 999);
-          if (new Date() > expiryDate) {
-            isExpired = true;
-          }
-          expiryInfo = { type: 'endDate', value: validityVal };
-        }
-      } else if (currentMode === 'Validity' && validityVal) {
-        // Validity mode: Relative to enrollment/purchase date
-        // Priority: Purchase Date > Last Assigned/Updated Date > Current Date
-        const startDate = purchase?.createdAt 
-          || student.updatedAt 
-          || new Date();
-        
-        if (startDate) {
-          const value = parseInt(validityVal);
-          if (!isNaN(value)) {
-            const expDate = new Date(startDate);
-            const lowerUnit = String(unit).toLowerCase();
-            
-            if (lowerUnit === 'days' || lowerUnit === 'day') {
-              expDate.setDate(expDate.getDate() + value);
-            } else if (lowerUnit === 'weeks' || lowerUnit === 'week') {
-              expDate.setDate(expDate.getDate() + (value * 7));
-            } else if (lowerUnit === 'years' || lowerUnit === 'year') {
-              expDate.setFullYear(expDate.getFullYear() + value);
-            } else {
-              // Default and backward compatibility: Months
-              expDate.setMonth(expDate.getMonth() + value);
-            }
-            
-            expDate.setHours(23, 59, 59, 999);
-            if (new Date() > expDate) {
-              isExpired = true;
-            }
-            expiryInfo = { 
-              type: 'months', 
-              value: validityVal, 
-              unit: lowerUnit, 
-              expiryDate: expDate.toISOString(),
-              isManual: !purchase 
-            };
-          }
-        }
-      } else if (!currentMode || currentMode === 'Lifetime Access' || currentMode === 'lifetime') {
-        expiryInfo = { type: 'lifetime' };
-        isExpired = false;
-      }
+      const evalResult = evaluatePurchaseExpiry(purchase, course, student.updatedAt || new Date());
+      isExpired = evalResult.isExpired;
+      expiryInfo = evalResult.expiryInfo;
 
       if (isExpired) {
         accessAllowed = false;
@@ -657,7 +581,7 @@ export const checkEnrollment = async (req, res) => {
       }
 
       if (process.env.NODE_ENV !== 'production' && isExpired) {
-        console.log(`[checkEnrollment] Access expired for student ${studentId} on course ${courseId}. Mode: ${currentMode}`);
+        console.log(`[checkEnrollment] Access expired for student ${studentId} on course ${courseId}. ExpiryInfo:`, expiryInfo);
       }
     } else {
       accessAllowed = false;

@@ -25,12 +25,75 @@ const lazyRetry = (importFn: () => Promise<any>) =>
         const lastReload = Number(sessionStorage.getItem(reloadKey) || 0);
         if (Date.now() - lastReload > 8000) {
           sessionStorage.setItem(reloadKey, String(Date.now()));
-          window.location.reload();
+          if (typeof window !== 'undefined') {
+            const cleanCaches = 'caches' in window
+              ? caches.keys().then(names => Promise.all(names.map(name => caches.delete(name))))
+              : Promise.resolve();
+            const cleanSw = 'serviceWorker' in navigator
+              ? navigator.serviceWorker.getRegistrations().then(regs => Promise.all(regs.map(r => r.unregister())))
+              : Promise.resolve();
+            Promise.all([cleanCaches, cleanSw]).finally(() => window.location.reload());
+          }
+          return new Promise(() => {});
         }
         throw retryError;
       }
     }
   });
+
+class AppErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; errorMessage: string }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, errorMessage: '' };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, errorMessage: error?.message || 'Unexpected application error' };
+  }
+
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[AppErrorBoundary]', error, info);
+  }
+
+  handleRecover = () => {
+    const cleanCaches = typeof window !== 'undefined' && 'caches' in window
+      ? caches.keys().then(names => Promise.all(names.map(name => caches.delete(name))))
+      : Promise.resolve();
+    const cleanSw = typeof navigator !== 'undefined' && 'serviceWorker' in navigator
+      ? navigator.serviceWorker.getRegistrations().then(regs => Promise.all(regs.map(r => r.unregister())))
+      : Promise.resolve();
+    Promise.all([cleanCaches, cleanSw]).finally(() => window.location.reload());
+  };
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-[100dvh] flex items-center justify-center bg-slate-50 p-6 font-outfit">
+          <div className="max-w-md w-full bg-white rounded-3xl shadow-xl border border-slate-200 p-6 text-center space-y-4">
+            <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center mx-auto">
+              <span className="material-symbols-rounded text-2xl">error</span>
+            </div>
+            <h2 className="text-lg font-bold text-slate-900">Something went wrong</h2>
+            <p className="text-xs text-slate-500 break-words bg-slate-50 rounded-xl p-3 border border-slate-100">
+              {this.state.errorMessage}
+            </p>
+            <button
+              type="button"
+              onClick={this.handleRecover}
+              className="w-full py-3 px-4 rounded-xl bg-[#1A237E] text-white font-semibold text-sm active:scale-95 transition-transform"
+            >
+              Clear Cache & Reload
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const Home = lazyRetry(() => import('./screens/Home'));
 const CourseDetails = lazyRetry(() => import('./screens/CourseDetails'));
@@ -231,8 +294,35 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Force logout on app update
+  // Idle-prefetch core student screens so tab & course clicks open instantaneously
   useEffect(() => {
+    if (isAdminRoute()) return;
+    const prefetchStudentRoutes = () => {
+      const loaders = [
+        () => import('./screens/CourseDetails'),
+        () => import('./screens/ExploreCourses'),
+        () => import('./screens/MyCourses'),
+        () => import('./screens/LiveClasses'),
+        () => import('./screens/MockTests'),
+        () => import('./screens/CategoryPage'),
+        () => import('./screens/StudentProfile'),
+        () => import('./screens/ChatsScreen'),
+      ];
+      loaders.forEach((load, idx) => {
+        setTimeout(() => { load().catch(() => {}); }, 800 + idx * 250);
+      });
+    };
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      const id = (window as any).requestIdleCallback(prefetchStudentRoutes, { timeout: 2000 });
+      return () => (window as any).cancelIdleCallback?.(id);
+    }
+    const timer = setTimeout(prefetchStudentRoutes, 1200);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Force logout on app update (production builds only; in dev __APP_VERSION__ changes on every restart)
+  useEffect(() => {
+    if (import.meta.env.DEV) return;
     const currentVersion = localStorage.getItem('app_version');
     if (currentVersion !== APP_VERSION) {
       const savedDeviceId = localStorage.getItem('deviceId');
@@ -406,6 +496,7 @@ const App: React.FC = () => {
   }
 
   return (
+    <AppErrorBoundary>
     <div className="min-h-screen bg-white">
       <Toaster position="top-center" richColors />
 
@@ -523,6 +614,7 @@ const App: React.FC = () => {
       </Router>
       )}
     </div>
+    </AppErrorBoundary>
   );
 };
 

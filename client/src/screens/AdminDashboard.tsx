@@ -2,12 +2,14 @@ import React, { useState, useEffect, lazy, Suspense, useCallback, useTransition 
 import { useNavigate, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AdminUIContext } from '../context/AdminUIContext';
 
-// --- Eager Load Core Components for INSTANT navigation ---
+// --- Eager Load ONLY Dashboard for instant initial render ---
 import Dashboard from '../components/admin/Dashboard';
-import Students from '../components/admin/Students';
-import Packages from '../components/admin/Packages';
-import Categories from '../components/admin/Categories';
-import Courses from '../components/admin/misc/Courses';
+
+// --- Lazy load all secondary admin views to keep initial /admin bundle lightweight ---
+const Students = lazy(() => import('../components/admin/Students'));
+const Packages = lazy(() => import('../components/admin/Packages'));
+const Categories = lazy(() => import('../components/admin/Categories'));
+const Courses = lazy(() => import('../components/admin/misc/Courses'));
 
 // --- Keep Rare/Heavy Components as Lazy (with pre-fetching) ---
 const MiscSection = lazy(() => import('../components/admin/MiscSection'));
@@ -67,30 +69,6 @@ const AdminDashboard: React.FC<Props> = ({ setAuth }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const [isPending, startTransition] = useTransition();
-
-  // Background pre-fetcher for remaining lazy components to ensure "instant" feel later
-  useEffect(() => {
-    const prefetch = async () => {
-      try {
-        const components = [
-          () => import('../components/admin/Tests'),
-          () => import('../components/admin/MiscSection'),
-          () => import('../components/admin/store/StoreManagement'),
-          () => import('../components/admin/Institute'),
-          () => import('../components/admin/AllReports'),
-          () => import('../components/admin/Videos'),
-          () => import('../components/admin/LiveSessions'),
-          () => import('../components/admin/PDFs'),
-          () => import('../components/admin/CourseContentManager')
-        ];
-        // Low priority pre-fetching
-        for (const comp of components) {
-          setTimeout(() => comp(), 2000); 
-        }
-      } catch (err) { /* silent */ }
-    };
-    prefetch();
-  }, []);
 
   const [activeView, setActiveViewState] = useState<AdminView>(() => {
     const pathParts = location.pathname.split('/');

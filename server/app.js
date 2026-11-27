@@ -141,11 +141,21 @@ app.use('/attached_assets', (req, res, next) => {
 
 if (process.env.NODE_ENV === 'production') {
   app.use(express.static(path.join(__dirname, "../client/dist"), {
-    maxAge: '1d',
+    maxAge: 0,
     setHeaders: (res, filePath) => {
       // Hashed Vite assets in dist/assets get 1-year immutable caching
       if (filePath.includes(path.join('dist', 'assets')) || filePath.includes('/assets/')) {
         res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else if (
+        filePath.endsWith('index.html') ||
+        filePath.endsWith('sw.js') ||
+        filePath.endsWith('registerSW.js') ||
+        filePath.endsWith('manifest.webmanifest')
+      ) {
+        // NEVER cache index.html or service worker — prevents 404 chunk white-screens after deploys
+        res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
       }
     }
   }));
@@ -495,6 +505,9 @@ if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, "../client/dist", "index.html");
   app.get('*', (req, res) => {
     if (fs.existsSync(distPath)) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       res.sendFile(distPath);
     } else {
       res.status(404).send('Frontend build not found');

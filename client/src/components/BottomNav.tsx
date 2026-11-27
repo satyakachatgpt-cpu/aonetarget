@@ -17,6 +17,9 @@ const BottomNav: React.FC<BottomNavProps> = ({ isLoggedIn = false }) => {
     const courseId = path.split('/course/')[1]?.split('/')[0]?.split('?')[0];
     if (!courseId) return false;
     try {
+      if (sessionStorage.getItem(`course_expired_${courseId}`) === 'true') {
+        return false;
+      }
       if (sessionStorage.getItem(`course_enrolled_${courseId}`) === 'true') {
         return true;
       }

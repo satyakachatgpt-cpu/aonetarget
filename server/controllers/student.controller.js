@@ -516,13 +516,65 @@ export const updateStudent = async (req, res) => {
 export const deleteStudent = async (req, res) => {
   try {
     const db = getDb();
-    console.log('DELETE /api/students/:id - Deleting student:', req.params.id);
-    const result = await Student.findOneAndDelete({ id: req.params.id });
-    if (!result) {
-      console.warn('Student not found for deletion:', req.params.id);
+    const targetId = req.params.id;
+    console.log('DELETE /api/students/:id - Deleting student:', targetId);
+
+    const deletedStudent = await Student.findOneAndDelete({
+      $or: [
+        { id: targetId },
+        { userId: targetId },
+        ...(ObjectId.isValid(targetId) ? [{ _id: new ObjectId(targetId) }] : [])
+      ]
+    });
+
+    if (!deletedStudent) {
+      console.warn('Student not found for deletion:', targetId);
       return res.status(404).json({ error: 'Student not found' });
     }
-    console.log('Student deleted successfully:', req.params.id);
+
+    // Cascade-clean all enrollment, purchase, progress, and session records so re-signup starts 100% fresh
+    const studentIdStrings = [...new Set([
+      deletedStudent.id,
+      deletedStudent.userId,
+      String(deletedStudent._id)
+    ].filter(Boolean).map(String))];
+    const allStudentIds = [...studentIdStrings, deletedStudent._id].filter(Boolean);
+
+    const rawPhone = String(deletedStudent.phone || '').replace(/\D/g, '');
+    const cleanPhone10 = rawPhone.length > 10 ? rawPhone.slice(-10) : rawPhone;
+    const phoneVariants = cleanPhone10
+      ? [...new Set([deletedStudent.phone, cleanPhone10, `+91${cleanPhone10}`, `91${cleanPhone10}`].filter(Boolean))]
+      : [];
+
+    await Promise.allSettled([
+      db.collection('purchases').deleteMany({
+        $or: [
+          { studentId: { $in: allStudentIds } },
+          { studentMongoId: { $in: [String(deletedStudent._id), deletedStudent._id] } },
+          ...(phoneVariants.length ? [{ studentPhone: { $in: phoneVariants } }] : []),
+          ...(deletedStudent.email ? [{ studentEmail: deletedStudent.email }] : [])
+        ]
+      }),
+      db.collection('enrollments').deleteMany({
+        $or: [
+          { studentId: { $in: allStudentIds } },
+          { studentMongoId: { $in: [String(deletedStudent._id), deletedStudent._id] } },
+          { userId: { $in: allStudentIds } }
+        ]
+      }),
+      db.collection('pendingOrders').deleteMany({
+        $or: [
+          { studentId: { $in: allStudentIds } },
+          { studentMongoId: { $in: [String(deletedStudent._id), deletedStudent._id] } }
+        ]
+      }),
+      db.collection('courseProgress').deleteMany({ studentId: { $in: allStudentIds } }),
+      db.collection('refresh_tokens').deleteMany({ studentId: { $in: allStudentIds } }),
+      db.collection('testResults').deleteMany({ studentId: { $in: allStudentIds } }),
+      db.collection('testAttempts').deleteMany({ studentId: { $in: allStudentIds } })
+    ]);
+
+    console.log('Student and all linked access/purchase records deleted:', targetId);
     res.json({ success: true, message: 'Student deleted' });
   } catch (error) {
     console.error('Error deleting student:', error);

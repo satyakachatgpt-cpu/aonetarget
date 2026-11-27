@@ -131,6 +131,7 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
 
   const progressBarRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const manualFullscreenRef = useRef<boolean>(false);
   const [dragPercentage, setDragPercentage] = useState<number | null>(null);
 
   const getEffectiveDuration = useCallback(() => {
@@ -356,7 +357,14 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
       const isMobileView = w < 1024;
       
       setViewport({ width: w, height: h });
-      
+
+      // If user manually toggled landscape/fullscreen, NEVER let a resize event bounce it back to portrait
+      if (manualFullscreenRef.current && !isAdmin) {
+        setOrientation('landscape');
+        setIsFullscreen(true);
+        return;
+      }
+
       if (!isAdmin) {
         setOrientation(isLandscapeView ? 'landscape' : 'portrait');
       }
@@ -373,8 +381,8 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
             setIsFullscreen(true);
           }).catch(() => {});
         }
-      } else if (isMobileView && !isLandscapeView) {
-        // Portrait on mobile: exit fullscreen
+      } else if (isMobileView && !isLandscapeView && !manualFullscreenRef.current) {
+        // Portrait on mobile: exit fullscreen (only when not manually locked)
         showMobileStatusBar();
         if (document.fullscreenElement && document.exitFullscreen) {
           document.exitFullscreen().catch(() => {});
@@ -401,10 +409,12 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
       );
 
       if (!isFs) {
-        setIsFullscreen(false);
-        showMobileStatusBar();
-        if ((screen.orientation as any)?.unlock) {
-          (screen.orientation as any).unlock();
+        if (!manualFullscreenRef.current) {
+          setIsFullscreen(false);
+          showMobileStatusBar();
+          if ((screen.orientation as any)?.unlock) {
+            (screen.orientation as any).unlock();
+          }
         }
       } else {
         setIsFullscreen(true);
@@ -528,13 +538,16 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
     );
 
     if (!isCurrentlyFullscreen) {
+      manualFullscreenRef.current = true;
       hideMobileStatusBar();
+      setIsFullscreen(true);
+      if (isMobile) setOrientation('landscape');
+
       // 1. If on iOS and standard video element can enter native fullscreen (hides status bar on iPhone)
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       if (isIOS && videoRef.current && (videoRef.current as any).webkitEnterFullscreen) {
         try {
           (videoRef.current as any).webkitEnterFullscreen();
-          setIsFullscreen(true);
           return;
         } catch (e) {
           console.warn('[Player] iOS webkitEnterFullscreen failed, falling back:', e);
@@ -545,43 +558,31 @@ const StudentVideoPlayer: React.FC<StudentVideoPlayerProps> = ({
       const el: any = document.documentElement;
       const requestFs = el.requestFullscreen || el.webkitRequestFullscreen || el.mozRequestFullScreen || el.msRequestFullscreen;
 
+      if (isMobile && (screen.orientation as any)?.lock) {
+        (screen.orientation as any).lock('landscape').catch(() => {});
+      }
+
       if (requestFs) {
         requestFs.call(el).then(() => {
           if (isMobile && (screen.orientation as any)?.lock) {
             (screen.orientation as any).lock('landscape').catch(() => {});
           }
-          setIsFullscreen(true);
-          if (isMobile) setOrientation('landscape');
-        }).catch(() => {
-          setIsFullscreen(true);
-          if (isMobile) setOrientation('landscape');
-        });
-      } else {
-        setIsFullscreen(true);
-        if (isMobile) setOrientation('landscape');
+        }).catch(() => {});
       }
     } else {
+      manualFullscreenRef.current = false;
       showMobileStatusBar();
+      setIsFullscreen(false);
+      if (isMobile) setOrientation('portrait');
+      if (isMobile && (screen.orientation as any)?.unlock) {
+        try { (screen.orientation as any).unlock(); } catch (e) {}
+      }
+
       // Exit fullscreen + unlock orientation
       const exitFs = doc.exitFullscreen || doc.webkitExitFullscreen || doc.mozCancelFullScreen || doc.msExitFullscreen;
 
       if (exitFs && (doc.fullscreenElement || doc.webkitFullscreenElement || doc.mozFullScreenElement || doc.msFullscreenElement)) {
-        exitFs.call(doc).then(() => {
-          if (isMobile && (screen.orientation as any)?.unlock) {
-            (screen.orientation as any).unlock();
-          }
-          setIsFullscreen(false);
-          if (isMobile) setOrientation('portrait');
-        }).catch(() => {
-          setIsFullscreen(false);
-          if (isMobile) setOrientation('portrait');
-        });
-      } else {
-        if (isMobile && (screen.orientation as any)?.unlock) {
-          try { (screen.orientation as any).unlock(); } catch (e) {}
-        }
-        setIsFullscreen(false);
-        if (isMobile) setOrientation('portrait');
+        exitFs.call(doc).catch(() => {});
       }
     }
   };
