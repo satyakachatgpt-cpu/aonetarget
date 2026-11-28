@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { counsellingAPI } from '../../services/communicationService';
+import {
+  CounsellingLeadRecord,
+  ExportPeriod,
+  exportCounsellingLeadsToExcel,
+  filterLeadsByPeriod,
+  formatLeadMessage,
+  formatLeadSource,
+  isNewsLead,
+} from '../../utils/counsellingExport';
 
-interface CounsellingLead {
-  _id: string;
-  name: string;
-  phone: string;
-  email?: string;
-  interestedCategory?: string;
-  message?: string;
-  status: 'new' | 'contacted' | 'resolved';
-  source: string;
-  createdAt: string;
-}
+type CounsellingLead = CounsellingLeadRecord;
 
 interface Props {
   showToast: (msg: string, type: 'success' | 'error') => void;
@@ -23,6 +22,7 @@ const CounsellingLeads: React.FC<Props> = ({ showToast }) => {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'new' | 'contacted' | 'resolved'>('all');
+  const [exportPeriod, setExportPeriod] = useState<ExportPeriod>('monthly');
   const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; leadId: string | null; isDeleting: boolean }>({
     isOpen: false,
     leadId: null,
@@ -92,11 +92,20 @@ const CounsellingLeads: React.FC<Props> = ({ showToast }) => {
     resolved: leads.filter(l => l.status === 'resolved').length,
   };
 
-  const formatLeadSource = (source: string) => {
-    if (!source || source === 'student_explore_cta') return 'Explore Courses Page';
-    return source
-      .replace(/_/g, ' ')
-      .replace(/\b\w/g, c => c.toUpperCase());
+  const exportLeadsCount = filterLeadsByPeriod(leads, exportPeriod).length;
+
+  const handleExportExcel = () => {
+    try {
+      const exportedCount = exportCounsellingLeadsToExcel(leads, exportPeriod);
+      if (exportedCount === 0) {
+        showToast(`No counselling inquiries found for ${exportPeriod} export`, 'error');
+        return;
+      }
+      showToast(`Exported ${exportedCount} inquiries to Excel`, 'success');
+    } catch (error) {
+      console.error('[Counselling UI] Export failed:', error);
+      showToast('Failed to export Excel file', 'error');
+    }
   };
 
   if (loading && leads.length === 0) {
@@ -142,6 +151,39 @@ const CounsellingLeads: React.FC<Props> = ({ showToast }) => {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* Export Inquiries Bar */}
+      <div className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+          <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
+            Export Period:
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {(['daily', 'weekly', 'monthly', 'all'] as const).map((period) => (
+              <button
+                key={period}
+                type="button"
+                onClick={() => setExportPeriod(period)}
+                className={`px-4 py-2.5 rounded-2xl text-xs font-black uppercase tracking-widest transition-all whitespace-nowrap ${
+                  exportPeriod === period
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20'
+                    : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+                }`}
+              >
+                {period}
+              </button>
+            ))}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={handleExportExcel}
+          className="flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-emerald-600/20 hover:bg-emerald-700 transition-all active:scale-95 whitespace-nowrap"
+        >
+          <span className="material-symbols-outlined text-lg">download</span>
+          Export Excel ({exportLeadsCount})
+        </button>
       </div>
 
       {/* Filters */}
@@ -240,8 +282,10 @@ const CounsellingLeads: React.FC<Props> = ({ showToast }) => {
 
               {lead.message && (
                 <div className="bg-amber-50/50 rounded-2xl p-4 mb-6 border border-amber-100/50">
-                  <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Student Message</p>
-                  <p className="text-sm font-medium text-gray-700 italic">"{lead.message}"</p>
+                  <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">
+                    {isNewsLead(lead) ? 'News / Notification Opened' : 'Student Message'}
+                  </p>
+                  <p className="text-sm font-medium text-gray-700 italic">"{formatLeadMessage(lead)}"</p>
                 </div>
               )}
 

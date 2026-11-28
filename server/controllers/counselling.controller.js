@@ -111,7 +111,7 @@ export const submitNewsLead = async (req, res) => {
             phone: rawPhone,
             email: email || undefined,
             interestedCategory: 'News & Current Affairs',
-            message: newsTitle ? `Reader Lead: ${newsTitle}` : `News Reader (${newsId || 'General'})`,
+            message: newsTitle ? `News: ${newsTitle}` : `News Reader (${newsId || 'General'})`,
             source: source || 'news_reader_app'
         });
 
